@@ -36,14 +36,19 @@ export default function CourseCard({
       <div className="course-card-footer">
         <span className="course-card-credits">{creditStr}</span>
         <div className="course-card-hubs">
-          {hubUnits.slice(0, 3).map((unit) => (
-            <span
-              key={unit}
-              className={`hub-chip hub-chip-${HUB_COLOR_FOR[unit] ?? 'def'}`}
-            >
-              {unit}
-            </span>
-          ))}
+          {hubUnits.slice(0, 3).map((unit) => {
+            const colorInfo = HUB_COLOR_FOR[unit];
+            const groupId = colorInfo?.groupId ?? 'def';
+            return (
+              <span
+                key={unit}
+                className={`hub-chip hub-chip-${groupId}`}
+                style={colorInfo?.color ? { '--hub-color': colorInfo.color } : {}}
+              >
+                {unit}
+              </span>
+            );
+          })}
           {hubUnits.length > 3 && (
             <span className="hub-chip hub-chip-more">+{hubUnits.length - 3}</span>
           )}

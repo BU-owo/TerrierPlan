@@ -18,13 +18,13 @@
   --text-secondary: #5C5449;
   --text-muted: #9E9890;
 
-  /* HUB category colors */
-  --hub-phi: #6D28D9;   --hub-phi-bg: #EDE9FE;
-  --hub-sci: #0369A1;   --hub-sci-bg: #E0F2FE;
-  --hub-qr:  #0F766E;   --hub-qr-bg:  #CCFBF1;
-  --hub-div: #C2410C;   --hub-div-bg: #FFEDD5;
-  --hub-com: #BE185D;   --hub-com-bg: #FCE7F3;
-  --hub-tl:  #166534;   --hub-tl-bg:  #DCFCE7;
+  /* HUB category colors (6-group BU spec) */
+  --hub-phi: #B0413E;   --hub-phi-bg: #F5E8E8;   /* Philosophical, Aesthetic, Historical - deep rose */
+  --hub-sci: #2F6F5E;   --hub-sci-bg: #E8F3F1;   /* Scientific and Social Inquiry - forest green */
+  --hub-qr:  #3B5D8C;   --hub-qr-bg:  #E8F0F7;   /* Quantitative Reasoning - slate blue */
+  --hub-div: #C77B2E;   --hub-div-bg: #F7EADC;   /* Diversity, Civic, Global - amber */
+  --hub-com: #7A4F9E;   --hub-com-bg: #F1E8F8;   /* Communication - plum */
+  --hub-tl:  #4A7A8C;   --hub-tl-bg:  #E8F1F5;   /* Intellectual Toolkit - teal */
   --hub-def: #374151;   --hub-def-bg: #F3F4F6;
 
   /* Shape */

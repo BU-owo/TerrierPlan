@@ -1,13 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import {
-  collection,
-  query,
-  orderBy,
-  startAt,
-  endAt,
-  limit,
-  getDocs,
-} from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { HUB_COLOR_FOR, SEMESTER_LABELS } from '../../utils/hubConstants';
 
@@ -20,8 +12,29 @@ export default function CourseSearch({
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedCourseForPicker, setSelectedCourseForPicker] = useState(null);
+  const [allCourses, setAllCourses] = useState([]);
+  const [coursesLoaded, setCoursesLoaded] = useState(false);
   const debounceRef = useRef(null);
 
+  // Load all courses once on first mount
+  useEffect(() => {
+    const loadAllCourses = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'courses'));
+        const courses = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setAllCourses(courses);
+        setCoursesLoaded(true);
+      } catch (err) {
+        console.error('Failed to load courses:', err);
+        setCoursesLoaded(true); // Still mark as loaded even on error
+      }
+    };
+
+    loadAllCourses();
+  }, []);
+
+  // Filter courses client-side on keystroke
   useEffect(() => {
     clearTimeout(debounceRef.current);
     const term = searchQuery.trim();
@@ -31,48 +44,36 @@ export default function CourseSearch({
       return;
     }
 
-    debounceRef.current = setTimeout(async () => {
+    // Don't search until courses are loaded
+    if (!coursesLoaded) {
+      return;
+    }
+
+    debounceRef.current = setTimeout(() => {
       setLoading(true);
-      try {
-        const merged = new Map();
 
-        // Query 1: courseNumber prefix (e.g. "CAS CS")
-        const upper = term.toUpperCase();
-        const q1 = query(
-          collection(db, 'courses'),
-          orderBy('courseNumber'),
-          startAt(upper),
-          endAt(upper + '\uf8ff'),
-          limit(15),
+      // Normalize query: strip spaces, uppercase
+      const normalizedQuery = term.replace(/\s+/g, '').toUpperCase();
+
+      // Filter in-memory using substring matching
+      const matches = allCourses.filter((course) => {
+        const normalizedCourseNum = (course.courseNumber || '')
+          .replace(/\s+/g, '')
+          .toUpperCase();
+        const normalizedCourseName = (course.name || '').toUpperCase();
+
+        return (
+          normalizedCourseNum.includes(normalizedQuery) ||
+          normalizedCourseName.includes(normalizedQuery)
         );
-        const s1 = await getDocs(q1);
-        s1.docs.forEach((d) => merged.set(d.id, { id: d.id, ...d.data() }));
+      });
 
-        // Query 2: name prefix (title-cased, e.g. "Calculus")
-        const titled =
-          term.charAt(0).toUpperCase() + term.slice(1).toLowerCase();
-        const q2 = query(
-          collection(db, 'courses'),
-          orderBy('name'),
-          startAt(titled),
-          endAt(titled + '\uf8ff'),
-          limit(15),
-        );
-        const s2 = await getDocs(q2);
-        s2.docs.forEach((d) => {
-          if (!merged.has(d.id)) merged.set(d.id, { id: d.id, ...d.data() });
-        });
-
-        setResults(Array.from(merged.values()).slice(0, 20));
-      } catch (err) {
-        console.error('Search error:', err);
-      } finally {
-        setLoading(false);
-      }
+      setResults(matches.slice(0, 20));
+      setLoading(false);
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [searchQuery]);
+  }, [searchQuery, coursesLoaded, allCourses]);
 
   return (
     <div className="search-panel">
@@ -124,8 +125,8 @@ export default function CourseSearch({
         {!loading && !searchQuery.trim() && (
           <div className="search-empty">
             <div className="search-empty-paw">🐾</div>
-            Search by course code or name, then click&nbsp;+ to add it to the
-            selected semester.
+            Search by course code or name, then click a result to add it to a
+            semester.
           </div>
         )}
 
@@ -135,7 +136,32 @@ export default function CourseSearch({
             <div
               key={course.id}
               className={`search-result-card${alreadyAdded ? ' already-added' : ''}`}
-              title={alreadyAdded ? 'Already in your plan' : undefined}
+              title={
+                alreadyAdded
+                  ? 'Already in your plan'
+                  : 'Click to add to a semester or drag to a semester column'
+              }
+              onClick={() => {
+                if (!alreadyAdded) {
+                  // If a semester is focused/selected, auto-add directly
+                  if (activeSemIndex !== undefined && activeSemIndex !== null) {
+                    onAddCourse(course.id, activeSemIndex);
+                  } else {
+                    // Otherwise, show picker modal for user to select semester
+                    setSelectedCourseForPicker(course);
+                  }
+                }
+              }}
+              style={{ cursor: alreadyAdded ? 'default' : 'pointer' }}
+              draggable={!alreadyAdded}
+              onDragStart={(e) => {
+                if (alreadyAdded) {
+                  e.preventDefault();
+                  return;
+                }
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setData('courseId', course.id);
+              }}
             >
               <div className="search-result-info">
                 <div className="search-result-code">
@@ -147,7 +173,9 @@ export default function CourseSearch({
                     {course.hubUnits.slice(0, 4).map((unit) => (
                       <span
                         key={unit}
-                        className={`hub-chip hub-chip-${HUB_COLOR_FOR[unit] ?? 'def'}`}
+                        className={`hub-chip hub-chip-${
+                          HUB_COLOR_FOR[unit]?.groupId ?? 'def'
+                        }`}
                       >
                         {unit}
                       </span>
@@ -155,18 +183,50 @@ export default function CourseSearch({
                   </div>
                 )}
               </div>
-              {!alreadyAdded && (
-                <button
-                  className="search-result-add"
-                  onClick={() => onAddCourse(course.id, activeSemIndex)}
-                  aria-label={`Add ${course.courseNumber ?? course.id}`}
-                >
-                  +
-                </button>
-              )}
             </div>
           );
         })}
+
+        {/* Semester picker modal */}
+        {selectedCourseForPicker && (
+          <div className="search-picker-overlay" onClick={() => setSelectedCourseForPicker(null)}>
+            <div
+              className="search-picker-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="search-picker-header">
+                <h3>
+                  Add to semester:{' '}
+                  <span className="search-picker-course-code">
+                    {selectedCourseForPicker.courseNumber ??
+                      selectedCourseForPicker.id}
+                  </span>
+                </h3>
+                <button
+                  className="search-picker-close"
+                  onClick={() => setSelectedCourseForPicker(null)}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="search-picker-options">
+                {SEMESTER_LABELS.map((label, i) => (
+                  <button
+                    key={i}
+                    className="search-picker-option"
+                    onClick={() => {
+                      onAddCourse(selectedCourseForPicker.id, i);
+                      setSelectedCourseForPicker(null);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

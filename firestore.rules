@@ -2,20 +2,20 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Reference data — readable by any signed-in user, writable only by
-    // your import scripts (via the Admin SDK, which bypasses these rules).
+    // Reference data — readable by any user (signed-in or guest), 
+    // writable only by your import scripts (via the Admin SDK, which bypasses these rules).
     match /courses/{courseId} {
-      allow read: if request.auth != null;
+      allow read: if true;
       allow write: if false;
     }
 
     match /sections/{sectionId} {
-      allow read: if request.auth != null;
+      allow read: if true;
       allow write: if false;
     }
 
     match /bulletinPages/{majorSlug} {
-      allow read: if request.auth != null;
+      allow read: if true;
       allow write: if false;
     }
 
