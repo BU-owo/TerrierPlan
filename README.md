@@ -4,6 +4,12 @@ A degree planning, HUB tracking, and (eventually) scheduling tool for BU student
 
 ## Setup on a new machine
 
+**Prerequisite:** you need to already be added as a collaborator on the
+`terrierplan` Firebase project (Firebase Console → Project Settings →
+Users and permissions). If you're not listed there yet, ask the project
+owner to add you before continuing — the steps below assume you already
+have access.
+
 Every time you clone this repo onto a new machine, you need to redo these steps —
 they're intentionally **not** stored in git (they contain credentials or are
 machine-specific):
