@@ -1,16 +1,70 @@
-# React + Vite
+# TerrierPlan
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A degree planning, HUB tracking, and (eventually) scheduling tool for BU students.
 
-Currently, two official plugins are available:
+## Setup on a new machine
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Every time you clone this repo onto a new machine, you need to redo these steps —
+they're intentionally **not** stored in git (they contain credentials or are
+machine-specific):
 
-## React Compiler
+1. **Install dependencies**
+   ```
+   npm install
+   ```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+2. **Create your local environment file**
+   ```
+   cp .env.example .env.local
+   ```
+   Then fill in the real values in `.env.local` from:
+   Firebase Console → Project Settings → General → Your apps → Web app config
 
-## Expanding the ESLint configuration
+   (The actual values are also saved in [wherever you keep secrets — e.g. a
+   password manager note — fill this in for yourself].)
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+3. **Run the dev server**
+   ```
+   npm run dev
+   ```
+   If the page loads blank with no error, the most common cause is a missing
+   or stale `.env.local` — check the browser console (F12) first.
+
+### If you also need to run the import/seed scripts on this machine
+
+The scripts in `scripts/` (`import-courses.cjs`, `import-sections.cjs`,
+`patch-fyw-wri.cjs`, etc.) need a Firebase service account key, which is
+**also not in git** and must be copied over separately (never store it inside
+the repo folder, even gitignored).
+
+```
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your-service-account-key.json"
+node scripts/<script-name>.cjs
+```
+
+If you don't have the key file on this machine: Firebase Console → Project
+Settings → Service Accounts → Generate new private key.
+
+### If you need to deploy Firestore rules/indexes from this machine
+
+```
+npx firebase-tools login
+npx firebase-tools use --add    # select "terrierplan", alias it "terrierplan"
+npx firebase-tools deploy --only firestore:rules
+```
+
+Run `npx firebase-tools deploy` **from the repo root** — running it from a
+parent directory (like your home folder) can accidentally create/use a
+`firebase.json` there instead of in the project, which silently breaks
+future deploys. Confirm `pwd` shows the repo root before deploying.
+
+## Project structure
+
+- `SCHEMA.md` — Firestore collection schema, source of truth for data shapes
+- `HUB_REQUIREMENTS.md` — BU HUB requirement tables (first-year + transfer)
+- `.github/copilot-instructions.md` — project conventions and scope boundaries for Copilot
+- `scripts/` — one-off Firestore import/patch scripts (see above for credentials)
+
+## Tech stack
+
+Vite + React, Firebase (Auth + Firestore).
