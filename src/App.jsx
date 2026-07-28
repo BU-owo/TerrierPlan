@@ -16,12 +16,27 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/planner" element={<PlannerPage />} />
-        <Route path="*" element={<Navigate to="/planner" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/planner" element={<PlannerPage />} />
+          <Route path="*" element={<Navigate to="/planner" replace />} />
+        </Routes>
+      </BrowserRouter>
+
+      <footer style={{
+        textAlign: 'center',
+        padding: '1.5rem 1rem',
+        fontSize: '0.75rem',
+        color: '#888',
+        borderTop: '1px solid #eee',
+        marginTop: '2rem'
+      }}>
+        Not affiliated with or endorsed by Boston University. This is an
+        independent, community-made, mostly vibe-coded tool. Use at your
+        own discretion.
+      </footer>
+    </>
   );
 }
