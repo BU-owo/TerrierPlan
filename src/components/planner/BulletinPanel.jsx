@@ -45,7 +45,7 @@ export default function BulletinPanel() {
           <span>📋</span>
           <span>Major & Minor Bulletin</span>
           {selectedProgram && (
-            <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>
+            <span className="bulletin-selected-label">
               — {selectedProgram.name} ({selectedProgram.degree})
             </span>
           )}
@@ -57,116 +57,109 @@ export default function BulletinPanel() {
       <div className={`bulletin-body${isOpen ? ' open' : ''}`}>
         <div className="bulletin-body-inner">
           <div className="bulletin-content-area">
-            {/* School selector */}
-            <div className="bulletin-major-selector">
-              <label htmlFor="bulletin-school">School / College</label>
-              <select
-                id="bulletin-school"
-                className="bulletin-major-select"
-                value={selectedSchoolCode}
-                onChange={handleSchoolChange}
-              >
-                <option value="">— Pick a school —</option>
-                {BU_SCHOOLS.map((s) => (
-                  <option key={s.code} value={s.code}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
 
-            {/* Program selector */}
-            {selectedSchool && (
-              <div className="bulletin-major-selector" style={{ marginTop: 8 }}>
-                <label htmlFor="bulletin-program">Major / Minor</label>
+            {/* Left: selectors */}
+            <div className="bulletin-left">
+              <div className="bulletin-major-selector">
+                <label htmlFor="bulletin-school">School / College</label>
                 <select
-                  id="bulletin-program"
+                  id="bulletin-school"
                   className="bulletin-major-select"
-                  value={selectedProgramUrl}
-                  onChange={handleProgramChange}
+                  value={selectedSchoolCode}
+                  onChange={handleSchoolChange}
                 >
-                  <option value="">— Pick a major or minor —</option>
-                  {selectedSchool.programs.map((p) => (
-                    <option key={p.url} value={p.url}>
-                      {p.name} ({p.degree})
-                    </option>
+                  <option value="">— Pick a school —</option>
+                  {BU_SCHOOLS.map((s) => (
+                    <option key={s.code} value={s.code}>{s.name}</option>
                   ))}
                 </select>
               </div>
-            )}
 
-            {/* Not-found note */}
-            {selectedSchool && (
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
-                Don't see your program listed? This list covers common
-                undergrad majors/minors but isn't exhaustive yet — you can
-                still find it directly on{' '}
-                <a
-                  href="https://www.bu.edu/academics/degree-programs/"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  BU's degree programs page
-                </a>.
-              </p>
-            )}
+              {selectedSchool && (
+                <div className="bulletin-major-selector">
+                  <label htmlFor="bulletin-program">Major / Minor</label>
+                  <select
+                    id="bulletin-program"
+                    className="bulletin-major-select"
+                    value={selectedProgramUrl}
+                    onChange={handleProgramChange}
+                  >
+                    <option value="">— Pick a major or minor —</option>
+                    {selectedSchool.programs.map((p) => (
+                      <option key={p.url} value={p.url}>
+                        {p.name} ({p.degree})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-            {/* Content pane */}
-            {selectedProgram && (
-              <div style={{ marginTop: 12 }}>
-                <a
-                  href={selectedProgram.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="bulletin-open-new-tab"
-                  style={{
-                    display: 'inline-block',
-                    fontSize: 12,
-                    marginBottom: 8,
-                    color: 'var(--text-accent)',
-                  }}
-                >
-                  Open full page in new tab ↗
-                </a>
+              {selectedSchool && (
+                <p className="bulletin-hint">
+                  Don't see your program?{' '}
+                  <a
+                    href="https://www.bu.edu/academics/degree-programs/"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Browse all BU programs ↗
+                  </a>
+                </p>
+              )}
+            </div>
 
-                {!iframeFailed ? (
-                  <div style={{ position: 'relative' }}>
-                    {iframeLoading && (
-                      <div className="bulletin-empty">Loading bulletin page…</div>
-                    )}
-                    <iframe
-                      key={selectedProgram.url}
-                      src={selectedProgram.url}
-                      title={`${selectedProgram.name} bulletin`}
-                      style={{
-                        width: '100%',
-                        height: '480px',
-                        border: '1px solid var(--border, #ddd)',
-                        borderRadius: 8,
-                        display: iframeLoading ? 'none' : 'block',
-                      }}
-                      onLoad={() => setIframeLoading(false)}
-                      onError={() => {
-                        setIframeFailed(true);
-                        setIframeLoading(false);
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div className="bulletin-empty" style={{ lineHeight: 1.6 }}>
-                    This page can't be shown embedded here — BU's site
-                    blocks embedding for this page. Use the "Open full
-                    page in new tab" link above instead.
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Right: viewer */}
+            <div className="bulletin-right">
+              {!selectedSchool && (
+                <div className="bulletin-empty">
+                  Pick a school to browse its majors and minors.
+                </div>
+              )}
 
-            {!selectedSchool && (
-              <div className="bulletin-empty" style={{ marginTop: 12 }}>
-                Pick a school to browse its majors and minors.
-              </div>
-            )}
+              {selectedSchool && !selectedProgram && (
+                <div className="bulletin-empty">
+                  Pick a major or minor to see its requirements.
+                </div>
+              )}
+
+              {selectedProgram && (
+                <>
+                  <a
+                    href={selectedProgram.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bulletin-open-new-tab"
+                  >
+                    Open full page in new tab ↗
+                  </a>
+
+                  {!iframeFailed ? (
+                    <div className="bulletin-iframe-wrapper">
+                      {iframeLoading && (
+                        <div className="bulletin-loading">Loading bulletin page…</div>
+                      )}
+                      <iframe
+                        key={selectedProgram.url}
+                        src={selectedProgram.url}
+                        title={`${selectedProgram.name} bulletin`}
+                        className={`bulletin-iframe${iframeLoading ? ' hidden' : ''}`}
+                        onLoad={() => setIframeLoading(false)}
+                        onError={() => {
+                          setIframeFailed(true);
+                          setIframeLoading(false);
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="bulletin-empty">
+                      BU's site blocks this page from being embedded.
+                      Use the link above to open it in a new tab.
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
           </div>
         </div>
       </div>
