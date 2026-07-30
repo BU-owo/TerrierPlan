@@ -26,7 +26,13 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-mascot" aria-hidden="true">🐾</div>
+        <img
+          className="login-mascot"
+          src="/faviconlight.png"
+          alt="TerrierPlan"
+          width={48}
+          height={48}
+        />
         <h1 className="login-title">TerrierPlan</h1>
         <p className="login-subtitle">
           Plan your BU degree, track HUB units, and build your schedule — all in one place.
@@ -72,8 +78,11 @@ export default function LoginPage() {
           box-shadow: var(--shadow-lg);
         }
         .login-mascot {
-          font-size: 48px;
-          margin-bottom: 8px;
+          width: 48px;
+          height: 48px;
+          object-fit: contain;
+          display: block;
+          margin: 0 auto 8px;
         }
         .login-title {
           font-size: 26px;

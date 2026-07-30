@@ -20,11 +20,21 @@
   z-index: 20;
 }
 .planner-header-logo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 16px;
   font-weight: 700;
   letter-spacing: -.3px;
   white-space: nowrap;
   margin-right: 4px;
+}
+.planner-header-logo img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
 }
 .planner-header-center {
   flex: 1;
@@ -265,7 +275,13 @@
   font-size: 13px;
   line-height: 1.6;
 }
-.search-empty-paw { font-size: 28px; margin-bottom: 8px; }
+.search-empty-paw {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto 8px;
+}
 .search-hint {
   margin-top: 8px;
   font-size: 11px;
@@ -1099,7 +1115,10 @@
 }
 
 .beta-modal-paw {
-  font-size: 36px;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  display: block;
 }
 
 .beta-modal h2 {
@@ -1129,3 +1148,33 @@
   transition: opacity 0.15s;
 }
 .beta-dismiss-btn:hover { opacity: 0.88; }
+
+/* Unsaved-changes leave modal (reuses beta overlay/modal) */
+.unsaved-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  width: 100%;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.unsaved-modal-stay {
+  margin-top: 4px;
+  padding: 10px 24px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.unsaved-modal-stay:hover {
+  background: var(--cream);
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+.unsaved-modal-leave {
+  margin-top: 4px;
+}

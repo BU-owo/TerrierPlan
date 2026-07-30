@@ -30,6 +30,7 @@ import CourseCard from '../components/planner/CourseCard';
 import HubSidebar from '../components/planner/HubSidebar';
 import BulletinPanel from '../components/planner/BulletinPanel';
 import './planner.css';
+import '../App.css';
 
 const EMPTY_SEMESTERS = () => Array.from({ length: 8 }, () => []);
 const LOCAL_STORAGE_KEY = 'terrierplan_session';
@@ -53,7 +54,7 @@ export default function PlannerPage() {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(''); // 'saved' | 'error' | ''
   const [isDirty, setIsDirty] = useState(false);
-  const [unsavedChangesWarning, setUnsavedChangesWarning] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverlay, setDragOverlay] = useState(null);
 
@@ -64,6 +65,7 @@ export default function PlannerPage() {
   const saveTimeoutRef = useRef(null);
   const isInitialLoad = useRef(true);
   const hasUnsavedChanges = useRef(false);
+  const pendingLeaveAction = useRef(null);
 
   // ── Load plans on sign-in ─────────────────────────────────────────────────
   useEffect(() => {
@@ -104,21 +106,70 @@ export default function PlannerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, authLoading]);
 
-  // ── Warn before losing unsaved changes ─────────────────────────────────────
+  // ── Keep hasUnsavedChanges ref in sync with isDirty ───────────────────────
+  useEffect(() => {
+    hasUnsavedChanges.current = isDirty;
+  }, [isDirty]);
+
+  // ── Warn before losing unsaved changes (tab close / refresh) ───────────────
   useEffect(() => {
     function handleBeforeUnload(e) {
-      if (isDirty) {
-        const message = user
-          ? 'You have unsaved changes. Your plan will not be saved if you leave.'
-          : 'You have unsaved changes. Sign in to save your plan, or your changes will be lost when you leave.';
-        e.preventDefault();
-        e.returnValue = message;
-        return message;
-      }
+      if (!hasUnsavedChanges.current) return;
+      e.preventDefault();
+      e.returnValue = '';
     }
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isDirty, user]);
+  }, []);
+
+  // ── In-app leave confirmation ─────────────────────────────────────────────
+  function requestLeave(action) {
+    if (!hasUnsavedChanges.current) {
+      action();
+      return;
+    }
+    pendingLeaveAction.current = action;
+    setShowLeaveModal(true);
+  }
+
+  function handleStay() {
+    pendingLeaveAction.current = null;
+    setShowLeaveModal(false);
+  }
+
+  function handleLeaveAnyway() {
+    const action = pendingLeaveAction.current;
+    pendingLeaveAction.current = null;
+    setShowLeaveModal(false);
+    // Clear dirty so beforeunload does not also fire on programmatic navigation
+    hasUnsavedChanges.current = false;
+    setIsDirty(false);
+    action?.();
+  }
+
+  function handleInternalLinkClick(e) {
+    const anchor = e.target.closest?.('a[href]');
+    if (!anchor || !hasUnsavedChanges.current) return;
+
+    const href = anchor.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+      return;
+    }
+
+    // Only intercept same-origin / relative navigations
+    let url;
+    try {
+      url = new URL(href, window.location.href);
+    } catch {
+      return;
+    }
+    if (url.origin !== window.location.origin) return;
+
+    e.preventDefault();
+    requestLeave(() => {
+      window.location.href = url.href;
+    });
+  }
 
   // ── Autosave on change ────────────────────────────────────────────────────
   useEffect(() => {
@@ -470,17 +521,31 @@ export default function PlannerPage() {
   if (authLoading) {
     return (
       <div className="auth-loading">
-        <span className="auth-loading-paw">🐾</span>
+        <img
+          className="auth-loading-paw"
+          src="/faviconlight.png"
+          alt="TerrierPlan"
+          width={32}
+          height={32}
+        />
         <p>Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="planner-layout">
+    <div className="planner-layout" onClickCapture={handleInternalLinkClick}>
       {/* ── Header ── */}
       <header className="planner-header">
-        <div className="planner-header-logo">🐾 TerrierPlan</div>
+        <div className="planner-header-logo">
+          <img
+            src="/faviconred.png"
+            alt=""
+            width={18}
+            height={18}
+          />
+          TerrierPlan
+        </div>
 
         <div className="planner-header-center">
           {user ? (
@@ -541,7 +606,7 @@ export default function PlannerPage() {
               </span>
               <button
                 className="btn-signout"
-                onClick={() => signOut(auth)}
+                onClick={() => requestLeave(() => signOut(auth))}
               >
                 Sign out
               </button>
@@ -549,7 +614,11 @@ export default function PlannerPage() {
           ) : (
             <button
               className="btn-signin"
-              onClick={() => window.location.href = '/login'}
+              onClick={() =>
+                requestLeave(() => {
+                  window.location.href = '/login';
+                })
+              }
             >
               Sign in
             </button>
@@ -622,6 +691,43 @@ export default function PlannerPage() {
             <a href="/login" className="banner-signin-link">
               Sign in →
             </a>
+          </div>
+        </div>
+      )}
+
+      {/* ── Unsaved changes leave confirmation ── */}
+      {showLeaveModal && (
+        <div className="beta-overlay" role="dialog" aria-modal="true" aria-labelledby="unsaved-modal-title">
+          <div className="beta-modal">
+            <img
+              className="beta-modal-paw"
+              src="/faviconlight.png"
+              alt="TerrierPlan"
+              width={48}
+              height={48}
+            />
+            <h2 id="unsaved-modal-title">Unsaved changes</h2>
+            <p>
+              {user
+                ? 'You have unsaved changes. These will be lost if you leave without saving.'
+                : 'You have unsaved changes. Sign in to save your plan, or your changes will be lost.'}
+            </p>
+            <div className="unsaved-modal-actions">
+              <button
+                type="button"
+                className="unsaved-modal-stay"
+                onClick={handleStay}
+              >
+                Stay
+              </button>
+              <button
+                type="button"
+                className="beta-dismiss-btn unsaved-modal-leave"
+                onClick={handleLeaveAnyway}
+              >
+                Leave anyway
+              </button>
+            </div>
           </div>
         </div>
       )}

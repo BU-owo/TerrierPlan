@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
 import PlannerPage from './pages/PlannerPage';
 import { useState, useEffect } from 'react';
+import './App.css';
 
 export default function App() {
   const { loading } = useAuth();
@@ -23,7 +24,13 @@ export default function App() {
   if (loading) {
     return (
       <div className="auth-loading">
-        <span className="auth-loading-paw">🐾</span>
+        <img
+          className="auth-loading-paw"
+          src="/faviconlight.png"
+          alt="TerrierPlan"
+          width={32}
+          height={32}
+        />
         <p>Loading…</p>
       </div>
     );
@@ -34,7 +41,13 @@ export default function App() {
       {showBeta && (
         <div className="beta-overlay">
           <div className="beta-modal">
-            <div className="beta-modal-paw">🐾</div>
+            <img
+              className="beta-modal-paw"
+              src="/faviconlight.png"
+              alt="TerrierPlan"
+              width={48}
+              height={48}
+            />
             <h2>Welcome to TerrierPlan!</h2>
             <p>
               This project is currently in beta — things may be incomplete,

@@ -4,6 +4,153 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { HUB_COLOR_FOR, SEMESTER_LABELS } from '../../utils/hubConstants';
 
+const HUB_FILTER_CODES = [
+  'PLM',
+  'AEX',
+  'HCO',
+  'SI1',
+  'SO1',
+  'SI2',
+  'SO2',
+  'QR1',
+  'QR2',
+  'IIC',
+  'GCI',
+  'ETR',
+  'FYW',
+  'WRI',
+  'WIN',
+  'OSC',
+  'DME',
+  'CRT',
+  'RIL',
+  'TWC',
+  'CRI',
+];
+
+function HubFilterSelect({ selected, onChange }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    function handlePointerDown(e) {
+      if (rootRef.current && !rootRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, []);
+
+  const displayLabel =
+    selected.length === 0
+      ? 'All'
+      : selected.length <= 3
+        ? selected.join(', ')
+        : `${selected.slice(0, 2).join(', ')} +${selected.length - 2}`;
+
+  function toggleCode(code) {
+    if (selected.includes(code)) {
+      onChange(selected.filter((c) => c !== code));
+    } else {
+      onChange([...selected, code]);
+    }
+  }
+
+  return (
+    <div
+      className="search-sem-target"
+      ref={rootRef}
+      style={{ position: 'relative', alignItems: 'flex-start' }}
+    >
+      <label htmlFor="hub-filter-trigger">Filter by HUB unit</label>
+      <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+        <button
+          type="button"
+          id="hub-filter-trigger"
+          className="search-sem-select"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          style={{
+            width: '100%',
+            textAlign: 'left',
+            cursor: 'pointer',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {displayLabel}
+        </button>
+
+        {open && (
+          <div
+            role="listbox"
+            aria-multiselectable="true"
+            style={{
+              position: 'absolute',
+              zIndex: 40,
+              top: 'calc(100% + 4px)',
+              left: 0,
+              right: 0,
+              maxHeight: 220,
+              overflowY: 'auto',
+              background: 'var(--cream)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-xs)',
+              padding: 4,
+              boxShadow: 'var(--shadow-sm, 0 2px 8px rgba(0,0,0,.12))',
+            }}
+          >
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 6px',
+                fontSize: 12,
+                color: 'var(--text)',
+                cursor: 'pointer',
+                borderRadius: 3,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selected.length === 0}
+                onChange={() => onChange([])}
+              />
+              All
+            </label>
+            {HUB_FILTER_CODES.map((code) => (
+              <label
+                key={code}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 6px',
+                  fontSize: 12,
+                  color: 'var(--text)',
+                  cursor: 'pointer',
+                  borderRadius: 3,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(code)}
+                  onChange={() => toggleCode(code)}
+                />
+                {code}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SearchResultCard({
   course,
   alreadyAdded,
@@ -73,6 +220,7 @@ export default function CourseSearch({
   onAddCourse,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [hubFilters, setHubFilters] = useState([]);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCourseForPicker, setSelectedCourseForPicker] = useState(null);
@@ -97,13 +245,15 @@ export default function CourseSearch({
     loadAllCourses();
   }, []);
 
-  // Filter courses client-side on keystroke
+  // Filter courses client-side on keystroke / HUB filter change
   useEffect(() => {
     clearTimeout(debounceRef.current);
     const term = searchQuery.trim();
+    const hasHubFilter = hubFilters.length > 0;
 
-    if (!term) {
+    if (!term && !hasHubFilter) {
       setResults([]);
+      setLoading(false);
       return;
     }
 
@@ -116,19 +266,30 @@ export default function CourseSearch({
       setLoading(true);
 
       // Normalize query: strip spaces, uppercase
-      const normalizedQuery = term.replace(/\s+/g, '').toUpperCase();
+      const normalizedQuery = term
+        ? term.replace(/\s+/g, '').toUpperCase()
+        : '';
 
-      // Filter in-memory using substring matching
       const matches = allCourses.filter((course) => {
-        const normalizedCourseNum = (course.courseNumber || '')
-          .replace(/\s+/g, '')
-          .toUpperCase();
-        const normalizedCourseName = (course.name || '').toUpperCase();
+        let textMatch = true;
+        if (normalizedQuery) {
+          const normalizedCourseNum = (course.courseNumber || '')
+            .replace(/\s+/g, '')
+            .toUpperCase();
+          const normalizedCourseName = (course.name || '').toUpperCase();
+          textMatch =
+            normalizedCourseNum.includes(normalizedQuery) ||
+            normalizedCourseName.includes(normalizedQuery);
+        }
 
-        return (
-          normalizedCourseNum.includes(normalizedQuery) ||
-          normalizedCourseName.includes(normalizedQuery)
-        );
+        let hubMatch = true;
+        if (hasHubFilter) {
+          const units = course.hubUnits ?? [];
+          // OR: course matches if it has ANY of the selected HUB codes
+          hubMatch = hubFilters.some((code) => units.includes(code));
+        }
+
+        return textMatch && hubMatch;
       });
 
       setResults(matches.slice(0, 20));
@@ -136,7 +297,9 @@ export default function CourseSearch({
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [searchQuery, coursesLoaded, allCourses]);
+  }, [searchQuery, hubFilters, coursesLoaded, allCourses]);
+
+  const hasActiveQuery = Boolean(searchQuery.trim()) || hubFilters.length > 0;
 
   return (
     <div className="search-panel">
@@ -154,6 +317,7 @@ export default function CourseSearch({
             spellCheck={false}
           />
         </div>
+        <HubFilterSelect selected={hubFilters} onChange={setHubFilters} />
         <div className="search-sem-target">
           <label htmlFor="sem-target">Add to</label>
           <select
@@ -174,20 +338,34 @@ export default function CourseSearch({
       <div className="search-results">
         {loading && <div className="search-loading">Searching…</div>}
 
-        {!loading && searchQuery.trim() && results.length === 0 && (
+        {!loading && hasActiveQuery && results.length === 0 && (
           <div className="search-empty">
-            <div className="search-empty-paw">🐾</div>
-            No courses found for &ldquo;{searchQuery.trim()}&rdquo;
+            <img
+              className="search-empty-paw"
+              src="/faviconlight.png"
+              alt="TerrierPlan"
+              width={28}
+              height={28}
+            />
+            {searchQuery.trim()
+              ? <>No courses found for &ldquo;{searchQuery.trim()}&rdquo;</>
+              : 'No courses found for the selected HUB units'}
             <div className="search-hint">
-              Try a course code like &ldquo;CAS CS 111&rdquo; or a name prefix
-              like &ldquo;Calculus&rdquo;
+              Try a course code like &ldquo;CAS CS 111&rdquo;, a name prefix
+              like &ldquo;Calculus&rdquo;, or a different HUB filter
             </div>
           </div>
         )}
 
-        {!loading && !searchQuery.trim() && (
+        {!loading && !hasActiveQuery && (
           <div className="search-empty">
-            <div className="search-empty-paw">🐾</div>
+            <img
+              className="search-empty-paw"
+              src="/faviconlight.png"
+              alt="TerrierPlan"
+              width={28}
+              height={28}
+            />
             Search by course code or name, then click a result to add it to a
             semester.
           </div>
