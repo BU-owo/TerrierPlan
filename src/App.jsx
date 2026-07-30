@@ -2,9 +2,23 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
 import PlannerPage from './pages/PlannerPage';
+import { useState, useEffect } from 'react';
 
 export default function App() {
   const { loading } = useAuth();
+
+  const [showBeta, setShowBeta] = useState(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem('terrierplan_beta_seen')) {
+      setShowBeta(true);
+    }
+  }, []);
+
+  function dismissBeta() {
+    localStorage.setItem('terrierplan_beta_seen', 'true');
+    setShowBeta(false);
+  }
 
   if (loading) {
     return (
@@ -17,6 +31,22 @@ export default function App() {
 
   return (
     <>
+      {showBeta && (
+        <div className="beta-overlay">
+          <div className="beta-modal">
+            <div className="beta-modal-paw">🐾</div>
+            <h2>Welcome to TerrierPlan!</h2>
+            <p>
+              This project is currently in beta — things may be incomplete,
+              broken, or change without warning. If you find bugs or have
+              ideas, you know where to find me!
+            </p>
+            <button className="beta-dismiss-btn" onClick={dismissBeta}>
+              Got it, let me in!!!!!!
+            </button>
+          </div>
+        </div>
+      )}
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -36,7 +66,7 @@ export default function App() {
         Not affiliated with or endorsed by Boston University. This is an
         independent, community-made tool built with AI assistance. Data is sourced from BU's official catalog and website. Use at your
         own discretion.
-      </footer> 
+      </footer>
     </>
   );
 }

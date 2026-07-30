@@ -1038,3 +1038,59 @@
   border-radius: var(--radius-sm);
   border: 1.5px dashed var(--border);
 }
+
+.beta-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.beta-modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 32px 28px;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.beta-modal-paw {
+  font-size: 36px;
+}
+
+.beta-modal h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--scarlet);
+  margin: 0;
+}
+
+.beta-modal p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.beta-dismiss-btn {
+  margin-top: 4px;
+  padding: 10px 24px;
+  background: var(--scarlet);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.beta-dismiss-btn:hover { opacity: 0.88; }
