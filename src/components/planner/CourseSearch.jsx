@@ -1,7 +1,70 @@
 import { useState, useEffect, useRef } from 'react';
+import { useDraggable } from '@dnd-kit/core';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { HUB_COLOR_FOR, SEMESTER_LABELS } from '../../utils/hubConstants';
+
+function SearchResultCard({
+  course,
+  alreadyAdded,
+  activeSemIndex,
+  onAddCourse,
+  onPickSemester,
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `search-${course.id}`,
+    data: { from: 'search', courseKey: course.id, course },
+    disabled: alreadyAdded,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={[
+        'search-result-card',
+        alreadyAdded ? 'already-added' : '',
+        isDragging ? 'is-dragging' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      title={
+        alreadyAdded
+          ? 'Already in your plan'
+          : 'Click to add to a semester or drag to a semester column'
+      }
+      onClick={() => {
+        if (alreadyAdded) return;
+        if (activeSemIndex !== undefined && activeSemIndex !== null) {
+          onAddCourse(course.id, activeSemIndex);
+        } else {
+          onPickSemester(course);
+        }
+      }}
+      {...(alreadyAdded ? {} : { ...attributes, ...listeners })}
+    >
+      <div className="search-result-info">
+        <div className="search-result-code">
+          {course.courseNumber ?? course.id}
+        </div>
+        <div className="search-result-name">{course.name ?? '—'}</div>
+        {course.hubUnits?.length > 0 && (
+          <div className="search-result-hub">
+            {course.hubUnits.slice(0, 4).map((unit) => (
+              <span
+                key={unit}
+                className={`hub-chip hub-chip-${
+                  HUB_COLOR_FOR[unit]?.groupId ?? 'def'
+                }`}
+              >
+                {unit}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function CourseSearch({
   activeSemIndex,
@@ -130,62 +193,16 @@ export default function CourseSearch({
           </div>
         )}
 
-        {results.map((course) => {
-          const alreadyAdded = coursesInPlan.has(course.id);
-          return (
-            <div
-              key={course.id}
-              className={`search-result-card${alreadyAdded ? ' already-added' : ''}`}
-              title={
-                alreadyAdded
-                  ? 'Already in your plan'
-                  : 'Click to add to a semester or drag to a semester column'
-              }
-              onClick={() => {
-                if (!alreadyAdded) {
-                  // If a semester is focused/selected, auto-add directly
-                  if (activeSemIndex !== undefined && activeSemIndex !== null) {
-                    onAddCourse(course.id, activeSemIndex);
-                  } else {
-                    // Otherwise, show picker modal for user to select semester
-                    setSelectedCourseForPicker(course);
-                  }
-                }
-              }}
-              style={{ cursor: alreadyAdded ? 'default' : 'pointer' }}
-              draggable={!alreadyAdded}
-              onDragStart={(e) => {
-                if (alreadyAdded) {
-                  e.preventDefault();
-                  return;
-                }
-                e.dataTransfer.effectAllowed = 'copy';
-                e.dataTransfer.setData('courseId', course.id);
-              }}
-            >
-              <div className="search-result-info">
-                <div className="search-result-code">
-                  {course.courseNumber ?? course.id}
-                </div>
-                <div className="search-result-name">{course.name ?? '—'}</div>
-                {course.hubUnits?.length > 0 && (
-                  <div className="search-result-hub">
-                    {course.hubUnits.slice(0, 4).map((unit) => (
-                      <span
-                        key={unit}
-                        className={`hub-chip hub-chip-${
-                          HUB_COLOR_FOR[unit]?.groupId ?? 'def'
-                        }`}
-                      >
-                        {unit}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {results.map((course) => (
+          <SearchResultCard
+            key={course.id}
+            course={course}
+            alreadyAdded={coursesInPlan.has(course.id)}
+            activeSemIndex={activeSemIndex}
+            onAddCourse={onAddCourse}
+            onPickSemester={setSelectedCourseForPicker}
+          />
+        ))}
 
         {/* Semester picker modal */}
         {selectedCourseForPicker && (

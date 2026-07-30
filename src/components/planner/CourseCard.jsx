@@ -10,6 +10,7 @@ export default function CourseCard({
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: courseKey,
+    data: { from: 'board', courseKey },
     disabled: isDragOverlay,
   });
 

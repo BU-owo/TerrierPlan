@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { signOut } from 'firebase/auth';
 import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
   collection,
   doc,
   getDocs,
@@ -19,6 +26,7 @@ import { useAuth } from '../hooks/useAuth';
 import PlanSelector from '../components/planner/PlanSelector';
 import CourseSearch from '../components/planner/CourseSearch';
 import SemesterBoard from '../components/planner/SemesterBoard';
+import CourseCard from '../components/planner/CourseCard';
 import HubSidebar from '../components/planner/HubSidebar';
 import BulletinPanel from '../components/planner/BulletinPanel';
 import './planner.css';
@@ -46,6 +54,12 @@ export default function PlannerPage() {
   const [saveStatus, setSaveStatus] = useState(''); // 'saved' | 'error' | ''
   const [isDirty, setIsDirty] = useState(false);
   const [unsavedChangesWarning, setUnsavedChangesWarning] = useState(false);
+  const [draggingId, setDraggingId] = useState(null);
+  const [dragOverlay, setDragOverlay] = useState(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
 
   const saveTimeoutRef = useRef(null);
   const isInitialLoad = useRef(true);
@@ -403,6 +417,42 @@ export default function PlannerPage() {
     if (!user) saveLocalPlan();
   }
 
+  function handleDragStart({ active }) {
+    const courseKey = active.data.current?.courseKey ?? active.id;
+    setDraggingId(active.id);
+    setDragOverlay({
+      courseKey,
+      data: active.data.current?.course ?? courseMap[courseKey],
+      credits: creditsMap[courseKey],
+    });
+  }
+
+  function handleDragEnd({ active, over }) {
+    setDraggingId(null);
+    setDragOverlay(null);
+    if (!over) return;
+
+    const match = String(over.id).match(/^col-(\d+)$/);
+    if (!match) return;
+    const destIndex = parseInt(match[1], 10);
+    const courseKey = active.data.current?.courseKey ?? active.id;
+    const from = active.data.current?.from;
+
+    if (from === 'search') {
+      handleAddCourse(courseKey, destIndex);
+      return;
+    }
+
+    const srcIndex = semesters.findIndex((sem) => sem.includes(courseKey));
+    if (srcIndex === -1 || srcIndex === destIndex) return;
+    handleMoveCourse(courseKey, srcIndex, destIndex);
+  }
+
+  function handleDragCancel() {
+    setDraggingId(null);
+    setDragOverlay(null);
+  }
+
   function handleToggleTransfer(val) {
     setIsTransfer(val);
     setIsDirty(true);
@@ -508,40 +558,58 @@ export default function PlannerPage() {
       </header>
 
       {/* ── Body ── */}
-      <div className="planner-body">
-        {/* Left: search */}
-        <aside className="planner-left">
-          <CourseSearch
-            activeSemIndex={activeSemIndex}
-            onActiveSemChange={setActiveSemIndex}
-            coursesInPlan={coursesInPlan}
-            onAddCourse={handleAddCourse}
-          />
-        </aside>
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
+        <div className="planner-body">
+          {/* Left: search */}
+          <aside className="planner-left">
+            <CourseSearch
+              activeSemIndex={activeSemIndex}
+              onActiveSemChange={setActiveSemIndex}
+              coursesInPlan={coursesInPlan}
+              onAddCourse={handleAddCourse}
+            />
+          </aside>
 
-        {/* Center: semester board */}
-        <main className="planner-center">
-          <SemesterBoard
-            semesters={semesters}
-            courseMap={courseMap}
-            creditsMap={creditsMap}
-            activeSemIndex={activeSemIndex}
-            onSemesterClick={setActiveSemIndex}
-            onMoveCourse={handleMoveCourse}
-            onRemoveCourse={handleRemoveCourse}
-          />
-        </main>
+          {/* Center: semester board */}
+          <main className="planner-center">
+            <SemesterBoard
+              semesters={semesters}
+              courseMap={courseMap}
+              creditsMap={creditsMap}
+              activeSemIndex={activeSemIndex}
+              onSemesterClick={setActiveSemIndex}
+              onRemoveCourse={handleRemoveCourse}
+              draggingId={draggingId}
+            />
+          </main>
 
-        {/* Right: HUB tracker */}
-        <aside className="planner-right">
-          <HubSidebar
-            semesters={semesters}
-            courseMap={courseMap}
-            isTransfer={isTransfer}
-            onToggleTransfer={handleToggleTransfer}
-          />
-        </aside>
-      </div>
+          {/* Right: HUB tracker */}
+          <aside className="planner-right">
+            <HubSidebar
+              semesters={semesters}
+              courseMap={courseMap}
+              isTransfer={isTransfer}
+              onToggleTransfer={handleToggleTransfer}
+            />
+          </aside>
+        </div>
+
+        <DragOverlay dropAnimation={null}>
+          {dragOverlay ? (
+            <CourseCard
+              courseKey={dragOverlay.courseKey}
+              data={dragOverlay.data}
+              credits={dragOverlay.credits}
+              isDragOverlay
+            />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* ── Bulletin Panel ── */}
       <BulletinPanel />
