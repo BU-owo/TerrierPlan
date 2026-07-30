@@ -34,9 +34,9 @@ export default function App() {
         marginTop: '2rem'
       }}>
         Not affiliated with or endorsed by Boston University. This is an
-        independent, community-made, mostly vibe-coded tool. Use at your
+        independent, community-made tool built with AI assistance. Data is sourced from BU's official catalog and website. Use at your
         own discretion.
-      </footer>
+      </footer> 
     </>
   );
 }
