@@ -35,6 +35,10 @@ import '../App.css';
 const EMPTY_SEMESTERS = () => Array.from({ length: 8 }, () => []);
 const LOCAL_STORAGE_KEY = 'terrierplan_session';
 
+// Shared across Strict Mode double-invokes of the auth effect so we only
+// migrate (and clear localStorage) once per guest session → sign-in.
+let guestMigrationPromise = null;
+
 export default function PlannerPage() {
   const { user, loading: authLoading } = useAuth();
 
@@ -67,42 +71,73 @@ export default function PlannerPage() {
   const hasUnsavedChanges = useRef(false);
   const pendingLeaveAction = useRef(null);
 
-  // ── Load plans on sign-in ─────────────────────────────────────────────────
+  // ── Load plans on sign-in (and migrate any guest plan first) ──────────────
   useEffect(() => {
     if (authLoading) return; // Wait for auth to load
 
-    if (user) {
-      // User is logged in
-      loadPlans(user.uid).then(async (list) => {
-        // Check if we have a guest plan to migrate
-        const guestPlan = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (guestPlan) {
-          try {
-            const parsedGuest = JSON.parse(guestPlan);
-            // Migrate guest plan to Firestore
-            await migrateGuestPlan(user.uid, parsedGuest);
-            // Reload plans to show the migrated one
-            const updatedList = await loadPlans(user.uid);
-            if (updatedList.length > 0) {
-              await loadPlan(user.uid, updatedList[0].id, updatedList);
-            }
-          } catch (err) {
-            console.error('Error migrating guest plan:', err);
-            // Fall back to loading first plan if migration fails
-            if (list.length > 0) {
-              await loadPlan(user.uid, list[0].id, list);
-            }
-          }
-        } else if (list.length === 0) {
-          await createDefaultPlan(user.uid);
+    let cancelled = false;
+
+    async function migrateGuestPlanIfNeeded(uid) {
+      // Deduplicate concurrent calls (React Strict Mode remounts the effect)
+      if (!guestMigrationPromise) {
+        const guestRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (!guestRaw) {
+          guestMigrationPromise = Promise.resolve(null);
         } else {
-          await loadPlan(user.uid, list[0].id, list);
+          // Claim immediately so a sibling effect cannot also migrate / createDefault
+          localStorage.removeItem(LOCAL_STORAGE_KEY);
+          guestMigrationPromise = (async () => {
+            try {
+              const parsedGuest = JSON.parse(guestRaw);
+              return await migrateGuestPlan(uid, parsedGuest);
+            } catch (err) {
+              console.error('Error migrating guest plan:', err);
+              localStorage.setItem(LOCAL_STORAGE_KEY, guestRaw);
+              guestMigrationPromise = null; // allow retry on next sign-in attempt
+              return null;
+            }
+          })();
         }
-      });
-    } else {
-      // User is not logged in — load from local storage
-      loadLocalPlan();
+      }
+      return guestMigrationPromise;
     }
+
+    async function initForUser(uid) {
+      // 1. Migrate guest plan BEFORE loadPlans/createDefaultPlan
+      const migratedId = await migrateGuestPlanIfNeeded(uid);
+      if (cancelled) return;
+
+      // 2. Load existing plans (migrated doc is additive — never overwrites)
+      let list = [];
+      try {
+        list = await loadPlans(uid);
+      } catch (err) {
+        console.error('Error loading plans:', err);
+        return;
+      }
+      if (cancelled) return;
+
+      if (migratedId) {
+        await loadPlan(uid, migratedId, list);
+      } else if (list.length === 0) {
+        await createDefaultPlan(uid);
+      } else {
+        await loadPlan(uid, list[0].id, list);
+      }
+    }
+
+    if (user) {
+      initForUser(user.uid);
+    } else {
+      // Signed out — allow a future sign-in to migrate a new guest plan
+      guestMigrationPromise = null;
+      loadLocalPlan();
+      isInitialLoad.current = false;
+    }
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, authLoading]);
 
@@ -141,6 +176,8 @@ export default function PlannerPage() {
     const action = pendingLeaveAction.current;
     pendingLeaveAction.current = null;
     setShowLeaveModal(false);
+    // Flush guest plan so sign-in migration has the latest board state
+    if (!user) saveLocalPlan();
     // Clear dirty so beforeunload does not also fire on programmatic navigation
     hasUnsavedChanges.current = false;
     setIsDirty(false);
@@ -198,12 +235,23 @@ export default function PlannerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [semesters, planName, isTransfer, isDirty]);
 
+  // ── Guest: persist to localStorage after React commits the new state ──────
+  // Handlers used to call saveLocalPlan() immediately after setSemesters(),
+  // which wrote the *previous* board (stale closure) — so the last course
+  // change was never stored, and a single-course plan looked "lost" on sign-in.
+  useEffect(() => {
+    if (user || authLoading || isInitialLoad.current || !isDirty) return;
+    saveLocalPlan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [semesters, planName, isTransfer, isDirty, user, authLoading]);
+
   // ── Local plan management (for auth-optional browsing) ─────────────────────
-  function saveLocalPlan() {
+  function saveLocalPlan(overrides = {}) {
     const plan = {
-      name: planName,
-      semesters,
-      isTransfer,
+      name: overrides.name ?? planName,
+      major: overrides.major ?? '',
+      semesters: overrides.semesters ?? semesters,
+      isTransfer: overrides.isTransfer ?? isTransfer,
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(plan));
@@ -225,16 +273,15 @@ export default function PlannerPage() {
   }
 
   async function migrateGuestPlan(uid, guestPlan) {
-    // Create a new plan in Firestore from the guest localStorage data
+    // Always addDoc — never overwrite an existing saved plan
     const ref = await addDoc(collection(db, 'users', uid, 'plans'), {
       name: guestPlan.name || 'Imported Plan',
+      major: guestPlan.major || '',
       semesters: guestPlan.semesters || EMPTY_SEMESTERS(),
       isTransfer: guestPlan.isTransfer || false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    // Only clear localStorage after successful Firestore write
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
     console.log('✅ Guest plan migrated to Firestore:', ref.id);
     return ref.id;
   }
@@ -444,7 +491,6 @@ export default function PlannerPage() {
     });
     setIsDirty(true);
     if (!courseMap[courseKey]) fetchCourseData([courseKey]);
-    if (!user) saveLocalPlan();
   }
 
   function handleMoveCourse(courseKey, fromSem, toSem) {
@@ -455,7 +501,6 @@ export default function PlannerPage() {
       return next;
     });
     setIsDirty(true);
-    if (!user) saveLocalPlan();
   }
 
   function handleRemoveCourse(courseKey, semIndex) {
@@ -465,7 +510,6 @@ export default function PlannerPage() {
       return next;
     });
     setIsDirty(true);
-    if (!user) saveLocalPlan();
   }
 
   function handleDragStart({ active }) {
@@ -507,7 +551,6 @@ export default function PlannerPage() {
   function handleToggleTransfer(val) {
     setIsTransfer(val);
     setIsDirty(true);
-    if (!user) saveLocalPlan();
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -616,6 +659,7 @@ export default function PlannerPage() {
               className="btn-signin"
               onClick={() =>
                 requestLeave(() => {
+                  saveLocalPlan();
                   window.location.href = '/login';
                 })
               }
