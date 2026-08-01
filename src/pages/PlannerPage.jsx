@@ -710,15 +710,25 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setIsDirty(true);
   }
 
-  function handleRemoveExternalCredit(index) {
-    setExternalCredits((prev) => prev.filter((_, creditIndex) => creditIndex !== index));
+  function handleRemoveExternalCredit(creditIdOrIndex) {
+    setExternalCredits((prev) => {
+      if (typeof creditIdOrIndex === 'number') {
+        return prev.filter((_, creditIndex) => creditIndex !== creditIdOrIndex);
+      }
+      return prev.filter((credit) => credit?.id !== creditIdOrIndex);
+    });
     setIsDirty(true);
   }
 
-  function handleUpdateExternalCredit(index, patch) {
-    setExternalCredits((prev) => prev.map((credit, creditIndex) => (
-      creditIndex === index ? (normalizeExternalCredit({ ...credit, ...patch }) || { ...credit, ...patch }) : credit
-    )));
+  function handleUpdateExternalCredit(creditIdOrIndex, patch) {
+    setExternalCredits((prev) => prev.map((credit, creditIndex) => {
+      const matches = typeof creditIdOrIndex === 'number'
+        ? creditIndex === creditIdOrIndex
+        : credit?.id === creditIdOrIndex;
+      return matches
+        ? (normalizeExternalCredit({ ...credit, ...patch }) || { ...credit, ...patch })
+        : credit;
+    }));
     setIsDirty(true);
   }
 
@@ -727,8 +737,27 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const extraCourseKeys = extraTerms.flatMap((term) => term.courseKeys || []);
   const coursesInPlan = new Set([...semesters.flat(), ...extraCourseKeys]);
 
-  const totalCredits = [...semesters.flat(), ...extraCourseKeys]
+  const planCourseCredits = [...semesters.flat(), ...extraCourseKeys]
     .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0);
+
+  const externalCreditTotal = (externalCredits || []).reduce((sum, credit) => {
+    if (!credit) return sum;
+    const creditValue = Number(credit.credits);
+    if (!Number.isFinite(creditValue)) return sum;
+
+    if (credit.type === 'ap' || credit.type === 'ib') {
+      return sum + creditValue;
+    }
+
+    if (credit.type === 'transfer') {
+      const mapped = Boolean(String(credit.courseKey || '').trim());
+      return mapped ? sum + creditValue : sum;
+    }
+
+    return sum;
+  }, 0);
+
+  const totalCredits = planCourseCredits + externalCreditTotal;
 
   if (authLoading) {
     return (

@@ -67,25 +67,12 @@ export const AP_HUB_CREDIT = {
 };
 
 // Raw "Test Subject" text as it may actually appear on a BU transcript ->
-// canonical key above. BU's own transcript printout doesn't always match
-// College Board's exact exam names (e.g. "AP Mathematics: Calculus AB").
-// Add to this list as new real-world variants show up.
+// canonical key above, for the rare cases the fuzzy word-matching below
+// can't handle on its own (e.g. "Macroeconomics" as one fused word vs.
+// "Economics: Macro" as two separate words).
 export const AP_ALIASES = {
-  'mathematics calculus ab': 'calculus ab',
-  'mathematics calculus bc': 'calculus bc',
   'economics macro': 'macroeconomics',
   'economics micro': 'microeconomics',
-  'government and politics united states': 'united states government and politics',
-  'government and politics comparative': 'comparative government and politics',
-  'physics c mechanics': 'physics c mechanics',
-  'physics c electricity and magnetism': 'physics c electricity and magnetism',
-  'u s history': 'united states history',
-  'us history': 'united states history',
-  'u s government and politics': 'united states government and politics',
-  'us government and politics': 'united states government and politics',
-  'united states government & politics': 'united states government and politics',
-  'english literature compostn': 'english literature and composition',
-  'english language compostn': 'english language and composition',
 };
 
 // ---------------------------------------------------------------------
@@ -150,13 +137,80 @@ export const IB_NO_CREDIT = [
 // ---------------------------------------------------------------------
 
 function normalize(str) {
-  return String(str || '')
+  let s = String(str || '')
     .toLowerCase()
     .replace(/^ap\s+/, '')
     .replace(/^ib\s+/, '')
     .replace(/[.:\-–—&]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  // known real-world abbreviations/synonyms, applied as whole-word swaps
+  // BEFORE word-set matching, so e.g. "U.S." and "American" both line up
+  // with the "united states" wording used in the table keys.
+  s = s.replace(/\bu s\b/g, 'united states');
+  s = s.replace(/\bus\b/g, 'united states');
+  s = s.replace(/\bamerican\b/g, 'united states');
+  s = s.replace(/\bcompostn\b/g, 'composition');
+  return s;
+}
+
+// Words to ignore when comparing word sets — filler words that some
+// transcripts include and others drop, which shouldn't block a match.
+const STOPWORDS = new Set(['and']);
+
+function wordSet(phrase) {
+  return new Set(phrase.split(' ').filter((w) => w && !STOPWORDS.has(w)));
+}
+
+function isSubset(a, b) {
+  for (const w of a) if (!b.has(w)) return false;
+  return true;
+}
+
+/**
+ * Match a normalized subject string against a lookup table's keys.
+ * Real transcripts abbreviate, reorder, and drop words inconsistently
+ * (e.g. "AP Spanish Language" vs. the College Board's full "Spanish
+ * Language and Culture") — matching on exact strings meant a new alias
+ * was needed every time a new variant showed up. Instead, this matches
+ * on word sets: if one side's meaningful words are entirely contained in
+ * the other's, it's a match, regardless of order or missing filler words.
+ * If more than one key matches with no clear best fit, this returns null
+ * rather than guessing — genuine ambiguity should go to manual review,
+ * not get silently resolved to the wrong exam.
+ * @returns {string|null} the matched canonical key, or null if none/ambiguous
+ */
+function fuzzyMatchKey(normalizedInput, table, aliases) {
+  if (aliases && aliases[normalizedInput]) return aliases[normalizedInput];
+  if (table[normalizedInput]) return normalizedInput;
+  const inputWords = wordSet(normalizedInput);
+  const candidates = [];
+  for (const key of Object.keys(table)) {
+    const keyWords = wordSet(key);
+    if (isSubset(keyWords, inputWords) || isSubset(inputWords, keyWords)) {
+      candidates.push({ key, overlap: keyWords.size + inputWords.size });
+    }
+  }
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0].key;
+  candidates.sort((a, b) => b.overlap - a.overlap);
+  if (candidates[0].overlap > candidates[1].overlap) return candidates[0].key;
+  return null; // genuinely ambiguous — don't guess, flag for review
+}
+
+/**
+ * Check whether an AP exam's HUB result actually depends on the score.
+ * Use this to decide whether to show a score picker at all — most AP
+ * exams have a fixed HUB result regardless of score (4 vs 5 only changes
+ * credit hours, not HUB eligibility), so don't ask for a score unless
+ * this returns true.
+ * @param {string} rawSubject
+ * @returns {boolean}
+ */
+export function isApScoreDependent(rawSubject) {
+  const key = fuzzyMatchKey(normalize(rawSubject), AP_HUB_CREDIT, AP_ALIASES);
+  const entry = key ? AP_HUB_CREDIT[key] : null;
+  return Boolean(entry && entry.byScore);
 }
 
 /**
@@ -168,10 +222,9 @@ function normalize(str) {
  *   callers should treat null as "flag for manual review", not "no HUB".
  */
 export function getApHub(rawSubject, score) {
-  const normalized = normalize(rawSubject);
-  const key = AP_ALIASES[normalized] || normalized;
+  const key = fuzzyMatchKey(normalize(rawSubject), AP_HUB_CREDIT, AP_ALIASES);
+  if (!key) return null;
   const entry = AP_HUB_CREDIT[key];
-  if (!entry) return null;
   if (entry.byScore) {
     if (score == null) return null;
     return entry.byScore[score] ?? [];
@@ -189,12 +242,13 @@ export function getApHub(rawSubject, score) {
  *   parsed from the transcript) — treat null as "flag for manual review".
  */
 export function getIbHub(rawSubject, score, isHigherLevel) {
-  const key = normalize(rawSubject);
-  if (IB_NO_CREDIT.includes(key)) return []; // caller should also skip creating an entry at all, not just zero the HUB
+  const normalized = normalize(rawSubject);
+  const noCreditTable = Object.fromEntries(IB_NO_CREDIT.map((k) => [k, true]));
+  if (fuzzyMatchKey(normalized, noCreditTable, null)) return []; // caller should also skip creating an entry at all, not just zero the HUB
   if (isHigherLevel === false) return [];
   if (score != null && score < 5) return [];
   if (isHigherLevel == null || score == null) return null;
-  const entry = IB_HUB_CREDIT[key];
-  if (!entry) return null;
-  return entry.hub;
+  const key = fuzzyMatchKey(normalized, IB_HUB_CREDIT, null);
+  if (!key) return null;
+  return IB_HUB_CREDIT[key].hub;
 }

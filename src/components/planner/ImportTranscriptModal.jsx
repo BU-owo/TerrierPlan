@@ -3,6 +3,7 @@ import { parseTranscriptPdf } from '../../utils/transcriptParser';
 import { buildImportPreview, applyImport } from '../../utils/transcriptMapping';
 import { SEMESTER_LABELS } from '../../utils/hubConstants';
 import { resolveApHubFromScore } from '../../utils/apScoreResolution';
+import { getApHub, isApScoreDependent } from '../../data/apIbHubCredit';
 
 const STEPS = ['Upload', 'Review', 'Confirm'];
 const DEBUG_IMPORT = true;
@@ -174,6 +175,12 @@ export default function ImportTranscriptModal({
         ...prev,
         apCredits: prev.apCredits.map((ap) => {
           if (ap.id !== id) return ap;
+          if (!isApScoreDependent(ap.testSubject)) {
+            return {
+              ...ap,
+              resolvedHubUnits: getApHub(ap.testSubject),
+            };
+          }
           const resolved = resolveApHubFromScore(ap.testSubject, scoreValue);
           return {
             ...ap,
@@ -382,34 +389,39 @@ export default function ImportTranscriptModal({
 
               <section className="import-section">
                 <h3>AP / Test Credit</h3>
-                <p className="import-section-note">Set AP scores here (1-5). Eligible AP exams are evaluated against BU&apos;s AP HUB policy as you edit.</p>
+                <p className="import-section-note">Only score-dependent AP exams ask for scores. Fixed-HUB AP exams are resolved automatically from the exam name.</p>
                 {preview.apCredits.length === 0 && <p className="import-muted">None found.</p>}
                 <ul className="import-list compact">
                   {preview.apCredits.map((ap, i) => {
+                    const scoreDependent = isApScoreDependent(ap.testSubject);
                     const resolvedHubUnits = Array.isArray(ap.resolvedHubUnits)
                       ? ap.resolvedHubUnits
-                      : resolveApHubFromScore(ap.testSubject, ap.score).hubUnits;
+                      : scoreDependent
+                        ? resolveApHubFromScore(ap.testSubject, ap.score).hubUnits
+                        : getApHub(ap.testSubject);
                     return (
                     <li key={ap.id || `${ap.courseKey}-${i}`}>
                       <strong>{ap.courseKey}</strong>
                       <span className="import-muted">{ap.testSubject} — {ap.title}</span>
                       <span>{ap.credits} cr</span>
-                      <label className="import-ap-score-field">
-                        Score
-                        <select
-                          value={ap.score ?? ''}
-                          onChange={(e) => updateApScore(ap.id, e.target.value)}
-                          aria-label={`AP score for ${ap.testSubject}`}
-                        >
-                          <option value="">—</option>
-                          {[1, 2, 3, 4, 5].map((scoreOption) => (
-                            <option key={scoreOption} value={scoreOption}>{scoreOption}</option>
-                          ))}
-                        </select>
-                      </label>
+                      {scoreDependent && (
+                        <label className="import-ap-score-field">
+                          Score
+                          <select
+                            value={ap.score ?? ''}
+                            onChange={(e) => updateApScore(ap.id, e.target.value)}
+                            aria-label={`AP score for ${ap.testSubject}`}
+                          >
+                            <option value="">—</option>
+                            {[1, 2, 3, 4, 5].map((scoreOption) => (
+                              <option key={scoreOption} value={scoreOption}>{scoreOption}</option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
                       {Array.isArray(resolvedHubUnits) && (
                         <span className="import-ap-hub-preview">
-                          {resolvedHubUnits.length > 0 ? `HUB: ${resolvedHubUnits.join(' · ')}` : 'No HUB from this score'}
+                          {resolvedHubUnits.length > 0 ? `HUB: ${resolvedHubUnits.join(' · ')}` : scoreDependent ? 'No HUB from this score' : 'No HUB for this exam'}
                         </span>
                       )}
                     </li>

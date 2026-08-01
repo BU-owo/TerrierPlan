@@ -95,6 +95,7 @@ requirement-checking, no rules engine yet).
 #### `externalCredits[]` entry
 | Field | Type | Notes |
 |---|---|---|
+| id | string | Persistent per-entry identifier used for stable UI keying and updates |
 | type | string | `'ap'` \| `'transfer'` |
 | sourceTitle | string | Title as printed on the transcript |
 | courseKey | string \| null | BU equivalent; null until user maps a transfer row |

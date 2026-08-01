@@ -1,8 +1,8 @@
-import { memo, useEffect, useState } from 'react';
-import { getApHub, getIbHub } from '../../data/apIbHubCredit';
+import { memo, useEffect, useRef, useState } from 'react';
+import { getApHub, getIbHub, isApScoreDependent } from '../../data/apIbHubCredit';
 import { HUB_LABELS } from '../../utils/hubConstants';
 import { normalizeExternalCredit } from '../../utils/externalCredits';
-import { resolveApHubFromScore, isKnownScoreDependentAp } from '../../utils/apScoreResolution';
+import { resolveApHubFromScore } from '../../utils/apScoreResolution';
 
 const DEBUG_EXTERNAL_CREDITS = true;
 
@@ -13,9 +13,19 @@ function debugExternalCredits(stage, payload) {
 
 const TransferExternalCreditRow = memo(function TransferExternalCreditRow({
   credit,
-  index,
+  creditId,
   onUpdate,
 }) {
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
+
+  console.log('[DEBUG TransferExternalCreditRow] render', {
+    creditId,
+    sourceTitle: credit.sourceTitle,
+    renderCount: renderCountRef.current,
+    propCourseKey: credit.courseKey || '',
+  });
+
   const [courseKeyDraft, setCourseKeyDraft] = useState(credit.courseKey || '');
 
   useEffect(() => {
@@ -23,7 +33,7 @@ const TransferExternalCreditRow = memo(function TransferExternalCreditRow({
   }, [credit.courseKey, credit.sourceTitle]);
 
   function commitCourseKey(nextValue) {
-    onUpdate?.(index, {
+    onUpdate?.(creditId, {
       courseKey: nextValue.replace(/\s+/g, '').toUpperCase() || null,
       status: nextValue.trim() ? 'mapped' : 'needs_mapping',
     });
@@ -39,8 +49,15 @@ const TransferExternalCreditRow = memo(function TransferExternalCreditRow({
         value={courseKeyDraft}
         onChange={(e) => {
           const nextValue = e.target.value;
+          console.log('[DEBUG TransferExternalCreditRow] onChange', {
+            creditId,
+            sourceTitle: credit.sourceTitle,
+            renderCount: renderCountRef.current,
+            eventValue: nextValue,
+            draftBeforeSet: courseKeyDraft,
+            propBeforeCommit: credit.courseKey || '',
+          });
           setCourseKeyDraft(nextValue);
-          commitCourseKey(nextValue);
         }}
         onBlur={(e) => commitCourseKey(e.target.value)}
       />
@@ -50,7 +67,7 @@ const TransferExternalCreditRow = memo(function TransferExternalCreditRow({
 
 export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpdate }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [editingScoreIndex, setEditingScoreIndex] = useState(null);
+  const [editingScoreCreditId, setEditingScoreCreditId] = useState(null);
   const credits = Array.isArray(externalCredits) ? externalCredits : [];
   debugExternalCredits('render-props', {
     collapsed,
@@ -93,26 +110,29 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
       <ul className="external-credits-list">
         {credits.map((ec, i) => {
           const normalized = normalizeExternalCredit(ec) || ec;
+          const creditId = normalized.id || `fallback-${i}`;
           const type = normalized.type;
+          const apScoreDependent = type === 'ap' && isApScoreDependent(normalized.testSubject);
           const isTestCredit = type === 'ap' || type === 'ib';
           const testHub = isTestCredit
             ? (Array.isArray(normalized.manualHubUnits)
               ? normalized.manualHubUnits
               : type === 'ib'
                 ? getIbHub(normalized.testSubject, normalized.score, normalized.isHigherLevel)
-                : getApHub(normalized.testSubject, normalized.score))
+                : apScoreDependent
+                  ? getApHub(normalized.testSubject, normalized.score)
+                  : getApHub(normalized.testSubject))
             : null;
-          const knownScoreDependentAp = type === 'ap' && isKnownScoreDependentAp(normalized.testSubject);
-          const hasKnownApScorePath = knownScoreDependentAp
+          const hasKnownApScorePath = apScoreDependent
             && testHub === null
             && normalized.score == null;
-          const showScoreEditor = knownScoreDependentAp && (hasKnownApScorePath || editingScoreIndex === i);
+          const showScoreEditor = apScoreDependent && (hasKnownApScorePath || editingScoreCreditId === creditId);
           const needsMapping = type === 'transfer' && (normalized.status === 'needs_mapping' || !normalized.courseKey);
-          const needsApReview = (type === 'ib' && testHub === null) || (type === 'ap' && testHub === null && !knownScoreDependentAp);
+          const needsApReview = (type === 'ib' && testHub === null) || (type === 'ap' && testHub === null && !apScoreDependent);
           const needsReview = needsMapping || needsApReview;
           return (
           <li
-            key={`${type}-${normalized.courseKey || normalized.sourceTitle}-${i}`}
+            key={creditId}
             className={`external-credit-row ${needsReview ? 'needs-review' : ''}`}
           >
             <div className="external-credit-main">
@@ -128,11 +148,11 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
                   {normalized.score != null && <span>Score {normalized.score}</span>}
                   {normalized.institution && <span>{normalized.institution}</span>}
                   <span>{normalized.credits} cr</span>
-                  {knownScoreDependentAp && normalized.score != null && (
+                  {apScoreDependent && normalized.score != null && (
                     <button
                       type="button"
                       className="external-credit-score-edit-btn"
-                      onClick={() => setEditingScoreIndex((prev) => (prev === i ? null : i))}
+                      onClick={() => setEditingScoreCreditId((prev) => (prev === creditId ? null : creditId))}
                     >
                       Edit score
                     </button>
@@ -141,7 +161,7 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
                 {needsMapping && (
                   <TransferExternalCreditRow
                     credit={normalized}
-                    index={i}
+                    creditId={creditId}
                     onUpdate={onUpdate}
                   />
                 )}
@@ -155,7 +175,7 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
                         value={normalized.score ?? ''}
                         onChange={(e) => {
                           const resolved = resolveApHubFromScore(normalized.testSubject, e.target.value);
-                          onUpdate?.(i, {
+                          onUpdate?.(creditId, {
                             score: resolved.score,
                             manualHubUnits: Array.isArray(resolved.hubUnits) ? resolved.hubUnits : undefined,
                             status: resolved.score == null ? 'needs_review' : 'auto_hub_resolved',
@@ -172,7 +192,7 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
                       <button
                         type="button"
                         className="external-credit-score-btn"
-                        onClick={() => setEditingScoreIndex(null)}
+                        onClick={() => setEditingScoreCreditId(null)}
                       >
                         Done
                       </button>
@@ -187,7 +207,7 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
                       <select
                         multiple
                         value={ec.manualHubUnits || []}
-                        onChange={(e) => onUpdate?.(i, {
+                        onChange={(e) => onUpdate?.(creditId, {
                           manualHubUnits: Array.from(e.target.selectedOptions, (option) => option.value),
                           status: 'manual_hub_confirmed',
                         })}
@@ -200,7 +220,7 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
                     <button
                       type="button"
                       className="external-credit-no-hub"
-                      onClick={() => onUpdate?.(i, {
+                      onClick={() => onUpdate?.(creditId, {
                         manualHubUnits: [],
                         status: 'no_hub_confirmed',
                       })}
@@ -220,7 +240,7 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
               <button
                 type="button"
                 className="external-credit-remove"
-                onClick={() => onRemove(i)}
+                onClick={() => onRemove(creditId)}
                 aria-label="Remove external credit"
               >
                 ×

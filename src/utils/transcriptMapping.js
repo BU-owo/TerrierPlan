@@ -1,6 +1,7 @@
 import { SEMESTER_LABELS } from './hubConstants';
 import { normalizeExternalCredits, normalizeExternalCredit } from './externalCredits';
 import { resolveApHubFromScore } from './apScoreResolution';
+import { getApHub, isApScoreDependent } from '../data/apIbHubCredit';
 
 const DEBUG_IMPORT = true;
 
@@ -143,7 +144,9 @@ export function buildImportPreview(parsed, existingSemesters, existingExtraTerms
     apCredits: (parsed.apCredits || []).map((ap, i) => ({
       ...ap,
       id: `ap-${i}`,
-      resolvedHubUnits: resolveApHubFromScore(ap.testSubject, ap.score).hubUnits,
+      resolvedHubUnits: isApScoreDependent(ap.testSubject)
+        ? resolveApHubFromScore(ap.testSubject, ap.score).hubUnits
+        : getApHub(ap.testSubject),
     })),
     transferCredits: (parsed.transferCredits || []).map((t, i) => ({
       ...t,

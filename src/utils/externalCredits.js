@@ -1,5 +1,18 @@
 const TEST_TYPES = new Set(['ap', 'ib']);
 
+function createExternalCreditId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `ec_${crypto.randomUUID()}`;
+  }
+  return `ec_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeCreditId(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
 function normalizeType(rawType, fallback) {
   const value = String(rawType || '').trim().toLowerCase();
   if (value === 'ap' || value === 'advanced_placement' || value === 'advanced placement') return 'ap';
@@ -25,9 +38,11 @@ export function normalizeExternalCredit(credit) {
 
   const type = normalizeType(credit.type, credit.institution ? 'transfer' : undefined);
   const courseKey = normalizeCourseKey(credit.courseKey);
+  const id = normalizeCreditId(credit.id) || createExternalCreditId();
 
   const normalized = {
     ...credit,
+    id,
     type,
     courseKey,
     status: normalizeStatus(type, credit.status, courseKey),
