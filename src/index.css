@@ -49,10 +49,32 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+html[data-theme='dark'] {
+  --cream: #111827;
+  --cream-dark: #263244;
+  --white: #1b2636;
+  --border: #3a4a60;
+  --border-light: #2c3a4d;
+  --text: #f5f7fb;
+  --text-secondary: #c4cedb;
+  --text-muted: #93a2b6;
+  --scarlet-light: #4b2026;
+  --scarlet-pale: #2d1a20;
+  --hub-phi-bg: #41282d;
+  --hub-sci-bg: #1c3835;
+  --hub-qr-bg: #1f3149;
+  --hub-div-bg: #45331d;
+  --hub-com-bg: #382747;
+  --hub-tl-bg: #203945;
+  --hub-def-bg: #303a49;
+  color-scheme: dark;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button  { cursor: pointer; font: inherit; }
 input, select, textarea { font: inherit; }
 a { color: inherit; text-decoration: none; }
+html, body, #root { min-height: 100%; background: var(--cream); color: var(--text); }
 
 /* Auth loading / route fallback */
 .auth-loading {

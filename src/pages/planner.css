@@ -1178,6 +1178,17 @@
 .unsaved-modal-leave {
   margin-top: 4px;
 }
+.theme-toggle {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255,255,255,.55);
+  border-radius: 50%;
+  background: rgba(255,255,255,.1);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+}
+.theme-toggle:hover { background: rgba(255,255,255,.22); }
 
 /* Transcript import and imported-credit panels */
 .btn-import-transcript {
@@ -1215,3 +1226,12 @@
 .import-error { color: #b42318; }.import-review-toolbar, .import-term-heading, .import-row-main, .import-transfer-fields { display: flex; gap: 10px; align-items: center; }.import-review-toolbar { justify-content: space-between; flex-wrap: wrap; }.import-section { margin-top: 22px; }.import-section h3 { margin: 0; font-size: 15px; }.import-list li { display: flex; gap: 10px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--border); }.import-conflict-row, .import-transfer-row { justify-content: space-between; flex-wrap: wrap; }.import-row-main { flex-wrap: wrap; }
 .import-chip-btn, .import-secondary-btn, .import-primary-btn { border-radius: 6px; padding: 7px 10px; cursor: pointer; font: inherit; font-size: 12px; }.import-chip-btn, .import-secondary-btn { border: 1px solid var(--border); background: #fff; }.import-chip-btn.active, .import-primary-btn { border: 1px solid var(--scarlet); background: var(--scarlet); color: #fff; }.import-primary-btn:disabled { opacity: .6; cursor: wait; }.import-conflict-actions { display: flex; gap: 5px; }.import-transfer-fields { align-items: end; }.import-transfer-fields label { display: grid; gap: 3px; font-size: 11px; color: var(--text-secondary); }.import-transfer-fields input { width: 130px; padding: 5px; border: 1px solid var(--border); border-radius: 4px; }
 @media (max-width: 640px) { .import-steps { gap: 8px; }.import-step-label { display: none; }.import-transfer-fields { width: 100%; }.import-transfer-fields input { width: 100%; } }
+
+html[data-theme='dark'] .search-picker-modal,
+html[data-theme='dark'] .import-modal,
+html[data-theme='dark'] .beta-modal { background: var(--white); }
+html[data-theme='dark'] .search-input:focus { background: var(--white); }
+html[data-theme='dark'] .hub-year-toggle-btn.active { background: var(--white); }
+html[data-theme='dark'] .plan-side-panel,
+html[data-theme='dark'] .external-credit-hub-picker select,
+html[data-theme='dark'] .external-credit-no-hub { background: var(--white); }

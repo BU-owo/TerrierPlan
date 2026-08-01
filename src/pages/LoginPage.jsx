@@ -3,7 +3,7 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 
-export default function LoginPage() {
+export default function LoginPage({ theme = 'light', onToggleTheme }) {
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,6 +25,14 @@ export default function LoginPage() {
 
   return (
     <div className="login-page">
+      <button
+        type="button"
+        className="login-theme-toggle"
+        onClick={onToggleTheme}
+        aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+      >
+        {theme === 'dark' ? '☀ Light mode' : '☾ Dark mode'}
+      </button>
       <div className="login-card">
         <img
           className="login-mascot"
@@ -67,6 +75,16 @@ export default function LoginPage() {
           justify-content: center;
           background: linear-gradient(150deg, #CC0000 0%, #8B0000 100%);
           padding: 24px;
+        }
+        .login-theme-toggle {
+          position: fixed;
+          top: 16px;
+          right: 16px;
+          border: 1px solid rgba(255,255,255,.7);
+          border-radius: 6px;
+          padding: 7px 10px;
+          background: rgba(0,0,0,.15);
+          color: #fff;
         }
         .login-card {
           background: var(--white);

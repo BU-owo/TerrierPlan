@@ -42,7 +42,7 @@ const LOCAL_STORAGE_KEY = 'terrierplan_session';
 // migrate (and clear localStorage) once per guest session → sign-in.
 let guestMigrationPromise = null;
 
-export default function PlannerPage() {
+export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const { user, loading: authLoading } = useAuth();
 
   // ── Plan list ─────────────────────────────────────────────────────────────
@@ -684,7 +684,7 @@ export default function PlannerPage() {
       <div className="auth-loading">
         <img
           className="auth-loading-paw"
-          src="/faviconlight.png"
+          src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
           alt="TerrierPlan"
           width={32}
           height={32}
@@ -759,6 +759,15 @@ export default function PlannerPage() {
         </div>
 
         <div className="planner-header-user">
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={onToggleTheme}
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {theme === 'dark' ? '☀' : '☾'}
+          </button>
           {user?.photoURL && (
             <img
               className="planner-header-avatar"
@@ -892,7 +901,7 @@ export default function PlannerPage() {
           <div className="beta-modal">
             <img
               className="beta-modal-paw"
-              src="/faviconlight.png"
+              src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
               alt="TerrierPlan"
               width={48}
               height={48}

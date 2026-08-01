@@ -5,16 +5,30 @@ import PlannerPage from './pages/PlannerPage';
 import { useState, useEffect } from 'react';
 import './App.css';
 
+const THEME_STORAGE_KEY = 'terrierplan_theme';
+
 export default function App() {
   const { loading } = useAuth();
 
   const [showBeta, setShowBeta] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) || 'light');
 
   useEffect(() => {
     if (!localStorage.getItem('terrierplan_beta_seen')) {
       setShowBeta(true);
     }
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    const favicon = document.querySelector('link[rel="icon"]');
+    if (favicon) favicon.href = theme === 'dark' ? '/favicondark.png' : '/faviconlight.png';
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((current) => current === 'dark' ? 'light' : 'dark');
+  }
 
   function dismissBeta() {
     localStorage.setItem('terrierplan_beta_seen', 'true');
@@ -26,7 +40,7 @@ export default function App() {
       <div className="auth-loading">
         <img
           className="auth-loading-paw"
-          src="/faviconlight.png"
+          src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
           alt="TerrierPlan"
           width={32}
           height={32}
@@ -43,7 +57,7 @@ export default function App() {
           <div className="beta-modal">
             <img
               className="beta-modal-paw"
-              src="/faviconlight.png"
+              src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
               alt="TerrierPlan"
               width={48}
               height={48}
@@ -62,20 +76,13 @@ export default function App() {
       )}
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/planner" element={<PlannerPage />} />
+          <Route path="/login" element={<LoginPage theme={theme} onToggleTheme={toggleTheme} />} />
+          <Route path="/planner" element={<PlannerPage theme={theme} onToggleTheme={toggleTheme} />} />
           <Route path="*" element={<Navigate to="/planner" replace />} />
         </Routes>
       </BrowserRouter>
 
-      <footer style={{
-        textAlign: 'center',
-        padding: '1.5rem 1rem',
-        fontSize: '0.75rem',
-        color: '#888',
-        borderTop: '1px solid #eee',
-        marginTop: '2rem'
-      }}>
+      <footer className="app-footer">
         Not affiliated with or endorsed by Boston University. This is an
         independent, community-made tool built with AI assistance. Data is sourced from BU's official catalog and website. Use at your
         own discretion.
