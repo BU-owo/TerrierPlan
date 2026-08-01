@@ -36,7 +36,7 @@ export default function LoginPage({ theme = 'light', onToggleTheme }) {
       <div className="login-card">
         <img
           className="login-mascot"
-          src="/faviconlight.png"
+          src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
           alt="TerrierPlan"
           width={48}
           height={48}

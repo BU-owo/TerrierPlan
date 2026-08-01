@@ -214,6 +214,7 @@ function SearchResultCard({
 }
 
 export default function CourseSearch({
+  theme = 'light',
   activeSemIndex,
   onActiveSemChange,
   coursesInPlan,
@@ -342,7 +343,7 @@ export default function CourseSearch({
           <div className="search-empty">
             <img
               className="search-empty-paw"
-              src="/faviconlight.png"
+              src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
               alt="TerrierPlan"
               width={28}
               height={28}
@@ -361,7 +362,7 @@ export default function CourseSearch({
           <div className="search-empty">
             <img
               className="search-empty-paw"
-              src="/faviconlight.png"
+              src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
               alt="TerrierPlan"
               width={28}
               height={28}

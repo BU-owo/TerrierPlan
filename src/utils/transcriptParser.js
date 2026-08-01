@@ -12,6 +12,12 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 const TERM_RE = /^(Fall|Spring|Summer|Winter)\s+(\d{4})$/i;
 const LETTER_GRADE_RE = /^(A|B|C|D)[+-]?$|^P$|^F$/i;
 const SKIP_GRADE_RE = /^(W|AU|I|IP|N|NG|MG)$/i;
+const DEBUG_TRANSCRIPT = true;
+
+function debugTranscript(stage, payload) {
+  if (!DEBUG_TRANSCRIPT) return;
+  console.log(`[DEBUG transcriptParser] ${stage}`, payload);
+}
 
 /** Strip watermark/decoration single-letter noise from a reconstructed line. */
 export function stripNoise(text) {
@@ -126,6 +132,7 @@ export function parseApBuEquivalent(titleText) {
 
 function parseApLine(line) {
   const cleaned = stripNoise(line);
+  debugTranscript('test-line-before-parse', cleaned);
   if (/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+\d{1,2},?\s+\d{4}\b/i.test(cleaned)
     || /\b(?:degree|conferral|awarded|conferred)\b/i.test(cleaned)) {
     return null;
@@ -156,11 +163,16 @@ function parseApLine(line) {
     }
   }
   const { courseKey, title } = parseApBuEquivalent(rest);
-  if (!courseKey) return null;
+  if (!courseKey) {
+    debugTranscript('test-line-no-bu-course-key', { cleaned, testSubject, rest, credits });
+    return null;
+  }
   const scoreMatch = testSubject.match(/\b([1-5])\s*$/);
   const score = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
   if (scoreMatch) testSubject = testSubject.slice(0, scoreMatch.index).trim();
-  return { testSubject, courseKey, title, credits, score };
+  const parsed = { testSubject, courseKey, title, credits, score };
+  debugTranscript('test-line-parsed', { cleaned, parsed });
+  return parsed;
 }
 
 function parseTransferInstitutionHeader(line) {
@@ -171,6 +183,7 @@ function parseTransferInstitutionHeader(line) {
 
 function parseTransferCourseLine(line) {
   const cleaned = stripNoise(line);
+  if (/^(course\s+title|title\s+credits?)$/i.test(cleaned)) return null;
   if (parseTransferInstitutionHeader(cleaned)) return null;
   const m = cleaned.match(/^(.+?)\s+(\d+(?:\.\d+)?)\s*$/);
   if (!m) return null;
@@ -180,10 +193,23 @@ function parseTransferCourseLine(line) {
   return { title: m[1].trim(), credits: parseFloat(m[2]) };
 }
 
+function shouldAppendApContinuation(previousSubject, line) {
+  const prior = String(previousSubject || '').trim();
+  const cleaned = stripNoise(line);
+  if (!prior || !cleaned) return false;
+  if (!/[&:\-–—]$/.test(prior)) return false;
+  if (TERM_RE.test(cleaned)) return false;
+  if (/^(test\s+credit|transfer\s+credit|test\s+subject|beginning\s+of|end\s+of|unofficial\s+transcript)/i.test(cleaned)) return false;
+  if (/\b[A-Z]{2,4}\s*[A-Z]{1,4}\s*\d{2,3}[A-Z]?\b/i.test(cleaned)) return false;
+  if (/\d+(?:\.\d+)?\s*$/.test(cleaned)) return false;
+  return cleaned.length <= 60;
+}
+
 function looksLikeInstitution(line) {
   const cleaned = stripNoise(line);
   if (TERM_RE.test(cleaned)) return false;
   if (parseCourseLine(cleaned)) return false;
+  if (/^(course\s+title|title\s+credits?)$/i.test(cleaned)) return false;
   if (/^\d+(\.\d+)?$/.test(cleaned)) return false;
   if (/cumulative|earned|points|gpa|degree|awarded|graduat/i.test(cleaned)) return false;
   if (/^(transfer credit|test credit|beginning of|end of|unofficial)/i.test(cleaned)) return false;
@@ -242,6 +268,7 @@ export async function parseTranscriptPdf(source) {
   let currentTerm = null;
   let currentInstitution = null;
   let graduated = false;
+  let lastApCredit = null;
 
   for (const raw of allLines) {
     const line = stripNoise(raw);
@@ -257,9 +284,11 @@ export async function parseTranscriptPdf(source) {
     if (/^TEST\s+CREDIT/i.test(line) || /^ADVANCED\s+PLACEMENT/i.test(line)) {
       mode = 'test';
       currentTerm = null;
+      lastApCredit = null;
       continue;
     }
     if (/^TRANSFER\s+CREDIT/i.test(line)) {
+      debugTranscript('transfer-mode-enter', line);
       mode = 'transfer';
       currentTerm = null;
       currentInstitution = null;
@@ -274,7 +303,15 @@ export async function parseTranscriptPdf(source) {
     // if a prior TEST CREDIT block ended on an earlier page.
     const termM = line.match(TERM_RE);
     if (termM) {
+      if (mode === 'transfer') {
+        debugTranscript('transfer-term-header', line);
+        continue;
+      }
+      if (mode !== 'terms') {
+        debugTranscript('term-header-switches-mode', { fromMode: mode, line });
+      }
       mode = 'terms';
+      lastApCredit = null;
       const term = `${termM[1][0].toUpperCase()}${termM[1].slice(1).toLowerCase()} ${termM[2]}`;
       currentTerm = {
         term,
@@ -290,34 +327,60 @@ export async function parseTranscriptPdf(source) {
       if (isTestCreditTerminator(line) || parseCourseLine(line)) {
         mode = 'terms';
         currentTerm = null;
+        lastApCredit = null;
         continue;
       }
       if (/^TRANSFER\s+CREDIT/i.test(line)) {
         mode = 'transfer';
+        lastApCredit = null;
+        continue;
+      }
+      if (lastApCredit && shouldAppendApContinuation(lastApCredit.testSubject, line)) {
+        lastApCredit.testSubject = stripNoise(`${lastApCredit.testSubject} ${line}`);
+        debugTranscript('test-line-subject-continuation', {
+          appendedLine: line,
+          mergedSubject: lastApCredit.testSubject,
+        });
         continue;
       }
       const ap = parseApLine(line);
-      if (ap) apCredits.push(ap);
+      if (ap) {
+        apCredits.push(ap);
+        lastApCredit = ap;
+      }
       continue;
     }
 
     if (mode === 'transfer') {
+      debugTranscript('transfer-line-before-parse', line);
       if (/^TEST\s+CREDIT/i.test(line)) {
         mode = 'test';
         continue;
       }
+      if (/^(course\s+title|title\s+credits?)$/i.test(line)) {
+        debugTranscript('transfer-header-row-skipped', line);
+        continue;
+      }
       const institutionHeader = parseTransferInstitutionHeader(line);
       if (institutionHeader) {
+        debugTranscript('transfer-institution-header', institutionHeader);
         currentInstitution = institutionHeader;
         continue;
       }
       // New institution header
       if (looksLikeInstitution(line) && !parseTransferCourseLine(line)) {
+        debugTranscript('transfer-institution-heuristic', line);
         currentInstitution = line;
         continue;
       }
       const tr = parseTransferCourseLine(line);
       if (tr) {
+        debugTranscript('transfer-line-parsed', {
+          rawLine: line,
+          institution: currentInstitution || 'Unknown institution',
+          title: tr.title,
+          credits: tr.credits,
+        });
         transferCredits.push({
           institution: currentInstitution || 'Unknown institution',
           title: tr.title,

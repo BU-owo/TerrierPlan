@@ -1,4 +1,13 @@
 import { SEMESTER_LABELS } from './hubConstants';
+import { normalizeExternalCredits, normalizeExternalCredit } from './externalCredits';
+import { resolveApHubFromScore } from './apScoreResolution';
+
+const DEBUG_IMPORT = true;
+
+function debugImport(stage, payload) {
+  if (!DEBUG_IMPORT) return;
+  console.log(`[DEBUG transcriptMapping] ${stage}`, payload);
+}
 
 const SEASON_ORDER = { spring: 0, summer: 1, fall: 2, winter: 3 };
 
@@ -36,6 +45,10 @@ function termSortKey(term) {
  * }}
  */
 export function buildImportPreview(parsed, existingSemesters, existingExtraTerms = []) {
+  debugImport('buildImportPreview-input', {
+    apCredits: parsed?.apCredits || [],
+    transferCredits: parsed?.transferCredits || [],
+  });
   const existingKeys = new Map(); // courseKey → { kind, label }
   (existingSemesters || []).forEach((sem, i) => {
     for (const key of sem) {
@@ -123,11 +136,15 @@ export function buildImportPreview(parsed, existingSemesters, existingExtraTerms
     addConflicts(a.courses, 'extra', a.term);
   }
 
-  return {
+  const preview = {
     slotAssignments,
     extraTermAssignments,
     conflicts,
-    apCredits: parsed.apCredits || [],
+    apCredits: (parsed.apCredits || []).map((ap, i) => ({
+      ...ap,
+      id: `ap-${i}`,
+      resolvedHubUnits: resolveApHubFromScore(ap.testSubject, ap.score).hubUnits,
+    })),
     transferCredits: (parsed.transferCredits || []).map((t, i) => ({
       ...t,
       id: `tr-${i}`,
@@ -136,6 +153,11 @@ export function buildImportPreview(parsed, existingSemesters, existingExtraTerms
     })),
     meta: parsed.meta || {},
   };
+  debugImport('buildImportPreview-output', {
+    apCredits: preview.apCredits,
+    transferCredits: preview.transferCredits,
+  });
+  return preview;
 }
 
 /**
@@ -147,6 +169,10 @@ export function buildImportPreview(parsed, existingSemesters, existingExtraTerms
  * @param {Array} existingExternalCredits
  */
 export function applyImport(preview, existingSemesters, existingExtraTerms = [], existingExternalCredits = []) {
+  debugImport('applyImport-input', {
+    previewTransferCredits: preview?.transferCredits || [],
+    existingExternalCredits,
+  });
   const resolutionById = new Map(
     (preview.conflicts || []).map((c) => [c.id, c.resolution]),
   );
@@ -238,7 +264,7 @@ export function applyImport(preview, existingSemesters, existingExtraTerms = [],
 
   // External credits: keep existing + add AP + transfers (including rows the
   // student can map later in the Planner).
-  const externalCredits = [...(existingExternalCredits || [])];
+  const externalCredits = normalizeExternalCredits(existingExternalCredits);
   let apAdded = 0;
   let transferAdded = 0;
   let transferIncomplete = 0;
@@ -249,14 +275,15 @@ export function applyImport(preview, existingSemesters, existingExtraTerms = [],
       (e) => e.type === 'ap' && e.courseKey === ap.courseKey,
     );
     if (dup) continue;
-    externalCredits.push({
+    externalCredits.push(normalizeExternalCredit({
       type: 'ap',
       sourceTitle: ap.title || ap.testSubject,
       courseKey: ap.courseKey,
       credits: ap.credits,
       testSubject: ap.testSubject,
       score: ap.score ?? null,
-    });
+      manualHubUnits: Array.isArray(ap.resolvedHubUnits) ? ap.resolvedHubUnits : undefined,
+    }));
     apAdded += 1;
   }
 
@@ -269,21 +296,21 @@ export function applyImport(preview, existingSemesters, existingExtraTerms = [],
         && (e.courseKey || '') === key,
     );
     if (dup) continue;
-    externalCredits.push({
+    externalCredits.push(normalizeExternalCredit({
       type: 'transfer',
       sourceTitle: tr.title,
       courseKey: key || null,
       credits: Number(tr.creditsEdit ?? tr.credits) || 0,
       institution: tr.institution,
       status: key ? 'mapped' : 'needs_mapping',
-    });
+    }));
     if (key) transferAdded += 1;
     else transferIncomplete += 1;
   }
 
   const meta = preview.meta || {};
 
-  return {
+  const result = {
     semesters,
     extraTerms,
     externalCredits,
@@ -299,4 +326,9 @@ export function applyImport(preview, existingSemesters, existingExtraTerms = [],
       skipped,
     },
   };
+  debugImport('applyImport-output', {
+    transferCreditsInOutput: result.externalCredits.filter((c) => c?.type === 'transfer'),
+    summary: result.summary,
+  });
+  return result;
 }

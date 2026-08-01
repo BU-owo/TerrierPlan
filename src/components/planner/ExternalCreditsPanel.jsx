@@ -1,10 +1,63 @@
-import { useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { getApHub, getIbHub } from '../../data/apIbHubCredit';
 import { HUB_LABELS } from '../../utils/hubConstants';
+import { normalizeExternalCredit } from '../../utils/externalCredits';
+import { resolveApHubFromScore, isKnownScoreDependentAp } from '../../utils/apScoreResolution';
+
+const DEBUG_EXTERNAL_CREDITS = true;
+
+function debugExternalCredits(stage, payload) {
+  if (!DEBUG_EXTERNAL_CREDITS) return;
+  console.log(`[DEBUG ExternalCreditsPanel] ${stage}`, payload);
+}
+
+const TransferExternalCreditRow = memo(function TransferExternalCreditRow({
+  credit,
+  index,
+  onUpdate,
+}) {
+  const [courseKeyDraft, setCourseKeyDraft] = useState(credit.courseKey || '');
+
+  useEffect(() => {
+    setCourseKeyDraft(credit.courseKey || '');
+  }, [credit.courseKey, credit.sourceTitle]);
+
+  function commitCourseKey(nextValue) {
+    onUpdate?.(index, {
+      courseKey: nextValue.replace(/\s+/g, '').toUpperCase() || null,
+      status: nextValue.trim() ? 'mapped' : 'needs_mapping',
+    });
+  }
+
+  return (
+    <div className="external-credit-warning">
+      Needs BU equivalent — check MyBU
+      <input
+        type="text"
+        aria-label={`BU equivalent for ${credit.sourceTitle}`}
+        placeholder="e.g. CASMA 225"
+        value={courseKeyDraft}
+        onChange={(e) => {
+          const nextValue = e.target.value;
+          setCourseKeyDraft(nextValue);
+          commitCourseKey(nextValue);
+        }}
+        onBlur={(e) => commitCourseKey(e.target.value)}
+      />
+    </div>
+  );
+});
 
 export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpdate }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [editingScoreIndex, setEditingScoreIndex] = useState(null);
   const credits = Array.isArray(externalCredits) ? externalCredits : [];
+  debugExternalCredits('render-props', {
+    collapsed,
+    count: credits.length,
+    transferCredits: credits.filter((c) => normalizeExternalCredit(c)?.type === 'transfer'),
+    externalCredits: credits,
+  });
 
   if (!credits.length) return null;
 
@@ -39,49 +92,91 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
 
       <ul className="external-credits-list">
         {credits.map((ec, i) => {
-          const isTestCredit = ec.type === 'ap' || ec.type === 'ib';
+          const normalized = normalizeExternalCredit(ec) || ec;
+          const type = normalized.type;
+          const isTestCredit = type === 'ap' || type === 'ib';
           const testHub = isTestCredit
-            ? (Array.isArray(ec.manualHubUnits)
-              ? ec.manualHubUnits
-              : ec.type === 'ib'
-                ? getIbHub(ec.testSubject, ec.score, ec.isHigherLevel)
-                : getApHub(ec.testSubject, ec.score))
+            ? (Array.isArray(normalized.manualHubUnits)
+              ? normalized.manualHubUnits
+              : type === 'ib'
+                ? getIbHub(normalized.testSubject, normalized.score, normalized.isHigherLevel)
+                : getApHub(normalized.testSubject, normalized.score))
             : null;
-          const needsMapping = ec.type === 'transfer' && (ec.status === 'needs_mapping' || !ec.courseKey);
-          const needsApReview = isTestCredit && testHub === null;
+          const knownScoreDependentAp = type === 'ap' && isKnownScoreDependentAp(normalized.testSubject);
+          const hasKnownApScorePath = knownScoreDependentAp
+            && testHub === null
+            && normalized.score == null;
+          const showScoreEditor = knownScoreDependentAp && (hasKnownApScorePath || editingScoreIndex === i);
+          const needsMapping = type === 'transfer' && (normalized.status === 'needs_mapping' || !normalized.courseKey);
+          const needsApReview = (type === 'ib' && testHub === null) || (type === 'ap' && testHub === null && !knownScoreDependentAp);
           const needsReview = needsMapping || needsApReview;
           return (
           <li
-            key={`${ec.type}-${ec.courseKey || ec.sourceTitle}-${i}`}
+            key={`${type}-${normalized.courseKey || normalized.sourceTitle}-${i}`}
             className={`external-credit-row ${needsReview ? 'needs-review' : ''}`}
           >
             <div className="external-credit-main">
-              <span className={`external-credit-type type-${ec.type}`}>
-                {ec.type === 'ap' ? 'AP' : ec.type === 'ib' ? 'IB' : 'Transfer'}
+              <span className={`external-credit-type type-${type}`}>
+                {type === 'ap' ? 'AP' : type === 'ib' ? 'IB' : 'Transfer'}
               </span>
               <div>
                 <div className="external-credit-title">
-                  {ec.courseKey || 'Unmapped'} · {ec.sourceTitle}
+                  {normalized.courseKey || 'Unmapped'} · {normalized.sourceTitle}
                 </div>
                 <div className="external-credit-meta">
-                  {ec.testSubject && <span>{ec.testSubject}</span>}
-                  {ec.score != null && <span>Score {ec.score}</span>}
-                  {ec.institution && <span>{ec.institution}</span>}
-                  <span>{ec.credits} cr</span>
+                  {normalized.testSubject && <span>{normalized.testSubject}</span>}
+                  {normalized.score != null && <span>Score {normalized.score}</span>}
+                  {normalized.institution && <span>{normalized.institution}</span>}
+                  <span>{normalized.credits} cr</span>
+                  {knownScoreDependentAp && normalized.score != null && (
+                    <button
+                      type="button"
+                      className="external-credit-score-edit-btn"
+                      onClick={() => setEditingScoreIndex((prev) => (prev === i ? null : i))}
+                    >
+                      Edit score
+                    </button>
+                  )}
                 </div>
                 {needsMapping && (
-                  <div className="external-credit-warning">
-                    Needs BU equivalent — check MyBU
-                    <input
-                      type="text"
-                      aria-label={`BU equivalent for ${ec.sourceTitle}`}
-                      placeholder="e.g. CASMA 225"
-                      value={ec.courseKey || ''}
-                      onChange={(e) => onUpdate?.(i, {
-                        courseKey: e.target.value.replace(/\s+/g, '').toUpperCase() || null,
-                        status: e.target.value.trim() ? 'mapped' : 'needs_mapping',
-                      })}
-                    />
+                  <TransferExternalCreditRow
+                    credit={normalized}
+                    index={i}
+                    onUpdate={onUpdate}
+                  />
+                )}
+                {showScoreEditor && (
+                  <div className="external-credit-warning external-credit-score-picker">
+                    Select AP score to resolve HUB units
+                    <label className="external-credit-score-label">
+                      Score
+                      <select
+                        className="external-credit-score-select"
+                        value={normalized.score ?? ''}
+                        onChange={(e) => {
+                          const resolved = resolveApHubFromScore(normalized.testSubject, e.target.value);
+                          onUpdate?.(i, {
+                            score: resolved.score,
+                            manualHubUnits: Array.isArray(resolved.hubUnits) ? resolved.hubUnits : undefined,
+                            status: resolved.score == null ? 'needs_review' : 'auto_hub_resolved',
+                          });
+                        }}
+                      >
+                        <option value="">—</option>
+                        {[1, 2, 3, 4, 5].map((scoreOption) => (
+                          <option key={scoreOption} value={scoreOption}>{scoreOption}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="external-credit-score-actions">
+                      <button
+                        type="button"
+                        className="external-credit-score-btn"
+                        onClick={() => setEditingScoreIndex(null)}
+                      >
+                        Done
+                      </button>
+                    </div>
                   </div>
                 )}
                 {needsApReview && (

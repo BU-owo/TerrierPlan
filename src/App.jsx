@@ -22,8 +22,6 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem(THEME_STORAGE_KEY, theme);
-    const favicon = document.querySelector('link[rel="icon"]');
-    if (favicon) favicon.href = theme === 'dark' ? '/favicondark.png' : '/faviconlight.png';
   }, [theme]);
 
   function toggleTheme() {

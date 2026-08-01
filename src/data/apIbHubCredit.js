@@ -79,6 +79,13 @@ export const AP_ALIASES = {
   'government and politics comparative': 'comparative government and politics',
   'physics c mechanics': 'physics c mechanics',
   'physics c electricity and magnetism': 'physics c electricity and magnetism',
+  'u s history': 'united states history',
+  'us history': 'united states history',
+  'u s government and politics': 'united states government and politics',
+  'us government and politics': 'united states government and politics',
+  'united states government & politics': 'united states government and politics',
+  'english literature compostn': 'english literature and composition',
+  'english language compostn': 'english language and composition',
 };
 
 // ---------------------------------------------------------------------
@@ -147,7 +154,7 @@ function normalize(str) {
     .toLowerCase()
     .replace(/^ap\s+/, '')
     .replace(/^ib\s+/, '')
-    .replace(/[:\-–—&]/g, ' ')
+    .replace(/[.:\-–—&]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }

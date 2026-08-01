@@ -1,9 +1,69 @@
-import { useState, useRef, useCallback } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { parseTranscriptPdf } from '../../utils/transcriptParser';
 import { buildImportPreview, applyImport } from '../../utils/transcriptMapping';
 import { SEMESTER_LABELS } from '../../utils/hubConstants';
+import { resolveApHubFromScore } from '../../utils/apScoreResolution';
 
 const STEPS = ['Upload', 'Review', 'Confirm'];
+const DEBUG_IMPORT = true;
+
+function debugImportModal(stage, payload) {
+  if (!DEBUG_IMPORT) return;
+  console.log(`[DEBUG ImportTranscriptModal] ${stage}`, payload);
+}
+
+const TransferCreditReviewRow = memo(function TransferCreditReviewRow({ transferCredit, onUpdate }) {
+  const [courseKeyDraft, setCourseKeyDraft] = useState(transferCredit.courseKey || '');
+  const [creditsDraft, setCreditsDraft] = useState(String(transferCredit.creditsEdit ?? transferCredit.credits ?? ''));
+
+  useEffect(() => {
+    setCourseKeyDraft(transferCredit.courseKey || '');
+  }, [transferCredit.id, transferCredit.courseKey]);
+
+  useEffect(() => {
+    setCreditsDraft(String(transferCredit.creditsEdit ?? transferCredit.credits ?? ''));
+  }, [transferCredit.id, transferCredit.creditsEdit, transferCredit.credits]);
+
+  function handleCourseKeyChange(nextValue) {
+    setCourseKeyDraft(nextValue);
+    onUpdate(transferCredit.id, { courseKey: nextValue });
+  }
+
+  function handleCreditsChange(nextValue) {
+    setCreditsDraft(nextValue);
+    onUpdate(transferCredit.id, { creditsEdit: nextValue });
+  }
+
+  return (
+    <li className="import-transfer-row">
+      <div className="import-row-main">
+        <strong>{transferCredit.title}</strong>
+        <span className="import-muted">{transferCredit.institution}</span>
+      </div>
+      <div className="import-transfer-fields">
+        <label>
+          Equivalent
+          <input
+            type="text"
+            placeholder="e.g. CASMA 225"
+            value={courseKeyDraft}
+            onChange={(e) => handleCourseKeyChange(e.target.value)}
+          />
+        </label>
+        <label>
+          Credits
+          <input
+            type="number"
+            min="0"
+            step="0.5"
+            value={creditsDraft}
+            onChange={(e) => handleCreditsChange(e.target.value)}
+          />
+        </label>
+      </div>
+    </li>
+  );
+});
 
 export default function ImportTranscriptModal({
   open,
@@ -55,7 +115,15 @@ export default function ImportTranscriptModal({
     setError('');
     try {
       const parsed = await parseTranscriptPdf(file);
+      debugImportModal('handleFile-parsed', {
+        apCredits: parsed?.apCredits || [],
+        transferCredits: parsed?.transferCredits || [],
+      });
       const built = buildImportPreview(parsed, semesters, extraTerms);
+      debugImportModal('handleFile-preview-built', {
+        transferCredits: built?.transferCredits || [],
+        apCredits: built?.apCredits || [],
+      });
       setPreview(built);
       setStep(1);
     } catch (err) {
@@ -99,8 +167,30 @@ export default function ImportTranscriptModal({
     });
   }
 
+  function updateApScore(id, scoreValue) {
+    setPreview((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        apCredits: prev.apCredits.map((ap) => {
+          if (ap.id !== id) return ap;
+          const resolved = resolveApHubFromScore(ap.testSubject, scoreValue);
+          return {
+            ...ap,
+            score: resolved.score,
+            resolvedHubUnits: resolved.hubUnits,
+          };
+        }),
+      };
+    });
+  }
+
   async function handleImport() {
     if (!preview) return;
+    debugImportModal('handleImport-preview-before-confirm', {
+      transferCredits: preview.transferCredits,
+      apCredits: preview.apCredits,
+    });
     const incompleteTransferCount = preview.transferCredits.filter(
       (credit) => !(credit.courseKey || '').trim(),
     ).length;
@@ -112,6 +202,11 @@ export default function ImportTranscriptModal({
     setError('');
     try {
       const result = applyImport(preview, semesters, extraTerms, externalCredits);
+      debugImportModal('handleImport-applyImport-result', {
+        transferCredits: result.externalCredits.filter((c) => c?.type === 'transfer'),
+        externalCredits: result.externalCredits,
+        summary: result.summary,
+      });
       await onImport(result);
       setSummary(result.summary);
       setStep(2);
@@ -287,16 +382,39 @@ export default function ImportTranscriptModal({
 
               <section className="import-section">
                 <h3>AP / Test Credit</h3>
-                <p className="import-section-note">Read-only — stored as External Credit; eligible AP exams are evaluated against BU&apos;s AP HUB policy.</p>
+                <p className="import-section-note">Set AP scores here (1-5). Eligible AP exams are evaluated against BU&apos;s AP HUB policy as you edit.</p>
                 {preview.apCredits.length === 0 && <p className="import-muted">None found.</p>}
                 <ul className="import-list compact">
-                  {preview.apCredits.map((ap, i) => (
-                    <li key={`${ap.courseKey}-${i}`}>
+                  {preview.apCredits.map((ap, i) => {
+                    const resolvedHubUnits = Array.isArray(ap.resolvedHubUnits)
+                      ? ap.resolvedHubUnits
+                      : resolveApHubFromScore(ap.testSubject, ap.score).hubUnits;
+                    return (
+                    <li key={ap.id || `${ap.courseKey}-${i}`}>
                       <strong>{ap.courseKey}</strong>
                       <span className="import-muted">{ap.testSubject} — {ap.title}</span>
                       <span>{ap.credits} cr</span>
+                      <label className="import-ap-score-field">
+                        Score
+                        <select
+                          value={ap.score ?? ''}
+                          onChange={(e) => updateApScore(ap.id, e.target.value)}
+                          aria-label={`AP score for ${ap.testSubject}`}
+                        >
+                          <option value="">—</option>
+                          {[1, 2, 3, 4, 5].map((scoreOption) => (
+                            <option key={scoreOption} value={scoreOption}>{scoreOption}</option>
+                          ))}
+                        </select>
+                      </label>
+                      {Array.isArray(resolvedHubUnits) && (
+                        <span className="import-ap-hub-preview">
+                          {resolvedHubUnits.length > 0 ? `HUB: ${resolvedHubUnits.join(' · ')}` : 'No HUB from this score'}
+                        </span>
+                      )}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </section>
 
@@ -312,33 +430,11 @@ export default function ImportTranscriptModal({
                 {preview.transferCredits.length === 0 && <p className="import-muted">None found.</p>}
                 <ul className="import-list">
                   {preview.transferCredits.map((tr) => (
-                    <li key={tr.id} className="import-transfer-row">
-                      <div className="import-row-main">
-                        <strong>{tr.title}</strong>
-                        <span className="import-muted">{tr.institution}</span>
-                      </div>
-                      <div className="import-transfer-fields">
-                        <label>
-                          Equivalent
-                          <input
-                            type="text"
-                            placeholder="e.g. CASMA 225"
-                            value={tr.courseKey}
-                            onChange={(e) => updateTransfer(tr.id, { courseKey: e.target.value })}
-                          />
-                        </label>
-                        <label>
-                          Credits
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.5"
-                            value={tr.creditsEdit}
-                            onChange={(e) => updateTransfer(tr.id, { creditsEdit: e.target.value })}
-                          />
-                        </label>
-                      </div>
-                    </li>
+                    <TransferCreditReviewRow
+                      key={tr.id}
+                      transferCredit={tr}
+                      onUpdate={updateTransfer}
+                    />
                   ))}
                 </ul>
               </section>

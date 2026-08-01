@@ -32,6 +32,7 @@ import BulletinPanel from '../components/planner/BulletinPanel';
 import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
 import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
 import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
+import { normalizeExternalCredits, normalizeExternalCredit } from '../utils/externalCredits';
 import './planner.css';
 import '../App.css';
 
@@ -41,6 +42,12 @@ const LOCAL_STORAGE_KEY = 'terrierplan_session';
 // Shared across Strict Mode double-invokes of the auth effect so we only
 // migrate (and clear localStorage) once per guest session → sign-in.
 let guestMigrationPromise = null;
+const DEBUG_IMPORT = true;
+
+function debugPlanner(stage, payload) {
+  if (!DEBUG_IMPORT) return;
+  console.log(`[DEBUG PlannerPage] ${stage}`, payload);
+}
 
 export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const { user, loading: authLoading } = useAuth();
@@ -262,19 +269,33 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   // ── Local plan management (for auth-optional browsing) ─────────────────────
   function saveLocalPlan(overrides = {}) {
+    const normalizedExternalCredits = normalizeExternalCredits(overrides.externalCredits ?? externalCredits);
     const plan = {
       name: overrides.name ?? planName,
       major: overrides.major ?? '',
       semesters: overrides.semesters ?? semesters,
       isTransfer: overrides.isTransfer ?? isTransfer,
       extraTerms: overrides.extraTerms ?? extraTerms,
-      externalCredits: overrides.externalCredits ?? externalCredits,
+      externalCredits: normalizedExternalCredits,
       cumulativeGpa: overrides.cumulativeGpa ?? cumulativeGpa,
       earnedCredits: overrides.earnedCredits ?? earnedCredits,
       gradePoints: overrides.gradePoints ?? gradePoints,
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(plan));
+    debugPlanner('saveLocalPlan-written', {
+      transferCredits: normalizedExternalCredits.filter((c) => c?.type === 'transfer'),
+      externalCredits: normalizedExternalCredits,
+    });
+    try {
+      const stored = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '{}');
+      debugPlanner('saveLocalPlan-readback', {
+        transferCredits: (stored.externalCredits || []).filter((c) => c?.type === 'transfer'),
+        externalCredits: stored.externalCredits || [],
+      });
+    } catch (err) {
+      console.error('[DEBUG PlannerPage] saveLocalPlan-readback-parse-failed', err);
+    }
   }
 
   function loadLocalPlan() {
@@ -286,7 +307,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         setSemesters(plan.semesters || EMPTY_SEMESTERS());
         setIsTransfer(plan.isTransfer || false);
         setExtraTerms(plan.extraTerms || []);
-        setExternalCredits(plan.externalCredits || []);
+        const normalizedExternalCredits = normalizeExternalCredits(plan.externalCredits);
+        setExternalCredits(normalizedExternalCredits);
+        debugPlanner('loadLocalPlan-read', {
+          transferCredits: normalizedExternalCredits.filter((c) => c?.type === 'transfer'),
+          externalCredits: normalizedExternalCredits,
+        });
         setCumulativeGpa(plan.cumulativeGpa ?? null);
         setEarnedCredits(plan.earnedCredits ?? null);
         setGradePoints(plan.gradePoints ?? null);
@@ -308,7 +334,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       semesters: guestPlan.semesters || EMPTY_SEMESTERS(),
       isTransfer: guestPlan.isTransfer || false,
       extraTerms: guestPlan.extraTerms || [],
-      externalCredits: guestPlan.externalCredits || [],
+      externalCredits: normalizeExternalCredits(guestPlan.externalCredits),
       cumulativeGpa: guestPlan.cumulativeGpa ?? null,
       earnedCredits: guestPlan.earnedCredits ?? null,
       gradePoints: guestPlan.gradePoints ?? null,
@@ -339,12 +365,18 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const data = snap.data();
     const semData = data.semesters ?? EMPTY_SEMESTERS();
     const extra = data.extraTerms ?? [];
+    const normalizedExternalCredits = normalizeExternalCredits(data.externalCredits);
+    debugPlanner('loadPlan-from-firestore', {
+      planId,
+      transferCredits: normalizedExternalCredits.filter((c) => c?.type === 'transfer'),
+      externalCredits: normalizedExternalCredits,
+    });
     setActivePlanId(planId);
     setPlanName(data.name ?? 'My Plan');
     setSemesters(semData);
     setIsTransfer(data.isTransfer ?? false);
     setExtraTerms(extra);
-    setExternalCredits(data.externalCredits ?? []);
+    setExternalCredits(normalizedExternalCredits);
     setCumulativeGpa(data.cumulativeGpa ?? null);
     setEarnedCredits(data.earnedCredits ?? null);
     setGradePoints(data.gradePoints ?? null);
@@ -415,7 +447,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         semesters: semData,
         isTransfer: transfer,
         extraTerms: extras.extraTerms ?? extraTerms,
-        externalCredits: extras.externalCredits ?? externalCredits,
+        externalCredits: normalizeExternalCredits(extras.externalCredits ?? externalCredits),
         cumulativeGpa: extras.cumulativeGpa ?? cumulativeGpa,
         earnedCredits: extras.earnedCredits ?? earnedCredits,
         gradePoints: extras.gradePoints ?? gradePoints,
@@ -426,8 +458,21 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         ...payload,
         updatedAt: '(server-timestamp)',
       });
+      debugPlanner('persistPlan-payload', {
+        planId,
+        transferCredits: (payload.externalCredits || []).filter((c) => c?.type === 'transfer'),
+        externalCredits: payload.externalCredits || [],
+      });
 
       await updateDoc(planRef, payload);
+
+      const writtenSnap = await getDoc(planRef);
+      const written = writtenSnap.exists() ? writtenSnap.data() : null;
+      debugPlanner('persistPlan-firestore-readback', {
+        planId,
+        transferCredits: (written?.externalCredits || []).filter((c) => c?.type === 'transfer'),
+        externalCredits: written?.externalCredits || [],
+      });
 
       console.log('✅ [persistPlan] Write succeeded');
       setSaveStatus('saved');
@@ -609,6 +654,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   async function handleTranscriptImport(result) {
+    const normalizedExternalCredits = normalizeExternalCredits(result.externalCredits);
+    debugPlanner('handleTranscriptImport-result', {
+      transferCredits: normalizedExternalCredits.filter((c) => c?.type === 'transfer'),
+      externalCredits: normalizedExternalCredits,
+      summary: result.summary,
+    });
     const importedCourseKeys = [
       ...result.semesters.flat(),
       ...result.extraTerms.flatMap((term) => term.courseKeys || []),
@@ -616,7 +667,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
     setSemesters(result.semesters);
     setExtraTerms(result.extraTerms);
-    setExternalCredits(result.externalCredits);
+    setExternalCredits(normalizedExternalCredits);
     setCumulativeGpa(result.cumulativeGpa);
     setEarnedCredits(result.earnedCredits);
     setGradePoints(result.gradePoints);
@@ -631,7 +682,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     if (user && activePlanId) {
       const saved = await persistPlan(user.uid, activePlanId, planName, result.semesters, isTransfer, {
         extraTerms: result.extraTerms,
-        externalCredits: result.externalCredits,
+        externalCredits: normalizedExternalCredits,
         cumulativeGpa: result.cumulativeGpa,
         earnedCredits: result.earnedCredits,
         gradePoints: result.gradePoints,
@@ -642,7 +693,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       saveLocalPlan({
         semesters: result.semesters,
         extraTerms: result.extraTerms,
-        externalCredits: result.externalCredits,
+        externalCredits: normalizedExternalCredits,
         cumulativeGpa: result.cumulativeGpa,
         earnedCredits: result.earnedCredits,
         gradePoints: result.gradePoints,
@@ -666,7 +717,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   function handleUpdateExternalCredit(index, patch) {
     setExternalCredits((prev) => prev.map((credit, creditIndex) => (
-      creditIndex === index ? { ...credit, ...patch } : credit
+      creditIndex === index ? (normalizeExternalCredit({ ...credit, ...patch }) || { ...credit, ...patch }) : credit
     )));
     setIsDirty(true);
   }
@@ -815,6 +866,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           {/* Left: search */}
           <aside className="planner-left">
             <CourseSearch
+              theme={theme}
               activeSemIndex={activeSemIndex}
               onActiveSemChange={setActiveSemIndex}
               coursesInPlan={coursesInPlan}
