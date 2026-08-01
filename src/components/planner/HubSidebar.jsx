@@ -7,21 +7,40 @@ import {
   OR_GROUP_DISPLAY_NAMES,
   computeProgress,
 } from '../../utils/hubConstants';
+import { getApHub, getIbHub } from '../../data/apIbHubCredit';
 
-export default function HubSidebar({ semesters, courseMap, isTransfer, onToggleTransfer }) {
+export default function HubSidebar({
+  semesters,
+  extraCourseKeys = [],
+  externalCredits = [],
+  courseMap,
+  isTransfer,
+  onToggleTransfer,
+}) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const counts = useMemo(() => {
     const result = {};
-    for (const sem of semesters) {
-      for (const key of sem) {
-        for (const unit of courseMap[key]?.hubUnits ?? []) {
-          result[unit] = (result[unit] ?? 0) + 1;
-        }
+    const allKeys = [...semesters.flat(), ...extraCourseKeys];
+    for (const key of allKeys) {
+      for (const unit of courseMap[key]?.hubUnits ?? []) {
+        result[unit] = (result[unit] ?? 0) + 1;
       }
     }
+    // BU's AP policy has its own HUB table. Transfer credit is deliberately
+    // omitted: it never fulfills HUB, even when equated to a BU course.
+    for (const credit of externalCredits) {
+      if (credit.type !== 'ap' && credit.type !== 'ib') continue;
+      const units = Array.isArray(credit.manualHubUnits)
+        ? credit.manualHubUnits
+        : credit.type === 'ib'
+          ? getIbHub(credit.testSubject, credit.score, credit.isHigherLevel)
+          : getApHub(credit.testSubject, credit.score);
+      if (!Array.isArray(units)) continue;
+      for (const unit of units) result[unit] = (result[unit] ?? 0) + 1;
+    }
     return result;
-  }, [semesters, courseMap]);
+  }, [semesters, extraCourseKeys, externalCredits, courseMap]);
 
   const requirements = isTransfer ? TRANSFER_REQUIREMENTS : FIRST_YEAR_REQUIREMENTS;
 

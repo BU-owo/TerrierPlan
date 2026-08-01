@@ -75,8 +75,35 @@ requirement-checking, no rules engine yet).
 |---|---|---|
 | name | string | e.g. "Plan A — CS major" |
 | major | string | Free text for now, no schema validation |
-| semesters | courseKey[][] | Fixed length 8, one array per semester |
+| semesters | courseKey[][] | Fixed length 8, one array per semester (Fall/Spring × 4 years) |
+| isTransfer | boolean | HUB tracker uses transfer vs first-year requirement table |
+| extraTerms | object[] | Summer / Winter / overflow post-degree Fall–Spring terms (see below). These courses **do** count toward HUB and credit totals. |
+| externalCredits | object[] | AP / transfer credit from transcript import (see below). **Never** counted in HUB Tracker. |
+| cumulativeGpa | number? | Scraped from transcript footer on import (GPA UI not built yet) |
+| earnedCredits | number? | Scraped from transcript footer on import |
+| gradePoints | number? | Scraped from transcript footer on import |
 | createdAt, updatedAt | timestamp | |
+
+#### `extraTerms[]` entry
+| Field | Type | Notes |
+|---|---|---|
+| term | string | e.g. "Summer 2021" |
+| season | string | `'summer'` \| `'winter'` \| `'fall'` \| `'spring'` |
+| courseKeys | string[] | BU `courseKey`s |
+| isPostDegree | boolean? | True for terms after a listed graduation date / overflow Fall–Spring |
+
+#### `externalCredits[]` entry
+| Field | Type | Notes |
+|---|---|---|
+| type | string | `'ap'` \| `'transfer'` |
+| sourceTitle | string | Title as printed on the transcript |
+| courseKey | string \| null | BU equivalent; null until user maps a transfer row |
+| credits | number | |
+| institution | string? | Transfer only |
+| testSubject | string? | AP / test credit only |
+| score | number? | AP / test score, when printed on transcript |
+| status | string? | `'needs_mapping'` for a transfer row awaiting a BU equivalent; `'mapped'` once supplied |
+| manualHubUnits | string[]? | Admin/BU-confirmed HUB override for an AP/test entry when automatic lookup is unresolved; `[]` confirms no HUB |
 
 ### `users/{uid}/schedules/{scheduleId}`
 | Field | Type | Notes |

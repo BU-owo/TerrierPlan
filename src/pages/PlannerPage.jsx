@@ -29,6 +29,9 @@ import SemesterBoard from '../components/planner/SemesterBoard';
 import CourseCard from '../components/planner/CourseCard';
 import HubSidebar from '../components/planner/HubSidebar';
 import BulletinPanel from '../components/planner/BulletinPanel';
+import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
+import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
+import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
 import './planner.css';
 import '../App.css';
 
@@ -48,6 +51,11 @@ export default function PlannerPage() {
   const [planName, setPlanName] = useState('My Plan');
   const [semesters, setSemesters] = useState(EMPTY_SEMESTERS);
   const [isTransfer, setIsTransfer] = useState(false);
+  const [extraTerms, setExtraTerms] = useState([]);
+  const [externalCredits, setExternalCredits] = useState([]);
+  const [cumulativeGpa, setCumulativeGpa] = useState(null);
+  const [earnedCredits, setEarnedCredits] = useState(null);
+  const [gradePoints, setGradePoints] = useState(null);
 
   // ── Course data caches ────────────────────────────────────────────────────
   const [courseMap, setCourseMap] = useState({}); // courseKey → course doc
@@ -61,6 +69,7 @@ export default function PlannerPage() {
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverlay, setDragOverlay] = useState(null);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -222,7 +231,13 @@ export default function PlannerPage() {
     saveTimeoutRef.current = setTimeout(() => {
       console.log('⏱️  [autosave] Debounce fired, calling persistPlan');
       if (activePlanId) {
-        persistPlan(user.uid, activePlanId, planName, semesters, isTransfer);
+        persistPlan(user.uid, activePlanId, planName, semesters, isTransfer, {
+          extraTerms,
+          externalCredits,
+          cumulativeGpa,
+          earnedCredits,
+          gradePoints,
+        });
       } else {
         console.warn('⚠️  [autosave] activePlanId is null, skipping save');
       }
@@ -233,7 +248,7 @@ export default function PlannerPage() {
       console.log('🧹 [autosave] Cleaning up timeout');
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [semesters, planName, isTransfer, isDirty]);
+  }, [semesters, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints]);
 
   // ── Guest: persist to localStorage after React commits the new state ──────
   // Handlers used to call saveLocalPlan() immediately after setSemesters(),
@@ -243,7 +258,7 @@ export default function PlannerPage() {
     if (user || authLoading || isInitialLoad.current || !isDirty) return;
     saveLocalPlan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [semesters, planName, isTransfer, isDirty, user, authLoading]);
+  }, [semesters, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, user, authLoading]);
 
   // ── Local plan management (for auth-optional browsing) ─────────────────────
   function saveLocalPlan(overrides = {}) {
@@ -252,6 +267,11 @@ export default function PlannerPage() {
       major: overrides.major ?? '',
       semesters: overrides.semesters ?? semesters,
       isTransfer: overrides.isTransfer ?? isTransfer,
+      extraTerms: overrides.extraTerms ?? extraTerms,
+      externalCredits: overrides.externalCredits ?? externalCredits,
+      cumulativeGpa: overrides.cumulativeGpa ?? cumulativeGpa,
+      earnedCredits: overrides.earnedCredits ?? earnedCredits,
+      gradePoints: overrides.gradePoints ?? gradePoints,
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(plan));
@@ -265,7 +285,15 @@ export default function PlannerPage() {
         setPlanName(plan.name || 'My Plan');
         setSemesters(plan.semesters || EMPTY_SEMESTERS());
         setIsTransfer(plan.isTransfer || false);
+        setExtraTerms(plan.extraTerms || []);
+        setExternalCredits(plan.externalCredits || []);
+        setCumulativeGpa(plan.cumulativeGpa ?? null);
+        setEarnedCredits(plan.earnedCredits ?? null);
+        setGradePoints(plan.gradePoints ?? null);
         setIsDirty(false);
+        const extraKeys = (plan.extraTerms || []).flatMap((t) => t.courseKeys || []);
+        const allKeys = [...(plan.semesters || []).flat(), ...extraKeys];
+        if (allKeys.length > 0) fetchCourseData(allKeys);
       }
     } catch (err) {
       console.error('Error loading local plan:', err);
@@ -279,6 +307,11 @@ export default function PlannerPage() {
       major: guestPlan.major || '',
       semesters: guestPlan.semesters || EMPTY_SEMESTERS(),
       isTransfer: guestPlan.isTransfer || false,
+      extraTerms: guestPlan.extraTerms || [],
+      externalCredits: guestPlan.externalCredits || [],
+      cumulativeGpa: guestPlan.cumulativeGpa ?? null,
+      earnedCredits: guestPlan.earnedCredits ?? null,
+      gradePoints: guestPlan.gradePoints ?? null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -305,14 +338,22 @@ export default function PlannerPage() {
     if (!snap.exists()) return;
     const data = snap.data();
     const semData = data.semesters ?? EMPTY_SEMESTERS();
+    const extra = data.extraTerms ?? [];
     setActivePlanId(planId);
     setPlanName(data.name ?? 'My Plan');
     setSemesters(semData);
     setIsTransfer(data.isTransfer ?? false);
+    setExtraTerms(extra);
+    setExternalCredits(data.externalCredits ?? []);
+    setCumulativeGpa(data.cumulativeGpa ?? null);
+    setEarnedCredits(data.earnedCredits ?? null);
+    setGradePoints(data.gradePoints ?? null);
     setIsDirty(false);
     if (list) setPlans(list);
-    // Fetch course data for courses already in the plan
-    const allKeys = semData.flat();
+    const allKeys = [
+      ...semData.flat(),
+      ...extra.flatMap((t) => t.courseKeys || []),
+    ];
     if (allKeys.length > 0) {
       await fetchCourseData(allKeys);
     }
@@ -326,6 +367,11 @@ export default function PlannerPage() {
       major: '',
       semesters: EMPTY_SEMESTERS(),
       isTransfer: false,
+      extraTerms: [],
+      externalCredits: [],
+      cumulativeGpa: null,
+      earnedCredits: null,
+      gradePoints: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -333,12 +379,17 @@ export default function PlannerPage() {
     setPlanName('My Plan');
     setSemesters(EMPTY_SEMESTERS());
     setIsTransfer(false);
+    setExtraTerms([]);
+    setExternalCredits([]);
+    setCumulativeGpa(null);
+    setEarnedCredits(null);
+    setGradePoints(null);
     setPlans([{ id: ref.id, name: 'My Plan' }]);
     setIsDirty(false);
     isInitialLoad.current = false;
   }
 
-  async function persistPlan(uid, planId, name, semData, transfer) {
+  async function persistPlan(uid, planId, name, semData, transfer, extras = {}) {
     setSaving(true);
     const debugLog = {
       timestamp: new Date().toISOString(),
@@ -353,7 +404,6 @@ export default function PlannerPage() {
     try {
       console.log('🔄 [persistPlan] Starting save:', debugLog);
 
-      // Verify we have required data
       if (!uid) throw new Error('Missing uid');
       if (!planId) throw new Error('Missing planId');
 
@@ -364,6 +414,11 @@ export default function PlannerPage() {
         name,
         semesters: semData,
         isTransfer: transfer,
+        extraTerms: extras.extraTerms ?? extraTerms,
+        externalCredits: extras.externalCredits ?? externalCredits,
+        cumulativeGpa: extras.cumulativeGpa ?? cumulativeGpa,
+        earnedCredits: extras.earnedCredits ?? earnedCredits,
+        gradePoints: extras.gradePoints ?? gradePoints,
         updatedAt: serverTimestamp(),
       };
 
@@ -372,13 +427,13 @@ export default function PlannerPage() {
         updatedAt: '(server-timestamp)',
       });
 
-      // Attempt the write
       await updateDoc(planRef, payload);
 
       console.log('✅ [persistPlan] Write succeeded');
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus(''), 2500);
       setIsDirty(false);
+      return true;
     } catch (err) {
       const errorDetails = {
         message: err.message,
@@ -388,7 +443,6 @@ export default function PlannerPage() {
       console.error('❌ [persistPlan] Write failed:', errorDetails);
       console.error('🔍 [persistPlan] Debug log:', debugLog);
 
-      // Log different error codes
       if (err.code === 'permission-denied') {
         console.error('⚠️  Permission denied — check Firestore rules and authentication');
       } else if (err.code === 'unauthenticated') {
@@ -399,6 +453,7 @@ export default function PlannerPage() {
 
       setSaveStatus('error');
       setTimeout(() => setSaveStatus(''), 3000);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -553,12 +608,75 @@ export default function PlannerPage() {
     setIsDirty(true);
   }
 
+  async function handleTranscriptImport(result) {
+    const importedCourseKeys = [
+      ...result.semesters.flat(),
+      ...result.extraTerms.flatMap((term) => term.courseKeys || []),
+    ];
+
+    setSemesters(result.semesters);
+    setExtraTerms(result.extraTerms);
+    setExternalCredits(result.externalCredits);
+    setCumulativeGpa(result.cumulativeGpa);
+    setEarnedCredits(result.earnedCredits);
+    setGradePoints(result.gradePoints);
+    setIsDirty(true);
+
+    if (importedCourseKeys.length > 0) {
+      fetchCourseData(importedCourseKeys).catch((err) => {
+        console.error('Error loading imported course details:', err);
+      });
+    }
+
+    if (user && activePlanId) {
+      const saved = await persistPlan(user.uid, activePlanId, planName, result.semesters, isTransfer, {
+        extraTerms: result.extraTerms,
+        externalCredits: result.externalCredits,
+        cumulativeGpa: result.cumulativeGpa,
+        earnedCredits: result.earnedCredits,
+        gradePoints: result.gradePoints,
+      });
+      if (!saved) throw new Error('Could not save imported transcript');
+    } else {
+      // Avoid stale React state when saving a guest import.
+      saveLocalPlan({
+        semesters: result.semesters,
+        extraTerms: result.extraTerms,
+        externalCredits: result.externalCredits,
+        cumulativeGpa: result.cumulativeGpa,
+        earnedCredits: result.earnedCredits,
+        gradePoints: result.gradePoints,
+      });
+    }
+  }
+
+  function handleRemoveExtraTermCourse(term, courseKey) {
+    setExtraTerms((prev) => prev
+      .map((extraTerm) => extraTerm.term === term
+        ? { ...extraTerm, courseKeys: extraTerm.courseKeys.filter((key) => key !== courseKey) }
+        : extraTerm)
+      .filter((extraTerm) => extraTerm.courseKeys.length > 0));
+    setIsDirty(true);
+  }
+
+  function handleRemoveExternalCredit(index) {
+    setExternalCredits((prev) => prev.filter((_, creditIndex) => creditIndex !== index));
+    setIsDirty(true);
+  }
+
+  function handleUpdateExternalCredit(index, patch) {
+    setExternalCredits((prev) => prev.map((credit, creditIndex) => (
+      creditIndex === index ? { ...credit, ...patch } : credit
+    )));
+    setIsDirty(true);
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const coursesInPlan = new Set(semesters.flat());
+  const extraCourseKeys = extraTerms.flatMap((term) => term.courseKeys || []);
+  const coursesInPlan = new Set([...semesters.flat(), ...extraCourseKeys]);
 
-  const totalCredits = semesters
-    .flat()
+  const totalCredits = [...semesters.flat(), ...extraCourseKeys]
     .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0);
 
   if (authLoading) {
@@ -631,6 +749,13 @@ export default function PlannerPage() {
               Browsing as guest — sign in to save your plans
             </div>
           )}
+          <button
+            type="button"
+            className="btn-import-transcript"
+            onClick={() => setShowImportModal(true)}
+          >
+            Import Transcript
+          </button>
         </div>
 
         <div className="planner-header-user">
@@ -699,12 +824,25 @@ export default function PlannerPage() {
               onRemoveCourse={handleRemoveCourse}
               draggingId={draggingId}
             />
+            <ExtraTermsPanel
+              extraTerms={extraTerms}
+              courseMap={courseMap}
+              creditsMap={creditsMap}
+              onRemoveCourse={handleRemoveExtraTermCourse}
+            />
+            <ExternalCreditsPanel
+              externalCredits={externalCredits}
+              onRemove={handleRemoveExternalCredit}
+              onUpdate={handleUpdateExternalCredit}
+            />
           </main>
 
           {/* Right: HUB tracker */}
           <aside className="planner-right">
             <HubSidebar
               semesters={semesters}
+              extraCourseKeys={extraCourseKeys}
+              externalCredits={externalCredits}
               courseMap={courseMap}
               isTransfer={isTransfer}
               onToggleTransfer={handleToggleTransfer}
@@ -726,6 +864,15 @@ export default function PlannerPage() {
 
       {/* ── Bulletin Panel ── */}
       <BulletinPanel />
+
+      <ImportTranscriptModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        semesters={semesters}
+        extraTerms={extraTerms}
+        externalCredits={externalCredits}
+        onImport={handleTranscriptImport}
+      />
 
       {/* ── Sign-in prompt for unsaved changes (unauthenticated) ── */}
       {!user && isDirty && (
