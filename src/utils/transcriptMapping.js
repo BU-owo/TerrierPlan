@@ -3,7 +3,7 @@ import { normalizeExternalCredits, normalizeExternalCredit } from './externalCre
 import { resolveApHubFromScore } from './apScoreResolution';
 import { getApHub, isApScoreDependent } from '../data/apIbHubCredit';
 
-const DEBUG_IMPORT = true;
+const DEBUG_IMPORT = import.meta.env.DEV;
 
 function debugImport(stage, payload) {
   if (!DEBUG_IMPORT) return;

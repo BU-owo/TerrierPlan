@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
 import PlannerPage from './pages/PlannerPage';
@@ -6,6 +6,31 @@ import { useState, useEffect } from 'react';
 import './App.css';
 
 const THEME_STORAGE_KEY = 'terrierplan_theme';
+
+function AppRoutes({ theme, onToggleTheme }) {
+  const location = useLocation();
+  const isPlanner = location.pathname.startsWith('/planner');
+
+  return (
+    <>
+      <Routes>
+        <Route path="/login" element={<LoginPage theme={theme} onToggleTheme={onToggleTheme} />} />
+        <Route path="/planner" element={<PlannerPage theme={theme} onToggleTheme={onToggleTheme} />} />
+        <Route path="*" element={<Navigate to="/planner" replace />} />
+      </Routes>
+
+      {/* The planner is a full-height app shell (100dvh, internal scroll);
+          the footer only makes sense on the marketing-style login page. */}
+      {!isPlanner && (
+        <footer className="app-footer">
+          Not affiliated with or endorsed by Boston University. This is an
+          independent, community-made tool built with AI assistance. Data is sourced from BU's official catalog and website. Use at your
+          own discretion.
+        </footer>
+      )}
+    </>
+  );
+}
 
 export default function App() {
   const { loading } = useAuth();
@@ -73,18 +98,8 @@ export default function App() {
         </div>
       )}
       <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage theme={theme} onToggleTheme={toggleTheme} />} />
-          <Route path="/planner" element={<PlannerPage theme={theme} onToggleTheme={toggleTheme} />} />
-          <Route path="*" element={<Navigate to="/planner" replace />} />
-        </Routes>
+        <AppRoutes theme={theme} onToggleTheme={toggleTheme} />
       </BrowserRouter>
-
-      <footer className="app-footer">
-        Not affiliated with or endorsed by Boston University. This is an
-        independent, community-made tool built with AI assistance. Data is sourced from BU's official catalog and website. Use at your
-        own discretion.
-      </footer>
     </>
   );
 }

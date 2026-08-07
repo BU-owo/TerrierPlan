@@ -6,7 +6,7 @@ import { resolveApHubFromScore } from '../../utils/apScoreResolution';
 import { getApHub, isApScoreDependent } from '../../data/apIbHubCredit';
 
 const STEPS = ['Upload', 'Review', 'Confirm'];
-const DEBUG_IMPORT = true;
+const DEBUG_IMPORT = import.meta.env.DEV;
 
 function debugImportModal(stage, payload) {
   if (!DEBUG_IMPORT) return;

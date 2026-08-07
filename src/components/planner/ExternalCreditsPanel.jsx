@@ -4,7 +4,7 @@ import { HUB_LABELS } from '../../utils/hubConstants';
 import { normalizeExternalCredit } from '../../utils/externalCredits';
 import { resolveApHubFromScore } from '../../utils/apScoreResolution';
 
-const DEBUG_EXTERNAL_CREDITS = true;
+const DEBUG_EXTERNAL_CREDITS = import.meta.env.DEV;
 
 function debugExternalCredits(stage, payload) {
   if (!DEBUG_EXTERNAL_CREDITS) return;
@@ -19,12 +19,14 @@ const TransferExternalCreditRow = memo(function TransferExternalCreditRow({
   const renderCountRef = useRef(0);
   renderCountRef.current += 1;
 
-  console.log('[DEBUG TransferExternalCreditRow] render', {
-    creditId,
-    sourceTitle: credit.sourceTitle,
-    renderCount: renderCountRef.current,
-    propCourseKey: credit.courseKey || '',
-  });
+  if (DEBUG_EXTERNAL_CREDITS) {
+    console.log('[DEBUG TransferExternalCreditRow] render', {
+      creditId,
+      sourceTitle: credit.sourceTitle,
+      renderCount: renderCountRef.current,
+      propCourseKey: credit.courseKey || '',
+    });
+  }
 
   const [courseKeyDraft, setCourseKeyDraft] = useState(credit.courseKey || '');
 
@@ -49,14 +51,16 @@ const TransferExternalCreditRow = memo(function TransferExternalCreditRow({
         value={courseKeyDraft}
         onChange={(e) => {
           const nextValue = e.target.value;
-          console.log('[DEBUG TransferExternalCreditRow] onChange', {
-            creditId,
-            sourceTitle: credit.sourceTitle,
-            renderCount: renderCountRef.current,
-            eventValue: nextValue,
-            draftBeforeSet: courseKeyDraft,
-            propBeforeCommit: credit.courseKey || '',
-          });
+          if (DEBUG_EXTERNAL_CREDITS) {
+            console.log('[DEBUG TransferExternalCreditRow] onChange', {
+              creditId,
+              sourceTitle: credit.sourceTitle,
+              renderCount: renderCountRef.current,
+              eventValue: nextValue,
+              draftBeforeSet: courseKeyDraft,
+              propBeforeCommit: credit.courseKey || '',
+            });
+          }
           setCourseKeyDraft(nextValue);
         }}
         onBlur={(e) => commitCourseKey(e.target.value)}
