@@ -18,6 +18,26 @@
   --text-secondary: #5C5449;
   --text-muted: #9E9890;
 
+  /* Semantic status */
+  --warning-surface: #FFF5F4;
+  --warning-text: #B42318;
+  --warning-border: #D92D20;
+  --success-surface: #F0FDF4;
+  --success-text: #166534;
+  --success-strong: #16A34A;
+
+  /* Semantic category badges */
+  --badge-warm-bg: #F7E5B7;
+  --badge-warm-text: #6B5115;
+  --badge-cool-bg: #E8EDF7;
+  --badge-cool-text: #2C3E6B;
+  --badge-success-bg: #DCEFE3;
+  --badge-success-text: #1B5E3A;
+
+  /* Semantic interaction */
+  --drag-over-bg: #F5F3FF;
+  --drag-over-border: #7C3AED;
+
   /* HUB category colors (6-group BU spec) */
   --hub-phi: #B0413E;   --hub-phi-bg: #F5E8E8;   /* Philosophical, Aesthetic, Historical - deep rose */
   --hub-sci: #2F6F5E;   --hub-sci-bg: #E8F3F1;   /* Scientific and Social Inquiry - forest green */
@@ -60,6 +80,20 @@ html[data-theme='dark'] {
   --text-muted: #93a2b6;
   --scarlet-light: #4b2026;
   --scarlet-pale: #2d1a20;
+  --warning-surface: #402327;
+  --warning-text: #FFB4AD;
+  --warning-border: #F97066;
+  --success-surface: #1C3A2B;
+  --success-text: #A8E6C7;
+  --success-strong: #4ADE80;
+  --badge-warm-bg: #4A3A1D;
+  --badge-warm-text: #F5D48A;
+  --badge-cool-bg: #27344B;
+  --badge-cool-text: #C9D8F8;
+  --badge-success-bg: #224033;
+  --badge-success-text: #A8DCC0;
+  --drag-over-bg: #2E2746;
+  --drag-over-border: #A78BFA;
   --hub-phi-bg: #41282d;
   --hub-sci-bg: #1c3835;
   --hub-qr-bg: #1f3149;
