@@ -3,7 +3,7 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 
-export default function LoginPage() {
+export default function LoginPage({ theme = 'light', onToggleTheme }) {
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,8 +25,22 @@ export default function LoginPage() {
 
   return (
     <div className="login-page">
+      <button
+        type="button"
+        className="login-theme-toggle"
+        onClick={onToggleTheme}
+        aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+      >
+        {theme === 'dark' ? '☀ Light mode' : '☾ Dark mode'}
+      </button>
       <div className="login-card">
-        <div className="login-mascot" aria-hidden="true">🐾</div>
+        <img
+          className="login-mascot"
+          src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
+          alt="TerrierPlan"
+          width={48}
+          height={48}
+        />
         <h1 className="login-title">TerrierPlan</h1>
         <p className="login-subtitle">
           Plan your BU degree, track HUB units, and build your schedule — all in one place.
@@ -62,6 +76,16 @@ export default function LoginPage() {
           background: linear-gradient(150deg, #CC0000 0%, #8B0000 100%);
           padding: 24px;
         }
+        .login-theme-toggle {
+          position: fixed;
+          top: 16px;
+          right: 16px;
+          border: 1px solid rgba(255,255,255,.7);
+          border-radius: 6px;
+          padding: 7px 10px;
+          background: rgba(0,0,0,.15);
+          color: #fff;
+        }
         .login-card {
           background: var(--white);
           border-radius: var(--radius-xl);
@@ -72,8 +96,11 @@ export default function LoginPage() {
           box-shadow: var(--shadow-lg);
         }
         .login-mascot {
-          font-size: 48px;
-          margin-bottom: 8px;
+          width: 48px;
+          height: 48px;
+          object-fit: contain;
+          display: block;
+          margin: 0 auto 8px;
         }
         .login-title {
           font-size: 26px;

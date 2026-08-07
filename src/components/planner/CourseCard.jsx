@@ -10,6 +10,7 @@ export default function CourseCard({
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: courseKey,
+    data: { from: 'board', courseKey },
     disabled: isDragOverlay,
   });
 
@@ -20,7 +21,7 @@ export default function CourseCard({
 
   const cardContent = (
     <>
-      {!isDragOverlay && (
+      {!isDragOverlay && onRemove && (
         <button
           className="course-card-remove"
           onPointerDown={(e) => e.stopPropagation()}

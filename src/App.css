@@ -1,1 +1,28 @@
-/* planner styles imported via planner.css */
+/* Shared brand / favicon image sizing */
+
+.auth-loading-paw {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  display: block;
+  animation: paw-bounce 0.9s ease-in-out infinite;
+}
+
+@keyframes paw-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.app-footer {
+  margin-top: 2rem;
+  padding: 1.5rem 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: .75rem;
+  text-align: center;
+}

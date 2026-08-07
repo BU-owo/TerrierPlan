@@ -1,6 +1,5 @@
 import { useDroppable } from '@dnd-kit/core';
 import CourseCard from './CourseCard';
-import { SEMESTER_LABELS } from '../../utils/hubConstants';
 
 export default function SemesterColumn({
   index,
@@ -13,6 +12,7 @@ export default function SemesterColumn({
   draggingId,
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `col-${index}` });
+  const seasonLabel = index % 2 === 0 ? 'Fall' : 'Spring';
 
   const totalCredits = courses.reduce(
     (sum, key) => sum + (creditsMap[key] ?? 0),
@@ -31,7 +31,7 @@ export default function SemesterColumn({
       onClick={onColumnClick}
     >
       <div className="semester-header">
-        <span className="semester-name">{SEMESTER_LABELS[index]}</span>
+        <span className="semester-name">{seasonLabel}</span>
         {courses.length > 0 && (
           <span className="semester-credits">{totalCredits || '—'} cr</span>
         )}

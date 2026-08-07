@@ -99,10 +99,9 @@ export default function PlanSelector({
       {/* Delete plan */}
       {activePlanId && (
         <button
-          className={`plan-btn-icon danger`}
+          className={`plan-btn-icon danger ${confirmDelete ? 'confirm' : ''}`}
           title={confirmDelete ? 'Click again to confirm delete' : 'Delete this plan'}
           onClick={handleDelete}
-          style={confirmDelete ? { borderColor: '#ff6b6b', background: 'rgba(220,38,38,.4)' } : undefined}
         >
           {confirmDelete ? '?' : '🗑'}
         </button>

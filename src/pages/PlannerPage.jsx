@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { signOut } from 'firebase/auth';
 import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
   collection,
   doc,
   getDocs,
@@ -19,14 +26,30 @@ import { useAuth } from '../hooks/useAuth';
 import PlanSelector from '../components/planner/PlanSelector';
 import CourseSearch from '../components/planner/CourseSearch';
 import SemesterBoard from '../components/planner/SemesterBoard';
+import CourseCard from '../components/planner/CourseCard';
 import HubSidebar from '../components/planner/HubSidebar';
 import BulletinPanel from '../components/planner/BulletinPanel';
+import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
+import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
+import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
+import { normalizeExternalCredits, normalizeExternalCredit } from '../utils/externalCredits';
 import './planner.css';
+import '../App.css';
 
 const EMPTY_SEMESTERS = () => Array.from({ length: 8 }, () => []);
 const LOCAL_STORAGE_KEY = 'terrierplan_session';
 
-export default function PlannerPage() {
+// Shared across Strict Mode double-invokes of the auth effect so we only
+// migrate (and clear localStorage) once per guest session → sign-in.
+let guestMigrationPromise = null;
+const DEBUG_IMPORT = true;
+
+function debugPlanner(stage, payload) {
+  if (!DEBUG_IMPORT) return;
+  console.log(`[DEBUG PlannerPage] ${stage}`, payload);
+}
+
+export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const { user, loading: authLoading } = useAuth();
 
   // ── Plan list ─────────────────────────────────────────────────────────────
@@ -35,6 +58,11 @@ export default function PlannerPage() {
   const [planName, setPlanName] = useState('My Plan');
   const [semesters, setSemesters] = useState(EMPTY_SEMESTERS);
   const [isTransfer, setIsTransfer] = useState(false);
+  const [extraTerms, setExtraTerms] = useState([]);
+  const [externalCredits, setExternalCredits] = useState([]);
+  const [cumulativeGpa, setCumulativeGpa] = useState(null);
+  const [earnedCredits, setEarnedCredits] = useState(null);
+  const [gradePoints, setGradePoints] = useState(null);
 
   // ── Course data caches ────────────────────────────────────────────────────
   const [courseMap, setCourseMap] = useState({}); // courseKey → course doc
@@ -47,66 +75,156 @@ export default function PlannerPage() {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(''); // 'saved' | 'error' | ''
   const [isDirty, setIsDirty] = useState(false);
-  const [unsavedChangesWarning, setUnsavedChangesWarning] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [draggingId, setDraggingId] = useState(null);
+  const [dragOverlay, setDragOverlay] = useState(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
 
   const saveTimeoutRef = useRef(null);
   const isInitialLoad = useRef(true);
   const hasUnsavedChanges = useRef(false);
+  const pendingLeaveAction = useRef(null);
 
-  // ── Load plans on sign-in ─────────────────────────────────────────────────
+  // ── Load plans on sign-in (and migrate any guest plan first) ──────────────
   useEffect(() => {
     if (authLoading) return; // Wait for auth to load
 
-    if (user) {
-      // User is logged in
-      loadPlans(user.uid).then(async (list) => {
-        // Check if we have a guest plan to migrate
-        const guestPlan = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (guestPlan) {
-          try {
-            const parsedGuest = JSON.parse(guestPlan);
-            // Migrate guest plan to Firestore
-            await migrateGuestPlan(user.uid, parsedGuest);
-            // Reload plans to show the migrated one
-            const updatedList = await loadPlans(user.uid);
-            if (updatedList.length > 0) {
-              await loadPlan(user.uid, updatedList[0].id, updatedList);
-            }
-          } catch (err) {
-            console.error('Error migrating guest plan:', err);
-            // Fall back to loading first plan if migration fails
-            if (list.length > 0) {
-              await loadPlan(user.uid, list[0].id, list);
-            }
-          }
-        } else if (list.length === 0) {
-          await createDefaultPlan(user.uid);
+    let cancelled = false;
+
+    async function migrateGuestPlanIfNeeded(uid) {
+      // Deduplicate concurrent calls (React Strict Mode remounts the effect)
+      if (!guestMigrationPromise) {
+        const guestRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (!guestRaw) {
+          guestMigrationPromise = Promise.resolve(null);
         } else {
-          await loadPlan(user.uid, list[0].id, list);
+          // Claim immediately so a sibling effect cannot also migrate / createDefault
+          localStorage.removeItem(LOCAL_STORAGE_KEY);
+          guestMigrationPromise = (async () => {
+            try {
+              const parsedGuest = JSON.parse(guestRaw);
+              return await migrateGuestPlan(uid, parsedGuest);
+            } catch (err) {
+              console.error('Error migrating guest plan:', err);
+              localStorage.setItem(LOCAL_STORAGE_KEY, guestRaw);
+              guestMigrationPromise = null; // allow retry on next sign-in attempt
+              return null;
+            }
+          })();
         }
-      });
-    } else {
-      // User is not logged in — load from local storage
-      loadLocalPlan();
+      }
+      return guestMigrationPromise;
     }
+
+    async function initForUser(uid) {
+      // 1. Migrate guest plan BEFORE loadPlans/createDefaultPlan
+      const migratedId = await migrateGuestPlanIfNeeded(uid);
+      if (cancelled) return;
+
+      // 2. Load existing plans (migrated doc is additive — never overwrites)
+      let list = [];
+      try {
+        list = await loadPlans(uid);
+      } catch (err) {
+        console.error('Error loading plans:', err);
+        return;
+      }
+      if (cancelled) return;
+
+      if (migratedId) {
+        await loadPlan(uid, migratedId, list);
+      } else if (list.length === 0) {
+        await createDefaultPlan(uid);
+      } else {
+        await loadPlan(uid, list[0].id, list);
+      }
+    }
+
+    if (user) {
+      initForUser(user.uid);
+    } else {
+      // Signed out — allow a future sign-in to migrate a new guest plan
+      guestMigrationPromise = null;
+      loadLocalPlan();
+      isInitialLoad.current = false;
+    }
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, authLoading]);
 
-  // ── Warn before losing unsaved changes ─────────────────────────────────────
+  // ── Keep hasUnsavedChanges ref in sync with isDirty ───────────────────────
+  useEffect(() => {
+    hasUnsavedChanges.current = isDirty;
+  }, [isDirty]);
+
+  // ── Warn before losing unsaved changes (tab close / refresh) ───────────────
   useEffect(() => {
     function handleBeforeUnload(e) {
-      if (isDirty) {
-        const message = user
-          ? 'You have unsaved changes. Your plan will not be saved if you leave.'
-          : 'You have unsaved changes. Sign in to save your plan, or your changes will be lost when you leave.';
-        e.preventDefault();
-        e.returnValue = message;
-        return message;
-      }
+      if (!hasUnsavedChanges.current) return;
+      e.preventDefault();
+      e.returnValue = '';
     }
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isDirty, user]);
+  }, []);
+
+  // ── In-app leave confirmation ─────────────────────────────────────────────
+  function requestLeave(action) {
+    if (!hasUnsavedChanges.current) {
+      action();
+      return;
+    }
+    pendingLeaveAction.current = action;
+    setShowLeaveModal(true);
+  }
+
+  function handleStay() {
+    pendingLeaveAction.current = null;
+    setShowLeaveModal(false);
+  }
+
+  function handleLeaveAnyway() {
+    const action = pendingLeaveAction.current;
+    pendingLeaveAction.current = null;
+    setShowLeaveModal(false);
+    // Flush guest plan so sign-in migration has the latest board state
+    if (!user) saveLocalPlan();
+    // Clear dirty so beforeunload does not also fire on programmatic navigation
+    hasUnsavedChanges.current = false;
+    setIsDirty(false);
+    action?.();
+  }
+
+  function handleInternalLinkClick(e) {
+    const anchor = e.target.closest?.('a[href]');
+    if (!anchor || !hasUnsavedChanges.current) return;
+
+    const href = anchor.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+      return;
+    }
+
+    // Only intercept same-origin / relative navigations
+    let url;
+    try {
+      url = new URL(href, window.location.href);
+    } catch {
+      return;
+    }
+    if (url.origin !== window.location.origin) return;
+
+    e.preventDefault();
+    requestLeave(() => {
+      window.location.href = url.href;
+    });
+  }
 
   // ── Autosave on change ────────────────────────────────────────────────────
   useEffect(() => {
@@ -122,7 +240,13 @@ export default function PlannerPage() {
     saveTimeoutRef.current = setTimeout(() => {
       console.log('⏱️  [autosave] Debounce fired, calling persistPlan');
       if (activePlanId) {
-        persistPlan(user.uid, activePlanId, planName, semesters, isTransfer);
+        persistPlan(user.uid, activePlanId, planName, semesters, isTransfer, {
+          extraTerms,
+          externalCredits,
+          cumulativeGpa,
+          earnedCredits,
+          gradePoints,
+        });
       } else {
         console.warn('⚠️  [autosave] activePlanId is null, skipping save');
       }
@@ -133,17 +257,47 @@ export default function PlannerPage() {
       console.log('🧹 [autosave] Cleaning up timeout');
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [semesters, planName, isTransfer, isDirty]);
+  }, [semesters, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints]);
+
+  // ── Guest: persist to localStorage after React commits the new state ──────
+  // Handlers used to call saveLocalPlan() immediately after setSemesters(),
+  // which wrote the *previous* board (stale closure) — so the last course
+  // change was never stored, and a single-course plan looked "lost" on sign-in.
+  useEffect(() => {
+    if (user || authLoading || isInitialLoad.current || !isDirty) return;
+    saveLocalPlan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [semesters, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, user, authLoading]);
 
   // ── Local plan management (for auth-optional browsing) ─────────────────────
-  function saveLocalPlan() {
+  function saveLocalPlan(overrides = {}) {
+    const normalizedExternalCredits = normalizeExternalCredits(overrides.externalCredits ?? externalCredits);
     const plan = {
-      name: planName,
-      semesters,
-      isTransfer,
+      name: overrides.name ?? planName,
+      major: overrides.major ?? '',
+      semesters: overrides.semesters ?? semesters,
+      isTransfer: overrides.isTransfer ?? isTransfer,
+      extraTerms: overrides.extraTerms ?? extraTerms,
+      externalCredits: normalizedExternalCredits,
+      cumulativeGpa: overrides.cumulativeGpa ?? cumulativeGpa,
+      earnedCredits: overrides.earnedCredits ?? earnedCredits,
+      gradePoints: overrides.gradePoints ?? gradePoints,
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(plan));
+    debugPlanner('saveLocalPlan-written', {
+      transferCredits: normalizedExternalCredits.filter((c) => c?.type === 'transfer'),
+      externalCredits: normalizedExternalCredits,
+    });
+    try {
+      const stored = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '{}');
+      debugPlanner('saveLocalPlan-readback', {
+        transferCredits: (stored.externalCredits || []).filter((c) => c?.type === 'transfer'),
+        externalCredits: stored.externalCredits || [],
+      });
+    } catch (err) {
+      console.error('[DEBUG PlannerPage] saveLocalPlan-readback-parse-failed', err);
+    }
   }
 
   function loadLocalPlan() {
@@ -154,7 +308,20 @@ export default function PlannerPage() {
         setPlanName(plan.name || 'My Plan');
         setSemesters(plan.semesters || EMPTY_SEMESTERS());
         setIsTransfer(plan.isTransfer || false);
+        setExtraTerms(plan.extraTerms || []);
+        const normalizedExternalCredits = normalizeExternalCredits(plan.externalCredits);
+        setExternalCredits(normalizedExternalCredits);
+        debugPlanner('loadLocalPlan-read', {
+          transferCredits: normalizedExternalCredits.filter((c) => c?.type === 'transfer'),
+          externalCredits: normalizedExternalCredits,
+        });
+        setCumulativeGpa(plan.cumulativeGpa ?? null);
+        setEarnedCredits(plan.earnedCredits ?? null);
+        setGradePoints(plan.gradePoints ?? null);
         setIsDirty(false);
+        const extraKeys = (plan.extraTerms || []).flatMap((t) => t.courseKeys || []);
+        const allKeys = [...(plan.semesters || []).flat(), ...extraKeys];
+        if (allKeys.length > 0) fetchCourseData(allKeys);
       }
     } catch (err) {
       console.error('Error loading local plan:', err);
@@ -162,16 +329,20 @@ export default function PlannerPage() {
   }
 
   async function migrateGuestPlan(uid, guestPlan) {
-    // Create a new plan in Firestore from the guest localStorage data
+    // Always addDoc — never overwrite an existing saved plan
     const ref = await addDoc(collection(db, 'users', uid, 'plans'), {
       name: guestPlan.name || 'Imported Plan',
+      major: guestPlan.major || '',
       semesters: guestPlan.semesters || EMPTY_SEMESTERS(),
       isTransfer: guestPlan.isTransfer || false,
+      extraTerms: guestPlan.extraTerms || [],
+      externalCredits: normalizeExternalCredits(guestPlan.externalCredits),
+      cumulativeGpa: guestPlan.cumulativeGpa ?? null,
+      earnedCredits: guestPlan.earnedCredits ?? null,
+      gradePoints: guestPlan.gradePoints ?? null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    // Only clear localStorage after successful Firestore write
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
     console.log('✅ Guest plan migrated to Firestore:', ref.id);
     return ref.id;
   }
@@ -195,14 +366,28 @@ export default function PlannerPage() {
     if (!snap.exists()) return;
     const data = snap.data();
     const semData = data.semesters ?? EMPTY_SEMESTERS();
+    const extra = data.extraTerms ?? [];
+    const normalizedExternalCredits = normalizeExternalCredits(data.externalCredits);
+    debugPlanner('loadPlan-from-firestore', {
+      planId,
+      transferCredits: normalizedExternalCredits.filter((c) => c?.type === 'transfer'),
+      externalCredits: normalizedExternalCredits,
+    });
     setActivePlanId(planId);
     setPlanName(data.name ?? 'My Plan');
     setSemesters(semData);
     setIsTransfer(data.isTransfer ?? false);
+    setExtraTerms(extra);
+    setExternalCredits(normalizedExternalCredits);
+    setCumulativeGpa(data.cumulativeGpa ?? null);
+    setEarnedCredits(data.earnedCredits ?? null);
+    setGradePoints(data.gradePoints ?? null);
     setIsDirty(false);
     if (list) setPlans(list);
-    // Fetch course data for courses already in the plan
-    const allKeys = semData.flat();
+    const allKeys = [
+      ...semData.flat(),
+      ...extra.flatMap((t) => t.courseKeys || []),
+    ];
     if (allKeys.length > 0) {
       await fetchCourseData(allKeys);
     }
@@ -216,6 +401,11 @@ export default function PlannerPage() {
       major: '',
       semesters: EMPTY_SEMESTERS(),
       isTransfer: false,
+      extraTerms: [],
+      externalCredits: [],
+      cumulativeGpa: null,
+      earnedCredits: null,
+      gradePoints: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -223,12 +413,17 @@ export default function PlannerPage() {
     setPlanName('My Plan');
     setSemesters(EMPTY_SEMESTERS());
     setIsTransfer(false);
+    setExtraTerms([]);
+    setExternalCredits([]);
+    setCumulativeGpa(null);
+    setEarnedCredits(null);
+    setGradePoints(null);
     setPlans([{ id: ref.id, name: 'My Plan' }]);
     setIsDirty(false);
     isInitialLoad.current = false;
   }
 
-  async function persistPlan(uid, planId, name, semData, transfer) {
+  async function persistPlan(uid, planId, name, semData, transfer, extras = {}) {
     setSaving(true);
     const debugLog = {
       timestamp: new Date().toISOString(),
@@ -243,7 +438,6 @@ export default function PlannerPage() {
     try {
       console.log('🔄 [persistPlan] Starting save:', debugLog);
 
-      // Verify we have required data
       if (!uid) throw new Error('Missing uid');
       if (!planId) throw new Error('Missing planId');
 
@@ -254,6 +448,11 @@ export default function PlannerPage() {
         name,
         semesters: semData,
         isTransfer: transfer,
+        extraTerms: extras.extraTerms ?? extraTerms,
+        externalCredits: normalizeExternalCredits(extras.externalCredits ?? externalCredits),
+        cumulativeGpa: extras.cumulativeGpa ?? cumulativeGpa,
+        earnedCredits: extras.earnedCredits ?? earnedCredits,
+        gradePoints: extras.gradePoints ?? gradePoints,
         updatedAt: serverTimestamp(),
       };
 
@@ -261,14 +460,27 @@ export default function PlannerPage() {
         ...payload,
         updatedAt: '(server-timestamp)',
       });
+      debugPlanner('persistPlan-payload', {
+        planId,
+        transferCredits: (payload.externalCredits || []).filter((c) => c?.type === 'transfer'),
+        externalCredits: payload.externalCredits || [],
+      });
 
-      // Attempt the write
       await updateDoc(planRef, payload);
+
+      const writtenSnap = await getDoc(planRef);
+      const written = writtenSnap.exists() ? writtenSnap.data() : null;
+      debugPlanner('persistPlan-firestore-readback', {
+        planId,
+        transferCredits: (written?.externalCredits || []).filter((c) => c?.type === 'transfer'),
+        externalCredits: written?.externalCredits || [],
+      });
 
       console.log('✅ [persistPlan] Write succeeded');
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus(''), 2500);
       setIsDirty(false);
+      return true;
     } catch (err) {
       const errorDetails = {
         message: err.message,
@@ -278,7 +490,6 @@ export default function PlannerPage() {
       console.error('❌ [persistPlan] Write failed:', errorDetails);
       console.error('🔍 [persistPlan] Debug log:', debugLog);
 
-      // Log different error codes
       if (err.code === 'permission-denied') {
         console.error('⚠️  Permission denied — check Firestore rules and authentication');
       } else if (err.code === 'unauthenticated') {
@@ -289,6 +500,7 @@ export default function PlannerPage() {
 
       setSaveStatus('error');
       setTimeout(() => setSaveStatus(''), 3000);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -381,7 +593,6 @@ export default function PlannerPage() {
     });
     setIsDirty(true);
     if (!courseMap[courseKey]) fetchCourseData([courseKey]);
-    if (!user) saveLocalPlan();
     // On mobile the board is a separate tab from search — jump over so the
     // user can see the course land in its semester.
     setMobileView('board');
@@ -395,7 +606,6 @@ export default function PlannerPage() {
       return next;
     });
     setIsDirty(true);
-    if (!user) saveLocalPlan();
   }
 
   function handleRemoveCourse(courseKey, semIndex) {
@@ -405,37 +615,183 @@ export default function PlannerPage() {
       return next;
     });
     setIsDirty(true);
-    if (!user) saveLocalPlan();
+  }
+
+  function handleDragStart({ active }) {
+    const courseKey = active.data.current?.courseKey ?? active.id;
+    setDraggingId(active.id);
+    setDragOverlay({
+      courseKey,
+      data: active.data.current?.course ?? courseMap[courseKey],
+      credits: creditsMap[courseKey],
+    });
+  }
+
+  function handleDragEnd({ active, over }) {
+    setDraggingId(null);
+    setDragOverlay(null);
+    if (!over) return;
+
+    const match = String(over.id).match(/^col-(\d+)$/);
+    if (!match) return;
+    const destIndex = parseInt(match[1], 10);
+    const courseKey = active.data.current?.courseKey ?? active.id;
+    const from = active.data.current?.from;
+
+    if (from === 'search') {
+      handleAddCourse(courseKey, destIndex);
+      return;
+    }
+
+    const srcIndex = semesters.findIndex((sem) => sem.includes(courseKey));
+    if (srcIndex === -1 || srcIndex === destIndex) return;
+    handleMoveCourse(courseKey, srcIndex, destIndex);
+  }
+
+  function handleDragCancel() {
+    setDraggingId(null);
+    setDragOverlay(null);
   }
 
   function handleToggleTransfer(val) {
     setIsTransfer(val);
     setIsDirty(true);
-    if (!user) saveLocalPlan();
+  }
+
+  async function handleTranscriptImport(result) {
+    const normalizedExternalCredits = normalizeExternalCredits(result.externalCredits);
+    debugPlanner('handleTranscriptImport-result', {
+      transferCredits: normalizedExternalCredits.filter((c) => c?.type === 'transfer'),
+      externalCredits: normalizedExternalCredits,
+      summary: result.summary,
+    });
+    const importedCourseKeys = [
+      ...result.semesters.flat(),
+      ...result.extraTerms.flatMap((term) => term.courseKeys || []),
+    ];
+
+    setSemesters(result.semesters);
+    setExtraTerms(result.extraTerms);
+    setExternalCredits(normalizedExternalCredits);
+    setCumulativeGpa(result.cumulativeGpa);
+    setEarnedCredits(result.earnedCredits);
+    setGradePoints(result.gradePoints);
+    setIsDirty(true);
+
+    if (importedCourseKeys.length > 0) {
+      fetchCourseData(importedCourseKeys).catch((err) => {
+        console.error('Error loading imported course details:', err);
+      });
+    }
+
+    if (user && activePlanId) {
+      const saved = await persistPlan(user.uid, activePlanId, planName, result.semesters, isTransfer, {
+        extraTerms: result.extraTerms,
+        externalCredits: normalizedExternalCredits,
+        cumulativeGpa: result.cumulativeGpa,
+        earnedCredits: result.earnedCredits,
+        gradePoints: result.gradePoints,
+      });
+      if (!saved) throw new Error('Could not save imported transcript');
+    } else {
+      // Avoid stale React state when saving a guest import.
+      saveLocalPlan({
+        semesters: result.semesters,
+        extraTerms: result.extraTerms,
+        externalCredits: normalizedExternalCredits,
+        cumulativeGpa: result.cumulativeGpa,
+        earnedCredits: result.earnedCredits,
+        gradePoints: result.gradePoints,
+      });
+    }
+  }
+
+  function handleRemoveExtraTermCourse(term, courseKey) {
+    setExtraTerms((prev) => prev
+      .map((extraTerm) => extraTerm.term === term
+        ? { ...extraTerm, courseKeys: extraTerm.courseKeys.filter((key) => key !== courseKey) }
+        : extraTerm)
+      .filter((extraTerm) => extraTerm.courseKeys.length > 0));
+    setIsDirty(true);
+  }
+
+  function handleRemoveExternalCredit(creditIdOrIndex) {
+    setExternalCredits((prev) => {
+      if (typeof creditIdOrIndex === 'number') {
+        return prev.filter((_, creditIndex) => creditIndex !== creditIdOrIndex);
+      }
+      return prev.filter((credit) => credit?.id !== creditIdOrIndex);
+    });
+    setIsDirty(true);
+  }
+
+  function handleUpdateExternalCredit(creditIdOrIndex, patch) {
+    setExternalCredits((prev) => prev.map((credit, creditIndex) => {
+      const matches = typeof creditIdOrIndex === 'number'
+        ? creditIndex === creditIdOrIndex
+        : credit?.id === creditIdOrIndex;
+      return matches
+        ? (normalizeExternalCredit({ ...credit, ...patch }) || { ...credit, ...patch })
+        : credit;
+    }));
+    setIsDirty(true);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const coursesInPlan = new Set(semesters.flat());
+  const extraCourseKeys = extraTerms.flatMap((term) => term.courseKeys || []);
+  const coursesInPlan = new Set([...semesters.flat(), ...extraCourseKeys]);
 
-  const totalCredits = semesters
-    .flat()
+  const planCourseCredits = [...semesters.flat(), ...extraCourseKeys]
     .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0);
+
+  const externalCreditTotal = (externalCredits || []).reduce((sum, credit) => {
+    if (!credit) return sum;
+    const creditValue = Number(credit.credits);
+    if (!Number.isFinite(creditValue)) return sum;
+
+    if (credit.type === 'ap' || credit.type === 'ib') {
+      return sum + creditValue;
+    }
+
+    if (credit.type === 'transfer') {
+      const mapped = Boolean(String(credit.courseKey || '').trim());
+      return mapped ? sum + creditValue : sum;
+    }
+
+    return sum;
+  }, 0);
+
+  const totalCredits = planCourseCredits + externalCreditTotal;
 
   if (authLoading) {
     return (
       <div className="auth-loading">
-        <span className="auth-loading-paw">🐾</span>
+        <img
+          className="auth-loading-paw"
+          src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
+          alt="TerrierPlan"
+          width={32}
+          height={32}
+        />
         <p>Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="planner-layout">
+    <div className="planner-layout" onClickCapture={handleInternalLinkClick}>
       {/* ── Header ── */}
       <header className="planner-header">
-        <div className="planner-header-logo">🐾 TerrierPlan</div>
+        <div className="planner-header-logo">
+          <img
+            src="/faviconred.png"
+            alt=""
+            width={18}
+            height={18}
+          />
+          TerrierPlan
+        </div>
 
         <div className="planner-header-center">
           {user ? (
@@ -463,9 +819,25 @@ export default function PlannerPage() {
               Browsing as guest — sign in to save your plans
             </div>
           )}
+          <button
+            type="button"
+            className="btn-import-transcript"
+            onClick={() => setShowImportModal(true)}
+          >
+            Import Transcript
+          </button>
         </div>
 
         <div className="planner-header-user">
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={onToggleTheme}
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {theme === 'dark' ? '☀' : '☾'}
+          </button>
           {user?.photoURL && (
             <img
               className="planner-header-avatar"
@@ -481,7 +853,7 @@ export default function PlannerPage() {
               </span>
               <button
                 className="btn-signout"
-                onClick={() => signOut(auth)}
+                onClick={() => requestLeave(() => signOut(auth))}
               >
                 Sign out
               </button>
@@ -489,7 +861,12 @@ export default function PlannerPage() {
           ) : (
             <button
               className="btn-signin"
-              onClick={() => window.location.href = '/login'}
+              onClick={() =>
+                requestLeave(() => {
+                  saveLocalPlan();
+                  window.location.href = '/login';
+                })
+              }
             >
               Sign in
             </button>
@@ -499,43 +876,84 @@ export default function PlannerPage() {
 
       {/* ── Body ── */}
       {/* data-mobile-view lets CSS show only one panel at a time on narrow screens */}
-      <div className="planner-body" data-mobile-view={mobileView}>
-        {/* Left: search */}
-        <aside className="planner-left">
-          <CourseSearch
-            activeSemIndex={activeSemIndex}
-            onActiveSemChange={setActiveSemIndex}
-            coursesInPlan={coursesInPlan}
-            onAddCourse={handleAddCourse}
-          />
-        </aside>
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
+        <div className="planner-body" data-mobile-view={mobileView}>
+          {/* Left: search */}
+          <aside className="planner-left">
+            <CourseSearch
+              theme={theme}
+              activeSemIndex={activeSemIndex}
+              onActiveSemChange={setActiveSemIndex}
+              coursesInPlan={coursesInPlan}
+              onAddCourse={handleAddCourse}
+            />
+          </aside>
 
-        {/* Center: semester board */}
-        <main className="planner-center">
-          <SemesterBoard
-            semesters={semesters}
-            courseMap={courseMap}
-            creditsMap={creditsMap}
-            activeSemIndex={activeSemIndex}
-            onSemesterClick={setActiveSemIndex}
-            onMoveCourse={handleMoveCourse}
-            onRemoveCourse={handleRemoveCourse}
-          />
-        </main>
+          {/* Center: semester board */}
+          <main className="planner-center">
+            <SemesterBoard
+              semesters={semesters}
+              courseMap={courseMap}
+              creditsMap={creditsMap}
+              activeSemIndex={activeSemIndex}
+              onSemesterClick={setActiveSemIndex}
+              onRemoveCourse={handleRemoveCourse}
+              draggingId={draggingId}
+            />
+            <ExtraTermsPanel
+              extraTerms={extraTerms}
+              courseMap={courseMap}
+              creditsMap={creditsMap}
+              onRemoveCourse={handleRemoveExtraTermCourse}
+            />
+            <ExternalCreditsPanel
+              externalCredits={externalCredits}
+              onRemove={handleRemoveExternalCredit}
+              onUpdate={handleUpdateExternalCredit}
+            />
+          </main>
 
-        {/* Right: HUB tracker */}
-        <aside className="planner-right">
-          <HubSidebar
-            semesters={semesters}
-            courseMap={courseMap}
-            isTransfer={isTransfer}
-            onToggleTransfer={handleToggleTransfer}
-          />
-        </aside>
-      </div>
+          {/* Right: HUB tracker */}
+          <aside className="planner-right">
+            <HubSidebar
+              semesters={semesters}
+              extraCourseKeys={extraCourseKeys}
+              externalCredits={externalCredits}
+              courseMap={courseMap}
+              isTransfer={isTransfer}
+              onToggleTransfer={handleToggleTransfer}
+            />
+          </aside>
+        </div>
+
+        <DragOverlay dropAnimation={null}>
+          {dragOverlay ? (
+            <CourseCard
+              courseKey={dragOverlay.courseKey}
+              data={dragOverlay.data}
+              credits={dragOverlay.credits}
+              isDragOverlay
+            />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* ── Bulletin Panel ── */}
       <BulletinPanel />
+
+      <ImportTranscriptModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        semesters={semesters}
+        extraTerms={extraTerms}
+        externalCredits={externalCredits}
+        onImport={handleTranscriptImport}
+      />
 
       {/* ── Mobile tab bar (hidden on wide screens via CSS; stays bottom-most
            so the bulletin panel expands upward above it) ── */}
@@ -571,6 +989,43 @@ export default function PlannerPage() {
             <a href="/login" className="banner-signin-link">
               Sign in →
             </a>
+          </div>
+        </div>
+      )}
+
+      {/* ── Unsaved changes leave confirmation ── */}
+      {showLeaveModal && (
+        <div className="beta-overlay" role="dialog" aria-modal="true" aria-labelledby="unsaved-modal-title">
+          <div className="beta-modal">
+            <img
+              className="beta-modal-paw"
+              src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
+              alt="TerrierPlan"
+              width={48}
+              height={48}
+            />
+            <h2 id="unsaved-modal-title">Unsaved changes</h2>
+            <p>
+              {user
+                ? 'You have unsaved changes. These will be lost if you leave without saving.'
+                : 'You have unsaved changes. Sign in to save your plan, or your changes will be lost.'}
+            </p>
+            <div className="unsaved-modal-actions">
+              <button
+                type="button"
+                className="unsaved-modal-stay"
+                onClick={handleStay}
+              >
+                Stay
+              </button>
+              <button
+                type="button"
+                className="beta-dismiss-btn unsaved-modal-leave"
+                onClick={handleLeaveAnyway}
+              >
+                Leave anyway
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -7,37 +7,51 @@ import {
   OR_GROUP_DISPLAY_NAMES,
   computeProgress,
 } from '../../utils/hubConstants';
+import { getApHub, getIbHub } from '../../data/apIbHubCredit';
 
-export default function HubSidebar({ semesters, courseMap, isTransfer, onToggleTransfer }) {
+export default function HubSidebar({
+  semesters,
+  extraCourseKeys = [],
+  externalCredits = [],
+  courseMap,
+  isTransfer,
+  onToggleTransfer,
+}) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // Count how many courses satisfy each HUB unit
   const counts = useMemo(() => {
     const result = {};
-    for (const sem of semesters) {
-      for (const key of sem) {
-        for (const unit of courseMap[key]?.hubUnits ?? []) {
-          result[unit] = (result[unit] ?? 0) + 1;
-        }
+    const allKeys = [...semesters.flat(), ...extraCourseKeys];
+    for (const key of allKeys) {
+      for (const unit of courseMap[key]?.hubUnits ?? []) {
+        result[unit] = (result[unit] ?? 0) + 1;
       }
     }
+    // BU's AP policy has its own HUB table. Transfer credit is deliberately
+    // omitted: it never fulfills HUB, even when equated to a BU course.
+    for (const credit of externalCredits) {
+      if (credit.type !== 'ap' && credit.type !== 'ib') continue;
+      const units = Array.isArray(credit.manualHubUnits)
+        ? credit.manualHubUnits
+        : credit.type === 'ib'
+          ? getIbHub(credit.testSubject, credit.score, credit.isHigherLevel)
+          : getApHub(credit.testSubject, credit.score);
+      if (!Array.isArray(units)) continue;
+      for (const unit of units) result[unit] = (result[unit] ?? 0) + 1;
+    }
     return result;
-  }, [semesters, courseMap]);
+  }, [semesters, extraCourseKeys, externalCredits, courseMap]);
 
-  // Select requirements based on first-year vs transfer
   const requirements = isTransfer ? TRANSFER_REQUIREMENTS : FIRST_YEAR_REQUIREMENTS;
 
-  // Compute progress for all requirements
   const progress = useMemo(() => computeProgress(counts, requirements), [counts, requirements]);
 
-  // Overall stats: sum the required counts, not just count fulfilled requirements
   const totalRequired = requirements.reduce((sum, req) => sum + req.required, 0);
   const fulfilled = progress.reduce((sum, { requirement, isSatisfied }) => {
     return isSatisfied ? sum + requirement.required : sum;
   }, 0);
   const allFulfilled = fulfilled === totalRequired;
 
-  // Group requirements by group label
   const requirementsByGroup = useMemo(() => {
     const groups = {};
     progress.forEach(({ requirement, isSatisfied }) => {
@@ -49,12 +63,6 @@ export default function HubSidebar({ semesters, courseMap, isTransfer, onToggleT
     });
     return groups;
   }, [progress]);
-
-  // Find the group color for a groupLabel
-  function getGroupColor(groupLabel) {
-    const group = HUB_GROUPS.find((g) => g.label === groupLabel);
-    return group?.colorHex || '#ccc';
-  }
 
   if (isCollapsed) {
     return (
@@ -83,28 +91,28 @@ export default function HubSidebar({ semesters, courseMap, isTransfer, onToggleT
             −
           </button>
         </div>
-        
+
         <div className="hub-header-meta">
           <span className="hub-progress-badge">
             {fulfilled}/{totalRequired}
           </span>
-          
-        <div className="hub-year-toggle-group">
-          <button
-            className={`hub-year-toggle-btn ${!isTransfer ? 'active' : ''}`}
-            onClick={() => onToggleTransfer(false)}
-            title="Show first-year requirements"
-          >
-            First-Year
-          </button>
-          <button
-            className={`hub-year-toggle-btn ${isTransfer ? 'active' : ''}`}
-            onClick={() => onToggleTransfer(true)}
-            title="Show transfer requirements"
-          >
-            Transfer
-          </button>
-        </div>
+
+          <div className="hub-year-toggle-group">
+            <button
+              className={`hub-year-toggle-btn ${!isTransfer ? 'active' : ''}`}
+              onClick={() => onToggleTransfer(false)}
+              title="Show first-year requirements"
+            >
+              First-Year
+            </button>
+            <button
+              className={`hub-year-toggle-btn ${isTransfer ? 'active' : ''}`}
+              onClick={() => onToggleTransfer(true)}
+              title="Show transfer requirements"
+            >
+              Transfer
+            </button>
+          </div>
         </div>
       </div>
 
@@ -120,12 +128,6 @@ export default function HubSidebar({ semesters, courseMap, isTransfer, onToggleT
           const groupReqs = requirementsByGroup[group.label] || [];
           if (groupReqs.length === 0) return null;
 
-          // Calculate group progress by summing required counts
-          const groupTotalRequired = groupReqs.reduce((sum, { requirement }) => sum + requirement.required, 0);
-          const groupFulfilled = groupReqs.reduce((sum, { requirement, isSatisfied }) => {
-            return isSatisfied ? sum + requirement.required : sum;
-          }, 0);
-
           const groupStyle = {
             '--hub-group-color': group.colorHex,
             borderLeftColor: group.colorHex,
@@ -135,31 +137,30 @@ export default function HubSidebar({ semesters, courseMap, isTransfer, onToggleT
             <div key={group.label} className="hub-group" style={groupStyle}>
               <div className="hub-group-header">
                 <span className="hub-group-label">{group.label}</span>
-                <span className="hub-group-progress">
-                  {groupFulfilled}/{groupTotalRequired}
-                </span>
               </div>
 
               <div className="hub-group-requirements">
                 {groupReqs.map(({ requirement, isSatisfied }) => {
-                  // Determine display label
+                  // Full display label
                   let displayLabel = requirement.id;
                   if (requirement.units && requirement.units.length === 1) {
                     displayLabel = HUB_LABELS[requirement.units[0]] || requirement.id;
                   } else if (requirement.unitOptions) {
-                    // Extract the short ID (e.g., "si2-so2" from "fy-si2-so2")
                     const shortId = requirement.id.replace(/^(fy|tr)-/, '');
                     displayLabel = OR_GROUP_DISPLAY_NAMES[shortId] || shortId;
                   }
 
-                  // Determine detail text (shows what's required)
-                  const detailText = requirement.required > 1
-                    ? `${requirement.required} courses`
-                    : requirement.unitOptions
-                      ? 'or'
-                      : 'course';
+                  // Short code(s) shown as subtitle
+                  let shortLabel = '';
+                  if (requirement.units) {
+                    shortLabel = requirement.units.join(' · ');
+                  } else if (requirement.unitOptions) {
+                    shortLabel = requirement.unitOptions
+                      .map(optGroup => optGroup.join('+'))
+                      .join(' or ');
+                  }
 
-                  // Get the satisfied count based on requirement type
+                  // Satisfied count
                   let satisfiedCount = 0;
                   if (requirement.units) {
                     satisfiedCount = requirement.units.reduce((sum, code) => sum + (counts[code] ?? 0), 0);
@@ -179,12 +180,15 @@ export default function HubSidebar({ semesters, courseMap, isTransfer, onToggleT
                         {isSatisfied ? '✓' : '○'}
                       </div>
                       <div className="hub-requirement-info">
-                        <span className="hub-requirement-label">{displayLabel}</span>
-                        <span className="hub-requirement-detail">{detailText}</span>
+                        <span className="hub-requirement-label" title={displayLabel}>
+                          {displayLabel}
+                        </span>
+                        {shortLabel && (
+                          <span className="hub-requirement-detail">{shortLabel}</span>
+                        )}
                       </div>
                       <span className={`hub-requirement-count ${isSatisfied ? 'satisfied' : ''}`}>
-                        {satisfiedCount}
-                        {requirement.required > 1 ? `/${requirement.required}` : ''}
+                        {satisfiedCount}/{requirement.required}
                       </span>
                     </div>
                   );
