@@ -12,7 +12,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 const TERM_RE = /^(Fall|Spring|Summer|Winter)\s+(\d{4})$/i;
 const LETTER_GRADE_RE = /^(A|B|C|D)[+-]?$|^P$|^F$/i;
 const SKIP_GRADE_RE = /^(W|AU|I|IP|N|NG|MG)$/i;
-const DEBUG_TRANSCRIPT = true;
+const DEBUG_TRANSCRIPT = import.meta.env.DEV;
 
 function debugTranscript(stage, payload) {
   if (!DEBUG_TRANSCRIPT) return;

@@ -42,7 +42,7 @@ const LOCAL_STORAGE_KEY = 'terrierplan_session';
 // Shared across Strict Mode double-invokes of the auth effect so we only
 // migrate (and clear localStorage) once per guest session → sign-in.
 let guestMigrationPromise = null;
-const DEBUG_IMPORT = true;
+const DEBUG_IMPORT = import.meta.env.DEV;
 
 function debugPlanner(stage, payload) {
   if (!DEBUG_IMPORT) return;
