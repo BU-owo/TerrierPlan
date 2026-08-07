@@ -42,6 +42,8 @@ export default function PlannerPage() {
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [activeSemIndex, setActiveSemIndex] = useState(0);
+  // Which single panel is shown on narrow/mobile screens: 'search' | 'board' | 'hub'
+  const [mobileView, setMobileView] = useState('board');
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(''); // 'saved' | 'error' | ''
   const [isDirty, setIsDirty] = useState(false);
@@ -380,6 +382,9 @@ export default function PlannerPage() {
     setIsDirty(true);
     if (!courseMap[courseKey]) fetchCourseData([courseKey]);
     if (!user) saveLocalPlan();
+    // On mobile the board is a separate tab from search — jump over so the
+    // user can see the course land in its semester.
+    setMobileView('board');
   }
 
   function handleMoveCourse(courseKey, fromSem, toSem) {
@@ -448,28 +453,13 @@ export default function PlannerPage() {
               />
 
               {totalCredits > 0 && (
-                <span
-                  style={{
-                    fontSize: 12,
-                    opacity: 0.8,
-                    background: 'rgba(255,255,255,.18)',
-                    padding: '2px 10px',
-                    borderRadius: 20,
-                    marginLeft: 8,
-                  }}
-                >
+                <span className="planner-credits-badge">
                   {totalCredits} cr total
                 </span>
               )}
             </>
           ) : (
-            <div
-              style={{
-                fontSize: 13,
-                opacity: 0.9,
-                fontStyle: 'italic',
-              }}
-            >
+            <div className="planner-guest-label">
               Browsing as guest — sign in to save your plans
             </div>
           )}
@@ -508,7 +498,8 @@ export default function PlannerPage() {
       </header>
 
       {/* ── Body ── */}
-      <div className="planner-body">
+      {/* data-mobile-view lets CSS show only one panel at a time on narrow screens */}
+      <div className="planner-body" data-mobile-view={mobileView}>
         {/* Left: search */}
         <aside className="planner-left">
           <CourseSearch
@@ -545,6 +536,32 @@ export default function PlannerPage() {
 
       {/* ── Bulletin Panel ── */}
       <BulletinPanel />
+
+      {/* ── Mobile tab bar (hidden on wide screens via CSS; stays bottom-most
+           so the bulletin panel expands upward above it) ── */}
+      <nav className="mobile-tab-bar" aria-label="Planner sections">
+        <button
+          className={`mobile-tab-btn${mobileView === 'search' ? ' active' : ''}`}
+          onClick={() => setMobileView('search')}
+        >
+          <span className="mobile-tab-icon" aria-hidden="true">🔍</span>
+          Search
+        </button>
+        <button
+          className={`mobile-tab-btn${mobileView === 'board' ? ' active' : ''}`}
+          onClick={() => setMobileView('board')}
+        >
+          <span className="mobile-tab-icon" aria-hidden="true">📅</span>
+          Planner
+        </button>
+        <button
+          className={`mobile-tab-btn${mobileView === 'hub' ? ' active' : ''}`}
+          onClick={() => setMobileView('hub')}
+        >
+          <span className="mobile-tab-icon" aria-hidden="true">🎯</span>
+          HUB
+        </button>
+      </nav>
 
       {/* ── Sign-in prompt for unsaved changes (unauthenticated) ── */}
       {!user && isDirty && (
