@@ -13,7 +13,6 @@ export default function PlanSelector({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   function startEdit() {
     setDraft(planName);
@@ -29,16 +28,6 @@ export default function PlanSelector({
   function handleKeyDown(e) {
     if (e.key === 'Enter') commitEdit();
     if (e.key === 'Escape') setEditing(false);
-  }
-
-  function handleDelete() {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      setTimeout(() => setConfirmDelete(false), 3000);
-      return;
-    }
-    onDeletePlan(activePlanId);
-    setConfirmDelete(false);
   }
 
   const statusLabel =
@@ -99,11 +88,11 @@ export default function PlanSelector({
       {/* Delete plan */}
       {activePlanId && (
         <button
-          className={`plan-btn-icon danger ${confirmDelete ? 'confirm' : ''}`}
-          title={confirmDelete ? 'Click again to confirm delete' : 'Delete this plan'}
-          onClick={handleDelete}
+          className="plan-btn-icon danger"
+          title="Delete this plan"
+          onClick={() => onDeletePlan(activePlanId)}
         >
-          {confirmDelete ? '?' : '🗑'}
+          🗑
         </button>
       )}
 

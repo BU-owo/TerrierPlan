@@ -39,6 +39,24 @@ import '../App.css';
 const EMPTY_SEMESTERS = () => Array.from({ length: 8 }, () => []);
 const LOCAL_STORAGE_KEY = 'terrierplan_session';
 
+// Firestore rejects arrays nested directly inside arrays, so `semesters`
+// (array of arrays of courseKeys) can't be written as-is. Store it as an
+// object keyed by semester index instead; these two helpers are the only
+// places that should ever cross the array ⇄ object boundary.
+function semestersToFirestore(semesters) {
+  return (semesters || EMPTY_SEMESTERS()).reduce((obj, courseKeys, i) => {
+    obj[i] = courseKeys;
+    return obj;
+  }, {});
+}
+
+function semestersFromFirestore(stored) {
+  if (Array.isArray(stored)) return stored; // tolerate any pre-fix docs written before this migration
+  if (!stored) return EMPTY_SEMESTERS();
+  const length = Math.max(8, ...Object.keys(stored).map((k) => Number(k) + 1));
+  return Array.from({ length }, (_, i) => stored[i] ?? []);
+}
+
 // Shared across Strict Mode double-invokes of the auth effect so we only
 // migrate (and clear localStorage) once per guest session → sign-in.
 let guestMigrationPromise = null;
@@ -79,6 +97,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverlay, setDragOverlay] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [deletePlanId, setDeletePlanId] = useState(null); // non-null → confirm-delete modal open for this plan id
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -333,7 +352,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const ref = await addDoc(collection(db, 'users', uid, 'plans'), {
       name: guestPlan.name || 'Imported Plan',
       major: guestPlan.major || '',
-      semesters: guestPlan.semesters || EMPTY_SEMESTERS(),
+      semesters: semestersToFirestore(guestPlan.semesters),
       isTransfer: guestPlan.isTransfer || false,
       extraTerms: guestPlan.extraTerms || [],
       externalCredits: normalizeExternalCredits(guestPlan.externalCredits),
@@ -365,7 +384,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const snap = await getDoc(doc(db, 'users', uid, 'plans', planId));
     if (!snap.exists()) return;
     const data = snap.data();
-    const semData = data.semesters ?? EMPTY_SEMESTERS();
+    const semData = semestersFromFirestore(data.semesters);
     const extra = data.extraTerms ?? [];
     const normalizedExternalCredits = normalizeExternalCredits(data.externalCredits);
     debugPlanner('loadPlan-from-firestore', {
@@ -399,7 +418,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const ref = await addDoc(collection(db, 'users', uid, 'plans'), {
       name: 'My Plan',
       major: '',
-      semesters: EMPTY_SEMESTERS(),
+      semesters: semestersToFirestore(EMPTY_SEMESTERS()),
       isTransfer: false,
       extraTerms: [],
       externalCredits: [],
@@ -446,7 +465,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
       const payload = {
         name,
-        semesters: semData,
+        semesters: semestersToFirestore(semData),
         isTransfer: transfer,
         extraTerms: extras.extraTerms ?? extraTerms,
         externalCredits: normalizeExternalCredits(extras.externalCredits ?? externalCredits),
@@ -569,6 +588,20 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setPlans((prev) =>
       prev.map((p) => (p.id === activePlanId ? { ...p, name: newName } : p)),
     );
+  }
+
+  function requestDeletePlan(planId) {
+    setDeletePlanId(planId);
+  }
+
+  function cancelDeletePlan() {
+    setDeletePlanId(null);
+  }
+
+  async function confirmDeletePlan() {
+    const planId = deletePlanId;
+    setDeletePlanId(null);
+    await handleDeletePlan(planId);
   }
 
   async function handleDeletePlan(planId) {
@@ -805,7 +838,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                 onSelectPlan={handleSelectPlan}
                 onRenamePlan={handleRenamePlan}
                 onNewPlan={handleNewPlan}
-                onDeletePlan={handleDeletePlan}
+                onDeletePlan={requestDeletePlan}
               />
 
               {totalCredits > 0 && (
@@ -1023,7 +1056,42 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                 className="beta-dismiss-btn unsaved-modal-leave"
                 onClick={handleLeaveAnyway}
               >
-                Leave anyway
+                {user ? 'Leave anyway' : 'Continue to sign in'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete plan confirmation ── */}
+      {deletePlanId && (
+        <div className="beta-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-plan-modal-title">
+          <div className="beta-modal">
+            <img
+              className="beta-modal-paw"
+              src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
+              alt="TerrierPlan"
+              width={48}
+              height={48}
+            />
+            <h2 id="delete-plan-modal-title">
+              Delete "{plans.find((p) => p.id === deletePlanId)?.name ?? planName}"?
+            </h2>
+            <p>This cannot be undone. The plan and everything in it will be permanently deleted.</p>
+            <div className="unsaved-modal-actions">
+              <button
+                type="button"
+                className="unsaved-modal-stay"
+                onClick={cancelDeletePlan}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="beta-dismiss-btn unsaved-modal-leave"
+                onClick={confirmDeletePlan}
+              >
+                Delete plan
               </button>
             </div>
           </div>

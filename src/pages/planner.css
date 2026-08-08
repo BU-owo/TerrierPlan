@@ -220,7 +220,6 @@
 }
 .plan-btn-icon:hover { background: rgba(255,255,255,.18); }
 .plan-btn-icon.danger:hover { background: rgba(220,38,38,.5); border-color: #ff6b6b; }
-.plan-btn-icon.danger.confirm { background: rgba(220,38,38,.4); border-color: #ff6b6b; }
 
 /* ===== COURSE SEARCH ===== */
 .search-panel {
