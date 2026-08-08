@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   HUB_GROUPS,
   HUB_LABELS,
@@ -16,8 +16,12 @@ export default function HubSidebar({
   courseMap,
   isTransfer,
   onToggleTransfer,
+  onSummaryChange,
 }) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Groups the student has already finished collapse to a one-line summary
+  // by default so the groups that still need attention stand out; explicit
+  // clicks here override that default either way.
+  const [collapsedOverrides, setCollapsedOverrides] = useState({});
 
   const counts = useMemo(() => {
     const result = {};
@@ -52,6 +56,11 @@ export default function HubSidebar({
   }, 0);
   const allFulfilled = fulfilled === totalRequired;
 
+  useEffect(() => {
+    onSummaryChange?.({ badge: `${fulfilled}/${totalRequired}` });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fulfilled, totalRequired]);
+
   const requirementsByGroup = useMemo(() => {
     const groups = {};
     progress.forEach(({ requirement, isSatisfied }) => {
@@ -64,61 +73,36 @@ export default function HubSidebar({
     return groups;
   }, [progress]);
 
-  if (isCollapsed) {
-    return (
-      <div className="hub-sidebar hub-sidebar-collapsed">
-        <button
-          className="hub-expand-btn"
-          onClick={() => setIsCollapsed(false)}
-          title="Expand HUB sidebar"
-        >
-          HUB {fulfilled}/{totalRequired}
-        </button>
-      </div>
-    );
+  function toggleGroup(groupLabel, currentlyCollapsed) {
+    setCollapsedOverrides((prev) => ({ ...prev, [groupLabel]: !currentlyCollapsed }));
   }
 
   return (
-    <div className="hub-sidebar">
-      <div className="hub-sidebar-header">
-        <div className="hub-header-top">
-          <h2>BU Hub</h2>
-          <button
-            className="hub-collapse-btn"
-            onClick={() => setIsCollapsed(true)}
-            title="Collapse HUB sidebar"
-          >
-            −
-          </button>
-        </div>
+    <div className="hub-panel">
+      <p className="panel-summary-line">
+        {fulfilled} of {totalRequired} HUB units complete
+      </p>
 
-        <div className="hub-header-meta">
-          <span className="hub-progress-badge">
-            {fulfilled}/{totalRequired}
-          </span>
-
-          <div className="hub-year-toggle-group">
-            <button
-              className={`hub-year-toggle-btn ${!isTransfer ? 'active' : ''}`}
-              onClick={() => onToggleTransfer(false)}
-              title="Show first-year requirements"
-            >
-              First-Year
-            </button>
-            <button
-              className={`hub-year-toggle-btn ${isTransfer ? 'active' : ''}`}
-              onClick={() => onToggleTransfer(true)}
-              title="Show transfer requirements"
-            >
-              Transfer
-            </button>
-          </div>
-        </div>
+      <div className="hub-year-toggle-group">
+        <button
+          className={`hub-year-toggle-btn ${!isTransfer ? 'active' : ''}`}
+          onClick={() => onToggleTransfer(false)}
+          title="Show first-year requirements"
+        >
+          First-Year
+        </button>
+        <button
+          className={`hub-year-toggle-btn ${isTransfer ? 'active' : ''}`}
+          onClick={() => onToggleTransfer(true)}
+          title="Show transfer requirements"
+        >
+          Transfer
+        </button>
       </div>
 
       {allFulfilled && (
-        <div className="hub-all-fulfilled">
-          <div className="hub-all-fulfilled-icon">🎉</div>
+        <div className="panel-all-fulfilled">
+          <div className="panel-all-fulfilled-icon">🎉</div>
           <p>All HUB requirements fulfilled!</p>
         </div>
       )}
@@ -128,6 +112,14 @@ export default function HubSidebar({
           const groupReqs = requirementsByGroup[group.label] || [];
           if (groupReqs.length === 0) return null;
 
+          const groupFulfilled = groupReqs.reduce(
+            (sum, { requirement, isSatisfied }) => (isSatisfied ? sum + requirement.required : sum),
+            0
+          );
+          const groupTotal = groupReqs.reduce((sum, { requirement }) => sum + requirement.required, 0);
+          const groupSatisfied = groupFulfilled === groupTotal;
+          const collapsed = collapsedOverrides[group.label] ?? groupSatisfied;
+
           const groupStyle = {
             '--hub-group-color': group.colorHex,
             borderLeftColor: group.colorHex,
@@ -135,65 +127,77 @@ export default function HubSidebar({
 
           return (
             <div key={group.label} className="hub-group" style={groupStyle}>
-              <div className="hub-group-header">
+              <div
+                className="hub-group-header"
+                role="button"
+                tabIndex={0}
+                onClick={() => toggleGroup(group.label, collapsed)}
+                onKeyDown={(e) => e.key === 'Enter' && toggleGroup(group.label, collapsed)}
+              >
+                <span className="panel-group-caret">{collapsed ? '▸' : '▾'}</span>
                 <span className="hub-group-label">{group.label}</span>
+                <span className={`hub-group-progress${groupSatisfied ? ' satisfied' : ''}`}>
+                  {groupFulfilled}/{groupTotal}
+                </span>
               </div>
 
-              <div className="hub-group-requirements">
-                {groupReqs.map(({ requirement, isSatisfied }) => {
-                  // Full display label
-                  let displayLabel = requirement.id;
-                  if (requirement.units && requirement.units.length === 1) {
-                    displayLabel = HUB_LABELS[requirement.units[0]] || requirement.id;
-                  } else if (requirement.unitOptions) {
-                    const shortId = requirement.id.replace(/^(fy|tr)-/, '');
-                    displayLabel = OR_GROUP_DISPLAY_NAMES[shortId] || shortId;
-                  }
+              {!collapsed && (
+                <div className="hub-group-requirements">
+                  {groupReqs.map(({ requirement, isSatisfied }) => {
+                    // Full display label
+                    let displayLabel = requirement.id;
+                    if (requirement.units && requirement.units.length === 1) {
+                      displayLabel = HUB_LABELS[requirement.units[0]] || requirement.id;
+                    } else if (requirement.unitOptions) {
+                      const shortId = requirement.id.replace(/^(fy|tr)-/, '');
+                      displayLabel = OR_GROUP_DISPLAY_NAMES[shortId] || shortId;
+                    }
 
-                  // Short code(s) shown as subtitle
-                  let shortLabel = '';
-                  if (requirement.units) {
-                    shortLabel = requirement.units.join(' · ');
-                  } else if (requirement.unitOptions) {
-                    shortLabel = requirement.unitOptions
-                      .map(optGroup => optGroup.join('+'))
-                      .join(' or ');
-                  }
+                    // Short code(s) shown as subtitle
+                    let shortLabel = '';
+                    if (requirement.units) {
+                      shortLabel = requirement.units.join(' · ');
+                    } else if (requirement.unitOptions) {
+                      shortLabel = requirement.unitOptions
+                        .map(optGroup => optGroup.join('+'))
+                        .join(' or ');
+                    }
 
-                  // Satisfied count
-                  let satisfiedCount = 0;
-                  if (requirement.units) {
-                    satisfiedCount = requirement.units.reduce((sum, code) => sum + (counts[code] ?? 0), 0);
-                  } else if (requirement.unitOptions) {
-                    satisfiedCount = requirement.unitOptions.reduce((sum, optGroup) => {
-                      const optSum = optGroup.reduce((s, code) => s + (counts[code] ?? 0), 0);
-                      return sum + optSum;
-                    }, 0);
-                  }
+                    // Satisfied count
+                    let satisfiedCount = 0;
+                    if (requirement.units) {
+                      satisfiedCount = requirement.units.reduce((sum, code) => sum + (counts[code] ?? 0), 0);
+                    } else if (requirement.unitOptions) {
+                      satisfiedCount = requirement.unitOptions.reduce((sum, optGroup) => {
+                        const optSum = optGroup.reduce((s, code) => s + (counts[code] ?? 0), 0);
+                        return sum + optSum;
+                      }, 0);
+                    }
 
-                  return (
-                    <div
-                      key={requirement.id}
-                      className={`hub-requirement ${isSatisfied ? 'fulfilled' : 'pending'}`}
-                    >
-                      <div className="hub-requirement-indicator">
-                        {isSatisfied ? '✓' : '○'}
-                      </div>
-                      <div className="hub-requirement-info">
-                        <span className="hub-requirement-label" title={displayLabel}>
-                          {displayLabel}
+                    return (
+                      <div
+                        key={requirement.id}
+                        className={`hub-requirement ${isSatisfied ? 'fulfilled' : 'pending'}`}
+                      >
+                        <div className="hub-requirement-indicator">
+                          {isSatisfied ? '✓' : '○'}
+                        </div>
+                        <div className="hub-requirement-info">
+                          <span className="hub-requirement-label" title={displayLabel}>
+                            {displayLabel}
+                          </span>
+                          {shortLabel && (
+                            <span className="hub-requirement-detail">{shortLabel}</span>
+                          )}
+                        </div>
+                        <span className={`hub-requirement-count ${isSatisfied ? 'satisfied' : ''}`}>
+                          {satisfiedCount}/{requirement.required}
                         </span>
-                        {shortLabel && (
-                          <span className="hub-requirement-detail">{shortLabel}</span>
-                        )}
                       </div>
-                      <span className={`hub-requirement-count ${isSatisfied ? 'satisfied' : ''}`}>
-                        {satisfiedCount}/{requirement.required}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}

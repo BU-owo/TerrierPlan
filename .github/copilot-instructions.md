@@ -14,7 +14,6 @@
 - `users/{uid}/schedules/{scheduleId}` — a saved schedule, `selectedSectionIds` references `sections` doc IDs
 
 ## Explicit non-goals for now (do not build these unless asked)
-- No degree-requirements rules engine yet — requirement checking beyond HUB units is manual, via the bulletin panel. Do not add major-specific validation logic.
 - No open-seat notifications.
 - No live/real-time section data — section data is imported once per term and treated as a snapshot with an `importedAt` timestamp. Don't build polling/websocket infrastructure for this.
 - Registration itself is out of scope — this tool never submits registration actions, only plans/schedules for reference.
@@ -46,10 +45,12 @@ playful, not corporate.
 - Reference data (`courses`, `sections`, `bulletinPages`) is read-only from the client; it's populated by import scripts, not app code.
 
 ## Build order (current phase)
-1. Degree Planner page (drag courses into 8 semesters, credit totals, HUB auto-tracking, bulletin side panel)
-2. HUB Tracker page (reuses HUB data from the Planner)
+This is a rough sequencing note, not a gate — work on whatever's next by
+the user's call, no confirmation needed.
+1. Degree Planner page (drag courses into 8 semesters, credit totals, HUB auto-tracking, bulletin side panel) — done
+2. HUB Tracker page (reuses HUB data from the Planner) — done
 3. Scheduler rebuild
-4. GPA + transcript/AP/IB import
-5. Degree-requirements engine (later — do not start on this yet)
+4. GPA + transcript/AP/IB import — partially done (import exists, GPA UI doesn't)
+5. Degree-requirements engine
 
-When in doubt about a feature's scope, check this file and `SCHEMA.md` before assuming — don't add functionality (real-time updates, requirement validation, notifications) that's explicitly listed as a non-goal above.
+When in doubt about a feature's scope, check this file and `SCHEMA.md` — don't add functionality (real-time updates, open-seat notifications) that's explicitly listed as a non-goal above.

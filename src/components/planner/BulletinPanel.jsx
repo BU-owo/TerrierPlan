@@ -1,33 +1,29 @@
 import { useState, useMemo } from 'react';
 import { BU_SCHOOLS } from '../../data/bu-programs';
+import MajorPicker from './MajorPicker';
 
-export default function BulletinPanel() {
+// selectedProgramUrl / onProgramSelect are lifted up so the active plan's
+// majorBulletinUrl (also editable from the Requirements tab via its own
+// MajorPicker) stays in sync with whatever major is picked here — see
+// SCHEMA.md's `majorBulletinUrl` field.
+export default function BulletinPanel({ selectedProgramUrl = '', onProgramSelect }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedSchoolCode, setSelectedSchoolCode] = useState('');
-  const [selectedProgramUrl, setSelectedProgramUrl] = useState('');
   const [iframeFailed, setIframeFailed] = useState(false);
   const [iframeLoading, setIframeLoading] = useState(false);
 
-  const selectedSchool = useMemo(
-    () => BU_SCHOOLS.find((s) => s.code === selectedSchoolCode) || null,
-    [selectedSchoolCode]
-  );
-
   const selectedProgram = useMemo(() => {
-    if (!selectedSchool || !selectedProgramUrl) return null;
-    return selectedSchool.programs.find((p) => p.url === selectedProgramUrl) || null;
-  }, [selectedSchool, selectedProgramUrl]);
+    if (!selectedProgramUrl) return null;
+    for (const school of BU_SCHOOLS) {
+      const found = school.programs.find((p) => p.url === selectedProgramUrl);
+      if (found) return found;
+    }
+    return null;
+  }, [selectedProgramUrl]);
 
-  function handleSchoolChange(e) {
-    setSelectedSchoolCode(e.target.value);
-    setSelectedProgramUrl('');
+  function handleProgramSelect(url) {
+    onProgramSelect?.(url);
     setIframeFailed(false);
-  }
-
-  function handleProgramChange(e) {
-    setSelectedProgramUrl(e.target.value);
-    setIframeFailed(false);
-    setIframeLoading(true);
+    setIframeLoading(Boolean(url));
   }
 
   return (
@@ -60,65 +56,18 @@ export default function BulletinPanel() {
 
             {/* Left: selectors */}
             <div className="bulletin-left">
-              <div className="bulletin-major-selector">
-                <label htmlFor="bulletin-school">School / College</label>
-                <select
-                  id="bulletin-school"
-                  className="bulletin-major-select"
-                  value={selectedSchoolCode}
-                  onChange={handleSchoolChange}
-                >
-                  <option value="">— Pick a school —</option>
-                  {BU_SCHOOLS.map((s) => (
-                    <option key={s.code} value={s.code}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedSchool && (
-                <div className="bulletin-major-selector">
-                  <label htmlFor="bulletin-program">Major / Minor</label>
-                  <select
-                    id="bulletin-program"
-                    className="bulletin-major-select"
-                    value={selectedProgramUrl}
-                    onChange={handleProgramChange}
-                  >
-                    <option value="">— Pick a major or minor —</option>
-                    {selectedSchool.programs.map((p) => (
-                      <option key={p.url} value={p.url}>
-                        {p.name} ({p.degree})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {selectedSchool && (
-                <p className="bulletin-hint">
-                  Don't see your program?{' '}
-                  <a
-                    href="https://www.bu.edu/academics/degree-programs/"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Browse all BU programs ↗
-                  </a>
-                </p>
-              )}
+              <MajorPicker
+                idPrefix="bulletin"
+                selectedProgramUrl={selectedProgramUrl}
+                onProgramSelect={handleProgramSelect}
+              />
             </div>
 
             {/* Right: viewer */}
             <div className="bulletin-right">
-              {!selectedSchool && (
+              {!selectedProgram && (
                 <div className="bulletin-empty">
-                  Pick a school to browse its majors and minors.
-                </div>
-              )}
-
-              {selectedSchool && !selectedProgram && (
-                <div className="bulletin-empty">
-                  Pick a major or minor to see its requirements.
+                  Pick a school, then a major or minor, to see its bulletin page.
                 </div>
               )}
 

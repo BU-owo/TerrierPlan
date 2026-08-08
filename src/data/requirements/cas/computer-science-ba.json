@@ -1,0 +1,53 @@
+{
+  "programName": "Computer Science",
+  "degree": "BA",
+  "school": "CAS",
+  "bulletinUrl": "https://www.bu.edu/academics/cas/programs/computer-science/ba/",
+  "minGrade": "C",
+  "totalCoursesRequired": 15,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "type": "ALL",
+    "label": "Computer Science BA — Major Requirements",
+    "children": [
+      {
+        "type": "ALL",
+        "label": "Group A: Foundational Courses",
+        "courses": ["CASCS111", "CASCS112", "CASCS131", "CASCS210", "CASCS330"]
+      },
+      {
+        "type": "COUNT",
+        "label": "Group B: Formal Tools",
+        "min": 2,
+        "pool": [
+          { "type": "SUBSTITUTE_GROUP", "primary": "CASCS132", "substitutes": ["CASMA242"] },
+          { "type": "SUBSTITUTE_GROUP", "primary": "CASCS235", "substitutes": ["CASMA294"] },
+          { "type": "SUBSTITUTE_GROUP", "primary": "CASCS237", "substitutes": ["CASMA581"] }
+        ]
+      },
+      {
+        "type": "COUNT",
+        "label": "Group C: Central Topics",
+        "min": 2,
+        "note": "Must be taken at BU — transfer credit cannot satisfy this group.",
+        "pool": ["CASCS320", "CASCS332", "CASCS350"]
+      },
+      {
+        "type": "REMAINDER",
+        "label": "Group D: Electives",
+        "totalRequired": 15,
+        "note": "Any CS 300/400/500-level course not already used for Group C, plus CS132/235/237 if not used for Group B.",
+        "pool": [
+          { "type": "COURSE_RANGE", "subject": "CASCS", "min": 300, "max": 599 }
+        ],
+        "additionalPool": ["CASCS132", "CASCS235", "CASCS237"]
+      },
+      {
+        "type": "UNRESOLVED",
+        "label": "Non-CS petition courses (Group D)",
+        "note": "Up to 2 non-CS courses may count toward Group D with Undergraduate Director approval — discretionary, requires manual verification."
+      }
+    ]
+  }
+}

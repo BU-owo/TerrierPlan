@@ -172,8 +172,8 @@
   transition: width 200ms ease-out;
 }
 
-/* Collapse the right panel when sidebar is collapsed */
-.planner-right:has(.hub-sidebar-collapsed) {
+/* Collapse the right panel when its single tabbed status panel is collapsed. */
+.planner-right:has(.side-panel-collapsed) {
   width: 50px;
   border-left: none;
   padding: 8px 4px;
@@ -700,18 +700,81 @@
 .hub-chip-def { color: var(--hub-def); background: var(--hub-def-bg); }
 .hub-chip-more{ color: var(--text-muted); background: var(--cream-dark); }
 
-/* ===== HUB SIDEBAR ===== */
-.hub-sidebar {
-  padding: 12px 12px 16px;
-  overflow-y: auto;
+/* ===== SIDE PANEL TABS (HUB / Requirements / Credits) ===== */
+/* One panel visible at a time; collapse/expand applies to the whole tabbed
+   container, not to an individual panel — see SidePanelTabs.jsx. */
+.side-panel-tabs {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  flex: 1;
 }
-.hub-sidebar.hub-sidebar-collapsed {
+.side-panel-tabs.side-panel-collapsed {
   padding: 0;
   overflow: hidden;
 }
-.hub-expand-btn {
+
+.side-panel-tab-bar {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.side-panel-tab-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 4px 7px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color .12s, border-color .12s;
+  min-width: 0;
+}
+.side-panel-tab-btn:hover {
+  color: var(--text-secondary);
+}
+.side-panel-tab-btn.active {
+  color: var(--scarlet);
+  border-bottom-color: var(--scarlet);
+}
+.side-panel-tab-icon { font-size: 15px; line-height: 1; }
+.side-panel-tab-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.side-panel-tab-badge {
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.side-panel-tab-btn.active .side-panel-tab-badge { color: var(--scarlet); }
+
+.side-panel-collapse-btn {
+  flex-shrink: 0;
+  width: 24px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: background .12s;
+}
+.side-panel-collapse-btn:hover {
+  background: var(--cream-dark);
+}
+
+.side-panel-expand-btn {
   padding: 6px 4px;
   background: var(--cream);
   border: 1px solid var(--border);
@@ -726,58 +789,65 @@
   line-height: 1.2;
   white-space: nowrap;
 }
-.hub-expand-btn:hover {
+.side-panel-expand-btn:hover {
   background: var(--cream-dark);
 }
 
-.hub-sidebar-header {
+.side-panel-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.side-panel-hidden { display: none; }
+
+/* Shared across the HUB / Requirements / Credits panel bodies */
+.panel-summary-line {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 10px;
+  line-height: 1.35;
+}
+.panel-all-fulfilled {
+  text-align: center;
+  padding: 16px 10px;
+  background: var(--success-surface);
+  border-radius: var(--radius-md);
   margin-bottom: 12px;
 }
-.hub-header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
+.panel-all-fulfilled-icon { font-size: 28px; }
+.panel-all-fulfilled p {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success-text);
+  margin-top: 4px;
+  margin-bottom: 0;
 }
-.hub-sidebar-header h2 {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -.3px;
-  color: var(--text);
-  margin: 0;
-}
-.hub-collapse-btn {
-  background: none;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
+.panel-empty-state {
+  font-size: 11px;
   color: var(--text-secondary);
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  transition: background .12s;
+  background: var(--cream);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 10px;
+  text-align: center;
+  line-height: 1.4;
 }
-.hub-collapse-btn:hover {
-  background: var(--cream-dark);
+.panel-empty-state p { margin: 0; }
+.panel-group-caret {
+  font-size: 8px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  width: 8px;
 }
 
-.hub-header-meta {
+/* ===== HUB PANEL ===== */
+.hub-panel {
+  padding: 12px;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
 }
-.hub-progress-badge {
-  font-size: 11px;
-  font-weight: 700;
-  background: var(--scarlet-light);
-  color: var(--scarlet);
-  padding: 2px 6px;
-  border-radius: 3px;
-}
+
 .hub-year-toggle-group {
   display: flex;
   gap: 2px;
@@ -785,6 +855,7 @@
   border-radius: 3px;
   background: var(--cream);
   padding: 1px;
+  margin-bottom: 12px;
 }
 .hub-year-toggle-btn {
   flex: 1;
@@ -808,22 +879,6 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-.hub-all-fulfilled {
-  text-align: center;
-  padding: 16px 10px;
-  background: var(--success-surface);
-  border-radius: var(--radius-md);
-  margin-bottom: 12px;
-}
-.hub-all-fulfilled-icon { font-size: 28px; }
-.hub-all-fulfilled p { 
-  font-size: 12px; 
-  font-weight: 600; 
-  color: var(--success-text); 
-  margin-top: 4px;
-  margin-bottom: 0;
-}
-
 .hub-requirements-list {
   display: flex;
   flex-direction: column;
@@ -838,10 +893,12 @@
 .hub-group-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 5px;
   margin-bottom: 6px;
+  cursor: pointer;
 }
 .hub-group-label {
+  flex: 1;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -852,6 +909,9 @@
   font-size: 9px;
   font-weight: 600;
   color: var(--text-muted);
+}
+.hub-group-progress.satisfied {
+  color: var(--success-strong);
 }
 
 .hub-group-requirements {
@@ -928,6 +988,192 @@
 .hub-requirement.fulfilled .hub-requirement-count {
   color: var(--success-strong);
   font-weight: 700;
+}
+
+/* ===== REQUIREMENTS PANEL ===== */
+.req-panel {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+.major-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.req-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.req-group {
+  border-left: 3px solid var(--border);
+  padding-left: 8px;
+}
+.req-group-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.req-group-label {
+  flex: 1;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-secondary);
+}
+.req-group-progress {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.req-group-progress.satisfied {
+  color: var(--success-strong);
+}
+.req-group-children {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.req-node {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  transition: background .12s;
+}
+.req-node.fulfilled {
+  background: var(--success-surface);
+}
+.req-node.pending {
+  background: transparent;
+}
+.req-node.needs-review {
+  background: var(--badge-warm-bg);
+}
+
+.req-node-indicator {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+.req-node.fulfilled .req-node-indicator {
+  background: var(--success-strong);
+  color: #fff;
+}
+.req-node.pending .req-node-indicator {
+  background: var(--cream-dark);
+  color: var(--text-muted);
+  border: 1.5px solid var(--border);
+}
+.req-node.needs-review .req-node-indicator {
+  background: var(--badge-warm-text);
+  color: #fff;
+}
+
+.req-node-info {
+  flex: 1;
+  min-width: 0;
+}
+.req-node-label {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+  white-space: normal;
+  line-height: 1.3;
+}
+.req-node-detail {
+  display: block;
+  font-size: 9px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+.req-node.fulfilled .req-node-label { color: var(--success-text); }
+.req-node.fulfilled .req-node-detail { color: var(--success-text); }
+.req-node.needs-review .req-node-label { color: var(--badge-warm-text); }
+.req-node.needs-review .req-node-detail { color: var(--badge-warm-text); }
+
+.req-node-count {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 24px;
+  text-align: right;
+}
+.req-node.fulfilled .req-node-count {
+  color: var(--success-strong);
+  font-weight: 700;
+}
+
+.req-node-review-badge {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  color: var(--badge-warm-text);
+  background: rgba(255,255,255,.5);
+  border: 1px solid var(--badge-warm-text);
+  border-radius: 3px;
+  padding: 2px 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ===== CREDITS PANEL ===== */
+.credits-panel {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.credits-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.credits-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 11px;
+}
+.credits-row:last-child { border-bottom: none; }
+.credits-row-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.credits-row-value {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.credits-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
 }
 
 /* ===== UNAUTHENTICATED BANNER ===== */
@@ -1406,10 +1652,11 @@ html[data-theme='dark'] .external-credit-no-hub { background: var(--white); }
     border-left: none;
     transition: none;
   }
-  /* HUB is its own full-screen tab on mobile — collapsing it would just
-     leave an empty screen, so drop the collapse affordance entirely. */
-  .hub-collapse-btn,
-  .hub-expand-btn {
+  /* The status tabs (HUB/Requirements/Credits) are their own full-screen
+     mobile tab — collapsing them would just leave an empty screen, so drop
+     the collapse affordance entirely. */
+  .side-panel-collapse-btn,
+  .side-panel-expand-btn {
     display: none;
   }
 

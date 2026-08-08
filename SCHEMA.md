@@ -75,6 +75,7 @@ requirement-checking, no rules engine yet).
 |---|---|---|
 | name | string | e.g. "Plan A — CS major" |
 | major | string | Free text for now, no schema validation |
+| majorBulletinUrl | string \| null | Lookup key into `src/data/requirements/`. Matches the `url` field of a program entry in `bu-programs.js` and the `bulletinUrl` field of a requirements JSON file — set when the user picks a major in the bulletin panel. `major` stays free text for display; this is the only field the requirements engine can key off of. |
 | semesters | courseKey[][] | Fixed length 8, one array per semester (Fall/Spring × 4 years) |
 | isTransfer | boolean | HUB tracker uses transfer vs first-year requirement table |
 | extraTerms | object[] | Summer / Winter / overflow post-degree Fall–Spring terms (see below). These courses **do** count toward HUB and credit totals. |

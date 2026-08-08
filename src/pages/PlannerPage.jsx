@@ -27,7 +27,7 @@ import PlanSelector from '../components/planner/PlanSelector';
 import CourseSearch from '../components/planner/CourseSearch';
 import SemesterBoard from '../components/planner/SemesterBoard';
 import CourseCard from '../components/planner/CourseCard';
-import HubSidebar from '../components/planner/HubSidebar';
+import SidePanelTabs from '../components/planner/SidePanelTabs';
 import BulletinPanel from '../components/planner/BulletinPanel';
 import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
 import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
@@ -76,6 +76,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [planName, setPlanName] = useState('My Plan');
   const [semesters, setSemesters] = useState(EMPTY_SEMESTERS);
   const [isTransfer, setIsTransfer] = useState(false);
+  const [majorBulletinUrl, setMajorBulletinUrl] = useState(null);
   const [extraTerms, setExtraTerms] = useState([]);
   const [externalCredits, setExternalCredits] = useState([]);
   const [cumulativeGpa, setCumulativeGpa] = useState(null);
@@ -265,6 +266,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           cumulativeGpa,
           earnedCredits,
           gradePoints,
+          majorBulletinUrl,
         });
       } else {
         console.warn('⚠️  [autosave] activePlanId is null, skipping save');
@@ -276,7 +278,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       console.log('🧹 [autosave] Cleaning up timeout');
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [semesters, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints]);
+  }, [semesters, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl]);
 
   // ── Guest: persist to localStorage after React commits the new state ──────
   // Handlers used to call saveLocalPlan() immediately after setSemesters(),
@@ -286,7 +288,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     if (user || authLoading || isInitialLoad.current || !isDirty) return;
     saveLocalPlan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [semesters, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, user, authLoading]);
+  }, [semesters, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, user, authLoading]);
 
   // ── Local plan management (for auth-optional browsing) ─────────────────────
   function saveLocalPlan(overrides = {}) {
@@ -294,6 +296,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const plan = {
       name: overrides.name ?? planName,
       major: overrides.major ?? '',
+      majorBulletinUrl: overrides.majorBulletinUrl ?? majorBulletinUrl,
       semesters: overrides.semesters ?? semesters,
       isTransfer: overrides.isTransfer ?? isTransfer,
       extraTerms: overrides.extraTerms ?? extraTerms,
@@ -327,6 +330,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         setPlanName(plan.name || 'My Plan');
         setSemesters(plan.semesters || EMPTY_SEMESTERS());
         setIsTransfer(plan.isTransfer || false);
+        setMajorBulletinUrl(plan.majorBulletinUrl ?? null);
         setExtraTerms(plan.extraTerms || []);
         const normalizedExternalCredits = normalizeExternalCredits(plan.externalCredits);
         setExternalCredits(normalizedExternalCredits);
@@ -353,6 +357,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const ref = await addDoc(collection(db, 'users', uid, 'plans'), {
       name,
       major: guestPlan.major || '',
+      majorBulletinUrl: guestPlan.majorBulletinUrl ?? null,
       semesters: semestersToFirestore(guestPlan.semesters),
       isTransfer: guestPlan.isTransfer || false,
       extraTerms: guestPlan.extraTerms || [],
@@ -408,6 +413,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setPlanName(data.name ?? 'My Plan');
     setSemesters(semData);
     setIsTransfer(data.isTransfer ?? false);
+    setMajorBulletinUrl(data.majorBulletinUrl ?? null);
     setExtraTerms(extra);
     setExternalCredits(normalizedExternalCredits);
     setCumulativeGpa(data.cumulativeGpa ?? null);
@@ -431,6 +437,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const ref = await addDoc(collection(db, 'users', uid, 'plans'), {
       name,
       major: '',
+      majorBulletinUrl: null,
       semesters: semestersToFirestore(EMPTY_SEMESTERS()),
       isTransfer: false,
       extraTerms: [],
@@ -445,6 +452,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setPlanName(name);
     setSemesters(EMPTY_SEMESTERS());
     setIsTransfer(false);
+    setMajorBulletinUrl(null);
     setExtraTerms([]);
     setExternalCredits([]);
     setCumulativeGpa(null);
@@ -480,6 +488,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         name,
         semesters: semestersToFirestore(semData),
         isTransfer: transfer,
+        majorBulletinUrl: extras.majorBulletinUrl ?? majorBulletinUrl,
         extraTerms: extras.extraTerms ?? extraTerms,
         externalCredits: normalizeExternalCredits(extras.externalCredits ?? externalCredits),
         cumulativeGpa: extras.cumulativeGpa ?? cumulativeGpa,
@@ -704,6 +713,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setIsDirty(true);
   }
 
+  function handleMajorSelect(url) {
+    setMajorBulletinUrl(url || null);
+    setIsDirty(true);
+  }
+
   async function handleTranscriptImport(result) {
     const normalizedExternalCredits = normalizeExternalCredits(result.externalCredits);
     debugPlanner('handleTranscriptImport-result', {
@@ -787,6 +801,15 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   const extraCourseKeys = extraTerms.flatMap((term) => term.courseKeys || []);
   const coursesInPlan = new Set([...semesters.flat(), ...extraCourseKeys]);
+
+  // Unlike HUB (which excludes externalCredits entirely), the requirements
+  // engine should see transfer/AP-equivalent courses too — they can satisfy
+  // a major requirement even though they never count toward HUB.
+  const requirementsCourseKeys = [
+    ...semesters.flat(),
+    ...extraCourseKeys,
+    ...externalCredits.map((c) => c?.courseKey).filter(Boolean),
+  ];
 
   const planCourseCredits = [...semesters.flat(), ...extraCourseKeys]
     .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0);
@@ -968,15 +991,19 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
             />
           </main>
 
-          {/* Right: HUB tracker */}
+          {/* Right: HUB / Requirements / Credits status tabs */}
           <aside className="planner-right">
-            <HubSidebar
+            <SidePanelTabs
               semesters={semesters}
               extraCourseKeys={extraCourseKeys}
               externalCredits={externalCredits}
               courseMap={courseMap}
+              creditsMap={creditsMap}
               isTransfer={isTransfer}
               onToggleTransfer={handleToggleTransfer}
+              majorBulletinUrl={majorBulletinUrl}
+              planCourseKeys={requirementsCourseKeys}
+              onMajorSelect={handleMajorSelect}
             />
           </aside>
         </div>
@@ -994,7 +1021,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       </DndContext>
 
       {/* ── Bulletin Panel ── */}
-      <BulletinPanel />
+      <BulletinPanel
+        selectedProgramUrl={majorBulletinUrl || ''}
+        onProgramSelect={handleMajorSelect}
+      />
 
       <ImportTranscriptModal
         open={showImportModal}
@@ -1027,7 +1057,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           onClick={() => setMobileView('hub')}
         >
           <span className="mobile-tab-icon" aria-hidden="true">🎯</span>
-          HUB
+          Status
         </button>
       </nav>
 
