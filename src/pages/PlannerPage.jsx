@@ -348,9 +348,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   async function migrateGuestPlan(uid, guestPlan) {
+    const name = await uniquePlanName(uid, guestPlan.name || 'Imported Plan');
     // Always addDoc — never overwrite an existing saved plan
     const ref = await addDoc(collection(db, 'users', uid, 'plans'), {
-      name: guestPlan.name || 'Imported Plan',
+      name,
       major: guestPlan.major || '',
       semesters: semestersToFirestore(guestPlan.semesters),
       isTransfer: guestPlan.isTransfer || false,
@@ -367,6 +368,17 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  // Appends the lowest unused " N" suffix (starting at 2) if baseName already
+  // exists among this user's plans, so new plans never share a display name.
+  async function uniquePlanName(uid, baseName) {
+    const snap = await getDocs(collection(db, 'users', uid, 'plans'));
+    const existingNames = new Set(snap.docs.map((d) => d.data().name));
+    if (!existingNames.has(baseName)) return baseName;
+    let n = 2;
+    while (existingNames.has(`${baseName} ${n}`)) n++;
+    return `${baseName} ${n}`;
+  }
 
   async function loadPlans(uid) {
     const q = query(
@@ -415,8 +427,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   async function createDefaultPlan(uid) {
     isInitialLoad.current = true;
+    const name = await uniquePlanName(uid, 'My Plan');
     const ref = await addDoc(collection(db, 'users', uid, 'plans'), {
-      name: 'My Plan',
+      name,
       major: '',
       semesters: semestersToFirestore(EMPTY_SEMESTERS()),
       isTransfer: false,
@@ -429,7 +442,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       updatedAt: serverTimestamp(),
     });
     setActivePlanId(ref.id);
-    setPlanName('My Plan');
+    setPlanName(name);
     setSemesters(EMPTY_SEMESTERS());
     setIsTransfer(false);
     setExtraTerms([]);
@@ -437,7 +450,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setCumulativeGpa(null);
     setEarnedCredits(null);
     setGradePoints(null);
-    setPlans([{ id: ref.id, name: 'My Plan' }]);
+    setPlans([{ id: ref.id, name }]);
     setIsDirty(false);
     isInitialLoad.current = false;
   }
