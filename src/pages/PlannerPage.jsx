@@ -869,8 +869,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
             type="button"
             className="btn-import-transcript"
             onClick={() => setShowImportModal(true)}
+            title="Import Transcript"
           >
-            Import Transcript
+            <span className="btn-import-transcript-icon" aria-hidden="true">📄</span>
+            <span className="btn-import-transcript-label">Import Transcript</span>
           </button>
         </div>
 
@@ -900,8 +902,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               <button
                 className="btn-signout"
                 onClick={() => requestLeave(() => signOut(auth))}
+                title="Sign out"
               >
-                Sign out
+                <span className="btn-signout-icon" aria-hidden="true">⎋</span>
+                <span className="btn-signout-label">Sign out</span>
               </button>
             </>
           ) : (

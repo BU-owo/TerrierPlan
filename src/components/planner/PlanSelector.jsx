@@ -64,10 +64,10 @@ export default function PlanSelector({
         />
       ) : (
         <button
-          className="plan-btn-icon"
+          className="plan-btn-icon plan-btn-rename"
           title={`Plan: ${planName} — click to rename`}
           onClick={startEdit}
-          style={{ width: 'auto', padding: '0 10px', fontSize: 13, fontWeight: 600, gap: 4, maxWidth: 200 }}
+          style={{ width: 'auto', padding: '0 10px', fontSize: 13, fontWeight: 600, gap: 4, maxWidth: 200, flexShrink: 1, minWidth: 0 }}
         >
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {planName}
