@@ -1004,6 +1004,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               majorBulletinUrl={majorBulletinUrl}
               planCourseKeys={requirementsCourseKeys}
               onMajorSelect={handleMajorSelect}
+              activeSemIndex={activeSemIndex}
+              onAddCourse={handleAddCourse}
+              onEnsureCourseData={fetchCourseData}
             />
           </aside>
         </div>

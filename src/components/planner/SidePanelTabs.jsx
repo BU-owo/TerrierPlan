@@ -24,6 +24,9 @@ export default function SidePanelTabs({
   majorBulletinUrl,
   planCourseKeys,
   onMajorSelect,
+  activeSemIndex,
+  onAddCourse,
+  onEnsureCourseData,
 }) {
   const [activeTab, setActiveTab] = useState('hub');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -98,6 +101,10 @@ export default function SidePanelTabs({
             planCourseKeys={planCourseKeys}
             onMajorSelect={onMajorSelect}
             onSummaryChange={makeSummaryHandler('requirements')}
+            courseMap={courseMap}
+            activeSemIndex={activeSemIndex}
+            onAddCourse={onAddCourse}
+            onEnsureCourseData={onEnsureCourseData}
           />
         </div>
         <div className={activeTab === 'credits' ? '' : 'side-panel-hidden'}>

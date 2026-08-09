@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { evaluateRequirementTree } from '../../utils/requirementsEngine';
+import { normalizeCourseKey } from '../../utils/courseKey';
 import MajorPicker from './MajorPicker';
+import SemesterPickerModal from './SemesterPickerModal';
 
 // Auto-discovers every program file under src/data/requirements/** so new
 // majors just need a JSON file dropped in — no registry to hand-maintain.
@@ -21,7 +23,134 @@ function statusRank(node) {
   return node.status === 'satisfied' ? 2 : 0;
 }
 
-function RequirementNodeView({ node, isRoot = false, collapsedOverrides, onToggle }) {
+// Flattens a leaf node's matched/missing into per-course chip lists for the
+// expandable pool view. `planCourseKeySet` (everything already in the plan,
+// same set the engine itself claims against) is what decides "addable" —
+// not `node.matched`, since a course can be enumerable-eligible for this
+// node's slot while actually having been claimed by a different node. Using
+// plan-membership rather than this node's own claim keeps a course that's
+// already claimed elsewhere from ever showing as addable here too.
+function collectPoolCourses(node, planCourseKeySet) {
+  if (node.type === 'ALL' && !Array.isArray(node.children)) {
+    return {
+      claimed: (node.matched || []).map((key) => ({ key })),
+      eligible: (node.missing || [])
+        .filter((key) => !planCourseKeySet.has(key))
+        .map((key) => ({ key })),
+    };
+  }
+
+  if (node.type === 'COUNT' || node.type === 'REMAINDER') {
+    const claimed = [];
+    for (const entry of node.matched || []) {
+      for (const key of entry.courseKeys || []) claimed.push({ key });
+    }
+    const seen = new Set();
+    const eligible = [];
+    for (const entry of node.missing || []) {
+      for (const key of entry.courseKeys || []) {
+        if (planCourseKeySet.has(key) || seen.has(key)) continue;
+        seen.add(key);
+        eligible.push({ key });
+      }
+    }
+    return { claimed, eligible };
+  }
+
+  return null;
+}
+
+// Walks the whole evaluated tree collecting every courseKey it references
+// (claimed or eligible), so the sidebar can make sure courseMap has display
+// data (courseNumber/name) for each one, including required courses the
+// student hasn't added yet.
+function collectAllCourseKeys(node, acc = new Set()) {
+  if (!node) return acc;
+  if (node.type === 'ALL' && Array.isArray(node.children)) {
+    node.children.forEach((child) => collectAllCourseKeys(child, acc));
+    return acc;
+  }
+  if (node.type === 'ALL') {
+    (node.matched || []).forEach((key) => acc.add(key));
+    (node.missing || []).forEach((key) => acc.add(key));
+    return acc;
+  }
+  if (node.type === 'COUNT' || node.type === 'REMAINDER') {
+    (node.matched || []).forEach((entry) => (entry.courseKeys || []).forEach((key) => acc.add(key)));
+    (node.missing || []).forEach((entry) => (entry.courseKeys || []).forEach((key) => acc.add(key)));
+  }
+  return acc;
+}
+
+function CourseChip({ courseKey, courseMap, interactive, onClick }) {
+  const data = courseMap[courseKey];
+  const display = data?.courseNumber ?? courseKey;
+  const title = data?.name ? `${display} — ${data.name}` : display;
+
+  if (!interactive) {
+    return (
+      <span className="req-pool-chip claimed" title={title}>
+        {display}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="req-pool-chip eligible"
+      title={`Add ${title}`}
+      onClick={onClick}
+    >
+      {display}
+    </button>
+  );
+}
+
+function CoursePool({ claimed, eligible, courseMap, onAddCourse }) {
+  if (claimed.length === 0 && eligible.length === 0) return null;
+
+  return (
+    <div className="req-pool">
+      {eligible.length > 0 && (
+        <div className="req-pool-section">
+          <span className="req-pool-section-label">Add:</span>
+          <div className="req-pool-chips">
+            {eligible.map(({ key }) => (
+              <CourseChip
+                key={key}
+                courseKey={key}
+                courseMap={courseMap}
+                interactive
+                onClick={() => onAddCourse(key)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {claimed.length > 0 && (
+        <div className="req-pool-section">
+          <span className="req-pool-section-label">Fulfilled by:</span>
+          <div className="req-pool-chips">
+            {claimed.map(({ key }) => (
+              <CourseChip key={key} courseKey={key} courseMap={courseMap} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RequirementNodeView({
+  node,
+  isRoot = false,
+  collapsedOverrides,
+  onToggle,
+  planCourseKeySet,
+  courseMap,
+  onAddCourse,
+}) {
   if (node.type === 'ALL' && Array.isArray(node.children)) {
     const orderedChildren = [...node.children].sort((a, b) => statusRank(a) - statusRank(b));
     const children = orderedChildren.map((child, i) => (
@@ -30,6 +159,9 @@ function RequirementNodeView({ node, isRoot = false, collapsedOverrides, onToggl
         node={child}
         collapsedOverrides={collapsedOverrides}
         onToggle={onToggle}
+        planCourseKeySet={planCourseKeySet}
+        courseMap={courseMap}
+        onAddCourse={onAddCourse}
       />
     ));
     if (isRoot) return <>{children}</>;
@@ -64,18 +196,41 @@ function RequirementNodeView({ node, isRoot = false, collapsedOverrides, onToggl
       ? `Needs: ${node.missing.map(describeMissing).join(', ')}`
       : null;
 
+  // UNRESOLVED nodes (petition clauses) have no fixed course list to add
+  // from, so they never get a pool — description + badge only.
+  const pool = isUnresolved ? null : collectPoolCourses(node, planCourseKeySet);
+  const hasPool = pool && (pool.claimed.length > 0 || pool.eligible.length > 0);
+  const poolToggleKey = `pool:${node.label}`;
+  const poolExpanded = Boolean(collapsedOverrides[poolToggleKey]);
+
   return (
     <div className={`req-node ${statusClass}`}>
       <div className="req-node-indicator">
         {isUnresolved ? '!' : node.status === 'satisfied' ? '✓' : '○'}
       </div>
       <div className="req-node-info">
-        <span className="req-node-label" title={node.label}>{node.label}</span>
+        <div className="req-node-toprow">
+          <span className="req-node-label" title={node.label}>{node.label}</span>
+          {hasPool && (
+            <button
+              type="button"
+              className="req-node-pool-toggle"
+              onClick={() => onToggle(poolToggleKey, poolExpanded)}
+            >
+              {poolExpanded ? 'Hide courses' : 'Show courses'}
+            </button>
+          )}
+        </div>
         {isUnresolved && node.note && <span className="req-node-detail">{node.note}</span>}
-        {/* TODO: once drag-requirement-into-planner exists, a per-course drag
-            handle on each entry in node.missing would attach here — not
-            building that interaction in this pass. */}
         {missingDetail && <span className="req-node-detail">{missingDetail}</span>}
+        {hasPool && poolExpanded && (
+          <CoursePool
+            claimed={pool.claimed}
+            eligible={pool.eligible}
+            courseMap={courseMap}
+            onAddCourse={onAddCourse}
+          />
+        )}
       </div>
       {isUnresolved ? (
         <span className="req-node-review-badge">Needs review</span>
@@ -93,8 +248,13 @@ export default function RequirementsSidebar({
   planCourseKeys = [],
   onMajorSelect,
   onSummaryChange,
+  courseMap = {},
+  activeSemIndex,
+  onAddCourse,
+  onEnsureCourseData,
 }) {
   const [collapsedOverrides, setCollapsedOverrides] = useState({});
+  const [pickerCourseKey, setPickerCourseKey] = useState(null);
 
   const programDef = useMemo(
     () => REQUIREMENT_PROGRAMS.find((p) => p.bulletinUrl === majorBulletinUrl) || null,
@@ -106,6 +266,14 @@ export default function RequirementsSidebar({
     [programDef, planCourseKeys]
   );
 
+  // The engine's own claim set is built from this same normalization, so
+  // matching it here is what lets "already claimed elsewhere" and "already
+  // in the plan" collapse into a single addability check.
+  const planCourseKeySet = useMemo(
+    () => new Set(Array.from(planCourseKeys).filter(Boolean).map(normalizeCourseKey)),
+    [planCourseKeys]
+  );
+
   useEffect(() => {
     onSummaryChange?.({
       badge: result ? `${result.totalCoursesClaimed}/${result.totalCoursesRequired}` : '—',
@@ -113,8 +281,27 @@ export default function RequirementsSidebar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
 
+  useEffect(() => {
+    if (!result || !onEnsureCourseData) return;
+    const keys = Array.from(collectAllCourseKeys(result.tree));
+    const missing = keys.filter((key) => !courseMap[key]);
+    if (missing.length > 0) onEnsureCourseData(missing);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+
   function toggleGroup(label, currentlyCollapsed) {
     setCollapsedOverrides((prev) => ({ ...prev, [label]: !currentlyCollapsed }));
+  }
+
+  // Same add-to-plan logic as the search-results chip click: add straight to
+  // the focused semester, or fall back to the semester picker if none is
+  // focused.
+  function handleAddCourse(courseKey) {
+    if (activeSemIndex !== undefined && activeSemIndex !== null) {
+      onAddCourse(courseKey, activeSemIndex);
+    } else {
+      setPickerCourseKey(courseKey);
+    }
   }
 
   return (
@@ -158,10 +345,26 @@ export default function RequirementsSidebar({
               isRoot
               collapsedOverrides={collapsedOverrides}
               onToggle={toggleGroup}
+              planCourseKeySet={planCourseKeySet}
+              courseMap={courseMap}
+              onAddCourse={handleAddCourse}
             />
           </div>
         </>
       )}
+
+      <SemesterPickerModal
+        course={
+          pickerCourseKey
+            ? { id: pickerCourseKey, courseNumber: courseMap[pickerCourseKey]?.courseNumber ?? pickerCourseKey }
+            : null
+        }
+        onPick={(i) => {
+          onAddCourse(pickerCourseKey, i);
+          setPickerCourseKey(null);
+        }}
+        onClose={() => setPickerCourseKey(null)}
+      />
     </div>
   );
 }

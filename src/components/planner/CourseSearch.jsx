@@ -3,6 +3,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { HUB_COLOR_FOR, SEMESTER_LABELS } from '../../utils/hubConstants';
+import SemesterPickerModal from './SemesterPickerModal';
 
 const HUB_FILTER_CODES = [
   'PLM',
@@ -383,45 +384,14 @@ export default function CourseSearch({
         ))}
 
         {/* Semester picker modal */}
-        {selectedCourseForPicker && (
-          <div className="search-picker-overlay" onClick={() => setSelectedCourseForPicker(null)}>
-            <div
-              className="search-picker-modal"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="search-picker-header">
-                <h3>
-                  Add to semester:{' '}
-                  <span className="search-picker-course-code">
-                    {selectedCourseForPicker.courseNumber ??
-                      selectedCourseForPicker.id}
-                  </span>
-                </h3>
-                <button
-                  className="search-picker-close"
-                  onClick={() => setSelectedCourseForPicker(null)}
-                  aria-label="Close"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="search-picker-options">
-                {SEMESTER_LABELS.map((label, i) => (
-                  <button
-                    key={i}
-                    className="search-picker-option"
-                    onClick={() => {
-                      onAddCourse(selectedCourseForPicker.id, i);
-                      setSelectedCourseForPicker(null);
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        <SemesterPickerModal
+          course={selectedCourseForPicker}
+          onPick={(i) => {
+            onAddCourse(selectedCourseForPicker.id, i);
+            setSelectedCourseForPicker(null);
+          }}
+          onClose={() => setSelectedCourseForPicker(null)}
+        />
       </div>
     </div>
   );

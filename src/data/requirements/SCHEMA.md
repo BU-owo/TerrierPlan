@@ -32,6 +32,13 @@ Every node has a `type` and a `label`. The evaluator adds `status`
 `satisfiedCount`, and `required` to each node in its output — don't set those
 in the source JSON, they're computed.
 
+For `COUNT`/`REMAINDER`, each `missing` entry also carries `courseKeys`: the
+enumerable list of courseKeys that would satisfy that slot (a plain courseKey
+or `OR_EQUIVALENT`/`SUBSTITUTE_GROUP`/`COURSE_LIST` entry), or `null` for
+`COURSE_RANGE`/`COURSE_RANGE_CAP` entries, which aren't enumerable without a
+full course catalog. The UI uses this to offer "add this course" chips for
+remaining-eligible courses, skipping the non-enumerable ones.
+
 ### `ALL`
 Two forms, distinguished by which key is present:
 
