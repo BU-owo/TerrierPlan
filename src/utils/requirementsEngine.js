@@ -10,6 +10,7 @@ function describeEntry(entry) {
     return `${entry.subject} ${entry.min}-${entry.max}`;
   }
   if (entry.type === 'COURSE_LIST') return entry.courses.join(', ');
+  if (entry.type === 'SEQUENCE_GROUP') return entry.options.map((option) => option.label).join(' or ');
   return JSON.stringify(entry);
 }
 
@@ -26,6 +27,11 @@ function structuralCourseCount(node) {
         : (node.courses || []).length;
     case 'COUNT':
       return node.min;
+    case 'SEQUENCE_GROUP':
+      // Every option is meant to be an equivalent bundle for the same slot;
+      // use the smallest so a sibling REMAINDER's denominator is never
+      // overstated regardless of which option the student ends up matching.
+      return Math.min(...node.options.map((option) => option.courses.length));
     case 'REMAINDER':
     case 'UNRESOLVED':
       return 0;
@@ -64,6 +70,7 @@ function poolEntryCandidateKeys(entry) {
       return (entry.courses || []).map(normalizeCourseKey);
     case 'COURSE_RANGE':
     case 'COURSE_RANGE_CAP':
+    case 'SEQUENCE_GROUP':
       return null;
     default:
       return null;
@@ -143,6 +150,21 @@ function claimPoolEntry(entry, ctx, need) {
       claim.forEach((key) => ctx.claimed.add(key));
       return { claimedKeys: claim, candidateKeys };
     }
+    case 'SEQUENCE_GROUP': {
+      for (const option of entry.options) {
+        const keys = option.courses.map(normalizeCourseKey);
+        const allPresent = keys.every((key) => ctx.planCourseKeys.has(key) && !ctx.claimed.has(key));
+        if (allPresent) {
+          keys.forEach((key) => ctx.claimed.add(key));
+          // A bundle claims several real courses but is still only ONE slot
+          // filled (e.g. BB401+BB402 together count as one BMB elective, not
+          // two) — claimFromPools reads this flag instead of
+          // claimedKeys.length so it doesn't over-count the pool's `need`.
+          return { claimedKeys: keys, candidateKeys, bundleClaim: true };
+        }
+      }
+      return { claimedKeys: [], candidateKeys };
+    }
     default:
       throw new Error(`Unknown pool entry type: ${entry.type}`);
   }
@@ -163,7 +185,10 @@ function claimFromPools(pools, required, ctx) {
       if (remaining <= 0) break;
       const result = claimPoolEntry(entry, ctx, remaining);
       if (result.claimedKeys.length > 0) {
-        satisfiedCount += result.claimedKeys.length;
+        // A SEQUENCE_GROUP entry's bundleClaim counts as 1 slot regardless of
+        // how many real courses back it — everything else counts by however
+        // many courses it actually claimed.
+        satisfiedCount += result.bundleClaim ? 1 : result.claimedKeys.length;
         matched.push({ label: describeEntry(entry), courseKeys: result.claimedKeys });
       } else {
         // courseKeys is null for non-enumerable entries (COURSE_RANGE /
@@ -269,6 +294,39 @@ function evaluateRemainder(node, ctx, meta = {}) {
   };
 }
 
+// Exactly one bundle from several must be completed in full — e.g. BU's
+// "General Chemistry Sequence" is CH109+CH110, OR CH111+CH112, OR
+// CH101+CH102+CH201. Claims the first option whose courses are ALL present
+// and unclaimed (array order = priority, same convention as claimFromPools);
+// a student who happens to qualify for more than one option only has the
+// first claimed, so no course gets pulled into two different options' counts.
+function evaluateSequenceGroup(node, ctx) {
+  for (const option of node.options) {
+    const keys = option.courses.map(normalizeCourseKey);
+    const allPresent = keys.every((key) => ctx.planCourseKeys.has(key) && !ctx.claimed.has(key));
+    if (allPresent) {
+      keys.forEach((key) => ctx.claimed.add(key));
+      return {
+        ...node,
+        status: 'satisfied',
+        matched: keys,
+        missing: [],
+        matchedOption: option.label,
+        satisfiedCount: 1,
+        required: 1,
+      };
+    }
+  }
+  return {
+    ...node,
+    status: 'unsatisfied',
+    matched: [],
+    missing: node.options.map((option) => option.label),
+    satisfiedCount: 0,
+    required: 1,
+  };
+}
+
 function evaluateUnresolved(node) {
   return {
     ...node,
@@ -304,7 +362,12 @@ function evaluateWaived(node, override) {
 // participates in claim priority exactly like any other pool entry — it can
 // still lose the course to an earlier-evaluated sibling that also wants it.
 // UNRESOLVED nodes have no pool of their own, so they're evaluated as a
-// synthetic COUNT(min: 1) built just for this call. ALL nodes have no
+// synthetic COUNT(min: 1) built just for this call. SEQUENCE_GROUP nodes
+// have no pool either — the courseKey must already appear in one of the
+// node's own options, and that option is then evaluated as if the student
+// had it, so its other courses still need to be genuinely in the plan; if
+// the courseKey doesn't belong to any option, this returns null so the
+// caller falls back to normal (unsubstituted) evaluation. ALL nodes have no
 // well-defined "add to pool" (there's no slot the substitute is *for*), so
 // they fall through to normal evaluation and the override has no effect.
 function evaluateSubstituted(node, ctx, meta, override) {
@@ -337,6 +400,18 @@ function evaluateSubstituted(node, ctx, meta, override) {
     return { ...result, pool: node.pool, substituted: true, overrideNote: override.note ?? null };
   }
 
+  if (node.type === 'SEQUENCE_GROUP') {
+    const optionIndex = node.options.findIndex((option) =>
+      option.courses.map(normalizeCourseKey).includes(subKey)
+    );
+    if (optionIndex === -1) return null; // doesn't match any option's course list — fail gracefully.
+    // Treat subKey as satisfied via petition for whichever option it belongs
+    // to — the option's other courses still need to be genuinely in the plan.
+    const patchedCtx = { ...ctx, planCourseKeys: new Set(ctx.planCourseKeys).add(subKey) };
+    const result = evaluateSequenceGroup(node, patchedCtx);
+    return { ...result, substituted: true, overrideNote: override.note ?? null };
+  }
+
   return null; // ALL: no pool to substitute into — caller falls back to normal evaluation.
 }
 
@@ -355,6 +430,8 @@ function evaluateNode(node, ctx, meta) {
       return evaluateCount(node, ctx);
     case 'REMAINDER':
       return evaluateRemainder(node, ctx, meta);
+    case 'SEQUENCE_GROUP':
+      return evaluateSequenceGroup(node, ctx);
     case 'UNRESOLVED':
       return evaluateUnresolved(node, ctx);
     default:

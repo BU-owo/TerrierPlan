@@ -45,15 +45,27 @@
       },
       {
         "id": "bmb-ba-foundation-chem-general",
-        "type": "UNRESOLVED",
+        "type": "SEQUENCE_GROUP",
         "label": "Foundation Courses: General Chemistry Sequence",
-        "note": "Complete ONE full sequence: CH 109 + CH 110, OR CH 111 + CH 112, OR CH 101 + CH 102 + CH 201. Not auto-tracked — the engine's pool-entry types can express 'any one of several single courses' (OR_EQUIVALENT) but not 'any one of several multi-course sequences', so this needs manual verification rather than a possibly-wrong automated check."
+        "note": "CH 111 does not currently resolve to a document in the `courses` Firestore collection (confirmed via a live public read, 2026-08-09), even though it's referenced elsewhere in the catalog as a valid prerequisite (CH 112's own prereq, plus EE 371/514/540) — a real, currently-offered course, just missing from the scrape/import. Sequence II can't be matched through the normal course-search add flow until that's fixed; a custom courseKey can still be entered manually via the exception form's 'course code not yet in your plan' field.",
+        "options": [
+          { "label": "CH 109 + CH 110", "courses": ["CASCH109", "CASCH110"] },
+          { "label": "CH 111 + CH 112", "courses": ["CASCH111", "CASCH112"] },
+          { "label": "CH 101 + CH 102 + CH 201", "courses": ["CASCH101", "CASCH102", "CASCH201"] }
+        ]
       },
       {
         "id": "bmb-ba-foundation-chem-organic",
-        "type": "UNRESOLVED",
+        "type": "SEQUENCE_GROUP",
         "label": "Foundation Courses: Organic Chemistry Sequence",
-        "note": "Complete ONE full sequence: (CH 203 or CH 218) + CH 214, OR CH 211 + CH 212, OR (CH 203 or CH 218) + CH 204 + CH 220. Not auto-tracked for the same reason as the General Chemistry sequence above — sequence alternation (OR of multi-course bundles) isn't expressible with the current pool-entry types."
+        "note": "The bulletin's '(CH 203 or CH 218) + CH 214' and '(CH 203 or CH 218) + CH 204 + CH 220' phrasing is expanded into separate fixed-course options below (SEQUENCE_GROUP options can't nest an OR within a single bundle) — CH203+CH214, CH218+CH214, CH203+CH204+CH220, and CH218+CH204+CH220 are the same two bulletin sequences written out as four options instead of two ORs.",
+        "options": [
+          { "label": "CH 203 + CH 214", "courses": ["CASCH203", "CASCH214"] },
+          { "label": "CH 218 + CH 214", "courses": ["CASCH218", "CASCH214"] },
+          { "label": "CH 211 + CH 212", "courses": ["CASCH211", "CASCH212"] },
+          { "label": "CH 203 + CH 204 + CH 220", "courses": ["CASCH203", "CASCH204", "CASCH220"] },
+          { "label": "CH 218 + CH 204 + CH 220", "courses": ["CASCH218", "CASCH204", "CASCH220"] }
+        ]
       },
       {
         "id": "bmb-ba-core",
@@ -66,16 +78,17 @@
         "type": "COUNT",
         "label": "Advanced Lab Elective",
         "min": 1,
-        "note": "Evaluated before BMB Electives below (array order = claim priority) so a course claimed here — BB522, BI513, or CH524 — can't also be double-counted as a BMB Elective.",
+        "note": "Evaluated before BMB Electives below (array order = claim priority) so a course claimed here — BB522, BI513, CH524, or the BB401+BB402 bundle — can't also be double-counted as a BMB Elective.",
         "pool": [
-          { "type": "SUBSTITUTE_GROUP", "primary": "CASBB522", "substitutes": ["CASBI513", "CASCH524"] }
+          { "type": "SUBSTITUTE_GROUP", "primary": "CASBB522", "substitutes": ["CASBI513", "CASCH524"] },
+          { "type": "SEQUENCE_GROUP", "options": [{ "label": "BB 401 + BB 402", "courses": ["CASBB401", "CASBB402"] }] }
         ]
       },
       {
         "id": "bmb-ba-adv-lab-elective-bundle-note",
         "type": "UNRESOLVED",
-        "label": "Advanced Lab Elective — additional bundle options",
-        "note": "Besides BB 522 / BI 513 / CH 524 above, the Advanced Lab Elective can also be satisfied by BB 401 AND BB 402 together, or by any TWO of BB 450/451/452/453 — not auto-tracked, since the engine has no pool-entry type for requiring a bundle of courses as a single claimable slot."
+        "label": "Advanced Lab Elective — 'any two of BB 450/451/452/453' bundle option",
+        "note": "Besides BB 522/BI 513/CH 524 and the BB 401+BB 402 bundle (both now auto-tracked in the Advanced Lab Elective pool above), the Advanced Lab Elective can also be satisfied by any TWO of BB 450/451/452/453 taken together. Not auto-tracked — SEQUENCE_GROUP options need a fixed course list, and 'any 2 of 4' is a combinatorial choice (6 possible pairs); enumerating all 6 as separate options doesn't scale and reads as a workaround rather than a clean fit, so this stays a manual petition/verification note."
       },
       {
         "id": "bmb-ba-electives",
@@ -104,14 +117,12 @@
               "GMSBI751",
               "GMSBT432"
             ]
+          },
+          {
+            "type": "SEQUENCE_GROUP",
+            "options": [{ "label": "BB 401 + BB 402 (year-long sequence)", "courses": ["CASBB401", "CASBB402"] }]
           }
         ]
-      },
-      {
-        "id": "bmb-ba-electives-bb401-402-note",
-        "type": "UNRESOLVED",
-        "label": "BMB Elective — BB 401 + BB 402 (year-long sequence)",
-        "note": "BB 401 and BB 402 taken together count as ONE BMB elective, not two — not auto-tracked, since COURSE_LIST claims courses independently and has no way to treat two specific courses as a single atomic unit. (Deliberately left out of the BMB Electives pool above so the engine doesn't accidentally double-count the pair as two separate electives.)"
       },
       {
         "id": "bmb-ba-gms-bi751-note",
@@ -160,9 +171,16 @@
       },
       {
         "id": "bmb-ba-related-physics",
-        "type": "UNRESOLVED",
+        "type": "SEQUENCE_GROUP",
         "label": "Related: Physics Sequence",
-        "note": "Complete ONE full two-course sequence: PY 105 + PY 106, OR PY 211 + PY 106, OR PY 211 + PY 212, OR PY 241 + PY 242, OR PY 251 + PY 252. Not auto-tracked — same sequence-alternation gap as the Chemistry requirements above (OR of multi-course bundles isn't expressible with the current pool-entry types)."
+        "note": "PY 241 and PY 242 don't appear anywhere in the local catalog scrape (bu_courses_all.csv) or the `courses` Firestore collection (confirmed via a live public read, 2026-08-09) — unlike CH 111 in the General Chemistry Sequence above, they're also not referenced as a prerequisite anywhere else in the catalog, so this option couldn't be independently corroborated as a currently-offered BU sequence. Kept as-is since it was already in the prior bulletin transcription rather than guessed away, but worth a human check against the current bulletin.",
+        "options": [
+          { "label": "PY 105 + PY 106", "courses": ["CASPY105", "CASPY106"] },
+          { "label": "PY 211 + PY 106", "courses": ["CASPY211", "CASPY106"] },
+          { "label": "PY 211 + PY 212", "courses": ["CASPY211", "CASPY212"] },
+          { "label": "PY 241 + PY 242", "courses": ["CASPY241", "CASPY242"] },
+          { "label": "PY 251 + PY 252", "courses": ["CASPY251", "CASPY252"] }
+        ]
       },
       {
         "id": "bmb-ba-electives-petition",

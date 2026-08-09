@@ -108,6 +108,42 @@ readability.
 A container should have at most one `REMAINDER` child in practice (multiple
 would all race for the same `totalRequired` target).
 
+### `SEQUENCE_GROUP`
+```jsonc
+{
+  "type": "SEQUENCE_GROUP",
+  "options": [
+    { "label": "Sequence I", "courses": ["CASCH109", "CASCH110"] },
+    { "label": "Sequence II", "courses": ["CASCH111", "CASCH112"] },
+    { "label": "Sequence III", "courses": ["CASCH101", "CASCH102", "CASCH201"] }
+  ]
+}
+```
+
+Exactly ONE bundle from several must be completed in full — the "choose one
+sequence, complete every course in it" shape (e.g. BU's General Chemistry
+Sequence: CH109+CH110, OR CH111+CH112, OR CH101+CH102+CH201). An option's
+courses are fixed — a nested "X or Y" within a single bundle isn't
+expressible directly; write out each variant as its own option instead (e.g.
+"(CH203 or CH218) + CH214" becomes two options, `CH203+CH214` and
+`CH218+CH214`).
+
+Satisfied once every course in one option is present and unclaimed; the
+evaluator tries options in array order and claims the first fully-matching
+one — same claim-priority convention as `COUNT`/`REMAINDER` pools. A student
+who happens to qualify for more than one option only has the first claimed;
+the rest are left alone rather than picking "the best" one. Only ever
+contributes `satisfiedCount`/`required` of `0/1` or `1/1` — it's one slot,
+regardless of how many courses the winning option happened to need.
+
+`SEQUENCE_GROUP` can also appear as a **pool entry** (see below) when the
+bundle is one of several alternative ways to fill a slot inside an existing
+`COUNT`/`REMAINDER`, rather than a standalone required node of its own —
+e.g. "BB 401 + BB 402 together count as one BMB elective" sits inside the
+BMB Electives `COUNT`'s pool alongside its `COURSE_LIST` entry, instead of
+being modeled as a second, independently-required sibling that would have to
+be satisfied *in addition to* an already-satisfied elective pool.
+
 ### `UNRESOLVED`
 `{ "type": "UNRESOLVED", "label": "...", "note": "..." }`
 
@@ -155,6 +191,12 @@ superset of slot refs — any slot ref is a valid pool entry — plus:
   more than one course from the list can count if the node needs more than
   one — each listed course is its own potential claim, not a single slot with
   alternatives.
+- `{ "type": "SEQUENCE_GROUP", "options": [{ "label": "...", "courses": [...] }, ...] }`
+  — see the `SEQUENCE_GROUP` node type above for the shape and matching
+  rules. As a pool entry it still claims every course in its matched option,
+  but (unlike `COURSE_LIST`) counts as exactly **one** claim toward the
+  node's `min`/`totalRequired`, not one per course — a two-course bundle
+  fills one slot, the same way a single `OR_EQUIVALENT` course would.
 
 ## courseKey parsing
 
@@ -199,9 +241,14 @@ verified. Before evaluating a node, the engine checks
   wants it — see Double-counting above). Meaningful for `UNRESOLVED` nodes
   (evaluated as a synthetic `COUNT(min: 1, pool: [courseKey])` so they can
   actually claim something) and for `COUNT`/`REMAINDER` nodes (courseKey is
-  prepended to `pool`). Has no effect on `ALL` nodes — there's no pool to
-  add to, and no well-defined "which required course does this substitute
-  for."
+  prepended to `pool`). For `SEQUENCE_GROUP` nodes, courseKey must already
+  appear in one of the node's own `options` — that option is then evaluated
+  as if the student had it, so the option's *other* courses still need to be
+  genuinely in the plan (this doesn't manufacture a whole bundle out of
+  nothing, it excuses one course within it); if courseKey doesn't belong to
+  any option, the override has no effect and the node evaluates normally.
+  Has no effect on `ALL` nodes — there's no pool to add to, and no
+  well-defined "which required course does this substitute for."
 
 ## Worked example
 
