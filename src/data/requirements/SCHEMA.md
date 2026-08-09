@@ -136,6 +136,14 @@ the rest are left alone rather than picking "the best" one. Only ever
 contributes `satisfiedCount`/`required` of `0/1` or `1/1` — it's one slot,
 regardless of how many courses the winning option happened to need.
 
+When unsatisfied, the output also carries `partialMatch`: either `null` (the
+student has zero courses toward any option — nothing to prioritize) or
+`{ label, haveKeys, needKeys }` for whichever option has the most
+already-present-and-unclaimed courses (ties go to the first option in array
+order). Purely additional reporting for the UI to show progress toward one
+specific sequence instead of a flat list of every option — it doesn't affect
+`status`, claiming, or `satisfiedCount`/`required` above.
+
 `SEQUENCE_GROUP` can also appear as a **pool entry** (see below) when the
 bundle is one of several alternative ways to fill a slot inside an existing
 `COUNT`/`REMAINDER`, rather than a standalone required node of its own —

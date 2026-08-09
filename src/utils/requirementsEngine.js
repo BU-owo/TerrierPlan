@@ -312,16 +312,36 @@ function evaluateSequenceGroup(node, ctx) {
         matched: keys,
         missing: [],
         matchedOption: option.label,
+        partialMatch: null,
         satisfiedCount: 1,
         required: 1,
       };
     }
   }
+
+  // Nothing satisfied — report the "closest" option (most courses already
+  // present & unclaimed) so the UI can show progress instead of a flat list
+  // of every option. Ties go to the first option in array order (only a
+  // strictly bigger count replaces the current best). null if the student
+  // has zero courses toward ANY option — nothing to prioritize over anything
+  // else. Purely additional reporting; doesn't affect status/claiming above.
+  let partialMatch = null;
+  for (const option of node.options) {
+    const keys = option.courses.map(normalizeCourseKey);
+    const haveKeys = keys.filter((key) => ctx.planCourseKeys.has(key) && !ctx.claimed.has(key));
+    if (haveKeys.length === 0) continue;
+    if (!partialMatch || haveKeys.length > partialMatch.haveKeys.length) {
+      const haveSet = new Set(haveKeys);
+      partialMatch = { label: option.label, haveKeys, needKeys: keys.filter((key) => !haveSet.has(key)) };
+    }
+  }
+
   return {
     ...node,
     status: 'unsatisfied',
     matched: [],
     missing: node.options.map((option) => option.label),
+    partialMatch,
     satisfiedCount: 0,
     required: 1,
   };

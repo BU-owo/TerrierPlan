@@ -13,6 +13,10 @@ function describeMissing(entry) {
   return typeof entry === 'string' ? entry : entry.label;
 }
 
+function formatCourseLabel(courseKey, courseMap) {
+  return courseMap[courseKey]?.courseNumber ?? courseKey;
+}
+
 // Most requirement trees are flat enough (a handful of leaf-type groups
 // directly under the root) that there's nothing to collapse — each group is
 // already a single row. Sorting unsatisfied first is what actually makes the
@@ -121,6 +125,16 @@ function collectAllCourseKeys(node, acc = new Set()) {
   if (node.type === 'COUNT' || node.type === 'REMAINDER') {
     (node.matched || []).forEach((entry) => (entry.courseKeys || []).forEach((key) => acc.add(key)));
     (node.missing || []).forEach((entry) => (entry.courseKeys || []).forEach((key) => acc.add(key)));
+  }
+  if (node.type === 'SEQUENCE_GROUP') {
+    // matched (satisfied case) plus partialMatch's have/need keys (unsatisfied
+    // case) — both are what SequenceGroupDetail actually renders, so both
+    // need courseMap data prefetched or they'd fall back to raw courseKeys.
+    (node.matched || []).forEach((key) => acc.add(key));
+    if (node.partialMatch) {
+      node.partialMatch.haveKeys.forEach((key) => acc.add(key));
+      node.partialMatch.needKeys.forEach((key) => acc.add(key));
+    }
   }
   return acc;
 }
@@ -373,6 +387,45 @@ function ExceptionModal({
   );
 }
 
+// Replaces the flat "Needs: [every option]" line for an unsatisfied
+// SEQUENCE_GROUP once the student has made progress toward one specific
+// option (node.partialMatch) — highlights that option instead of listing
+// every alternative with equal weight. The other options are still
+// reachable, just tucked behind a toggle rather than shown inline. Falls
+// back to the plain flat list when partialMatch is null (nothing to
+// prioritize yet).
+function SequenceGroupDetail({ node, courseMap, collapsedOverrides, onToggle }) {
+  if (!node.partialMatch) {
+    return <span className="req-node-detail">{`Needs: ${node.missing.map(describeMissing).join(', ')}`}</span>;
+  }
+
+  const { label, haveKeys, needKeys } = node.partialMatch;
+  const otherOptions = node.missing.filter((optionLabel) => optionLabel !== label);
+  const toggleKey = `seq-alt:${node.label}`;
+  const expanded = Boolean(collapsedOverrides[toggleKey]);
+
+  return (
+    <div className="req-node-detail req-sequence-partial">
+      <span className="req-sequence-ontrack-label">On track: {label}</span> —{' '}
+      <span className="req-sequence-have">have {haveKeys.map((key) => formatCourseLabel(key, courseMap)).join(', ')}</span>
+      {', '}
+      <span className="req-sequence-need">still need {needKeys.map((key) => formatCourseLabel(key, courseMap)).join(', ')}</span>
+      {otherOptions.length > 0 && (
+        <div className="req-sequence-alt-wrap">
+          <button
+            type="button"
+            className="req-node-pool-toggle req-sequence-alt-toggle"
+            onClick={() => onToggle(toggleKey, expanded)}
+          >
+            {expanded ? 'Hide other sequences' : 'or complete a different sequence instead ▾'}
+          </button>
+          {expanded && <div className="req-sequence-alt-list">{otherOptions.join(', ')}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RequirementNodeView({
   node,
   isRoot = false,
@@ -458,10 +511,12 @@ function RequirementNodeView({
   else if (isUnresolved) indicatorSymbol = node.substituted ? (node.status === 'satisfied' ? '✓' : '○') : '!';
   else indicatorSymbol = node.status === 'satisfied' ? '✓' : '○';
 
+  const isSequenceGroup = node.type === 'SEQUENCE_GROUP';
   const missingDetail =
-    !isUnresolved && !isOverridden && node.status !== 'satisfied' && node.missing?.length > 0
+    !isUnresolved && !isOverridden && !isSequenceGroup && node.status !== 'satisfied' && node.missing?.length > 0
       ? `Needs: ${node.missing.map(describeMissing).join(', ')}`
       : null;
+  const showSequenceDetail = isSequenceGroup && !isOverridden && node.status !== 'satisfied';
 
   // UNRESOLVED nodes (petition clauses) have no fixed course list to add
   // from, so they never get a pool — description + badge only. Same for any
@@ -489,6 +544,14 @@ function RequirementNodeView({
         </div>
         {isUnresolved && node.note && <span className="req-node-detail">{node.note}</span>}
         {missingDetail && <span className="req-node-detail">{missingDetail}</span>}
+        {showSequenceDetail && (
+          <SequenceGroupDetail
+            node={node}
+            courseMap={courseMap}
+            collapsedOverrides={collapsedOverrides}
+            onToggle={onToggle}
+          />
+        )}
         {hasPool && poolExpanded && (
           <CoursePool
             claimed={pool.claimed}

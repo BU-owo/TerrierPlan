@@ -1231,6 +1231,32 @@
 .req-node.needs-review .req-node-label { color: var(--badge-warm-text); }
 .req-node.needs-review .req-node-detail { color: var(--badge-warm-text); }
 
+/* SEQUENCE_GROUP progress — highlights the one option a student is actually
+   partway into instead of listing every option with equal weight. */
+.req-sequence-ontrack-label {
+  font-weight: 700;
+  color: var(--text);
+}
+.req-sequence-have {
+  color: var(--success-text);
+  font-weight: 600;
+}
+.req-sequence-need {
+  color: var(--text-muted);
+}
+.req-sequence-alt-wrap {
+  margin-top: 4px;
+}
+.req-sequence-alt-toggle {
+  display: block;
+}
+.req-sequence-alt-list {
+  margin-top: 3px;
+  font-size: 9px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .req-node-count {
   font-size: 9px;
   font-weight: 600;
