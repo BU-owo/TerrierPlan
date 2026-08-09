@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import {
   DndContext,
@@ -28,6 +29,7 @@ import CourseSearch from '../components/planner/CourseSearch';
 import SemesterBoard from '../components/planner/SemesterBoard';
 import CourseCard from '../components/planner/CourseCard';
 import SidePanelTabs from '../components/planner/SidePanelTabs';
+import RequirementsFullView from '../components/planner/RequirementsFullView';
 import BulletinPanel from '../components/planner/BulletinPanel';
 import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
 import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
@@ -82,6 +84,12 @@ function debugPlanner(stage, payload) {
 
 export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const { user, loading: authLoading } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Whether the initial `?view=requirements` URL param (if any) has been
+  // consulted yet — gated on the plan actually being loaded, so a linked/
+  // refreshed full view doesn't flash open before plan data (semesters,
+  // courseMap, majorBulletinUrl) exists. See the effect below.
+  const [hasAppliedInitialView, setHasAppliedInitialView] = useState(false);
 
   // ── Plan list ─────────────────────────────────────────────────────────────
   const [plans, setPlans] = useState([]);
@@ -124,6 +132,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [dragOverlay, setDragOverlay] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [deletePlanId, setDeletePlanId] = useState(null); // non-null → confirm-delete modal open for this plan id
+
+  // Full-screen Requirements view — an in-page overlay/mode, not a route (see
+  // RequirementsFullView.jsx), so it shares this component's state instead of
+  // duplicating it. Mirrored to `?view=requirements` for linkability/back-
+  // button support; the URL is the source of truth once the initial load has
+  // been applied (see hasAppliedInitialView above).
+  const requirementsFullView = hasAppliedInitialView && searchParams.get('view') === 'requirements';
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -208,6 +223,43 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   useEffect(() => {
     hasUnsavedChanges.current = isDirty;
   }, [isDirty]);
+
+  // ── Apply `?view=requirements` once plan data is actually ready ───────────
+  // Waits for the signed-in plan load (activePlanId set) or the guest local
+  // plan load (which finishes synchronously inside the auth effect above, by
+  // the time authLoading goes false with no user) before consulting the URL,
+  // so a linked/refreshed full view never flashes open over an empty plan.
+  useEffect(() => {
+    if (hasAppliedInitialView || authLoading) return;
+    if (user && !activePlanId) return; // signed-in plan still loading
+    setHasAppliedInitialView(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user, activePlanId, hasAppliedInitialView]);
+
+  function openRequirementsFullView() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('view', 'requirements');
+      return next;
+    });
+  }
+
+  function closeRequirementsFullView() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('view');
+      return next;
+    });
+  }
+
+  // "Browse eligible courses" from within the full-screen view — same as the
+  // compact sidebar's handleBrowseRange, but also exits full mode since
+  // Search isn't part of the full view (it jumps back to the normal planner
+  // layout, where Search is visible again).
+  function handleBrowseRangeFromFullView(range) {
+    handleBrowseRange(range);
+    closeRequirementsFullView();
+  }
 
   // ── Warn before losing unsaved changes (tab close / refresh) ───────────────
   useEffect(() => {
@@ -954,6 +1006,38 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   ];
   const coursesInPlan = new Set([...gridCourseKeys, ...extraCourseKeys]);
 
+  // courseKey -> { locked, source } — display-only lookup for the full
+  // Requirements view's planned/completed chip distinction (never fed into
+  // evaluateRequirementTree, which only ever sees flat courseKeys). extraTerms
+  // entries carry no locked/source of their own (they're plain courseKey
+  // strings — see courseEntry.js), but they only ever come from a parsed
+  // transcript, so every course in there is functionally already-completed.
+  const lockStatusMap = useMemo(() => {
+    const map = {};
+    semesters.forEach((sem) => {
+      sem.forEach((entry) => {
+        map[entryCourseKey(entry)] = {
+          locked: Boolean(entry?.locked),
+          source: entry?.source ?? 'manual',
+        };
+      });
+    });
+    Object.values(gridSummerTerms).forEach((entries) => {
+      entries.forEach((entry) => {
+        map[entryCourseKey(entry)] = {
+          locked: Boolean(entry?.locked),
+          source: entry?.source ?? 'manual',
+        };
+      });
+    });
+    extraTerms.forEach((term) => {
+      (term.courseKeys || []).forEach((key) => {
+        map[key] = { locked: true, source: 'transcript' };
+      });
+    });
+    return map;
+  }, [semesters, gridSummerTerms, extraTerms]);
+
   // Unlike HUB (which excludes externalCredits entirely), the requirements
   // engine should see transfer/AP-equivalent courses too — they can satisfy
   // a major requirement even though they never count toward HUB.
@@ -1182,6 +1266,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               requirementOverrides={requirementOverrides}
               onSetRequirementOverride={handleSetRequirementOverride}
               onRemoveRequirementOverride={handleRemoveRequirementOverride}
+              onOpenFullView={openRequirementsFullView}
             />
           </aside>
         </div>
@@ -1197,6 +1282,27 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {/* ── Full-screen Requirements view (overlay/mode, not a route — see
+           requirementsFullView above) ── */}
+      {requirementsFullView && (
+        <RequirementsFullView
+          majorBulletinUrl={majorBulletinUrl}
+          planCourseKeys={requirementsCourseKeys}
+          onMajorSelect={handleMajorSelect}
+          courseMap={courseMap}
+          activeSemIndex={activeSemIndex}
+          semesterOptions={semesterOptions}
+          onAddCourse={handleAddCourse}
+          onEnsureCourseData={fetchCourseData}
+          onBrowseRange={handleBrowseRangeFromFullView}
+          requirementOverrides={requirementOverrides}
+          onSetRequirementOverride={handleSetRequirementOverride}
+          onRemoveRequirementOverride={handleRemoveRequirementOverride}
+          lockStatusMap={lockStatusMap}
+          onClose={closeRequirementsFullView}
+        />
+      )}
 
       {/* ── Bulletin Panel ── */}
       <BulletinPanel

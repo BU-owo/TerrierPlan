@@ -32,6 +32,7 @@ export default function SidePanelTabs({
   requirementOverrides,
   onSetRequirementOverride,
   onRemoveRequirementOverride,
+  onOpenFullView,
 }) {
   const [activeTab, setActiveTab] = useState('hub');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -115,6 +116,7 @@ export default function SidePanelTabs({
             requirementOverrides={requirementOverrides}
             onSetRequirementOverride={onSetRequirementOverride}
             onRemoveRequirementOverride={onRemoveRequirementOverride}
+            onOpenFullView={onOpenFullView}
           />
         </div>
         <div className={activeTab === 'credits' ? '' : 'side-panel-hidden'}>

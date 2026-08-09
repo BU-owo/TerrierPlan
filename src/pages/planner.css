@@ -1543,6 +1543,206 @@
   text-decoration: underline;
 }
 
+/* Compact sidebar's summary line + "Open full view" control, side by side. */
+.panel-summary-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.panel-summary-row .panel-summary-line { margin: 0; flex: 1; }
+.req-open-full-btn {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--scarlet);
+  background: transparent;
+  border: 1px solid var(--scarlet);
+  border-radius: var(--radius-xs, 3px);
+  padding: 3px 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s, color .12s;
+}
+.req-open-full-btn:hover { background: var(--scarlet); color: #fff; }
+
+/* ===== REQUIREMENTS — FULL-SCREEN VIEW ===== */
+/* In-page overlay/mode rendered from PlannerPage (see requirementsFullView) —
+   not a route, so no page-load/unmount cost and the exact same plan state as
+   the compact sidebar. */
+.req-full-view {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--cream);
+}
+.req-full-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 24px;
+  background: var(--scarlet);
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0,0,0,.2);
+}
+.req-full-view-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+.req-full-view-close {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid rgba(255,255,255,.6);
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  cursor: pointer;
+  transition: background .15s;
+}
+.req-full-view-close:hover { background: rgba(255,255,255,.24); }
+.req-full-view-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 20px 60px;
+}
+.req-full-view-inner {
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+/* Overall progress bar shown at the top of full density instead of the
+   compact panel-summary-line. */
+.req-progress-summary {
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.req-progress-summary-text {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.req-progress-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--cream-dark);
+  overflow: hidden;
+}
+.req-progress-bar-fill {
+  height: 100%;
+  background: var(--success-strong);
+  border-radius: 999px;
+  transition: width .3s ease;
+}
+.req-progress-summary-sub {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Full density renders the same req-panel markup at a larger, more legible
+   scale — group headers/progress counts stay scannable at full-screen width
+   instead of the sidebar's cramped ~244px. Compact (.req-panel without this
+   modifier) is completely untouched by these rules. */
+.req-panel--full { padding: 0; gap: 0; }
+.req-panel--full .major-picker { margin-bottom: 18px; }
+.req-panel--full .req-exception-entry { font-size: 12px; padding: 7px 12px; margin-bottom: 16px; }
+.req-panel--full .req-tree { gap: 12px; }
+.req-panel--full .req-group { padding-left: 12px; border-left-width: 4px; }
+.req-panel--full .req-group-header { margin-bottom: 8px; gap: 8px; }
+.req-panel--full .req-group-label { font-size: 12.5px; }
+.req-panel--full .req-group-progress { font-size: 11px; }
+.req-panel--full .req-group-children { gap: 8px; }
+.req-panel--full .req-node { font-size: 13px; padding: 8px 10px; gap: 10px; }
+.req-panel--full .req-node-indicator { width: 18px; height: 18px; font-size: 10px; margin-top: 2px; }
+.req-panel--full .req-node-detail { font-size: 11.5px; margin-top: 3px; }
+.req-panel--full .req-node-count,
+.req-panel--full .req-node-review-badge,
+.req-panel--full .req-node-petitioned-badge { font-size: 10px; }
+.req-panel--full .req-node-pool-toggle { font-size: 11px; }
+.req-panel--full .req-pool-chip { font-size: 12px; padding: 5px 9px; }
+.req-panel--full .req-pool-section-label { font-size: 9px; }
+.req-panel--full .panel-empty-state { font-size: 13px; padding: 24px 16px; }
+.req-panel--full .panel-all-fulfilled { padding: 22px 14px; margin-bottom: 18px; }
+.req-panel--full .panel-all-fulfilled p { font-size: 15px; }
+.req-panel--full .req-unresolved-item,
+.req-panel--full .req-unresolved-summary-toggle { font-size: 11.5px; }
+
+/* Course-name-aware pool chips (full density only) — code + name inline,
+   plus a planned/completed distinction on claimed chips driven by
+   lockStatusMap. Compact density never adds these classes (see CourseChip). */
+.req-pool-chip--full {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+}
+.req-pool-chip--full .req-pool-chip-text { white-space: normal; text-align: left; }
+.req-pool-chip-check { flex-shrink: 0; font-size: 10px; }
+.req-pool-chip-status {
+  flex-shrink: 0;
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 2px;
+}
+.req-pool-chip--completed .req-pool-chip-status { background: var(--success-strong); color: #fff; }
+.req-pool-chip--completed-manual {
+  background: var(--badge-cool-bg);
+  color: var(--badge-cool-text);
+}
+.req-pool-chip--completed-manual .req-pool-chip-status { background: var(--badge-cool-text); color: #fff; }
+.req-pool-chip--planned {
+  background: transparent;
+  border: 1.5px dashed var(--border);
+  color: var(--text-secondary);
+}
+.req-pool-chip--planned .req-pool-chip-status { background: var(--cream-dark); color: var(--text-muted); }
+
+/* Large pools (>12 entries, full density only — see CoursePool's
+   LARGE_POOL_THRESHOLD) get a scoped text filter and a scrollable list
+   instead of dumping every chip inline. */
+.req-pool-filter-input {
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs, 3px);
+  background: var(--white);
+  color: var(--text);
+  margin: 2px 0 6px;
+  width: 100%;
+  max-width: 320px;
+}
+.req-pool-chips--list {
+  max-height: 260px;
+  overflow-y: auto;
+  align-content: flex-start;
+  padding-right: 4px;
+}
+.req-pool-filter-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 6px 0;
+}
+
 /* ===== CREDITS PANEL ===== */
 .credits-panel {
   padding: 12px;
@@ -2113,6 +2313,14 @@ html[data-theme='dark'] .external-credit-no-hub { background: var(--white); }
   .unauthenticated-banner { bottom: 58px; }
   .banner-content { flex-direction: column; align-items: flex-start; gap: 6px; }
   .banner-signin-link { margin-left: 0; }
+
+  /* Full-screen Requirements view: tighter chrome, single-column body. */
+  .req-full-view-header { padding: 12px 14px; }
+  .req-full-view-title { font-size: 16px; }
+  .req-full-view-close { padding: 5px 10px; font-size: 12px; }
+  .req-full-view-body { padding: 16px 12px 40px; }
+  .req-progress-summary { padding: 12px 14px; }
+  .req-progress-summary-text { font-size: 13px; }
 }
 
 @media (max-width: 600px) {
