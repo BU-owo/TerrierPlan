@@ -1,10 +1,4 @@
-import { normalizeCourseKey } from './courseKey.js';
-
-function parseCourseKey(courseKey) {
-  const match = /^([A-Z]+)(\d+)$/.exec(courseKey);
-  if (!match) return null;
-  return { subject: match[1], number: Number(match[2]) };
-}
+import { normalizeCourseKey, parseCourseKey } from './courseKey.js';
 
 function describeEntry(entry) {
   if (typeof entry === 'string') return entry;
@@ -74,6 +68,18 @@ function poolEntryCandidateKeys(entry) {
     default:
       return null;
   }
+}
+
+// Subject/min/max for COURSE_RANGE / COURSE_RANGE_CAP entries, so a missing
+// entry that can't offer a fixed candidateKeys list can still tell the UI
+// what range it matches against (e.g. to pre-fill a search-panel filter).
+// Null for every other entry type.
+function poolEntryRange(entry) {
+  if (typeof entry === 'string') return null;
+  if (entry.type === 'COURSE_RANGE' || entry.type === 'COURSE_RANGE_CAP') {
+    return { subject: entry.subject, min: entry.min, max: entry.max, exclude: entry.exclude || [] };
+  }
+  return null;
 }
 
 // Claims up to `need` courses from a single pool entry, mutating ctx.claimed.
@@ -162,7 +168,13 @@ function claimFromPools(pools, required, ctx) {
       } else {
         // courseKeys is null for non-enumerable entries (COURSE_RANGE /
         // COURSE_RANGE_CAP) — there's no fixed list to offer as "add this".
-        missing.push({ label: describeEntry(entry), courseKeys: result.candidateKeys });
+        // range carries the subject/min/max for those same entries instead,
+        // so the UI can offer a "browse this range" action.
+        missing.push({
+          label: describeEntry(entry),
+          courseKeys: result.candidateKeys,
+          range: poolEntryRange(entry),
+        });
       }
     }
     if (satisfiedCount >= required) break;

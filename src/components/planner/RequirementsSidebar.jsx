@@ -37,6 +37,7 @@ function collectPoolCourses(node, planCourseKeySet) {
       eligible: (node.missing || [])
         .filter((key) => !planCourseKeySet.has(key))
         .map((key) => ({ key })),
+      ranges: [],
     };
   }
 
@@ -47,14 +48,27 @@ function collectPoolCourses(node, planCourseKeySet) {
     }
     const seen = new Set();
     const eligible = [];
+    // COURSE_RANGE / COURSE_RANGE_CAP entries carry `range` instead of an
+    // enumerable `courseKeys` list — dedup by subject/min/max since the same
+    // range can appear in both a node's pool and a sibling's additionalPool.
+    const seenRanges = new Set();
+    const ranges = [];
     for (const entry of node.missing || []) {
+      if (entry.range) {
+        const sig = `${entry.range.subject}:${entry.range.min}-${entry.range.max}`;
+        if (!seenRanges.has(sig)) {
+          seenRanges.add(sig);
+          ranges.push({ range: entry.range, label: entry.label });
+        }
+        continue;
+      }
       for (const key of entry.courseKeys || []) {
         if (planCourseKeySet.has(key) || seen.has(key)) continue;
         seen.add(key);
         eligible.push({ key });
       }
     }
-    return { claimed, eligible };
+    return { claimed, eligible, ranges };
   }
 
   return null;
@@ -107,12 +121,12 @@ function CourseChip({ courseKey, courseMap, interactive, onClick }) {
   );
 }
 
-function CoursePool({ claimed, eligible, courseMap, onAddCourse }) {
-  if (claimed.length === 0 && eligible.length === 0) return null;
+function CoursePool({ claimed, eligible, ranges, courseMap, onAddCourse, onBrowseRange }) {
+  if (claimed.length === 0 && eligible.length === 0 && ranges.length === 0) return null;
 
   return (
     <div className="req-pool">
-      {eligible.length > 0 && (
+      {(eligible.length > 0 || ranges.length > 0) && (
         <div className="req-pool-section">
           <span className="req-pool-section-label">Add:</span>
           <div className="req-pool-chips">
@@ -124,6 +138,17 @@ function CoursePool({ claimed, eligible, courseMap, onAddCourse }) {
                 interactive
                 onClick={() => onAddCourse(key)}
               />
+            ))}
+            {ranges.map(({ range, label }) => (
+              <button
+                key={`${range.subject}-${range.min}-${range.max}`}
+                type="button"
+                className="req-pool-chip eligible"
+                title={`Browse ${label} in Search`}
+                onClick={() => onBrowseRange(range)}
+              >
+                Browse eligible courses →
+              </button>
             ))}
           </div>
         </div>
@@ -150,6 +175,7 @@ function RequirementNodeView({
   planCourseKeySet,
   courseMap,
   onAddCourse,
+  onBrowseRange,
 }) {
   if (node.type === 'ALL' && Array.isArray(node.children)) {
     const orderedChildren = [...node.children].sort((a, b) => statusRank(a) - statusRank(b));
@@ -162,6 +188,7 @@ function RequirementNodeView({
         planCourseKeySet={planCourseKeySet}
         courseMap={courseMap}
         onAddCourse={onAddCourse}
+        onBrowseRange={onBrowseRange}
       />
     ));
     if (isRoot) return <>{children}</>;
@@ -199,7 +226,7 @@ function RequirementNodeView({
   // UNRESOLVED nodes (petition clauses) have no fixed course list to add
   // from, so they never get a pool — description + badge only.
   const pool = isUnresolved ? null : collectPoolCourses(node, planCourseKeySet);
-  const hasPool = pool && (pool.claimed.length > 0 || pool.eligible.length > 0);
+  const hasPool = pool && (pool.claimed.length > 0 || pool.eligible.length > 0 || pool.ranges.length > 0);
   const poolToggleKey = `pool:${node.label}`;
   const poolExpanded = Boolean(collapsedOverrides[poolToggleKey]);
 
@@ -227,8 +254,10 @@ function RequirementNodeView({
           <CoursePool
             claimed={pool.claimed}
             eligible={pool.eligible}
+            ranges={pool.ranges}
             courseMap={courseMap}
             onAddCourse={onAddCourse}
+            onBrowseRange={onBrowseRange}
           />
         )}
       </div>
@@ -252,6 +281,7 @@ export default function RequirementsSidebar({
   activeSemIndex,
   onAddCourse,
   onEnsureCourseData,
+  onBrowseRange,
 }) {
   const [collapsedOverrides, setCollapsedOverrides] = useState({});
   const [pickerCourseKey, setPickerCourseKey] = useState(null);
@@ -348,6 +378,7 @@ export default function RequirementsSidebar({
               planCourseKeySet={planCourseKeySet}
               courseMap={courseMap}
               onAddCourse={handleAddCourse}
+              onBrowseRange={onBrowseRange}
             />
           </div>
         </>

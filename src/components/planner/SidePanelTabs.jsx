@@ -27,6 +27,7 @@ export default function SidePanelTabs({
   activeSemIndex,
   onAddCourse,
   onEnsureCourseData,
+  onBrowseRange,
 }) {
   const [activeTab, setActiveTab] = useState('hub');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -105,6 +106,7 @@ export default function SidePanelTabs({
             activeSemIndex={activeSemIndex}
             onAddCourse={onAddCourse}
             onEnsureCourseData={onEnsureCourseData}
+            onBrowseRange={onBrowseRange}
           />
         </div>
         <div className={activeTab === 'credits' ? '' : 'side-panel-hidden'}>

@@ -3,6 +3,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { HUB_COLOR_FOR, SEMESTER_LABELS } from '../../utils/hubConstants';
+import { parseCourseKey } from '../../utils/courseKey';
 import SemesterPickerModal from './SemesterPickerModal';
 
 const HUB_FILTER_CODES = [
@@ -220,6 +221,8 @@ export default function CourseSearch({
   onActiveSemChange,
   coursesInPlan,
   onAddCourse,
+  rangeFilter = null,
+  onClearRangeFilter,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hubFilters, setHubFilters] = useState([]);
@@ -229,6 +232,16 @@ export default function CourseSearch({
   const [allCourses, setAllCourses] = useState([]);
   const [coursesLoaded, setCoursesLoaded] = useState(false);
   const debounceRef = useRef(null);
+
+  // A fresh range filter (e.g. from "Browse eligible courses" in the
+  // Requirements panel) replaces whatever the user was searching for, rather
+  // than ANDing against stale text/HUB filters that would just hide it.
+  useEffect(() => {
+    if (rangeFilter) {
+      setSearchQuery('');
+      setHubFilters([]);
+    }
+  }, [rangeFilter]);
 
   // Load all courses once on first mount
   useEffect(() => {
@@ -247,13 +260,14 @@ export default function CourseSearch({
     loadAllCourses();
   }, []);
 
-  // Filter courses client-side on keystroke / HUB filter change
+  // Filter courses client-side on keystroke / HUB filter / range filter change
   useEffect(() => {
     clearTimeout(debounceRef.current);
     const term = searchQuery.trim();
     const hasHubFilter = hubFilters.length > 0;
+    const hasRangeFilter = Boolean(rangeFilter);
 
-    if (!term && !hasHubFilter) {
+    if (!term && !hasHubFilter && !hasRangeFilter) {
       setResults([]);
       setLoading(false);
       return;
@@ -271,6 +285,7 @@ export default function CourseSearch({
       const normalizedQuery = term
         ? term.replace(/\s+/g, '').toUpperCase()
         : '';
+      const excludeSet = new Set(rangeFilter?.exclude ?? []);
 
       const matches = allCourses.filter((course) => {
         let textMatch = true;
@@ -291,7 +306,18 @@ export default function CourseSearch({
           hubMatch = hubFilters.some((code) => units.includes(code));
         }
 
-        return textMatch && hubMatch;
+        let rangeMatch = true;
+        if (hasRangeFilter) {
+          const parsed = parseCourseKey(course.id);
+          rangeMatch =
+            Boolean(parsed) &&
+            parsed.subject === rangeFilter.subject &&
+            parsed.number >= rangeFilter.min &&
+            parsed.number <= rangeFilter.max &&
+            !excludeSet.has(course.id);
+        }
+
+        return textMatch && hubMatch && rangeMatch;
       });
 
       setResults(matches.slice(0, 20));
@@ -299,9 +325,9 @@ export default function CourseSearch({
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [searchQuery, hubFilters, coursesLoaded, allCourses]);
+  }, [searchQuery, hubFilters, rangeFilter, coursesLoaded, allCourses]);
 
-  const hasActiveQuery = Boolean(searchQuery.trim()) || hubFilters.length > 0;
+  const hasActiveQuery = Boolean(searchQuery.trim()) || hubFilters.length > 0 || Boolean(rangeFilter);
 
   return (
     <div className="search-panel">
@@ -318,6 +344,22 @@ export default function CourseSearch({
             spellCheck={false}
           />
         </div>
+        {rangeFilter && (
+          <div className="search-active-filter">
+            <span>
+              Showing {rangeFilter.subject} {rangeFilter.min}–{rangeFilter.max}
+            </span>
+            <button
+              type="button"
+              className="search-active-filter-clear"
+              onClick={onClearRangeFilter}
+              aria-label="Clear range filter"
+              title="Clear range filter"
+            >
+              ×
+            </button>
+          </div>
+        )}
         <HubFilterSelect selected={hubFilters} onChange={setHubFilters} />
         <div className="search-sem-target">
           <label htmlFor="sem-target">Add to</label>
@@ -350,10 +392,10 @@ export default function CourseSearch({
             />
             {searchQuery.trim()
               ? <>No courses found for &ldquo;{searchQuery.trim()}&rdquo;</>
-              : 'No courses found for the selected HUB units'}
+              : 'No courses found for the current filters'}
             <div className="search-hint">
               Try a course code like &ldquo;CAS CS 111&rdquo;, a name prefix
-              like &ldquo;Calculus&rdquo;, or a different HUB filter
+              like &ldquo;Calculus&rdquo;, or a different HUB/range filter
             </div>
           </div>
         )}

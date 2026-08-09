@@ -1,0 +1,161 @@
+{
+  "programName": "Biochemistry & Molecular Biology",
+  "degree": "BA",
+  "school": "CAS",
+  "bulletinUrl": "https://www.bu.edu/academics/cas/programs/biochemistry-molecular-biology/ba/",
+  "minGrade": null,
+  "totalCoursesRequired": 18,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "type": "ALL",
+    "label": "Biochemistry & Molecular Biology BA — Major Requirements",
+    "children": [
+      {
+        "type": "ALL",
+        "label": "Foundation Courses: Biology",
+        "children": [
+          {
+            "type": "ALL",
+            "label": "Introductory Biology I",
+            "courses": ["CASBI108"]
+          },
+          {
+            "type": "COUNT",
+            "label": "Introductory Biology II",
+            "min": 1,
+            "pool": [
+              { "type": "OR_EQUIVALENT", "options": ["CASBI213", "CASBI203", "CASBI218"] }
+            ]
+          },
+          {
+            "type": "COUNT",
+            "label": "Cell Biology",
+            "min": 1,
+            "pool": [
+              { "type": "OR_EQUIVALENT", "options": ["CASBI216", "CASBI206"] }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "UNRESOLVED",
+        "label": "Foundation Courses: General Chemistry Sequence",
+        "note": "Complete ONE full sequence: CH 109 + CH 110, OR CH 111 + CH 112, OR CH 101 + CH 102 + CH 201. Not auto-tracked — the engine's pool-entry types can express 'any one of several single courses' (OR_EQUIVALENT) but not 'any one of several multi-course sequences', so this needs manual verification rather than a possibly-wrong automated check."
+      },
+      {
+        "type": "UNRESOLVED",
+        "label": "Foundation Courses: Organic Chemistry Sequence",
+        "note": "Complete ONE full sequence: (CH 203 or CH 218) + CH 214, OR CH 211 + CH 212, OR (CH 203 or CH 218) + CH 204 + CH 220. Not auto-tracked for the same reason as the General Chemistry sequence above — sequence alternation (OR of multi-course bundles) isn't expressible with the current pool-entry types."
+      },
+      {
+        "type": "ALL",
+        "label": "Core Courses",
+        "courses": ["CASBB421", "CASBB422", "CASBI552", "CASCH525"]
+      },
+      {
+        "type": "COUNT",
+        "label": "Advanced Lab Elective",
+        "min": 1,
+        "note": "Evaluated before BMB Electives below (array order = claim priority) so a course claimed here — BB522, BI513, or CH524 — can't also be double-counted as a BMB Elective.",
+        "pool": [
+          { "type": "SUBSTITUTE_GROUP", "primary": "CASBB522", "substitutes": ["CASBI513", "CASCH524"] }
+        ]
+      },
+      {
+        "type": "UNRESOLVED",
+        "label": "Advanced Lab Elective — additional bundle options",
+        "note": "Besides BB 522 / BI 513 / CH 524 above, the Advanced Lab Elective can also be satisfied by BB 401 AND BB 402 together, or by any TWO of BB 450/451/452/453 — not auto-tracked, since the engine has no pool-entry type for requiring a bundle of courses as a single claimable slot."
+      },
+      {
+        "type": "COUNT",
+        "label": "BMB Electives",
+        "min": 2,
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "courses": [
+              "CASBB350", "CASBB351", "CASBB352", "CASBB450", "CASBB451", "CASBB452", "CASBB453", "CASBB522",
+              "CASBI311", "CASBI315", "CASBI385", "CASBI410", "CASBI411", "CASBI413",
+              "CASBI445", "CASBI455", "CASBI481",
+              "CASBI510", "CASBI513",
+              "CASBI525", "CASBI535",
+              "CASBI550", "CASBI551", "CASBI553",
+              "CASBI556",
+              "CASBI559", "CASBI560",
+              "CASBI561",
+              "CASBI565", "CASBI566", "CASBI572", "CASBI576", "CASBI577", "CASBI735", "CASBI753",
+              "CASBI589",
+              "CASCH524", "CASCH625", "CASCH626", "CASCH634", "CASCH648", "CASCH724",
+              "GMSMB722",
+              "ENGBF571",
+              "GMSBI751",
+              "GMSBT432"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "UNRESOLVED",
+        "label": "BMB Elective — BB 401 + BB 402 (year-long sequence)",
+        "note": "BB 401 and BB 402 taken together count as ONE BMB elective, not two — not auto-tracked, since COURSE_LIST claims courses independently and has no way to treat two specific courses as a single atomic unit. (Deliberately left out of the BMB Electives pool above so the engine doesn't accidentally double-count the pair as two separate electives.)"
+      },
+      {
+        "type": "UNRESOLVED",
+        "label": "GMS BI 751 unit-overlap restriction",
+        "note": "GMS BI 751 (6 units) cannot be combined with CH 373 / BB 421 / BB 422 for credit — flagged for manual verification rather than enforced automatically, since the engine has no mutual-exclusion pool-entry type."
+      },
+      {
+        "type": "ALL",
+        "label": "Related: Mathematics/Computer Science",
+        "note": "The bulletin requires 2 courses total with at least 1 from the calculus/statistics subset. Expressed as a COUNT(min 1, calc/stats-only pool) plus a REMAINDER that fills the 2nd slot from the full combined pool — composing the two guarantees the subset minimum without needing a node type that expresses 'min 1 of a subset' directly.",
+        "children": [
+          {
+            "type": "COUNT",
+            "label": "At least one Calculus or Statistics course",
+            "min": 1,
+            "pool": [
+              {
+                "type": "COURSE_LIST",
+                "courses": [
+                  "CASMA121", "CASMA122", "CASMA123", "CASMA124", "CASMA127", "CASMA129", "CASMA196",
+                  "CASMA115", "CASMA116", "CASMA213", "CASMA214", "CASDS100"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "REMAINDER",
+            "label": "Second Related course (Calculus, Statistics, or Computer Science)",
+            "totalRequired": 2,
+            "pool": [
+              {
+                "type": "COURSE_LIST",
+                "courses": [
+                  "CASMA121", "CASMA122", "CASMA123", "CASMA124", "CASMA127", "CASMA129", "CASMA196",
+                  "CASMA115", "CASMA116", "CASMA213", "CASMA214", "CASDS100",
+                  "CASCS105", "CASCS108", "CASCS111", "CASDS110"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "UNRESOLVED",
+        "label": "Related: Physics Sequence",
+        "note": "Complete ONE full two-course sequence: PY 105 + PY 106, OR PY 211 + PY 106, OR PY 211 + PY 212, OR PY 241 + PY 242, OR PY 251 + PY 252. Not auto-tracked — same sequence-alternation gap as the Chemistry requirements above (OR of multi-course bundles isn't expressible with the current pool-entry types)."
+      },
+      {
+        "type": "UNRESOLVED",
+        "label": "Non-BMB petition courses (BMB Electives)",
+        "note": "Other courses may fulfill a BMB elective by petition/department approval — discretionary, requires manual verification."
+      },
+      {
+        "type": "UNRESOLVED",
+        "label": "BU residency requirement",
+        "note": "Excluding Foundation Courses, at least 5 courses counting toward the BMB major must be taken in the BU BMB Program — not tracked, since the engine doesn't currently distinguish which claimed courses are transfer credit vs. taken at BU."
+      }
+    ]
+  }
+}

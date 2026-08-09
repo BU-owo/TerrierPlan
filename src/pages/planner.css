@@ -268,6 +268,30 @@
   transition: border-color .15s;
 }
 .search-input:focus { outline: none; border-color: var(--scarlet); background: var(--white); }
+.search-active-filter {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--cream);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs, 3px);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.search-active-filter-clear {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.search-active-filter-clear:hover { color: var(--scarlet); }
 .search-sem-target {
   margin-top: 8px;
   display: flex;

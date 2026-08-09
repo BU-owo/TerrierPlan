@@ -36,8 +36,12 @@ For `COUNT`/`REMAINDER`, each `missing` entry also carries `courseKeys`: the
 enumerable list of courseKeys that would satisfy that slot (a plain courseKey
 or `OR_EQUIVALENT`/`SUBSTITUTE_GROUP`/`COURSE_LIST` entry), or `null` for
 `COURSE_RANGE`/`COURSE_RANGE_CAP` entries, which aren't enumerable without a
-full course catalog. The UI uses this to offer "add this course" chips for
-remaining-eligible courses, skipping the non-enumerable ones.
+full course catalog. Those same entries carry `range` instead —
+`{ subject, min, max, exclude }` taken straight from the pool entry — so the
+UI can offer a "browse this range" action even though it can't list the
+courses up front. The UI uses `courseKeys` to offer "add this course" chips
+for enumerable remaining-eligible courses, and `range` to offer a browse
+action for the non-enumerable ones.
 
 ### `ALL`
 Two forms, distinguished by which key is present:

@@ -91,6 +91,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [activeSemIndex, setActiveSemIndex] = useState(0);
   // Which single panel is shown on narrow/mobile screens: 'search' | 'board' | 'hub'
   const [mobileView, setMobileView] = useState('board');
+  // { subject, min, max, exclude } | null — set by "Browse eligible courses"
+  // on a COURSE_RANGE requirement node, consumed by CourseSearch as an
+  // additional filter alongside its own text/HUB filters.
+  const [rangeFilter, setRangeFilter] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(''); // 'saved' | 'error' | ''
   const [isDirty, setIsDirty] = useState(false);
@@ -653,6 +657,14 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setMobileView('board');
   }
 
+  // "Browse eligible courses" on a COURSE_RANGE requirement node — hands the
+  // range to CourseSearch as a filter and, on mobile where Search/Requirements
+  // are separate tabs, jumps over so the results are actually visible.
+  function handleBrowseRange(range) {
+    setRangeFilter(range);
+    setMobileView('search');
+  }
+
   function handleMoveCourse(courseKey, fromSem, toSem) {
     setSemesters((prev) => {
       const next = prev.map((s) => [...s]);
@@ -964,6 +976,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               onActiveSemChange={setActiveSemIndex}
               coursesInPlan={coursesInPlan}
               onAddCourse={handleAddCourse}
+              rangeFilter={rangeFilter}
+              onClearRangeFilter={() => setRangeFilter(null)}
             />
           </aside>
 
@@ -1007,6 +1021,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               activeSemIndex={activeSemIndex}
               onAddCourse={handleAddCourse}
               onEnsureCourseData={fetchCourseData}
+              onBrowseRange={handleBrowseRange}
             />
           </aside>
         </div>
