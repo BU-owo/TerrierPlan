@@ -83,6 +83,7 @@ requirement-checking, no rules engine yet).
 | cumulativeGpa | number? | Scraped from transcript footer on import (GPA UI not built yet) |
 | earnedCredits | number? | Scraped from transcript footer on import |
 | gradePoints | number? | Scraped from transcript footer on import |
+| requirementOverrides | map | Student-reported waive/substitute exceptions to the major requirements tree (see below). **Never** treated as verified — informational only, no approval workflow. |
 | createdAt, updatedAt | timestamp | |
 
 #### `extraTerms[]` entry
@@ -106,6 +107,23 @@ requirement-checking, no rules engine yet).
 | score | number? | AP / test score, when printed on transcript |
 | status | string? | `'needs_mapping'` for a transfer row awaiting a BU equivalent; `'mapped'` once supplied |
 | manualHubUnits | string[]? | Admin/BU-confirmed HUB override for an AP/test entry when automatic lookup is unresolved; `[]` confirms no HUB |
+
+#### `requirementOverrides` map
+Keyed by a requirement node's `id` (see `src/data/requirements/SCHEMA.md`),
+not an array — one entry per overridden node, last-write-wins on re-save.
+
+| Field | Type | Notes |
+|---|---|---|
+| type | string | `'waive'` — treat the node as fully satisfied, no evaluation. `'substitute'` — add `courseKey` to the node's pool for this evaluation only. |
+| courseKey | string? | `'substitute'` only — the courseKey to try claiming for this node. |
+| note | string? | Free-text self-reported justification (e.g. "Approved by advisor 3/2026"). Shown in the UI, never validated. |
+| createdAt | string | ISO timestamp, set client-side when the override is created |
+
+Read/written by `requirementsEngine.js`'s `evaluateRequirementTree` (third
+argument) — see that file's `SCHEMA.md` for exactly how waive/substitute
+affect evaluation. This is deliberately student-facing and unauthoritative:
+no approval state, no admin review — the planner is informational, not a
+degree audit.
 
 ### `users/{uid}/schedules/{scheduleId}`
 | Field | Type | Notes |

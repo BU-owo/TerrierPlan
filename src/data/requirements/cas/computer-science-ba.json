@@ -8,15 +8,18 @@
   "verifiedBy": null,
   "verifiedDate": null,
   "tree": {
+    "id": "cs-ba-root",
     "type": "ALL",
     "label": "Computer Science BA — Major Requirements",
     "children": [
       {
+        "id": "cs-ba-group-a",
         "type": "ALL",
         "label": "Group A: Foundational Courses",
         "courses": ["CASCS111", "CASCS112", "CASCS131", "CASCS210", "CASCS330"]
       },
       {
+        "id": "cs-ba-group-b",
         "type": "COUNT",
         "label": "Group B: Formal Tools",
         "min": 2,
@@ -27,6 +30,7 @@
         ]
       },
       {
+        "id": "cs-ba-group-c",
         "type": "COUNT",
         "label": "Group C: Central Topics",
         "min": 2,
@@ -34,6 +38,7 @@
         "pool": ["CASCS320", "CASCS332", "CASCS350"]
       },
       {
+        "id": "cs-ba-group-d",
         "type": "REMAINDER",
         "label": "Group D: Electives",
         "totalRequired": 15,
@@ -44,6 +49,7 @@
         "additionalPool": ["CASCS132", "CASCS235", "CASCS237"]
       },
       {
+        "id": "cs-ba-group-d-petition",
         "type": "UNRESOLVED",
         "label": "Non-CS petition courses (Group D)",
         "note": "Up to 2 non-CS courses may count toward Group D with Undergraduate Director approval — discretionary, requires manual verification."

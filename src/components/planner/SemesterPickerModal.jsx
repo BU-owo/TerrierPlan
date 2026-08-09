@@ -1,9 +1,9 @@
-import { SEMESTER_LABELS } from '../../utils/hubConstants';
-
 // Shared "which semester?" fallback used anywhere a course can be added to
 // the plan without an active/focused semester to target — keep this as the
 // single add-flow picker rather than growing a second one per call site.
-export default function SemesterPickerModal({ course, onPick, onClose }) {
+// `semesterOptions` is [{ value, label }], grid slots plus any toggled-on
+// Summer slots — built once in PlannerPage and threaded down to every caller.
+export default function SemesterPickerModal({ course, semesterOptions, onPick, onClose }) {
   if (!course) return null;
 
   return (
@@ -25,11 +25,11 @@ export default function SemesterPickerModal({ course, onPick, onClose }) {
           </button>
         </div>
         <div className="search-picker-options">
-          {SEMESTER_LABELS.map((label, i) => (
+          {semesterOptions.map(({ value, label }) => (
             <button
-              key={i}
+              key={value}
               className="search-picker-option"
-              onClick={() => onPick(i)}
+              onClick={() => onPick(value)}
             >
               {label}
             </button>

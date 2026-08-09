@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { parseTranscriptPdf } from '../../utils/transcriptParser';
 import { buildImportPreview, applyImport } from '../../utils/transcriptMapping';
-import { SEMESTER_LABELS } from '../../utils/hubConstants';
 import { resolveApHubFromScore } from '../../utils/apScoreResolution';
 import { getApHub, isApScoreDependent } from '../../data/apIbHubCredit';
 
@@ -345,7 +344,7 @@ export default function ImportTranscriptModal({
                 {preview.slotAssignments.map((a) => (
                   <div key={a.term} className="import-term-block">
                     <div className="import-term-heading">
-                      {a.term} → {a.slotLabel || SEMESTER_LABELS[a.slotIndex]}
+                      {a.term} → {a.slotLabel}
                     </div>
                     <ul className="import-list compact">
                       {a.courses.map((c) => (

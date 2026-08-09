@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { entryCourseKey } from '../../utils/courseEntry';
 
 export default function CreditsPanel({
   semesters,
@@ -8,7 +9,8 @@ export default function CreditsPanel({
   onSummaryChange,
 }) {
   const planCourseCredits = useMemo(
-    () => [...semesters.flat(), ...extraCourseKeys].reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0),
+    () => [...semesters.flatMap((sem) => sem.map(entryCourseKey)), ...extraCourseKeys]
+      .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0),
     [semesters, extraCourseKeys, creditsMap]
   );
 

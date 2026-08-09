@@ -567,6 +567,62 @@
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
+.semester-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.semester-column-remove {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.semester-column-remove:hover { color: var(--warning-text); }
+
+/* A year's optional Summer slot, when not yet toggled on. Sits alongside
+   Fall/Spring in .year-semesters at a narrower fixed width. */
+.add-summer-term-btn {
+  flex: 0 0 92px;
+  align-self: stretch;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  padding: 6px;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.add-summer-term-btn:hover {
+  border-color: var(--scarlet);
+  color: var(--scarlet);
+  background: var(--scarlet-light);
+}
+
+.add-year-btn {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 8px 14px;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.add-year-btn:hover {
+  border-color: var(--scarlet);
+  color: var(--scarlet);
+  background: var(--scarlet-light);
+}
 .semester-name {
   font-size: 11px;
   font-weight: 700;
@@ -649,6 +705,37 @@
 }
 .course-card:hover .course-card-remove { opacity: 1; }
 .course-card-remove:hover { background: var(--warning-surface); color: var(--warning-text); }
+
+.course-card-lock {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  font-size: 10px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity .12s, background .12s;
+  cursor: pointer;
+}
+.course-card:hover .course-card-lock { opacity: 1; }
+.course-card-lock.is-locked { opacity: .85; }
+.course-card-lock:hover { background: var(--cream-dark); }
+/* Room for both buttons when a card can be both locked and removed */
+.course-card:has(.course-card-lock) .course-card-remove { right: 22px; }
+
+.course-card.is-locked {
+  cursor: default;
+  opacity: .82;
+  background: var(--cream);
+}
+.course-card.is-locked:hover { box-shadow: none; border-color: var(--border); }
 .course-card-code {
   font-size: 10px;
   font-weight: 700;
@@ -1219,6 +1306,127 @@
   border: 1px solid transparent;
 }
 
+/* Petitioned/waived — a student-reported exception, deliberately distinct
+   from the green "verified satisfied" styling above: this is the student's
+   claim, not the tool's, so it stays in the cool/muted badge tone used
+   elsewhere for informational (non-status) tags. */
+.req-node.petitioned {
+  background: var(--badge-cool-bg);
+}
+.req-node.petitioned .req-node-indicator {
+  background: var(--badge-cool-text);
+  color: #fff;
+}
+.req-node.petitioned .req-node-label,
+.req-node.petitioned .req-node-detail {
+  color: var(--badge-cool-text);
+}
+.req-node-petitioned-badge {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  color: var(--badge-cool-text);
+  background: rgba(255,255,255,.5);
+  border: 1px solid var(--badge-cool-text);
+  border-radius: 3px;
+  padding: 2px 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.req-petition-trigger {
+  margin-top: 4px;
+}
+.req-petition-active {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 9px;
+}
+.req-petition-detail {
+  flex: 1;
+  min-width: 0;
+  color: var(--badge-cool-text);
+  font-style: italic;
+  line-height: 1.35;
+}
+.req-petition-remove {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--warning-text);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.req-petition-remove:hover {
+  text-decoration: underline;
+}
+
+.req-petition-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs, 3px);
+  background: var(--white);
+}
+.req-petition-field {
+  display: grid;
+  gap: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.req-petition-field select,
+.req-petition-field input {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text);
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs, 3px);
+  background: var(--white);
+}
+.req-petition-form-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+.req-petition-save,
+.req-petition-cancel {
+  flex: 1;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 5px 8px;
+  border-radius: var(--radius-xs, 3px);
+  cursor: pointer;
+}
+.req-petition-save {
+  border: 1px solid var(--scarlet);
+  background: var(--scarlet);
+  color: #fff;
+}
+.req-petition-save:hover {
+  background: var(--scarlet-dark, var(--scarlet));
+}
+.req-petition-cancel {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+}
+.req-petition-cancel:hover {
+  background: var(--cream);
+}
+
 /* ===== CREDITS PANEL ===== */
 .credits-panel {
   padding: 12px;
@@ -1752,6 +1960,9 @@ html[data-theme='dark'] .external-credit-no-hub { background: var(--white); }
     width: 84vw;
     max-width: 360px;
     scroll-snap-align: center;
+  }
+  .add-summer-term-btn {
+    flex: 0 0 60px;
   }
 
   /* There's no hover on touch — keep the remove button visible and give

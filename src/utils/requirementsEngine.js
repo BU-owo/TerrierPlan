@@ -280,7 +280,74 @@ function evaluateUnresolved(node) {
   };
 }
 
+// A "waive" override skips normal evaluation entirely — no children
+// evaluated, no courses claimed — and reports the node as fully satisfied.
+// Deliberately doesn't try to synthesize a real satisfiedCount/required (a
+// waived ALL container has no evaluated children to count), so the UI keys
+// off `waived` instead of the numbers to decide how to render it.
+function evaluateWaived(node, override) {
+  return {
+    ...node,
+    status: 'satisfied',
+    matched: [],
+    missing: [],
+    satisfiedCount: 0,
+    required: 0,
+    waived: true,
+    overrideNote: override.note ?? null,
+  };
+}
+
+// A "substitute" override adds override.courseKey to the node's pool for
+// this evaluation only (never written back to the program JSON — see
+// SCHEMA.md's Manual overrides section), then evaluates normally so it
+// participates in claim priority exactly like any other pool entry — it can
+// still lose the course to an earlier-evaluated sibling that also wants it.
+// UNRESOLVED nodes have no pool of their own, so they're evaluated as a
+// synthetic COUNT(min: 1) built just for this call. ALL nodes have no
+// well-defined "add to pool" (there's no slot the substitute is *for*), so
+// they fall through to normal evaluation and the override has no effect.
+function evaluateSubstituted(node, ctx, meta, override) {
+  const subKey = normalizeCourseKey(override.courseKey);
+
+  if (node.type === 'UNRESOLVED') {
+    const synthetic = { ...node, type: 'COUNT', min: 1, pool: [subKey] };
+    const { status, matched, missing, satisfiedCount, required } = evaluateCount(synthetic, ctx);
+    return {
+      ...node,
+      status,
+      matched,
+      missing,
+      satisfiedCount,
+      required,
+      substituted: true,
+      overrideNote: override.note ?? null,
+    };
+  }
+
+  if (node.type === 'COUNT') {
+    const patched = { ...node, pool: [subKey, ...(node.pool || [])] };
+    const result = evaluateCount(patched, ctx);
+    return { ...result, pool: node.pool, substituted: true, overrideNote: override.note ?? null };
+  }
+
+  if (node.type === 'REMAINDER') {
+    const patched = { ...node, pool: [subKey, ...(node.pool || [])] };
+    const result = evaluateRemainder(patched, ctx, meta);
+    return { ...result, pool: node.pool, substituted: true, overrideNote: override.note ?? null };
+  }
+
+  return null; // ALL: no pool to substitute into — caller falls back to normal evaluation.
+}
+
 function evaluateNode(node, ctx, meta) {
+  const override = ctx.overrides?.[node.id];
+  if (override?.type === 'waive') return evaluateWaived(node, override);
+  if (override?.type === 'substitute' && override.courseKey) {
+    const substituted = evaluateSubstituted(node, ctx, meta, override);
+    if (substituted) return substituted;
+  }
+
   switch (node.type) {
     case 'ALL':
       return Array.isArray(node.children) ? evaluateAllContainer(node, ctx) : evaluateAllLeaf(node, ctx);
@@ -298,13 +365,17 @@ function evaluateNode(node, ctx, meta) {
 // planCourseKeys should include every courseKey the student has credit for —
 // semesters, extraTerms, AND externalCredits (unlike the HUB tracker, which
 // excludes externalCredits). The engine doesn't care where a key came from.
-export function evaluateRequirementTree(programDef, planCourseKeys) {
+//
+// requirementOverrides is the plan's student-reported waive/substitute map,
+// keyed by requirement node id (see src/data/requirements/SCHEMA.md's Manual
+// overrides section) — entirely plan-scoped, never persisted to programDef.
+export function evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides = {}) {
   const planSet = new Set(
     Array.from(planCourseKeys)
       .filter(Boolean)
       .map((key) => normalizeCourseKey(key))
   );
-  const ctx = { planCourseKeys: planSet, claimed: new Set() };
+  const ctx = { planCourseKeys: planSet, claimed: new Set(), overrides: requirementOverrides || {} };
   const tree = evaluateNode(programDef.tree, ctx);
 
   return {

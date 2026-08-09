@@ -167,6 +167,123 @@ function CoursePool({ claimed, eligible, ranges, courseMap, onAddCourse, onBrows
   );
 }
 
+// Student-reported "this requirement is petitioned/waived" exception — see
+// requirementOverrides in SCHEMA.md. Purely informational: no verification,
+// no approval state. UNRESOLVED nodes (no fixed course list) offer
+// "substitute" — pick a course already in the plan, or add a new one, to
+// stand in for the petition-approved slot. Every other node type offers
+// "waive" — the node reads as fully satisfied without needing a course at
+// all (e.g. "Group C waived, department approved a substitution off-catalog").
+function PetitionControls({ node, override, planCourseKeySet, courseMap, onAddCourse, onSetOverride, onRemoveOverride }) {
+  const [formOpen, setFormOpen] = useState(false);
+  const [note, setNote] = useState('');
+  const [substituteKey, setSubstituteKey] = useState('');
+  const [customKey, setCustomKey] = useState('');
+
+  const isUnresolved = node.type === 'UNRESOLVED';
+
+  if (override) {
+    const substitutedCourse = override.type === 'substitute' && override.courseKey
+      ? (courseMap[override.courseKey]?.courseNumber ?? override.courseKey)
+      : null;
+    return (
+      <div className="req-petition-active">
+        <span className="req-petition-detail">
+          {substitutedCourse && <>Using <strong>{substitutedCourse}</strong>. </>}
+          {override.note ? `“${override.note}”` : 'No note provided.'}
+        </span>
+        <button
+          type="button"
+          className="req-petition-remove"
+          onClick={() => onRemoveOverride(node.id)}
+        >
+          Remove
+        </button>
+      </div>
+    );
+  }
+
+  if (!formOpen) {
+    return (
+      <button
+        type="button"
+        className="req-node-pool-toggle req-petition-trigger"
+        onClick={(e) => { e.stopPropagation(); setFormOpen(true); }}
+      >
+        {isUnresolved ? 'Mark as petitioned' : 'Mark as waived'}
+      </button>
+    );
+  }
+
+  const planCourseOptions = Array.from(planCourseKeySet).sort();
+
+  function submit() {
+    if (isUnresolved) {
+      const trimmedCustom = customKey.trim();
+      if (substituteKey) {
+        onSetOverride(node.id, { type: 'substitute', courseKey: substituteKey, note: note.trim() || null });
+      } else if (trimmedCustom) {
+        const key = normalizeCourseKey(trimmedCustom);
+        onAddCourse(key);
+        onSetOverride(node.id, { type: 'substitute', courseKey: key, note: note.trim() || null });
+      } else {
+        return;
+      }
+    } else {
+      onSetOverride(node.id, { type: 'waive', note: note.trim() || null });
+    }
+    setFormOpen(false);
+    setNote('');
+    setSubstituteKey('');
+    setCustomKey('');
+  }
+
+  return (
+    <div className="req-petition-form" onClick={(e) => e.stopPropagation()}>
+      {isUnresolved && (
+        <>
+          <label className="req-petition-field">
+            <span>Course already in your plan</span>
+            <select
+              value={substituteKey}
+              onChange={(e) => { setSubstituteKey(e.target.value); setCustomKey(''); }}
+            >
+              <option value="">— none —</option>
+              {planCourseOptions.map((key) => (
+                <option key={key} value={key}>
+                  {courseMap[key]?.courseNumber ?? key}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="req-petition-field">
+            <span>Or a course code not yet in your plan</span>
+            <input
+              type="text"
+              placeholder="e.g. CAS CS 599"
+              value={customKey}
+              onChange={(e) => { setCustomKey(e.target.value); setSubstituteKey(''); }}
+            />
+          </label>
+        </>
+      )}
+      <label className="req-petition-field">
+        <span>Note (optional)</span>
+        <input
+          type="text"
+          placeholder="e.g. Approved by advisor, 3/2026"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </label>
+      <div className="req-petition-form-actions">
+        <button type="button" className="req-petition-save" onClick={submit}>Save</button>
+        <button type="button" className="req-petition-cancel" onClick={() => setFormOpen(false)}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 function RequirementNodeView({
   node,
   isRoot = false,
@@ -176,8 +293,14 @@ function RequirementNodeView({
   courseMap,
   onAddCourse,
   onBrowseRange,
+  requirementOverrides,
+  onSetRequirementOverride,
+  onRemoveRequirementOverride,
 }) {
-  if (node.type === 'ALL' && Array.isArray(node.children)) {
+  // A waived container is rendered as a flat "petitioned" row instead (see
+  // below) — it has no evaluated children to recurse into, since evaluation
+  // was skipped entirely for it.
+  if (node.type === 'ALL' && Array.isArray(node.children) && !node.waived) {
     const orderedChildren = [...node.children].sort((a, b) => statusRank(a) - statusRank(b));
     const children = orderedChildren.map((child, i) => (
       <RequirementNodeView
@@ -189,6 +312,9 @@ function RequirementNodeView({
         courseMap={courseMap}
         onAddCourse={onAddCourse}
         onBrowseRange={onBrowseRange}
+        requirementOverrides={requirementOverrides}
+        onSetRequirementOverride={onSetRequirementOverride}
+        onRemoveRequirementOverride={onRemoveRequirementOverride}
       />
     ));
     if (isRoot) return <>{children}</>;
@@ -211,30 +337,51 @@ function RequirementNodeView({
             {node.satisfiedCount}/{node.required}
           </span>
         </div>
-        {!collapsed && <div className="req-group-children">{children}</div>}
+        {!collapsed && (
+          <>
+            <div className="req-group-children">{children}</div>
+            <PetitionControls
+              node={node}
+              override={requirementOverrides?.[node.id]}
+              planCourseKeySet={planCourseKeySet}
+              courseMap={courseMap}
+              onAddCourse={onAddCourse}
+              onSetOverride={onSetRequirementOverride}
+              onRemoveOverride={onRemoveRequirementOverride}
+            />
+          </>
+        )}
       </div>
     );
   }
 
   const isUnresolved = node.type === 'UNRESOLVED';
-  const statusClass = isUnresolved ? 'needs-review' : node.status === 'satisfied' ? 'fulfilled' : 'pending';
+  const isOverridden = Boolean(node.waived || node.substituted);
+  const statusClass = isOverridden
+    ? 'petitioned'
+    : isUnresolved ? 'needs-review' : node.status === 'satisfied' ? 'fulfilled' : 'pending';
+
+  let indicatorSymbol;
+  if (node.waived) indicatorSymbol = '✎';
+  else if (isUnresolved) indicatorSymbol = node.substituted ? (node.status === 'satisfied' ? '✓' : '○') : '!';
+  else indicatorSymbol = node.status === 'satisfied' ? '✓' : '○';
+
   const missingDetail =
-    !isUnresolved && node.status !== 'satisfied' && node.missing?.length > 0
+    !isUnresolved && !isOverridden && node.status !== 'satisfied' && node.missing?.length > 0
       ? `Needs: ${node.missing.map(describeMissing).join(', ')}`
       : null;
 
   // UNRESOLVED nodes (petition clauses) have no fixed course list to add
-  // from, so they never get a pool — description + badge only.
-  const pool = isUnresolved ? null : collectPoolCourses(node, planCourseKeySet);
+  // from, so they never get a pool — description + badge only. Same for any
+  // node once overridden — the override supersedes normal course tracking.
+  const pool = isUnresolved || isOverridden ? null : collectPoolCourses(node, planCourseKeySet);
   const hasPool = pool && (pool.claimed.length > 0 || pool.eligible.length > 0 || pool.ranges.length > 0);
   const poolToggleKey = `pool:${node.label}`;
   const poolExpanded = Boolean(collapsedOverrides[poolToggleKey]);
 
   return (
     <div className={`req-node ${statusClass}`}>
-      <div className="req-node-indicator">
-        {isUnresolved ? '!' : node.status === 'satisfied' ? '✓' : '○'}
-      </div>
+      <div className="req-node-indicator">{indicatorSymbol}</div>
       <div className="req-node-info">
         <div className="req-node-toprow">
           <span className="req-node-label" title={node.label}>{node.label}</span>
@@ -260,8 +407,19 @@ function RequirementNodeView({
             onBrowseRange={onBrowseRange}
           />
         )}
+        <PetitionControls
+          node={node}
+          override={requirementOverrides?.[node.id]}
+          planCourseKeySet={planCourseKeySet}
+          courseMap={courseMap}
+          onAddCourse={onAddCourse}
+          onSetOverride={onSetRequirementOverride}
+          onRemoveOverride={onRemoveRequirementOverride}
+        />
       </div>
-      {isUnresolved ? (
+      {isOverridden ? (
+        <span className="req-node-petitioned-badge">Petitioned</span>
+      ) : isUnresolved ? (
         <span className="req-node-review-badge">Needs review</span>
       ) : (
         <span className={`req-node-count ${node.status === 'satisfied' ? 'satisfied' : ''}`}>
@@ -279,9 +437,13 @@ export default function RequirementsSidebar({
   onSummaryChange,
   courseMap = {},
   activeSemIndex,
+  semesterOptions,
   onAddCourse,
   onEnsureCourseData,
   onBrowseRange,
+  requirementOverrides = {},
+  onSetRequirementOverride,
+  onRemoveRequirementOverride,
 }) {
   const [collapsedOverrides, setCollapsedOverrides] = useState({});
   const [pickerCourseKey, setPickerCourseKey] = useState(null);
@@ -292,8 +454,8 @@ export default function RequirementsSidebar({
   );
 
   const result = useMemo(
-    () => (programDef ? evaluateRequirementTree(programDef, planCourseKeys) : null),
-    [programDef, planCourseKeys]
+    () => (programDef ? evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides) : null),
+    [programDef, planCourseKeys, requirementOverrides]
   );
 
   // The engine's own claim set is built from this same normalization, so
@@ -379,6 +541,9 @@ export default function RequirementsSidebar({
               courseMap={courseMap}
               onAddCourse={handleAddCourse}
               onBrowseRange={onBrowseRange}
+              requirementOverrides={requirementOverrides}
+              onSetRequirementOverride={onSetRequirementOverride}
+              onRemoveRequirementOverride={onRemoveRequirementOverride}
             />
           </div>
         </>
@@ -390,8 +555,9 @@ export default function RequirementsSidebar({
             ? { id: pickerCourseKey, courseNumber: courseMap[pickerCourseKey]?.courseNumber ?? pickerCourseKey }
             : null
         }
-        onPick={(i) => {
-          onAddCourse(pickerCourseKey, i);
+        semesterOptions={semesterOptions}
+        onPick={(target) => {
+          onAddCourse(pickerCourseKey, target);
           setPickerCourseKey(null);
         }}
         onClose={() => setPickerCourseKey(null)}

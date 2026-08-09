@@ -33,28 +33,41 @@ import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
 import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
 import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
 import { normalizeExternalCredits, normalizeExternalCredit } from '../utils/externalCredits';
+import { normalizeSemesters, normalizeGridSummerTerms, entryCourseKey } from '../utils/courseEntry';
+import { semesterLabel } from '../utils/hubConstants';
 import './planner.css';
 import '../App.css';
 
 const EMPTY_SEMESTERS = () => Array.from({ length: 8 }, () => []);
 const LOCAL_STORAGE_KEY = 'terrierplan_session';
 
+// A "target" identifies where a course lives/goes: a plain number is a grid
+// slot index (Fall/Spring), the string `summer:{year}` is that year's
+// optional Summer slot (see SemesterBoard). Shared by every add/move/
+// remove/lock handler below so both slot kinds go through one code path.
+function isSummerTarget(target) {
+  return typeof target === 'string' && target.startsWith('summer:');
+}
+function summerYearFromTarget(target) {
+  return target.slice('summer:'.length);
+}
+
 // Firestore rejects arrays nested directly inside arrays, so `semesters`
-// (array of arrays of courseKeys) can't be written as-is. Store it as an
+// (array of arrays of course entries) can't be written as-is. Store it as an
 // object keyed by semester index instead; these two helpers are the only
 // places that should ever cross the array ⇄ object boundary.
 function semestersToFirestore(semesters) {
-  return (semesters || EMPTY_SEMESTERS()).reduce((obj, courseKeys, i) => {
-    obj[i] = courseKeys;
+  return (semesters || EMPTY_SEMESTERS()).reduce((obj, entries, i) => {
+    obj[i] = entries;
     return obj;
   }, {});
 }
 
 function semestersFromFirestore(stored) {
-  if (Array.isArray(stored)) return stored; // tolerate any pre-fix docs written before this migration
+  if (Array.isArray(stored)) return normalizeSemesters(stored); // tolerate any pre-fix docs written before this migration
   if (!stored) return EMPTY_SEMESTERS();
   const length = Math.max(8, ...Object.keys(stored).map((k) => Number(k) + 1));
-  return Array.from({ length }, (_, i) => stored[i] ?? []);
+  return normalizeSemesters(Array.from({ length }, (_, i) => stored[i] ?? []));
 }
 
 // Shared across Strict Mode double-invokes of the auth effect so we only
@@ -75,6 +88,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [activePlanId, setActivePlanId] = useState(null);
   const [planName, setPlanName] = useState('My Plan');
   const [semesters, setSemesters] = useState(EMPTY_SEMESTERS);
+  // { [year]: courseEntry[] } — a year's optional Summer slot, keyed by
+  // 0-based year index; key presence (even []) means that year's Summer
+  // column is toggled on. See "+ Add Summer term" in SemesterBoard.
+  const [gridSummerTerms, setGridSummerTerms] = useState({});
   const [isTransfer, setIsTransfer] = useState(false);
   const [majorBulletinUrl, setMajorBulletinUrl] = useState(null);
   const [extraTerms, setExtraTerms] = useState([]);
@@ -82,6 +99,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [cumulativeGpa, setCumulativeGpa] = useState(null);
   const [earnedCredits, setEarnedCredits] = useState(null);
   const [gradePoints, setGradePoints] = useState(null);
+  // { [requirementNodeId]: { type: 'waive'|'substitute', courseKey?, note?, createdAt } }
+  // Student-reported petition/waive exceptions — informational only, never
+  // written back to the requirements JSON. See requirementOverrides in SCHEMA.md.
+  const [requirementOverrides, setRequirementOverrides] = useState({});
 
   // ── Course data caches ────────────────────────────────────────────────────
   const [courseMap, setCourseMap] = useState({}); // courseKey → course doc
@@ -266,11 +287,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       if (activePlanId) {
         persistPlan(user.uid, activePlanId, planName, semesters, isTransfer, {
           extraTerms,
+          gridSummerTerms,
           externalCredits,
           cumulativeGpa,
           earnedCredits,
           gradePoints,
           majorBulletinUrl,
+          requirementOverrides,
         });
       } else {
         console.warn('⚠️  [autosave] activePlanId is null, skipping save');
@@ -282,7 +305,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       console.log('🧹 [autosave] Cleaning up timeout');
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [semesters, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl]);
+  }, [semesters, gridSummerTerms, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, requirementOverrides]);
 
   // ── Guest: persist to localStorage after React commits the new state ──────
   // Handlers used to call saveLocalPlan() immediately after setSemesters(),
@@ -292,7 +315,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     if (user || authLoading || isInitialLoad.current || !isDirty) return;
     saveLocalPlan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [semesters, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, user, authLoading]);
+  }, [semesters, gridSummerTerms, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, requirementOverrides, user, authLoading]);
 
   // ── Local plan management (for auth-optional browsing) ─────────────────────
   function saveLocalPlan(overrides = {}) {
@@ -302,12 +325,14 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       major: overrides.major ?? '',
       majorBulletinUrl: overrides.majorBulletinUrl ?? majorBulletinUrl,
       semesters: overrides.semesters ?? semesters,
+      gridSummerTerms: overrides.gridSummerTerms ?? gridSummerTerms,
       isTransfer: overrides.isTransfer ?? isTransfer,
       extraTerms: overrides.extraTerms ?? extraTerms,
       externalCredits: normalizedExternalCredits,
       cumulativeGpa: overrides.cumulativeGpa ?? cumulativeGpa,
       earnedCredits: overrides.earnedCredits ?? earnedCredits,
       gradePoints: overrides.gradePoints ?? gradePoints,
+      requirementOverrides: overrides.requirementOverrides ?? requirementOverrides,
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(plan));
@@ -332,7 +357,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       if (stored) {
         const plan = JSON.parse(stored);
         setPlanName(plan.name || 'My Plan');
-        setSemesters(plan.semesters || EMPTY_SEMESTERS());
+        const localSemesters = normalizeSemesters(plan.semesters || EMPTY_SEMESTERS());
+        setSemesters(localSemesters);
+        setGridSummerTerms(normalizeGridSummerTerms(plan.gridSummerTerms));
         setIsTransfer(plan.isTransfer || false);
         setMajorBulletinUrl(plan.majorBulletinUrl ?? null);
         setExtraTerms(plan.extraTerms || []);
@@ -345,9 +372,17 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         setCumulativeGpa(plan.cumulativeGpa ?? null);
         setEarnedCredits(plan.earnedCredits ?? null);
         setGradePoints(plan.gradePoints ?? null);
+        setRequirementOverrides(plan.requirementOverrides ?? {});
         setIsDirty(false);
         const extraKeys = (plan.extraTerms || []).flatMap((t) => t.courseKeys || []);
-        const allKeys = [...(plan.semesters || []).flat(), ...extraKeys];
+        const summerKeys = Object.values(plan.gridSummerTerms || {}).flatMap(
+          (entries) => (entries || []).map(entryCourseKey),
+        );
+        const allKeys = [
+          ...localSemesters.flatMap((sem) => sem.map(entryCourseKey)),
+          ...extraKeys,
+          ...summerKeys,
+        ];
         if (allKeys.length > 0) fetchCourseData(allKeys);
       }
     } catch (err) {
@@ -362,13 +397,15 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       name,
       major: guestPlan.major || '',
       majorBulletinUrl: guestPlan.majorBulletinUrl ?? null,
-      semesters: semestersToFirestore(guestPlan.semesters),
+      semesters: semestersToFirestore(normalizeSemesters(guestPlan.semesters)),
+      gridSummerTerms: normalizeGridSummerTerms(guestPlan.gridSummerTerms),
       isTransfer: guestPlan.isTransfer || false,
       extraTerms: guestPlan.extraTerms || [],
       externalCredits: normalizeExternalCredits(guestPlan.externalCredits),
       cumulativeGpa: guestPlan.cumulativeGpa ?? null,
       earnedCredits: guestPlan.earnedCredits ?? null,
       gradePoints: guestPlan.gradePoints ?? null,
+      requirementOverrides: guestPlan.requirementOverrides ?? {},
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -406,6 +443,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     if (!snap.exists()) return;
     const data = snap.data();
     const semData = semestersFromFirestore(data.semesters);
+    const summerData = normalizeGridSummerTerms(data.gridSummerTerms);
     const extra = data.extraTerms ?? [];
     const normalizedExternalCredits = normalizeExternalCredits(data.externalCredits);
     debugPlanner('loadPlan-from-firestore', {
@@ -416,6 +454,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setActivePlanId(planId);
     setPlanName(data.name ?? 'My Plan');
     setSemesters(semData);
+    setGridSummerTerms(summerData);
     setIsTransfer(data.isTransfer ?? false);
     setMajorBulletinUrl(data.majorBulletinUrl ?? null);
     setExtraTerms(extra);
@@ -423,11 +462,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setCumulativeGpa(data.cumulativeGpa ?? null);
     setEarnedCredits(data.earnedCredits ?? null);
     setGradePoints(data.gradePoints ?? null);
+    setRequirementOverrides(data.requirementOverrides ?? {});
     setIsDirty(false);
     if (list) setPlans(list);
     const allKeys = [
-      ...semData.flat(),
+      ...semData.flatMap((sem) => sem.map(entryCourseKey)),
       ...extra.flatMap((t) => t.courseKeys || []),
+      ...Object.values(summerData).flatMap((entries) => entries.map(entryCourseKey)),
     ];
     if (allKeys.length > 0) {
       await fetchCourseData(allKeys);
@@ -443,18 +484,21 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       major: '',
       majorBulletinUrl: null,
       semesters: semestersToFirestore(EMPTY_SEMESTERS()),
+      gridSummerTerms: {},
       isTransfer: false,
       extraTerms: [],
       externalCredits: [],
       cumulativeGpa: null,
       earnedCredits: null,
       gradePoints: null,
+      requirementOverrides: {},
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
     setActivePlanId(ref.id);
     setPlanName(name);
     setSemesters(EMPTY_SEMESTERS());
+    setGridSummerTerms({});
     setIsTransfer(false);
     setMajorBulletinUrl(null);
     setExtraTerms([]);
@@ -462,6 +506,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setCumulativeGpa(null);
     setEarnedCredits(null);
     setGradePoints(null);
+    setRequirementOverrides({});
     setPlans([{ id: ref.id, name }]);
     setIsDirty(false);
     isInitialLoad.current = false;
@@ -491,6 +536,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       const payload = {
         name,
         semesters: semestersToFirestore(semData),
+        gridSummerTerms: extras.gridSummerTerms ?? gridSummerTerms,
         isTransfer: transfer,
         majorBulletinUrl: extras.majorBulletinUrl ?? majorBulletinUrl,
         extraTerms: extras.extraTerms ?? extraTerms,
@@ -498,6 +544,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         cumulativeGpa: extras.cumulativeGpa ?? cumulativeGpa,
         earnedCredits: extras.earnedCredits ?? earnedCredits,
         gradePoints: extras.gradePoints ?? gradePoints,
+        requirementOverrides: extras.requirementOverrides ?? requirementOverrides,
         updatedAt: serverTimestamp(),
       };
 
@@ -642,14 +689,45 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   // ── Board callbacks ───────────────────────────────────────────────────────
 
-  function handleAddCourse(courseKey, semIndex) {
-    const alreadyPlaced = semesters.some((sem) => sem.includes(courseKey));
+  // entries at a target location — a plain number indexes into `semesters`,
+  // a `summer:{year}` string indexes into `gridSummerTerms`.
+  function entriesAtTarget(target) {
+    return isSummerTarget(target)
+      ? (gridSummerTerms[summerYearFromTarget(target)] || [])
+      : (semesters[target] || []);
+  }
+
+  function setEntriesAtTarget(target, updater) {
+    if (isSummerTarget(target)) {
+      const year = summerYearFromTarget(target);
+      setGridSummerTerms((prev) => ({ ...prev, [year]: updater(prev[year] || []) }));
+    } else {
+      setSemesters((prev) => {
+        const next = prev.map((s) => [...s]);
+        next[target] = updater(next[target] || []);
+        return next;
+      });
+    }
+  }
+
+  // Scans both containers for a courseKey's current location, for drag-end
+  // (which only knows the dropped-on column, not where the card came from).
+  function findCourseTarget(courseKey) {
+    const semIndex = semesters.findIndex((sem) => sem.some((e) => entryCourseKey(e) === courseKey));
+    if (semIndex !== -1) return semIndex;
+    for (const year of Object.keys(gridSummerTerms)) {
+      if (gridSummerTerms[year].some((e) => entryCourseKey(e) === courseKey)) return `summer:${year}`;
+    }
+    return null;
+  }
+
+  function handleAddCourse(courseKey, target) {
+    const alreadyPlaced = findCourseTarget(courseKey) !== null;
     if (alreadyPlaced) return;
-    setSemesters((prev) => {
-      const next = prev.map((s) => [...s]);
-      next[semIndex] = [...next[semIndex], courseKey];
-      return next;
-    });
+    setEntriesAtTarget(target, (entries) => [
+      ...entries,
+      { courseKey, locked: false, source: 'manual' },
+    ]);
     setIsDirty(true);
     if (!courseMap[courseKey]) fetchCourseData([courseKey]);
     // On mobile the board is a separate tab from search — jump over so the
@@ -665,22 +743,49 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setMobileView('search');
   }
 
-  function handleMoveCourse(courseKey, fromSem, toSem) {
-    setSemesters((prev) => {
-      const next = prev.map((s) => [...s]);
-      next[fromSem] = next[fromSem].filter((k) => k !== courseKey);
-      next[toSem] = [...next[toSem], courseKey];
+  function handleMoveCourse(courseKey, fromTarget, toTarget) {
+    const entry = entriesAtTarget(fromTarget).find((e) => entryCourseKey(e) === courseKey);
+    if (!entry) return;
+    setEntriesAtTarget(fromTarget, (entries) => entries.filter((e) => entryCourseKey(e) !== courseKey));
+    setEntriesAtTarget(toTarget, (entries) => [...entries, entry]);
+    setIsDirty(true);
+  }
+
+  function handleRemoveCourse(courseKey, target) {
+    setEntriesAtTarget(target, (entries) => entries.filter((e) => entryCourseKey(e) !== courseKey));
+    setIsDirty(true);
+  }
+
+  // Student discretion, not enforcement — any course can be locked/unlocked
+  // regardless of source. Locked cards disable their own drag/remove in
+  // CourseCard, so this handler doesn't need to guard against those.
+  function handleToggleLock(courseKey, target) {
+    setEntriesAtTarget(target, (entries) => entries.map((e) =>
+      entryCourseKey(e) === courseKey ? { ...e, locked: !e.locked } : e
+    ));
+    setIsDirty(true);
+  }
+
+  // Reveals (or, if empty, hides) a year's optional Summer column — see
+  // "OPTIONAL SUMMER TERM PER YEAR". Key presence in gridSummerTerms is the
+  // toggle state; hiding a non-empty column isn't offered in the UI so data
+  // is never silently dropped here.
+  function handleToggleSummerYear(year, enabled) {
+    setGridSummerTerms((prev) => {
+      const next = { ...prev };
+      if (enabled) {
+        if (!(year in next)) next[year] = [];
+      } else {
+        delete next[year];
+      }
       return next;
     });
     setIsDirty(true);
   }
 
-  function handleRemoveCourse(courseKey, semIndex) {
-    setSemesters((prev) => {
-      const next = prev.map((s) => [...s]);
-      next[semIndex] = next[semIndex].filter((k) => k !== courseKey);
-      return next;
-    });
+  // Adds one more Fall/Spring pair below the grid — see "VARIABLE YEAR COUNT".
+  function handleAddYear() {
+    setSemesters((prev) => [...prev, [], []]);
     setIsDirty(true);
   }
 
@@ -699,20 +804,23 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setDragOverlay(null);
     if (!over) return;
 
-    const match = String(over.id).match(/^col-(\d+)$/);
-    if (!match) return;
-    const destIndex = parseInt(match[1], 10);
+    const overId = String(over.id);
+    const semMatch = overId.match(/^col-(\d+)$/);
+    const summerMatch = overId.match(/^col-summer-(\d+)$/);
+    if (!semMatch && !summerMatch) return;
+    const destTarget = semMatch ? parseInt(semMatch[1], 10) : `summer:${summerMatch[1]}`;
+
     const courseKey = active.data.current?.courseKey ?? active.id;
     const from = active.data.current?.from;
 
     if (from === 'search') {
-      handleAddCourse(courseKey, destIndex);
+      handleAddCourse(courseKey, destTarget);
       return;
     }
 
-    const srcIndex = semesters.findIndex((sem) => sem.includes(courseKey));
-    if (srcIndex === -1 || srcIndex === destIndex) return;
-    handleMoveCourse(courseKey, srcIndex, destIndex);
+    const srcTarget = findCourseTarget(courseKey);
+    if (srcTarget === null || srcTarget === destTarget) return;
+    handleMoveCourse(courseKey, srcTarget, destTarget);
   }
 
   function handleDragCancel() {
@@ -738,7 +846,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       summary: result.summary,
     });
     const importedCourseKeys = [
-      ...result.semesters.flat(),
+      ...result.semesters.flatMap((sem) => sem.map(entryCourseKey)),
       ...result.extraTerms.flatMap((term) => term.courseKeys || []),
     ];
 
@@ -809,22 +917,65 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setIsDirty(true);
   }
 
+  // Student-reported "waive" or "substitute" exception for a requirement
+  // node — see requirementOverrides in SCHEMA.md. Purely plan-scoped and
+  // informational; last write for a given nodeId wins.
+  function handleSetRequirementOverride(nodeId, override) {
+    setRequirementOverrides((prev) => ({
+      ...prev,
+      [nodeId]: { ...override, createdAt: new Date().toISOString() },
+    }));
+    setIsDirty(true);
+  }
+
+  function handleRemoveRequirementOverride(nodeId) {
+    setRequirementOverrides((prev) => {
+      if (!(nodeId in prev)) return prev;
+      const next = { ...prev };
+      delete next[nodeId];
+      return next;
+    });
+    setIsDirty(true);
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const extraCourseKeys = extraTerms.flatMap((term) => term.courseKeys || []);
-  const coursesInPlan = new Set([...semesters.flat(), ...extraCourseKeys]);
+  const gridCourseKeys = semesters.flatMap((sem) => sem.map(entryCourseKey));
+  const gridSummerCourseKeys = Object.values(gridSummerTerms).flatMap(
+    (entries) => entries.map(entryCourseKey),
+  );
+  // extraTerms (transcript overflow) and gridSummerTerms (planned per-year
+  // Summer slots) are both "outside the 8-slot grid but still counts" —
+  // combined here so HUB/CreditsPanel (which only take one flat list) see
+  // both without caring which produced a given key.
+  const extraCourseKeys = [
+    ...extraTerms.flatMap((term) => term.courseKeys || []),
+    ...gridSummerCourseKeys,
+  ];
+  const coursesInPlan = new Set([...gridCourseKeys, ...extraCourseKeys]);
 
   // Unlike HUB (which excludes externalCredits entirely), the requirements
   // engine should see transfer/AP-equivalent courses too — they can satisfy
   // a major requirement even though they never count toward HUB.
   const requirementsCourseKeys = [
-    ...semesters.flat(),
+    ...gridCourseKeys,
     ...extraCourseKeys,
     ...externalCredits.map((c) => c?.courseKey).filter(Boolean),
   ];
 
-  const planCourseCredits = [...semesters.flat(), ...extraCourseKeys]
+  const planCourseCredits = [...gridCourseKeys, ...extraCourseKeys]
     .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0);
+
+  // Options for "add to" targets — grid semesters plus any toggled-on Summer
+  // slots — shared by CourseSearch's dropdown and the SemesterPickerModal
+  // fallback picker.
+  const semesterOptions = [
+    ...semesters.map((_, i) => ({ value: i, label: semesterLabel(i) })),
+    ...Object.keys(gridSummerTerms)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .map((year) => ({ value: `summer:${year}`, label: `Year ${year + 1} – Summer` })),
+  ];
 
   const externalCreditTotal = (externalCredits || []).reduce((sum, credit) => {
     if (!credit) return sum;
@@ -974,6 +1125,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               theme={theme}
               activeSemIndex={activeSemIndex}
               onActiveSemChange={setActiveSemIndex}
+              semesterOptions={semesterOptions}
               coursesInPlan={coursesInPlan}
               onAddCourse={handleAddCourse}
               rangeFilter={rangeFilter}
@@ -985,11 +1137,15 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           <main className="planner-center">
             <SemesterBoard
               semesters={semesters}
+              gridSummerTerms={gridSummerTerms}
               courseMap={courseMap}
               creditsMap={creditsMap}
-              activeSemIndex={activeSemIndex}
+              activeTarget={activeSemIndex}
               onSemesterClick={setActiveSemIndex}
               onRemoveCourse={handleRemoveCourse}
+              onToggleLock={handleToggleLock}
+              onToggleSummerYear={handleToggleSummerYear}
+              onAddYear={handleAddYear}
               draggingId={draggingId}
             />
             <ExtraTermsPanel
@@ -1019,9 +1175,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               planCourseKeys={requirementsCourseKeys}
               onMajorSelect={handleMajorSelect}
               activeSemIndex={activeSemIndex}
+              semesterOptions={semesterOptions}
               onAddCourse={handleAddCourse}
               onEnsureCourseData={fetchCourseData}
               onBrowseRange={handleBrowseRange}
+              requirementOverrides={requirementOverrides}
+              onSetRequirementOverride={handleSetRequirementOverride}
+              onRemoveRequirementOverride={handleRemoveRequirementOverride}
             />
           </aside>
         </div>

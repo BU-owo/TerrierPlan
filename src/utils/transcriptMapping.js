@@ -1,7 +1,24 @@
-import { SEMESTER_LABELS } from './hubConstants';
+import { semesterLabel } from './hubConstants';
 import { normalizeExternalCredits, normalizeExternalCredit } from './externalCredits';
 import { resolveApHubFromScore } from './apScoreResolution';
 import { getApHub, isApScoreDependent } from '../data/apIbHubCredit';
+import { entryCourseKey } from './courseEntry';
+
+// BU's unofficial-transcript export sometimes prints generic block-credit
+// placeholder rows (bulk transfer/test credit not tied to a specific BU
+// course) using non-course codes like these. They're not real courses, so
+// they must never land in the semester grid as a regular (locked) entry —
+// the actual credit is already captured separately as an externalCredits row.
+const PLACEHOLDER_CREDIT_KEYS = new Set(['TFRGENCRDT', 'TSTGENNOCRDT']);
+
+function isPlaceholderCreditRow(course) {
+  const normalize = (s) => String(s || '').replace(/\s+/g, '').toUpperCase();
+  return (
+    PLACEHOLDER_CREDIT_KEYS.has(normalize(course.courseCode)) ||
+    PLACEHOLDER_CREDIT_KEYS.has(normalize(course.title)) ||
+    PLACEHOLDER_CREDIT_KEYS.has(normalize(course.courseKey))
+  );
+}
 
 const DEBUG_IMPORT = import.meta.env.DEV;
 
@@ -33,10 +50,10 @@ function termSortKey(term) {
 }
 
 /**
- * Map parsed transcript terms onto the 8-slot Fall/Spring grid + extraTerms.
+ * Map parsed transcript terms onto the Fall/Spring grid + extraTerms.
  *
  * @param {object} parsed - result of parseTranscriptPdf
- * @param {string[][]} existingSemesters - current plan semesters (length 8)
+ * @param {Array<Array<string|{courseKey,locked,source}>>} existingSemesters - current plan semesters
  * @param {Array<{term, courseKeys}>} existingExtraTerms
  * @returns {{
  *   slotAssignments: Array<{slotIndex, slotLabel, term, courses}>,
@@ -51,9 +68,10 @@ export function buildImportPreview(parsed, existingSemesters, existingExtraTerms
     transferCredits: parsed?.transferCredits || [],
   });
   const existingKeys = new Map(); // courseKey → { kind, label }
+  const semesterCount = (existingSemesters || []).length || 8;
   (existingSemesters || []).forEach((sem, i) => {
-    for (const key of sem) {
-      existingKeys.set(key, { kind: 'slot', label: SEMESTER_LABELS[i] ?? `Slot ${i}` });
+    for (const entry of sem) {
+      existingKeys.set(entryCourseKey(entry), { kind: 'slot', label: semesterLabel(i) });
     }
   });
   for (const et of existingExtraTerms || []) {
@@ -81,10 +99,10 @@ export function buildImportPreview(parsed, existingSemesters, existingExtraTerms
   let slotIndex = 0;
 
   for (const t of fallSpring) {
-    if (slotIndex < 8 && !t.isPostDegree) {
+    if (slotIndex < semesterCount && !t.isPostDegree) {
       slotAssignments.push({
         slotIndex,
-        slotLabel: SEMESTER_LABELS[slotIndex],
+        slotLabel: semesterLabel(slotIndex),
         term: t.term,
         season: t.season,
         isPostDegree: false,
@@ -216,7 +234,7 @@ export function applyImport(preview, existingSemesters, existingExtraTerms = [],
     if (conflict && resolution === 'replace') {
       // Remove the key from wherever it currently lives, then add at target
       for (const sem of semesters) {
-        const idx = sem.indexOf(course.courseKey);
+        const idx = sem.findIndex((e) => entryCourseKey(e) === course.courseKey);
         if (idx !== -1) sem.splice(idx, 1);
       }
       for (const et of extraMap.values()) {
@@ -230,9 +248,18 @@ export function applyImport(preview, existingSemesters, existingExtraTerms = [],
 
   for (const a of preview.slotAssignments || []) {
     for (const course of a.courses) {
+      // Block-credit placeholder rows (e.g. "TFR GEN CRDT") aren't real
+      // courses — the credit itself is already captured as an
+      // externalCredits row, so this shouldn't also become a board entry.
+      if (isPlaceholderCreditRow(course)) continue;
       resolveCourse(course, (key) => {
-        if (!semesters[a.slotIndex].includes(key)) {
-          semesters[a.slotIndex].push(key);
+        if (!semesters[a.slotIndex].some((e) => entryCourseKey(e) === key)) {
+          // Every course reaching this point already cleared
+          // transcriptParser's "counts as fulfilled" bar (real letter/P
+          // grade, not W/AU/I/IP/N/NG/MG or a TX/transfer row) — so it's
+          // safe to auto-lock rather than asking the student to re-confirm
+          // something their own transcript already verified.
+          semesters[a.slotIndex].push({ courseKey: key, locked: true, source: 'transcript' });
           coursesAdded += 1;
         }
       });
@@ -251,6 +278,7 @@ export function applyImport(preview, existingSemesters, existingExtraTerms = [],
     const et = extraMap.get(a.term);
     et.isPostDegree = et.isPostDegree || !!a.isPostDegree;
     for (const course of a.courses) {
+      if (isPlaceholderCreditRow(course)) continue;
       resolveCourse(course, (key) => {
         if (!et.courseKeys.includes(key)) {
           et.courseKeys.push(key);

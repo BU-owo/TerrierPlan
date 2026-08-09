@@ -8,6 +8,7 @@ import {
   computeProgress,
 } from '../../utils/hubConstants';
 import { getApHub, getIbHub } from '../../data/apIbHubCredit';
+import { entryCourseKey } from '../../utils/courseEntry';
 
 export default function HubSidebar({
   semesters,
@@ -25,7 +26,7 @@ export default function HubSidebar({
 
   const counts = useMemo(() => {
     const result = {};
-    const allKeys = [...semesters.flat(), ...extraCourseKeys];
+    const allKeys = [...semesters.flatMap((sem) => sem.map(entryCourseKey)), ...extraCourseKeys];
     for (const key of allKeys) {
       for (const unit of courseMap[key]?.hubUnits ?? []) {
         result[unit] = (result[unit] ?? 0) + 1;

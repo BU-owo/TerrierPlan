@@ -25,9 +25,13 @@ export default function SidePanelTabs({
   planCourseKeys,
   onMajorSelect,
   activeSemIndex,
+  semesterOptions,
   onAddCourse,
   onEnsureCourseData,
   onBrowseRange,
+  requirementOverrides,
+  onSetRequirementOverride,
+  onRemoveRequirementOverride,
 }) {
   const [activeTab, setActiveTab] = useState('hub');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -104,9 +108,13 @@ export default function SidePanelTabs({
             onSummaryChange={makeSummaryHandler('requirements')}
             courseMap={courseMap}
             activeSemIndex={activeSemIndex}
+            semesterOptions={semesterOptions}
             onAddCourse={onAddCourse}
             onEnsureCourseData={onEnsureCourseData}
             onBrowseRange={onBrowseRange}
+            requirementOverrides={requirementOverrides}
+            onSetRequirementOverride={onSetRequirementOverride}
+            onRemoveRequirementOverride={onRemoveRequirementOverride}
           />
         </div>
         <div className={activeTab === 'credits' ? '' : 'side-panel-hidden'}>

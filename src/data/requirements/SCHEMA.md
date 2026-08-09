@@ -27,10 +27,21 @@ this field, not on filename — filenames are just for human organization.
 
 ## Requirement node types
 
-Every node has a `type` and a `label`. The evaluator adds `status`
-(`'satisfied' | 'unsatisfied' | 'needs_review'`), `matched`, `missing`,
-`satisfiedCount`, and `required` to each node in its output — don't set those
-in the source JSON, they're computed.
+Every node has a `type`, a `label`, and an **`id`** — a short, stable,
+kebab-case string, unique within the file (e.g. `"cs-ba-group-a"`). `id` is
+required on every node, including the root `tree` node and every nested
+`ALL.children` entry — it's the key a plan's `requirementOverrides` map (see
+root `SCHEMA.md`) uses to attach a waive/substitute to a specific node, so it
+must stay stable across edits to that node's `label`/wording. Don't reuse an
+id elsewhere in the same file, and don't repurpose an existing id for a
+different node once a plan may have referenced it — add a new one instead.
+
+The evaluator adds `status` (`'satisfied' | 'unsatisfied' | 'needs_review'`),
+`matched`, `missing`, `satisfiedCount`, and `required` to each node in its
+output — don't set those in the source JSON, they're computed. When a
+`requirementOverrides` entry targets a node's `id`, the evaluator also adds
+`waived: true` (for a `"waive"` override) or `substituted: true` (for a
+`"substitute"` override) plus `overrideNote` — see "Manual overrides" below.
 
 For `COUNT`/`REMAINDER`, each `missing` entry also carries `courseKeys`: the
 enumerable list of courseKeys that would satisfy that slot (a plain courseKey
@@ -162,6 +173,35 @@ it again. This is how "CS132 counts for Group B unless it's needed in Group
 D" language gets expressed: put the possibly-reusable course in an earlier
 group's pool, and in a later group's `additionalPool` as a fallback — if the
 earlier group didn't need it, it's still unclaimed and available.
+
+## Manual overrides
+
+`evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides)`
+takes an optional third argument: the plan's `requirementOverrides` map (see
+root `SCHEMA.md`), keyed by node `id`. This is entirely plan-scoped — it's
+never written back to the program JSON, and it's student-reported, not
+verified. Before evaluating a node, the engine checks
+`requirementOverrides[node.id]`:
+
+- `{ type: "waive" }` — the node is treated as fully satisfied and its
+  normal evaluation is skipped entirely: no children are evaluated, no
+  courses are claimed. A waived `ALL` container's children never render in
+  the output tree (there's nothing to show — the whole node is excused).
+  Waiving a node doesn't change what its siblings structurally expect (see
+  `structuralCourseCount` — that's computed from the static JSON shape, not
+  from live evaluation), so a waived Group C still counts as "2 courses" for
+  a sibling `REMAINDER`'s denominator, same as if it'd been satisfied
+  normally.
+- `{ type: "substitute", courseKey }` — the given courseKey is added to the
+  node's pool for this evaluation only, then the node evaluates normally so
+  the course participates in claim priority exactly like any other pool
+  entry (including losing out to an earlier-evaluated sibling that also
+  wants it — see Double-counting above). Meaningful for `UNRESOLVED` nodes
+  (evaluated as a synthetic `COUNT(min: 1, pool: [courseKey])` so they can
+  actually claim something) and for `COUNT`/`REMAINDER` nodes (courseKey is
+  prepended to `pool`). Has no effect on `ALL` nodes — there's no pool to
+  add to, and no well-defined "which required course does this substitute
+  for."
 
 ## Worked example
 

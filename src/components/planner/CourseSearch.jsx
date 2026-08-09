@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { HUB_COLOR_FOR, SEMESTER_LABELS } from '../../utils/hubConstants';
+import { HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { parseCourseKey } from '../../utils/courseKey';
 import SemesterPickerModal from './SemesterPickerModal';
 
@@ -219,6 +219,7 @@ export default function CourseSearch({
   theme = 'light',
   activeSemIndex,
   onActiveSemChange,
+  semesterOptions,
   coursesInPlan,
   onAddCourse,
   rangeFilter = null,
@@ -367,10 +368,15 @@ export default function CourseSearch({
             id="sem-target"
             className="search-sem-select"
             value={activeSemIndex}
-            onChange={(e) => onActiveSemChange(Number(e.target.value))}
+            onChange={(e) => {
+              const raw = e.target.value;
+              // Grid slots are numeric values; a Summer slot's value is the
+              // string "summer:{year}" and must pass through as-is.
+              onActiveSemChange(/^\d+$/.test(raw) ? Number(raw) : raw);
+            }}
           >
-            {SEMESTER_LABELS.map((label, i) => (
-              <option key={i} value={i}>
+            {semesterOptions.map(({ value, label }) => (
+              <option key={value} value={value}>
                 {label}
               </option>
             ))}
@@ -428,8 +434,9 @@ export default function CourseSearch({
         {/* Semester picker modal */}
         <SemesterPickerModal
           course={selectedCourseForPicker}
-          onPick={(i) => {
-            onAddCourse(selectedCourseForPicker.id, i);
+          semesterOptions={semesterOptions}
+          onPick={(target) => {
+            onAddCourse(selectedCourseForPicker.id, target);
             setSelectedCourseForPicker(null);
           }}
           onClose={() => setSelectedCourseForPicker(null)}

@@ -194,15 +194,13 @@ export function computeProgress(counts, requirements) {
 }
 
 /**
- * Semester labels for the year-based layout (8 semesters = 4 academic years)
+ * Semester labels for the year-based layout. Plans aren't fixed at 4 years
+ * (see "+ Add Year" in SemesterBoard), so labels are derived from a semester
+ * index rather than hardcoded — index 0/1 is Year 1 Fall/Spring, 2/3 is
+ * Year 2, and so on indefinitely.
  */
-export const SEMESTER_LABELS = [
-  'Year 1 – Fall',
-  'Year 1 – Spring',
-  'Year 2 – Fall',
-  'Year 2 – Spring',
-  'Year 3 – Fall',
-  'Year 3 – Spring',
-  'Year 4 – Fall',
-  'Year 4 – Spring',
-];
+export function semesterLabel(index) {
+  const year = Math.floor(index / 2) + 1;
+  const season = index % 2 === 0 ? 'Fall' : 'Spring';
+  return `Year ${year} – ${season}`;
+}

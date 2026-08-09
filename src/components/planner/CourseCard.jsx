@@ -5,13 +5,15 @@ export default function CourseCard({
   courseKey,
   data,
   credits,
+  locked = false,
   onRemove,
+  onToggleLock,
   isDragOverlay = false,
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: courseKey,
     data: { from: 'board', courseKey },
-    disabled: isDragOverlay,
+    disabled: isDragOverlay || locked,
   });
 
   const hubUnits = data?.hubUnits ?? [];
@@ -21,7 +23,20 @@ export default function CourseCard({
 
   const cardContent = (
     <>
-      {!isDragOverlay && onRemove && (
+      {!isDragOverlay && onToggleLock && (
+        <button
+          type="button"
+          className={`course-card-lock${locked ? ' is-locked' : ''}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={onToggleLock}
+          aria-label={locked ? `Unlock ${courseNumber}` : `Lock ${courseNumber}`}
+          title={locked ? 'Locked — click to unlock' : 'Lock this course'}
+          tabIndex={-1}
+        >
+          {locked ? '🔒' : '🔓'}
+        </button>
+      )}
+      {!isDragOverlay && !locked && onRemove && (
         <button
           className="course-card-remove"
           onPointerDown={(e) => e.stopPropagation()}
@@ -65,9 +80,8 @@ export default function CourseCard({
   return (
     <div
       ref={setNodeRef}
-      className={`course-card${isDragging ? ' is-source' : ''}`}
-      {...attributes}
-      {...listeners}
+      className={`course-card${isDragging ? ' is-source' : ''}${locked ? ' is-locked' : ''}`}
+      {...(locked ? {} : { ...attributes, ...listeners })}
     >
       {cardContent}
     </div>
