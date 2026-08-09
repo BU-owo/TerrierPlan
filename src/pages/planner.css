@@ -1427,6 +1427,96 @@
   background: var(--cream);
 }
 
+/* Single top-level entry point for reporting a waive/substitute exception —
+   replaces what used to be a trigger button on every node. */
+.req-exception-entry {
+  align-self: flex-start;
+  margin-bottom: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--scarlet);
+  background: transparent;
+  border: 1px solid var(--scarlet);
+  border-radius: var(--radius-xs, 3px);
+  padding: 5px 9px;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.req-exception-entry:hover {
+  background: var(--scarlet);
+  color: #fff;
+}
+
+.req-exception-existing-tag {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-style: italic;
+}
+.req-exception-body {
+  padding: 8px 0 2px;
+}
+.req-exception-form .req-petition-form-actions {
+  margin-top: 4px;
+}
+
+/* Collapsed UNRESOLVED (discretionary/petition) nodes — one summary row at
+   the bottom of the tree instead of a badge on every individual node. */
+.req-unresolved-summary {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.req-unresolved-summary-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--badge-cool-text);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.req-unresolved-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.req-unresolved-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--radius-xs, 3px);
+  background: var(--badge-cool-bg);
+  font-size: 10px;
+}
+.req-unresolved-item-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--badge-cool-text);
+  line-height: 1.3;
+}
+.req-unresolved-item-action {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--badge-cool-text);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: underline;
+}
+
 /* ===== CREDITS PANEL ===== */
 .credits-panel {
   padding: 12px;

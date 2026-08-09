@@ -82,6 +82,7 @@
         "type": "COUNT",
         "label": "BMB Electives",
         "min": 2,
+        "note": "CASMB722 (MB 722, corrected from an earlier GMSMB722 guess) is a catalog data gap — neither CASMB722 nor GMSMB722 resolves to a document in the `courses` Firestore collection as of 2026-08-09 (confirmed via a live public read, not just a local guess), so this elective can't be auto-tracked if a student has taken it. Same pattern as the FYW/WRI gap in HUB_REQUIREMENTS.md: flagged rather than guessed further, pending a catalog scrape/import that actually includes this course.",
         "pool": [
           {
             "type": "COURSE_LIST",
@@ -98,7 +99,7 @@
               "CASBI565", "CASBI566", "CASBI572", "CASBI576", "CASBI577", "CASBI735", "CASBI753",
               "CASBI589",
               "CASCH524", "CASCH625", "CASCH626", "CASCH634", "CASCH648", "CASCH724",
-              "GMSMB722",
+              "CASMB722",
               "ENGBF571",
               "GMSBI751",
               "GMSBT432"

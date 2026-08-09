@@ -74,6 +74,35 @@ function collectPoolCourses(node, planCourseKeySet) {
   return null;
 }
 
+// Flat list of every overridable node (everything but the root), in tree
+// order, for the top-level "Report an exception" node picker. Container
+// (ALL-with-children) nodes are included alongside leaves since a whole
+// group can be waived, not just a single requirement.
+function collectAllNodes(node, acc = [], isRoot = true) {
+  if (!node) return acc;
+  if (!isRoot) acc.push(node);
+  if (node.type === 'ALL' && Array.isArray(node.children)) {
+    node.children.forEach((child) => collectAllNodes(child, acc, false));
+  }
+  return acc;
+}
+
+// UNRESOLVED nodes that don't already have an override — these are the ones
+// collapsed out of the inline tree and surfaced in the bottom summary row
+// instead. Once overridden (substituted/waived) a node stays visible inline
+// with its Petitioned badge, so it's excluded here.
+function collectUnresolvedNodes(node, acc = []) {
+  if (!node) return acc;
+  if (node.type === 'ALL' && Array.isArray(node.children)) {
+    node.children.forEach((child) => collectUnresolvedNodes(child, acc));
+    return acc;
+  }
+  if (node.type === 'UNRESOLVED' && !node.waived && !node.substituted) {
+    acc.push(node);
+  }
+  return acc;
+}
+
 // Walks the whole evaluated tree collecting every courseKey it references
 // (claimed or eligible), so the sidebar can make sure courseMap has display
 // data (courseNumber/name) for each one, including required courses the
@@ -167,118 +196,178 @@ function CoursePool({ claimed, eligible, ranges, courseMap, onAddCourse, onBrows
   );
 }
 
-// Student-reported "this requirement is petitioned/waived" exception — see
-// requirementOverrides in SCHEMA.md. Purely informational: no verification,
-// no approval state. UNRESOLVED nodes (no fixed course list) offer
-// "substitute" — pick a course already in the plan, or add a new one, to
-// stand in for the petition-approved slot. Every other node type offers
-// "waive" — the node reads as fully satisfied without needing a course at
-// all (e.g. "Group C waived, department approved a substitution off-catalog").
-function PetitionControls({ node, override, planCourseKeySet, courseMap, onAddCourse, onSetOverride, onRemoveOverride }) {
-  const [formOpen, setFormOpen] = useState(false);
+// Read-only display of an already-applied override — the node itself always
+// shows this (plus its "Petitioned" badge, see RequirementNodeView) once
+// requirementOverrides has an entry for it. Creating/removing the override
+// itself now only happens through the single top-level ExceptionModal below;
+// this component is display-only except for "Remove", which is reporting the
+// *absence* of an exception rather than a new entry point of its own.
+function PetitionActiveDisplay({ node, override, courseMap, onRemoveOverride }) {
+  if (!override) return null;
+  const substitutedCourse = override.type === 'substitute' && override.courseKey
+    ? (courseMap[override.courseKey]?.courseNumber ?? override.courseKey)
+    : null;
+  return (
+    <div className="req-petition-active">
+      <span className="req-petition-detail">
+        {substitutedCourse && <>Using <strong>{substitutedCourse}</strong>. </>}
+        {override.note ? `“${override.note}”` : 'No note provided.'}
+      </span>
+      <button
+        type="button"
+        className="req-petition-remove"
+        onClick={() => onRemoveOverride(node.id)}
+      >
+        Remove
+      </button>
+    </div>
+  );
+}
+
+// The single entry point for reporting a waive/substitute exception,
+// replacing what used to be a "Mark as waived"/"Mark as petitioned" trigger
+// on every node. Opened either generically (initialNodeId null — the top
+// "Report an exception" button, picker step first) or pre-targeted at one
+// node (from the UNRESOLVED summary list, straight to the form). UNRESOLVED
+// nodes get the substitute form (pick a course already in the plan, or add a
+// new one); every other node type gets the waive form (note only).
+function ExceptionModal({
+  open,
+  initialNodeId,
+  flatNodes,
+  requirementOverrides,
+  planCourseKeySet,
+  courseMap,
+  onAddCourse,
+  onSetOverride,
+  onRemoveOverride,
+  onClose,
+}) {
+  const [selectedNodeId, setSelectedNodeId] = useState(initialNodeId ?? null);
   const [note, setNote] = useState('');
   const [substituteKey, setSubstituteKey] = useState('');
   const [customKey, setCustomKey] = useState('');
 
-  const isUnresolved = node.type === 'UNRESOLVED';
+  useEffect(() => {
+    if (!open) return;
+    setSelectedNodeId(initialNodeId ?? null);
+    setNote('');
+    setSubstituteKey('');
+    setCustomKey('');
+  }, [open, initialNodeId]);
 
-  if (override) {
-    const substitutedCourse = override.type === 'substitute' && override.courseKey
-      ? (courseMap[override.courseKey]?.courseNumber ?? override.courseKey)
-      : null;
-    return (
-      <div className="req-petition-active">
-        <span className="req-petition-detail">
-          {substitutedCourse && <>Using <strong>{substitutedCourse}</strong>. </>}
-          {override.note ? `“${override.note}”` : 'No note provided.'}
-        </span>
-        <button
-          type="button"
-          className="req-petition-remove"
-          onClick={() => onRemoveOverride(node.id)}
-        >
-          Remove
-        </button>
-      </div>
-    );
-  }
+  if (!open) return null;
 
-  if (!formOpen) {
-    return (
-      <button
-        type="button"
-        className="req-node-pool-toggle req-petition-trigger"
-        onClick={(e) => { e.stopPropagation(); setFormOpen(true); }}
-      >
-        {isUnresolved ? 'Mark as petitioned' : 'Mark as waived'}
-      </button>
-    );
-  }
-
+  const selectedNode = flatNodes.find((n) => n.id === selectedNodeId) || null;
+  const override = selectedNode ? requirementOverrides?.[selectedNode.id] : null;
+  const isUnresolved = selectedNode?.type === 'UNRESOLVED';
   const planCourseOptions = Array.from(planCourseKeySet).sort();
 
   function submit() {
+    if (!selectedNode) return;
     if (isUnresolved) {
       const trimmedCustom = customKey.trim();
       if (substituteKey) {
-        onSetOverride(node.id, { type: 'substitute', courseKey: substituteKey, note: note.trim() || null });
+        onSetOverride(selectedNode.id, { type: 'substitute', courseKey: substituteKey, note: note.trim() || null });
       } else if (trimmedCustom) {
         const key = normalizeCourseKey(trimmedCustom);
         onAddCourse(key);
-        onSetOverride(node.id, { type: 'substitute', courseKey: key, note: note.trim() || null });
+        onSetOverride(selectedNode.id, { type: 'substitute', courseKey: key, note: note.trim() || null });
       } else {
         return;
       }
     } else {
-      onSetOverride(node.id, { type: 'waive', note: note.trim() || null });
+      onSetOverride(selectedNode.id, { type: 'waive', note: note.trim() || null });
     }
-    setFormOpen(false);
-    setNote('');
-    setSubstituteKey('');
-    setCustomKey('');
+    onClose();
   }
 
   return (
-    <div className="req-petition-form" onClick={(e) => e.stopPropagation()}>
-      {isUnresolved && (
-        <>
-          <label className="req-petition-field">
-            <span>Course already in your plan</span>
-            <select
-              value={substituteKey}
-              onChange={(e) => { setSubstituteKey(e.target.value); setCustomKey(''); }}
-            >
-              <option value="">— none —</option>
-              {planCourseOptions.map((key) => (
-                <option key={key} value={key}>
-                  {courseMap[key]?.courseNumber ?? key}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="req-petition-field">
-            <span>Or a course code not yet in your plan</span>
-            <input
-              type="text"
-              placeholder="e.g. CAS CS 599"
-              value={customKey}
-              onChange={(e) => { setCustomKey(e.target.value); setSubstituteKey(''); }}
+    <div className="search-picker-overlay" onClick={onClose}>
+      <div className="search-picker-modal req-exception-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="search-picker-header">
+          <h3>{selectedNode ? `Exception: ${selectedNode.label}` : 'Report an exception'}</h3>
+          <button type="button" className="search-picker-close" onClick={onClose} aria-label="Close">×</button>
+        </div>
+
+        {!selectedNode && (
+          <div className="search-picker-options">
+            {flatNodes.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                className="search-picker-option"
+                onClick={() => setSelectedNodeId(n.id)}
+              >
+                {n.label}
+                {requirementOverrides?.[n.id] && <span className="req-exception-existing-tag"> (reported)</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {selectedNode && override && (
+          <div className="req-exception-body">
+            <PetitionActiveDisplay
+              node={selectedNode}
+              override={override}
+              courseMap={courseMap}
+              onRemoveOverride={(id) => { onRemoveOverride(id); onClose(); }}
             />
-          </label>
-        </>
-      )}
-      <label className="req-petition-field">
-        <span>Note (optional)</span>
-        <input
-          type="text"
-          placeholder="e.g. Approved by advisor, 3/2026"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </label>
-      <div className="req-petition-form-actions">
-        <button type="button" className="req-petition-save" onClick={submit}>Save</button>
-        <button type="button" className="req-petition-cancel" onClick={() => setFormOpen(false)}>Cancel</button>
+            <div className="req-petition-form-actions">
+              <button type="button" className="req-petition-cancel" onClick={() => setSelectedNodeId(null)}>
+                Choose a different requirement
+              </button>
+            </div>
+          </div>
+        )}
+
+        {selectedNode && !override && (
+          <div className="req-petition-form req-exception-form">
+            {isUnresolved && (
+              <>
+                <label className="req-petition-field">
+                  <span>Course already in your plan</span>
+                  <select
+                    value={substituteKey}
+                    onChange={(e) => { setSubstituteKey(e.target.value); setCustomKey(''); }}
+                  >
+                    <option value="">— none —</option>
+                    {planCourseOptions.map((key) => (
+                      <option key={key} value={key}>
+                        {courseMap[key]?.courseNumber ?? key}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="req-petition-field">
+                  <span>Or a course code not yet in your plan</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. CAS CS 599"
+                    value={customKey}
+                    onChange={(e) => { setCustomKey(e.target.value); setSubstituteKey(''); }}
+                  />
+                </label>
+              </>
+            )}
+            <label className="req-petition-field">
+              <span>Note (optional)</span>
+              <input
+                type="text"
+                placeholder="e.g. Approved by advisor, 3/2026"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </label>
+            <div className="req-petition-form-actions">
+              <button type="button" className="req-petition-save" onClick={submit}>Save</button>
+              <button type="button" className="req-petition-cancel" onClick={() => setSelectedNodeId(null)}>
+                Back
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -294,14 +383,20 @@ function RequirementNodeView({
   onAddCourse,
   onBrowseRange,
   requirementOverrides,
-  onSetRequirementOverride,
   onRemoveRequirementOverride,
 }) {
   // A waived container is rendered as a flat "petitioned" row instead (see
   // below) — it has no evaluated children to recurse into, since evaluation
   // was skipped entirely for it.
   if (node.type === 'ALL' && Array.isArray(node.children) && !node.waived) {
-    const orderedChildren = [...node.children].sort((a, b) => statusRank(a) - statusRank(b));
+    // Non-overridden UNRESOLVED children are collapsed out of the inline
+    // tree entirely — they surface in the bottom summary row instead (see
+    // collectUnresolvedNodes). An overridden UNRESOLVED node still renders
+    // inline with its Petitioned badge.
+    const visibleChildren = node.children.filter(
+      (child) => !(child.type === 'UNRESOLVED' && !child.waived && !child.substituted)
+    );
+    const orderedChildren = [...visibleChildren].sort((a, b) => statusRank(a) - statusRank(b));
     const children = orderedChildren.map((child, i) => (
       <RequirementNodeView
         key={child.label ?? i}
@@ -313,7 +408,6 @@ function RequirementNodeView({
         onAddCourse={onAddCourse}
         onBrowseRange={onBrowseRange}
         requirementOverrides={requirementOverrides}
-        onSetRequirementOverride={onSetRequirementOverride}
         onRemoveRequirementOverride={onRemoveRequirementOverride}
       />
     ));
@@ -322,6 +416,7 @@ function RequirementNodeView({
     // Satisfied groups collapse to a one-line summary by default so
     // whatever's still unsatisfied is what actually catches the eye.
     const collapsed = collapsedOverrides[node.label] ?? node.status === 'satisfied';
+    const override = requirementOverrides?.[node.id];
     return (
       <div className="req-group">
         <div
@@ -340,13 +435,10 @@ function RequirementNodeView({
         {!collapsed && (
           <>
             <div className="req-group-children">{children}</div>
-            <PetitionControls
+            <PetitionActiveDisplay
               node={node}
-              override={requirementOverrides?.[node.id]}
-              planCourseKeySet={planCourseKeySet}
+              override={override}
               courseMap={courseMap}
-              onAddCourse={onAddCourse}
-              onSetOverride={onSetRequirementOverride}
               onRemoveOverride={onRemoveRequirementOverride}
             />
           </>
@@ -407,13 +499,10 @@ function RequirementNodeView({
             onBrowseRange={onBrowseRange}
           />
         )}
-        <PetitionControls
+        <PetitionActiveDisplay
           node={node}
           override={requirementOverrides?.[node.id]}
-          planCourseKeySet={planCourseKeySet}
           courseMap={courseMap}
-          onAddCourse={onAddCourse}
-          onSetOverride={onSetRequirementOverride}
           onRemoveOverride={onRemoveRequirementOverride}
         />
       </div>
@@ -447,6 +536,9 @@ export default function RequirementsSidebar({
 }) {
   const [collapsedOverrides, setCollapsedOverrides] = useState({});
   const [pickerCourseKey, setPickerCourseKey] = useState(null);
+  const [unresolvedExpanded, setUnresolvedExpanded] = useState(false);
+  const [exceptionModalOpen, setExceptionModalOpen] = useState(false);
+  const [exceptionInitialNodeId, setExceptionInitialNodeId] = useState(null);
 
   const programDef = useMemo(
     () => REQUIREMENT_PROGRAMS.find((p) => p.bulletinUrl === majorBulletinUrl) || null,
@@ -457,6 +549,9 @@ export default function RequirementsSidebar({
     () => (programDef ? evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides) : null),
     [programDef, planCourseKeys, requirementOverrides]
   );
+
+  const flatNodes = useMemo(() => (result ? collectAllNodes(result.tree) : []), [result]);
+  const unresolvedNodes = useMemo(() => (result ? collectUnresolvedNodes(result.tree) : []), [result]);
 
   // The engine's own claim set is built from this same normalization, so
   // matching it here is what lets "already claimed elsewhere" and "already
@@ -496,6 +591,16 @@ export default function RequirementsSidebar({
     }
   }
 
+  function openExceptionPicker() {
+    setExceptionInitialNodeId(null);
+    setExceptionModalOpen(true);
+  }
+
+  function openExceptionFor(nodeId) {
+    setExceptionInitialNodeId(nodeId);
+    setExceptionModalOpen(true);
+  }
+
   return (
     <div className="req-panel">
       {/* Standalone picker — Requirements tracking must work without ever
@@ -505,6 +610,15 @@ export default function RequirementsSidebar({
         selectedProgramUrl={majorBulletinUrl || ''}
         onProgramSelect={onMajorSelect}
       />
+
+      {/* Single consolidated entry point for waive/substitute exceptions —
+          replaces the old per-node "Mark as waived"/"Mark as petitioned"
+          trigger. See ExceptionModal. */}
+      {result && (
+        <button type="button" className="req-exception-entry" onClick={openExceptionPicker}>
+          Report an exception
+        </button>
+      )}
 
       {!majorBulletinUrl && (
         <div className="panel-empty-state">
@@ -542,12 +656,53 @@ export default function RequirementsSidebar({
               onAddCourse={handleAddCourse}
               onBrowseRange={onBrowseRange}
               requirementOverrides={requirementOverrides}
-              onSetRequirementOverride={onSetRequirementOverride}
               onRemoveRequirementOverride={onRemoveRequirementOverride}
             />
           </div>
+
+          {unresolvedNodes.length > 0 && (
+            <div className="req-unresolved-summary">
+              <button
+                type="button"
+                className="req-unresolved-summary-toggle"
+                onClick={() => setUnresolvedExpanded((v) => !v)}
+              >
+                <span className="panel-group-caret">{unresolvedExpanded ? '▾' : '▸'}</span>
+                {unresolvedNodes.length} discretionary/petition item{unresolvedNodes.length === 1 ? '' : 's'} — tap to review
+              </button>
+              {unresolvedExpanded && (
+                <ul className="req-unresolved-list">
+                  {unresolvedNodes.map((n) => (
+                    <li key={n.id} className="req-unresolved-item">
+                      <span className="req-unresolved-item-label">{n.label}</span>
+                      <button
+                        type="button"
+                        className="req-unresolved-item-action"
+                        onClick={() => openExceptionFor(n.id)}
+                      >
+                        Report an exception
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </>
       )}
+
+      <ExceptionModal
+        open={exceptionModalOpen}
+        initialNodeId={exceptionInitialNodeId}
+        flatNodes={flatNodes}
+        requirementOverrides={requirementOverrides}
+        planCourseKeySet={planCourseKeySet}
+        courseMap={courseMap}
+        onAddCourse={handleAddCourse}
+        onSetOverride={onSetRequirementOverride}
+        onRemoveOverride={onRemoveRequirementOverride}
+        onClose={() => setExceptionModalOpen(false)}
+      />
 
       <SemesterPickerModal
         course={
