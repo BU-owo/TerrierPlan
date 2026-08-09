@@ -30,6 +30,8 @@ Advanced Lab bundle options).
 - BulletinPanel removal (once requirements coverage is thorough enough)
 - Custom domain
 - full page for degree completion checking. more robust.
+- draw happy rhett for when reqs are complete
+- integrate the "when courses are held" script on my Mac.
 
 ## Recently done
 - Round 1: consolidated waive/petition entry point into a single "Report
