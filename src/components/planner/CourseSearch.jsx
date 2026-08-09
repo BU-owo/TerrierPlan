@@ -307,7 +307,6 @@ export default function CourseSearch({
       <div className="search-panel-header">
         <h2>Add Course</h2>
         <div className="search-input-wrap">
-          <span className="search-input-icon">🔍</span>
           <input
             className="search-input"
             type="text"

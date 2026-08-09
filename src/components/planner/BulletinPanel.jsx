@@ -38,7 +38,6 @@ export default function BulletinPanel({ selectedProgramUrl = '', onProgramSelect
         aria-expanded={isOpen}
       >
         <div className="bulletin-toggle-left">
-          <span>📋</span>
           <span>Major & Minor Bulletin</span>
           {selectedProgram && (
             <span className="bulletin-selected-label">

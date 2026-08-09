@@ -148,7 +148,6 @@ export default function RequirementsSidebar({
 
           {result.status === 'satisfied' && (
             <div className="panel-all-fulfilled">
-              <div className="panel-all-fulfilled-icon">🎓</div>
               <p>All requirements satisfied!</p>
             </div>
           )}

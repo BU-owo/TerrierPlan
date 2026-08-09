@@ -259,7 +259,7 @@
 }
 .search-input {
   width: 100%;
-  padding: 8px 10px 8px 32px;
+  padding: 8px 10px;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--cream);
@@ -268,15 +268,6 @@
   transition: border-color .15s;
 }
 .search-input:focus { outline: none; border-color: var(--scarlet); background: var(--white); }
-.search-input-icon {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-muted);
-  font-size: 14px;
-  pointer-events: none;
-}
 .search-sem-target {
   margin-top: 8px;
   display: flex;
@@ -745,7 +736,6 @@
   color: var(--scarlet);
   border-bottom-color: var(--scarlet);
 }
-.side-panel-tab-icon { font-size: 15px; line-height: 1; }
 .side-panel-tab-label {
   white-space: nowrap;
   overflow: hidden;
@@ -815,13 +805,11 @@
   border-radius: var(--radius-md);
   margin-bottom: 12px;
 }
-.panel-all-fulfilled-icon { font-size: 28px; }
 .panel-all-fulfilled p {
   font-size: 12px;
   font-weight: 600;
   color: var(--success-text);
-  margin-top: 4px;
-  margin-bottom: 0;
+  margin: 0;
 }
 .panel-empty-state {
   font-size: 11px;
@@ -1580,7 +1568,6 @@ html[data-theme='dark'] .external-credit-no-hub { background: var(--white); }
   transition: color .12s;
 }
 .mobile-tab-btn.active { color: var(--scarlet); }
-.mobile-tab-icon { font-size: 19px; line-height: 1; }
 
 /* ===== RESPONSIVE / MOBILE LAYOUT ===== */
 /* Header status pills are the least essential content — drop them first so

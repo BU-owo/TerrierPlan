@@ -894,7 +894,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
             onClick={() => setShowImportModal(true)}
             title="Import Transcript"
           >
-            <span className="btn-import-transcript-icon" aria-hidden="true">📄</span>
+            <span className="btn-import-transcript-icon" aria-hidden="true">Import</span>
             <span className="btn-import-transcript-label">Import Transcript</span>
           </button>
         </div>
@@ -927,7 +927,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                 onClick={() => requestLeave(() => signOut(auth))}
                 title="Sign out"
               >
-                <span className="btn-signout-icon" aria-hidden="true">⎋</span>
+                <span className="btn-signout-icon" aria-hidden="true">Out</span>
                 <span className="btn-signout-label">Sign out</span>
               </button>
             </>
@@ -1042,21 +1042,18 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           className={`mobile-tab-btn${mobileView === 'search' ? ' active' : ''}`}
           onClick={() => setMobileView('search')}
         >
-          <span className="mobile-tab-icon" aria-hidden="true">🔍</span>
           Search
         </button>
         <button
           className={`mobile-tab-btn${mobileView === 'board' ? ' active' : ''}`}
           onClick={() => setMobileView('board')}
         >
-          <span className="mobile-tab-icon" aria-hidden="true">📅</span>
           Planner
         </button>
         <button
           className={`mobile-tab-btn${mobileView === 'hub' ? ' active' : ''}`}
           onClick={() => setMobileView('hub')}
         >
-          <span className="mobile-tab-icon" aria-hidden="true">🎯</span>
           Status
         </button>
       </nav>
@@ -1065,7 +1062,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       {!user && isDirty && (
         <div className="unauthenticated-banner">
           <div className="banner-content">
-            <p>📌 Your plan is saved locally. Sign in to sync it to the cloud.</p>
+            <p>Your plan is saved locally. Sign in to sync it to the cloud.</p>
             <a href="/login" className="banner-signin-link">
               Sign in →
             </a>

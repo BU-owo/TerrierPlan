@@ -72,7 +72,7 @@ export default function PlanSelector({
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {planName}
           </span>
-          <span style={{ fontSize: 10, opacity: 0.7 }}>✏</span>
+          <span style={{ fontSize: 10, opacity: 0.7 }}>Edit</span>
         </button>
       )}
 
@@ -92,7 +92,7 @@ export default function PlanSelector({
           title="Delete this plan"
           onClick={() => onDeletePlan(activePlanId)}
         >
-          🗑
+          ×
         </button>
       )}
 

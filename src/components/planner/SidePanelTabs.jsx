@@ -4,9 +4,9 @@ import RequirementsSidebar from './RequirementsSidebar';
 import CreditsPanel from './CreditsPanel';
 
 const TABS = [
-  { id: 'hub', label: 'HUB', icon: '🎯' },
-  { id: 'requirements', label: 'Requirements', icon: '🎓' },
-  { id: 'credits', label: 'Credits', icon: '💳' },
+  { id: 'hub', label: 'HUB' },
+  { id: 'requirements', label: 'Requirements' },
+  { id: 'credits', label: 'Credits' },
 ];
 
 // One status panel at a time instead of stacking HubSidebar/RequirementsSidebar
@@ -65,7 +65,6 @@ export default function SidePanelTabs({
             onClick={() => setActiveTab(tab.id)}
             title={tab.label}
           >
-            <span className="side-panel-tab-icon" aria-hidden="true">{tab.icon}</span>
             <span className="side-panel-tab-label">{tab.label}</span>
             {summaries[tab.id] && (
               <span className="side-panel-tab-badge">{summaries[tab.id].badge}</span>

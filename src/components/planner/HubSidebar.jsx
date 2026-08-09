@@ -102,7 +102,6 @@ export default function HubSidebar({
 
       {allFulfilled && (
         <div className="panel-all-fulfilled">
-          <div className="panel-all-fulfilled-icon">🎉</div>
           <p>All HUB requirements fulfilled!</p>
         </div>
       )}
