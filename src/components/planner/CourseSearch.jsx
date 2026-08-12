@@ -153,6 +153,16 @@ function HubFilterSelect({ selected, onChange }) {
   );
 }
 
+const OFFERING_BADGES = {
+  'Alternating Fall': { className: 'offering-badge-warn', label: 'Offered some years' },
+  'Alternating Spring': { className: 'offering-badge-warn', label: 'Offered some years' },
+  'Not offered in 5 years': { className: 'offering-badge-rare', label: 'Rarely offered' },
+};
+
+function getOfferingBadge(offeringPattern) {
+  return OFFERING_BADGES[offeringPattern] ?? null;
+}
+
 function SearchResultCard({
   course,
   alreadyAdded,
@@ -165,6 +175,8 @@ function SearchResultCard({
     data: { from: 'search', courseKey: course.id, course },
     disabled: alreadyAdded,
   });
+
+  const offeringBadge = getOfferingBadge(course.offeringPattern);
 
   return (
     <div
@@ -196,9 +208,9 @@ function SearchResultCard({
           {course.courseNumber ?? course.id}
         </div>
         <div className="search-result-name">{course.name ?? '—'}</div>
-        {course.hubUnits?.length > 0 && (
+        {(course.hubUnits?.length > 0 || offeringBadge) && (
           <div className="search-result-hub">
-            {course.hubUnits.slice(0, 4).map((unit) => (
+            {course.hubUnits?.slice(0, 4).map((unit) => (
               <span
                 key={unit}
                 className={`hub-chip hub-chip-${
@@ -208,6 +220,11 @@ function SearchResultCard({
                 {unit}
               </span>
             ))}
+            {offeringBadge && (
+              <span className={`offering-badge ${offeringBadge.className}`}>
+                {offeringBadge.label}
+              </span>
+            )}
           </div>
         )}
       </div>

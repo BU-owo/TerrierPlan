@@ -802,6 +802,17 @@
 .hub-chip-def { color: var(--hub-def); background: var(--hub-def-bg); }
 .hub-chip-more{ color: var(--text-muted); background: var(--cream-dark); }
 
+/* ===== OFFERING FREQUENCY BADGE ===== */
+.offering-badge {
+  font-size: 9px;
+  font-weight: 500;
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.offering-badge-warn { color: var(--badge-warm-text); background: var(--badge-warm-bg); }
+.offering-badge-rare { color: var(--warning-text); background: var(--warning-surface); }
+
 /* ===== SIDE PANEL TABS (HUB / Requirements / Credits) ===== */
 /* One panel visible at a time; collapse/expand applies to the whole tabbed
    container, not to an individual panel — see SidePanelTabs.jsx. */
