@@ -154,6 +154,8 @@ function HubFilterSelect({ selected, onChange }) {
 }
 
 const OFFERING_BADGES = {
+  Fall: { className: 'offering-badge-neutral', label: 'Fall only' },
+  Spring: { className: 'offering-badge-neutral', label: 'Spring only' },
   'Alternating Fall': { className: 'offering-badge-warn', label: 'Offered some years' },
   'Alternating Spring': { className: 'offering-badge-warn', label: 'Offered some years' },
   'Not offered in 5 years': { className: 'offering-badge-rare', label: 'Rarely offered' },
@@ -207,10 +209,17 @@ function SearchResultCard({
         <div className="search-result-code">
           {course.courseNumber ?? course.id}
         </div>
-        <div className="search-result-name">{course.name ?? '—'}</div>
-        {(course.hubUnits?.length > 0 || offeringBadge) && (
+        <div className="search-result-name-row">
+          <span className="search-result-name">{course.name ?? '—'}</span>
+          {offeringBadge && (
+            <span className={`offering-badge ${offeringBadge.className}`}>
+              {offeringBadge.label}
+            </span>
+          )}
+        </div>
+        {course.hubUnits?.length > 0 && (
           <div className="search-result-hub">
-            {course.hubUnits?.slice(0, 4).map((unit) => (
+            {course.hubUnits.slice(0, 4).map((unit) => (
               <span
                 key={unit}
                 className={`hub-chip hub-chip-${
@@ -220,11 +229,6 @@ function SearchResultCard({
                 {unit}
               </span>
             ))}
-            {offeringBadge && (
-              <span className={`offering-badge ${offeringBadge.className}`}>
-                {offeringBadge.label}
-              </span>
-            )}
           </div>
         )}
       </div>
