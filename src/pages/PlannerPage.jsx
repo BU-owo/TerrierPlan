@@ -25,7 +25,7 @@ import {
 import { auth, db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
 import PlanSelector from '../components/planner/PlanSelector';
-import CourseSearch from '../components/planner/CourseSearch';
+import SearchPanelTabs from '../components/planner/SearchPanelTabs';
 import SemesterBoard from '../components/planner/SemesterBoard';
 import CourseCard from '../components/planner/CourseCard';
 import SidePanelTabs from '../components/planner/SidePanelTabs';
@@ -111,6 +111,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // Student-reported petition/waive exceptions — informational only, never
   // written back to the requirements JSON. See requirementOverrides in SCHEMA.md.
   const [requirementOverrides, setRequirementOverrides] = useState({});
+  // courseKey[] — saved-for-later courses, kept separate from the planner
+  // grid (see SearchPanelTabs' "Paw-tential Courses" tab). Generic name so
+  // the display label can change without a refactor.
+  const [stash, setStash] = useState([]);
 
   // ── Course data caches ────────────────────────────────────────────────────
   const [courseMap, setCourseMap] = useState({}); // courseKey → course doc
@@ -346,6 +350,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           gradePoints,
           majorBulletinUrl,
           requirementOverrides,
+          stash,
         });
       } else {
         console.warn('⚠️  [autosave] activePlanId is null, skipping save');
@@ -357,7 +362,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       console.log('🧹 [autosave] Cleaning up timeout');
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [semesters, gridSummerTerms, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, requirementOverrides]);
+  }, [semesters, gridSummerTerms, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, requirementOverrides, stash]);
 
   // ── Guest: persist to localStorage after React commits the new state ──────
   // Handlers used to call saveLocalPlan() immediately after setSemesters(),
@@ -367,7 +372,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     if (user || authLoading || isInitialLoad.current || !isDirty) return;
     saveLocalPlan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [semesters, gridSummerTerms, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, requirementOverrides, user, authLoading]);
+  }, [semesters, gridSummerTerms, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, requirementOverrides, stash, user, authLoading]);
 
   // ── Local plan management (for auth-optional browsing) ─────────────────────
   function saveLocalPlan(overrides = {}) {
@@ -385,6 +390,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       earnedCredits: overrides.earnedCredits ?? earnedCredits,
       gradePoints: overrides.gradePoints ?? gradePoints,
       requirementOverrides: overrides.requirementOverrides ?? requirementOverrides,
+      stash: overrides.stash ?? stash,
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(plan));
@@ -425,6 +431,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         setEarnedCredits(plan.earnedCredits ?? null);
         setGradePoints(plan.gradePoints ?? null);
         setRequirementOverrides(plan.requirementOverrides ?? {});
+        const localStash = plan.stash || [];
+        setStash(localStash);
         setIsDirty(false);
         const extraKeys = (plan.extraTerms || []).flatMap((t) => t.courseKeys || []);
         const summerKeys = Object.values(plan.gridSummerTerms || {}).flatMap(
@@ -434,6 +442,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           ...localSemesters.flatMap((sem) => sem.map(entryCourseKey)),
           ...extraKeys,
           ...summerKeys,
+          ...localStash,
         ];
         if (allKeys.length > 0) fetchCourseData(allKeys);
       }
@@ -458,6 +467,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       earnedCredits: guestPlan.earnedCredits ?? null,
       gradePoints: guestPlan.gradePoints ?? null,
       requirementOverrides: guestPlan.requirementOverrides ?? {},
+      stash: guestPlan.stash || [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -515,12 +525,15 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setEarnedCredits(data.earnedCredits ?? null);
     setGradePoints(data.gradePoints ?? null);
     setRequirementOverrides(data.requirementOverrides ?? {});
+    const loadedStash = data.stash ?? [];
+    setStash(loadedStash);
     setIsDirty(false);
     if (list) setPlans(list);
     const allKeys = [
       ...semData.flatMap((sem) => sem.map(entryCourseKey)),
       ...extra.flatMap((t) => t.courseKeys || []),
       ...Object.values(summerData).flatMap((entries) => entries.map(entryCourseKey)),
+      ...loadedStash,
     ];
     if (allKeys.length > 0) {
       await fetchCourseData(allKeys);
@@ -544,6 +557,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       earnedCredits: null,
       gradePoints: null,
       requirementOverrides: {},
+      stash: [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -559,6 +573,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setEarnedCredits(null);
     setGradePoints(null);
     setRequirementOverrides({});
+    setStash([]);
     setPlans([{ id: ref.id, name }]);
     setIsDirty(false);
     isInitialLoad.current = false;
@@ -597,6 +612,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         earnedCredits: extras.earnedCredits ?? earnedCredits,
         gradePoints: extras.gradePoints ?? gradePoints,
         requirementOverrides: extras.requirementOverrides ?? requirementOverrides,
+        stash: extras.stash ?? stash,
         updatedAt: serverTimestamp(),
       };
 
@@ -865,7 +881,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const courseKey = active.data.current?.courseKey ?? active.id;
     const from = active.data.current?.from;
 
-    if (from === 'search') {
+    // Search results and stashed courses aren't on the grid yet — either
+    // source just adds straight to the drop target, same as clicking would.
+    if (from === 'search' || from === 'stash') {
       handleAddCourse(courseKey, destTarget);
       return;
     }
@@ -987,6 +1005,20 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       delete next[nodeId];
       return next;
     });
+    setIsDirty(true);
+  }
+
+  // Saved-for-later courses (see SearchPanelTabs' "Paw-tential Courses" tab)
+  // — deliberately independent of the planner grid, so stashing/unstashing
+  // never touches semesters/gridSummerTerms or the add/remove-course paths.
+  function handleAddToStash(courseKey) {
+    setStash((prev) => (prev.includes(courseKey) ? prev : [...prev, courseKey]));
+    setIsDirty(true);
+    if (!courseMap[courseKey]) fetchCourseData([courseKey]);
+  }
+
+  function handleRemoveFromStash(courseKey) {
+    setStash((prev) => prev.filter((key) => key !== courseKey));
     setIsDirty(true);
   }
 
@@ -1205,7 +1237,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         <div className="planner-body" data-mobile-view={mobileView}>
           {/* Left: search */}
           <aside className="planner-left">
-            <CourseSearch
+            <SearchPanelTabs
               theme={theme}
               activeSemIndex={activeSemIndex}
               onActiveSemChange={setActiveSemIndex}
@@ -1214,6 +1246,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               onAddCourse={handleAddCourse}
               rangeFilter={rangeFilter}
               onClearRangeFilter={() => setRangeFilter(null)}
+              stash={stash}
+              courseMap={courseMap}
+              onAddToStash={handleAddToStash}
+              onRemoveFromStash={handleRemoveFromStash}
             />
           </aside>
 

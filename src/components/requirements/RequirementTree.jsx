@@ -127,6 +127,9 @@ export default function RequirementTree({
       {!majorBulletinUrl && (
         <div className="panel-empty-state">
           <p>Pick a major above to track your degree requirements.</p>
+          <p className="panel-empty-disclaimer">
+Hey! This tracker is a work in progress. ~200 majors need to be structured and confirmed manually. I'm only one fella.... Please confirm against the bulletin!
+          </p>
         </div>
       )}
 

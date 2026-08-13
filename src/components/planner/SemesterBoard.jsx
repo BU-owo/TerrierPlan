@@ -39,6 +39,7 @@ export default function SemesterBoard({
               <SemesterColumn
                 dropId={`col-${fallIndex}`}
                 label="Fall"
+                season="fall"
                 courses={semesters[fallIndex] || []}
                 courseMap={courseMap}
                 creditsMap={creditsMap}
@@ -51,6 +52,7 @@ export default function SemesterBoard({
               <SemesterColumn
                 dropId={`col-${springIndex}`}
                 label="Spring"
+                season="spring"
                 courses={semesters[springIndex] || []}
                 courseMap={courseMap}
                 creditsMap={creditsMap}
@@ -64,6 +66,7 @@ export default function SemesterBoard({
                 <SemesterColumn
                   dropId={`col-summer-${year}`}
                   label="Summer"
+                  season="summer"
                   courses={summerCourses}
                   courseMap={courseMap}
                   creditsMap={creditsMap}

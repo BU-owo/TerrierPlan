@@ -380,7 +380,14 @@
   gap: 3px;
   margin-top: 4px;
 }
-.search-result-add {
+/* Secondary "save for later" action on a search result — independent of
+   the card's own click/drag add-to-planner interaction. Stays visible by
+   default (not hover-revealed) since it's a primary affordance on every
+   result, not an incidental one. `already-added` cards go pointer-events:
+   none as a whole (see above), so this needs its own override to stay
+   clickable — stashing has nothing to do with whether a course is already
+   on the grid. */
+.search-result-stash-btn {
   flex-shrink: 0;
   width: 22px;
   height: 22px;
@@ -391,16 +398,81 @@
   border: 1.5px solid var(--scarlet);
   background: transparent;
   color: var(--scarlet);
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1;
-  transition: background .12s, color .12s;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
   margin-top: 1px;
+  pointer-events: auto;
 }
-.search-result-card:hover .search-result-add {
+.search-result-card:hover .search-result-stash-btn {
   background: var(--scarlet);
   color: #fff;
 }
+.search-result-stash-btn.is-stashed {
+  border-color: var(--badge-warm-text);
+  background: var(--badge-warm-bg);
+  color: var(--badge-warm-text);
+}
+.search-result-card:hover .search-result-stash-btn.is-stashed {
+  background: var(--badge-warm-text);
+  color: #fff;
+}
+
+/* "Remove from stash" — Paw-tential Courses tab only, same box as the
+   stash button above for visual consistency between the two panels. */
+.search-result-unstash-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+  margin-top: 1px;
+  pointer-events: auto;
+}
+.search-result-unstash-btn:hover {
+  background: var(--warning-surface);
+  color: var(--warning-text);
+  border-color: var(--warning-border);
+}
 .search-loading { padding: 20px; text-align: center; color: var(--text-muted); font-size: 12px; }
+
+/* ===== SEARCH / STASH TOGGLE (planner-left) ===== */
+/* Wraps CourseSearch + StashPanel, both kept mounted (see side-panel-hidden)
+   so neither loses its own state when the student flips tabs. Reuses the
+   First-Year/Transfer pill toggle (hub-year-toggle-group/-btn) rather than
+   the tab-bar style the right-hand status panel uses. */
+.search-panel-tabs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.search-panel-toggle {
+  margin: 10px 12px 0;
+}
+.search-panel-tab-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.stash-panel-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
 
 /* ===== SEARCH PICKER MODAL ===== */
 .search-picker-overlay {
@@ -752,6 +824,63 @@
   text-transform: uppercase;
   padding-right: 18px;
 }
+/* Season-mismatch heads-up — historical offeringPattern data vs. the slot a
+   course was actually dropped in. Informational only (never blocks the
+   drop). Shown as a short label (e.g. "⚠ Fall only"), not just a bare icon,
+   so it's self-explanatory at a glance instead of requiring a hover to
+   discover what it means — the full sentence is still the title tooltip for
+   anyone who wants the detail. "warning" (real mismatch) vs. "notice"
+   (alternating-pattern, placed in its usual season) reuse the same
+   warm/warning badge tokens as the search panel's offering badges. */
+.course-card-offering-warning {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 3px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.5;
+  cursor: default;
+}
+.course-card-offering-warning-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.course-card-offering-warning.is-warning {
+  color: var(--warning-text);
+  background: var(--warning-surface);
+}
+.course-card-offering-warning.is-notice {
+  color: var(--badge-warm-text);
+  background: var(--badge-warm-bg);
+  padding-right: 3px;
+}
+.course-card-offering-warning-dismiss {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  opacity: .65;
+  cursor: pointer;
+}
+.course-card-offering-warning-dismiss:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, .1);
+}
 .course-card-name {
   font-size: 11.5px;
   color: var(--text);
@@ -954,6 +1083,14 @@
   line-height: 1.4;
 }
 .panel-empty-state p { margin: 0; }
+.panel-empty-state p.panel-empty-disclaimer {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
 .panel-group-caret {
   font-size: 8px;
   color: var(--text-muted);
@@ -997,6 +1134,19 @@
   color: var(--scarlet);
   font-weight: 700;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* One-shot pulse on the "Paw-tential Courses" tab when a course gets
+   starred from Search — that tab isn't visible at the time, so this is the
+   only cue that something landed there. No animation-fill-mode, so once it
+   finishes the button just falls back to its normal (active/inactive) look. */
+@keyframes toggle-tab-flash {
+  0% { background: var(--badge-warm-bg); color: var(--badge-warm-text); transform: scale(1); }
+  35% { background: var(--scarlet); color: #fff; transform: scale(1.08); }
+  100% { background: transparent; color: var(--text-secondary); transform: scale(1); }
+}
+.hub-year-toggle-btn.flash {
+  animation: toggle-tab-flash 700ms ease-out;
 }
 
 .hub-requirements-list {
@@ -2314,7 +2464,8 @@ html[data-theme='dark'] .external-credit-no-hub { background: var(--white); }
 
   /* Larger tap targets throughout */
   .plan-btn-icon { width: 32px; height: 32px; }
-  .search-result-add { width: 26px; height: 26px; }
+  .search-result-stash-btn,
+  .search-result-unstash-btn { width: 26px; height: 26px; }
 
   /* 16px avoids iOS Safari auto-zooming the page on input focus */
   .search-input, .plan-name-input { font-size: 16px; }

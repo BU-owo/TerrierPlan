@@ -9,6 +9,7 @@ import { entryCourseKey } from '../../utils/courseEntry';
 export default function SemesterColumn({
   dropId,
   label,
+  season,
   courses,
   courseMap,
   creditsMap,
@@ -68,6 +69,7 @@ export default function SemesterColumn({
               data={courseMap[key]}
               credits={creditsMap[key]}
               locked={entry.locked}
+              season={season}
               isDragging={draggingId === key}
               onRemove={entry.locked ? undefined : () => onRemoveCourse(key)}
               onToggleLock={() => onToggleLock(key)}

@@ -60,6 +60,7 @@ export default function ExtraTermsPanel({
                   courseKey={key}
                   data={courseMap[key]}
                   credits={creditsMap[key]}
+                  season={et.season}
                   onRemove={onRemoveCourse ? () => onRemoveCourse(et.term, key) : undefined}
                 />
               ))}

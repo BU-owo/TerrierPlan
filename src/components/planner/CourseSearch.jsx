@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { parseCourseKey } from '../../utils/courseKey';
+import { getOfferingBadge } from '../../utils/offeringPattern';
 import SemesterPickerModal from './SemesterPickerModal';
 
 const HUB_FILTER_CODES = [
@@ -153,24 +154,15 @@ function HubFilterSelect({ selected, onChange }) {
   );
 }
 
-const OFFERING_BADGES = {
-  Fall: { className: 'offering-badge-neutral', label: 'Fall only' },
-  Spring: { className: 'offering-badge-neutral', label: 'Spring only' },
-  'Alternating Fall': { className: 'offering-badge-warn', label: 'Offered some years' },
-  'Alternating Spring': { className: 'offering-badge-warn', label: 'Offered some years' },
-  'Not offered in 5 years': { className: 'offering-badge-rare', label: 'Rarely offered' },
-};
-
-function getOfferingBadge(offeringPattern) {
-  return OFFERING_BADGES[offeringPattern] ?? null;
-}
-
 function SearchResultCard({
   course,
   alreadyAdded,
+  isStashed,
   activeSemIndex,
   onAddCourse,
   onPickSemester,
+  onAddToStash,
+  onRemoveFromStash,
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `search-${course.id}`,
@@ -179,6 +171,7 @@ function SearchResultCard({
   });
 
   const offeringBadge = getOfferingBadge(course.offeringPattern);
+  const courseLabel = course.courseNumber ?? course.id;
 
   return (
     <div
@@ -232,6 +225,23 @@ function SearchResultCard({
           </div>
         )}
       </div>
+      {/* Secondary action, independent of the card's own add-to-planner
+          click/drag — saves the course to the stash instead. Stops
+          propagation so it never triggers the card's click or arms a drag. */}
+      <button
+        type="button"
+        className={`search-result-stash-btn${isStashed ? ' is-stashed' : ''}`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (isStashed) onRemoveFromStash(course.id);
+          else onAddToStash(course.id);
+        }}
+        aria-label={isStashed ? `Remove ${courseLabel} from Paw-tential Courses` : `Add ${courseLabel} to Paw-tential Courses`}
+        title={isStashed ? 'Remove from Paw-tential Courses' : 'Add to Paw-tential Courses'}
+      >
+        {isStashed ? '★' : '☆'}
+      </button>
     </div>
   );
 }
@@ -245,6 +255,9 @@ export default function CourseSearch({
   onAddCourse,
   rangeFilter = null,
   onClearRangeFilter,
+  stash = [],
+  onAddToStash,
+  onRemoveFromStash,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hubFilters, setHubFilters] = useState([]);
@@ -350,6 +363,7 @@ export default function CourseSearch({
   }, [searchQuery, hubFilters, rangeFilter, coursesLoaded, allCourses]);
 
   const hasActiveQuery = Boolean(searchQuery.trim()) || hubFilters.length > 0 || Boolean(rangeFilter);
+  const stashSet = useMemo(() => new Set(stash), [stash]);
 
   return (
     <div className="search-panel">
@@ -446,9 +460,12 @@ export default function CourseSearch({
             key={course.id}
             course={course}
             alreadyAdded={coursesInPlan.has(course.id)}
+            isStashed={stashSet.has(course.id)}
             activeSemIndex={activeSemIndex}
             onAddCourse={onAddCourse}
             onPickSemester={setSelectedCourseForPicker}
+            onAddToStash={onAddToStash}
+            onRemoveFromStash={onRemoveFromStash}
           />
         ))}
 

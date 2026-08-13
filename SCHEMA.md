@@ -84,6 +84,7 @@ requirement-checking, no rules engine yet).
 | earnedCredits | number? | Scraped from transcript footer on import |
 | gradePoints | number? | Scraped from transcript footer on import |
 | requirementOverrides | map | Student-reported waive/substitute exceptions to the major requirements tree (see below). **Never** treated as verified — informational only, no approval workflow. |
+| stash | courseKey[] | Saved-for-later courses (the planner's "Paw-tential Courses" tab), kept separate from `semesters`/`extraTerms`. Not counted toward HUB, credits, or requirements — purely a bookmark list. |
 | createdAt, updatedAt | timestamp | |
 
 #### `extraTerms[]` entry
