@@ -75,6 +75,8 @@ async function importSections(csvPath) {
         enrlStat: row['Enrl Stat']?.trim() || '',
         classStat: row['Class Stat']?.trim() || '',
         classType: row['Class Type']?.trim() || '',
+        component: row['Component']?.trim() || '',
+        componentLabel: row['Component Label']?.trim() || '',
         mode: row['Mode']?.trim() || '',
         notes: row['Notes']?.trim() || '',
         finalExam: row['Final Exam']?.trim() || '',

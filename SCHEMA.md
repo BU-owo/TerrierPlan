@@ -54,7 +54,9 @@ collapse into one doc with an `instructors` array.
 | capEnrl, waitCap, minEnrl, totEnrl, waitTot | number | |
 | enrlStat | string | "Open" / "Closed" |
 | classStat, classType, mode | string | |
-| notes | string | Free text — linked lecture/discussion info lives here, unstructured |
+| component | string | Raw PeopleSoft component code, e.g. `"LEC"`, `"DIS"`, `"LAB"`, `"PLB"` (pre-lab). Only present when imported from `schedule_with_types.csv` (the base schedule export doesn't have this column) — absent/empty on sections imported before that file existed. Unlike `classType` (just "Enrollment" vs "Non-Enroll"), this can distinguish a discussion from a lab from a pre-lab, so it's the more reliable field for that. |
+| componentLabel | string | Human-readable form of `component`, e.g. `"Discussion Section"`, `"Laboratory"`, `"Pre-lab Section"` — falls back to the raw code when PeopleSoft has no friendlier label for it. Same import-source caveat as `component`. |
+| notes | string | Free text — linked lecture/discussion info lives here, unstructured. `component`/`componentLabel` now cover "what kind of section is this" structurally; notes still carries anything finer, e.g. which specific lecture a given discussion/lab pairs with. |
 | finalExam | string | |
 | importedAt | timestamp | |
 

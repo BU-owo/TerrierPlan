@@ -1,64 +1,78 @@
-// Which "piece" of a course a section represents. BU's PeopleSoft export
-// has no explicit Component field (Lecture/Discussion/Lab/Prelab) — only
-// classType ("Enrollment" vs "Non-Enroll") and a classSection code ("A1",
-// "B3", ...). We deliberately stop at that binary split: a course's
-// classSection *letter* prefix looks like it might encode finer structure
-// (e.g. MA 213's own notes: "a discussion section: B1-B6, and a lab
-// section: C1-C4"), but it doesn't hold up catalog-wide — other courses
-// use a fresh letter per *alternative* time slot for the exact same single
-// requirement (e.g. AH 111 has 12 one-off discussion letters that are all
-// interchangeable, not 12 separate mandatory pieces). There's no reliable
-// way to tell those two patterns apart from the structured fields alone, so
-// treating "distinct letter" as "distinct requirement" would silently force
-// impossible schedules for courses like AH 111. Non-Enroll sections stay
-// one pool; a course that genuinely needs more than one companion piece
-// (both a discussion AND a lab) is handled by letting the student lock more
-// than one section at once — see SchedulerPage's `locked` handling — after
-// reading the section's own `notes`, which is the only authoritative source
-// for exactly what's required.
-const LECTURE = 'lecture';
-const COMPANION = 'companion';
+// Which "piece" of a course a section represents — sourced directly from
+// BU's `component` field (raw PeopleSoft codes: "LEC", "DIS", "LAB", "SML",
+// "PLB" (pre-lab), etc. — see import-sections.cjs and SCHEMA.md). This
+// replaced an earlier version of this file that only had `classType`
+// ("Enrollment" vs "Non-Enroll") to go on and had to lump every companion
+// piece into one undifferentiated "Discussion / Lab" pool, unable to tell
+// a discussion from a lab from a pre-lab — now that `component` exists, a
+// course with distinct LEC + DIS + LAB sections gets three distinct
+// groups, each genuinely required, instead of one pool the student had to
+// manually multi-lock to get right.
+//
+// A blank `component` (sections imported before schedule_with_types.csv
+// existed, or roster-less cancelled-class rows) falls into its own single
+// "Other" group per course rather than being dropped or crashing.
+const UNKNOWN_KEY = '__unknown__';
 
 export function classifyComponent(section) {
-  return section?.classType === 'Non-Enroll' ? COMPANION : LECTURE;
+  return section?.component?.trim() || UNKNOWN_KEY;
 }
 
-// Groups a course's sections into up to two buckets — Lecture (if any
-// Enrollment sections exist) and Discussion/Lab (if any Non-Enroll sections
-// exist) — sorted by `comparator` within each. When every section in a
-// group shares one identical, non-empty `notes` string (the common case —
-// BU repeats the same instruction on every companion row), it's hoisted to
-// `commonNotes` on the group so it can be shown once instead of repeated
-// per row.
+function labelForGroup(key, groupSections) {
+  if (key === UNKNOWN_KEY) return 'Other';
+  const withLabel = groupSections.find((s) => s.componentLabel?.trim());
+  return withLabel?.componentLabel?.trim() || key;
+}
+
+function hintForGroup(group, index, groups) {
+  if (group.key === UNKNOWN_KEY) {
+    return "This term's data doesn't list a section type for these — check the notes below, and pick or lock whichever applies to you.";
+  }
+  if (index === 0) {
+    return `Pick the ${group.label.toLowerCase()} you plan to attend.`;
+  }
+  const primary = groups[0];
+  const primaryLabel = primary.key === UNKNOWN_KEY ? 'section above' : `${primary.label.toLowerCase()} above`;
+  return `Required alongside the ${primaryLabel} — pick one section from this group.`;
+}
+
+// Groups a course's sections by distinct `component` code, sorted within
+// each group by `comparator`. Group order: the "LEC" (lecture) group first
+// if present, then the rest alphabetically by label, with the blank-
+// component "Other" group always last (least meaningful, pure fallback).
+// When every section in a group shares one identical, non-empty `notes`
+// string, it's hoisted to `commonNotes` so it can be shown once instead of
+// repeated per row.
 export function groupSectionsByComponent(sections, comparator) {
-  const byKey = { [LECTURE]: [], [COMPANION]: [] };
+  const byKey = new Map();
   for (const section of sections) {
-    byKey[classifyComponent(section)].push(section);
+    const key = classifyComponent(section);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(section);
   }
 
-  const defs = [
-    {
-      key: LECTURE,
-      label: 'Lecture',
-      hint: 'Pick the lecture section you plan to attend.',
-    },
-    {
-      key: COMPANION,
-      label: 'Discussion / Lab',
-      hint: "Tied to the lecture above. Most courses need just one of these — but some need more than one (e.g. a lab AND a discussion). Check the notes below, and lock every piece you're required to take.",
-    },
-  ];
+  const groups = [...byKey.entries()].map(([key, groupSections]) => {
+    if (comparator) groupSections.sort(comparator);
+    const notesSet = new Set(groupSections.map((s) => (s.notes || '').trim()).filter(Boolean));
+    return {
+      key,
+      label: labelForGroup(key, groupSections),
+      sections: groupSections,
+      commonNotes: notesSet.size === 1 ? [...notesSet][0] : null,
+    };
+  });
 
-  return defs
-    .map((def) => {
-      const groupSections = byKey[def.key];
-      if (comparator) groupSections.sort(comparator);
-      const notesSet = new Set(groupSections.map((s) => (s.notes || '').trim()).filter(Boolean));
-      return {
-        ...def,
-        sections: groupSections,
-        commonNotes: notesSet.size === 1 ? [...notesSet][0] : null,
-      };
-    })
-    .filter((group) => group.sections.length > 0);
+  groups.sort((a, b) => {
+    if (a.key === 'LEC') return -1;
+    if (b.key === 'LEC') return 1;
+    if (a.key === UNKNOWN_KEY) return 1;
+    if (b.key === UNKNOWN_KEY) return -1;
+    return a.label.localeCompare(b.label);
+  });
+
+  groups.forEach((group, index) => {
+    group.hint = hintForGroup(group, index, groups);
+  });
+
+  return groups;
 }

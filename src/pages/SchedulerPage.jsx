@@ -78,14 +78,15 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const { user, loading: authLoading } = useAuth();
 
   // ── Draft (in-progress, unsaved schedule-building) state ──────────────────
-  // [{ courseKey, considering: { lecture: sectionId[], companion:
-  // sectionId[] }, locked: sectionId[] }] — deliberately not persisted
-  // anywhere (guest or signed-in): SCHEMA.md only has a slot for *saved*
-  // schedules, so a work-in-progress draft resets on reload, the same way
-  // an unsubmitted search query would. Order = the order courses were
-  // added. `locked` has no size cap — any number of sections can be locked
-  // at once (e.g. both a required discussion AND a required lab for the
-  // same course); see scheduleCombos.js's buildGenerationSlots.
+  // [{ courseKey, considering: { [componentKey]: sectionId[] }, locked:
+  // sectionId[] }] — componentKey is BU's raw `component` code (LEC/DIS/
+  // LAB/..., see sectionComponents.js), so however many distinct
+  // components a course has, it gets that many considering pools.
+  // Deliberately not persisted anywhere (guest or signed-in): SCHEMA.md
+  // only has a slot for *saved* schedules, so a work-in-progress draft
+  // resets on reload, the same way an unsubmitted search query would.
+  // Order = the order courses were added. `locked` has no size cap — see
+  // scheduleCombos.js's buildGenerationSlots.
   const [draftCourses, setDraftCourses] = useState([]);
   const [courseMap, setCourseMap] = useState({}); // courseKey -> course doc
   const [sectionsByCourse, setSectionsByCourse] = useState({}); // courseKey -> sectionDoc[]
@@ -211,10 +212,10 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // every currently locked-or-considering section. Two sections are only
   // exempt from being flagged against each other when they're alternatives
   // within the exact same (course, component) pool — a course's own
-  // Lecture pick and its own Discussion/Lab pick are DIFFERENT components,
-  // so they're checked against each other too (BU schedules them not to
-  // conflict, but this shouldn't just assume that). This is the "before
-  // generation" heads-up; actual generation re-derives conflicts itself.
+  // Lecture pick and its own Lab pick are DIFFERENT components, so they're
+  // checked against each other too (BU schedules them not to conflict, but
+  // this shouldn't just assume that). This is the "before generation"
+  // heads-up; actual generation re-derives conflicts itself.
   const conflictMap = useMemo(() => {
     const flat = draftCourses.flatMap((course) => {
       const consideringEntries = Object.entries(course.considering).flatMap(([groupKey, ids]) =>
@@ -290,17 +291,14 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   // Locking is a stronger constraint than checking (see scheduleCombos.js's
   // buildGenerationSlots) — and, unlike a plain checkbox, more than one
-  // section can be locked for the same course at once. That's deliberate:
-  // BU's export has no structured way to tell "these are alternative time
-  // slots for one requirement" apart from "these are two separately
-  // mandatory pieces" (e.g. a discussion AND a lab) — see
-  // sectionComponents.js — so a course that genuinely needs both is handled
-  // by the student locking both, after reading each section's notes, not by
-  // this app guessing. Locking one section clears OTHER currently-checked
-  // (non-locked) alternatives within that SAME component — they're moot
-  // once one from that group is mandatory — but leaves the other component
-  // and any other existing locks untouched. Unlocking releases it back into
-  // that component's checked pool rather than just dropping it.
+  // section can be locked for the same course at once, since a course's
+  // distinct components (LEC/DIS/LAB/...) each need their own lock
+  // independent of the others. Locking one section clears OTHER currently-
+  // checked (non-locked) alternatives within that SAME component — they're
+  // moot once one from that group is mandatory — but leaves every other
+  // component and any other existing locks untouched. Unlocking releases
+  // it back into that component's checked pool rather than just dropping
+  // it.
   function handleToggleLock(courseKey, groupKey, sectionId) {
     setDraftCourses((prev) =>
       prev.map((c) => {
@@ -428,12 +426,11 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   // Restores a saved schedule into the grid AND back into the editable
   // draft (grouped by course and component, each seeded with the section(s)
-  // that were actually committed — a course with both a lecture and a
-  // companion piece restores both) — not just the raw ID list, so the
-  // student can keep tweaking from where they left off. Nothing is
-  // restored as locked (SCHEMA.md's saved schedule doc has no slot for
-  // lock state), so if the course needed more than one companion piece,
-  // the student may want to re-lock it after loading.
+  // that were actually committed — a course with a lecture, discussion,
+  // and lab restores all three) — not just the raw ID list, so the student
+  // can keep tweaking from where they left off. Nothing is restored as
+  // locked (SCHEMA.md's saved schedule doc has no slot for lock state), so
+  // the student may want to re-pin anything they'd locked before saving.
   async function handleLoadSchedule(schedule) {
     const ids = schedule.selectedSectionIds || [];
     if (ids.length === 0) return;

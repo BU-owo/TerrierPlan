@@ -52,19 +52,24 @@ export function generateSchedules(slots, sectionsById) {
   return { schedules, truncated };
 }
 
-// draftCourses: [{ courseKey, considering: { lecture: sectionId[],
-// companion: sectionId[] }, locked: sectionId[] }]. Turns that per-course
-// state into flat generation slots — one slot per required component.
+// draftCourses: [{ courseKey, considering: { [componentKey]: sectionId[]
+// }, locked: sectionId[] }] — componentKey is BU's raw `component` code
+// (see sectionComponents.js), so a course with distinct LEC/DIS/LAB
+// sections already gets three separate considering pools/slots without
+// any extra handling here. Turns that per-course state into flat
+// generation slots — one slot per group groupSectionsByComponent reports
+// for that course.
 //
 // `locked` deliberately has no size limit and isn't scoped to "one per
-// component": a course that genuinely needs two simultaneous companion
-// pieces (e.g. MA 213's separately-required discussion AND lab, both
-// Non-Enroll) is handled by letting the student lock both — each locked
-// section becomes its OWN forced single-option slot, so any number of
-// locks within the same component all survive into every generated
-// schedule together, rather than being treated as alternatives to each
-// other. An unlocked component's checked alternatives become one ordinary
-// "pick one" slot.
+// component" or "one per course": each locked section becomes its OWN
+// forced single-option slot, independent of every other lock. Locking one
+// section per component (e.g. the lecture AND the lab) is the normal case
+// now that distinct components are already separate groups/slots; locking
+// more than one within the SAME component only matters for the blank-
+// component "Other" fallback group (see sectionComponents.js), where BU's
+// data doesn't distinguish pieces at all and the student may need to force
+// more than one in by hand. An unlocked component's checked alternatives
+// become one ordinary "pick one" slot.
 export function buildGenerationSlots(draftCourses, sectionsByCourse, sectionsById) {
   const slots = [];
   for (const course of draftCourses) {
@@ -88,9 +93,10 @@ export function buildGenerationSlots(draftCourses, sectionsByCourse, sectionsByI
   return slots;
 }
 
-// A course is ready to generate once every component it actually has
-// sections for (Lecture, and Discussion/Lab if the course has any
-// Non-Enroll sections) has at least one locked or considered option.
+// A course is ready to generate once every distinct component it actually
+// has sections for (however many that turns out to be — one for an
+// independent-study-only course, three for LEC+DIS+LAB, ...) has at least
+// one locked or considered option.
 export function isCourseReady(course, sections, sectionsById) {
   const groups = groupSectionsByComponent(sections);
   if (groups.length === 0) return false;
