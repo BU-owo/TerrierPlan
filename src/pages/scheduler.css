@@ -119,6 +119,22 @@ html[data-theme='dark'] {
   font-size: 15px;
   font-weight: 700;
 }
+.sched-draft-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+/* Reuses the pill-toggle look from hub-year-toggle-group (planner.css) —
+   same control shape as the First-Year/Transfer and Search/Stash toggles
+   elsewhere in the app, sized down to fit a toolbar. */
+.sched-sort-toggle.hub-year-toggle-group {
+  margin-bottom: 0;
+}
+.sched-sort-toggle .hub-year-toggle-btn {
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
 .sched-clear-all-btn {
   font-size: 12px;
   font-weight: 600;
@@ -176,6 +192,22 @@ html[data-theme='dark'] {
   color: var(--text-muted);
   white-space: nowrap;
 }
+.sched-draft-card-hint.is-locked {
+  color: var(--badge-warm-text);
+  font-weight: 600;
+}
+.sched-select-all-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: none;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.sched-select-all-btn:hover { border-color: var(--scarlet); color: var(--scarlet); }
 .sched-remove-course-btn {
   width: 22px;
   height: 22px;
@@ -198,16 +230,43 @@ html[data-theme='dark'] {
   color: var(--text-muted);
 }
 
+/* ===== Section groups (Lecture / Discussion-Lab / Other) ===== */
+.sched-section-group + .sched-section-group {
+  margin-top: 10px;
+}
+.sched-section-group-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 2px 4px;
+}
+.sched-section-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--text-secondary);
+}
+.sched-section-group-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* ===== Section rows ===== */
 .sched-section-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 .sched-section-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
   border: 1.5px solid var(--border-light);
-  border-radius: var(--radius-md);
-  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
   transition: border-color .12s, background .12s;
 }
 .sched-section-row.is-checked {
@@ -218,16 +277,22 @@ html[data-theme='dark'] {
   border-color: var(--warning-border);
   background: var(--warning-surface);
 }
+.sched-section-row.is-locked {
+  border-color: var(--badge-warm-text);
+  background: var(--badge-warm-bg);
+}
 .sched-section-row-main {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
   cursor: pointer;
 }
 .sched-section-row-main input[type="checkbox"] {
   margin-top: 3px;
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   flex-shrink: 0;
   accent-color: var(--scarlet);
 }
@@ -237,21 +302,13 @@ html[data-theme='dark'] {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 3px;
+  margin-bottom: 1px;
 }
-.sched-section-label { font-size: 13px; font-weight: 700; color: var(--text); }
-.sched-section-type-badge {
-  font-size: 10.5px;
-  font-weight: 600;
-  padding: 1px 7px;
-  border-radius: 20px;
-  background: var(--cream-dark);
-  color: var(--text-secondary);
-}
+.sched-section-label { font-size: 12.5px; font-weight: 700; color: var(--text); }
 .sched-enrl-badge {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 700;
-  padding: 1px 7px;
+  padding: 1px 6px;
   border-radius: 20px;
   text-transform: uppercase;
   letter-spacing: .3px;
@@ -261,16 +318,52 @@ html[data-theme='dark'] {
 .sched-section-row-details {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 10px;
-  font-size: 12px;
+  gap: 3px 8px;
+  font-size: 11px;
   color: var(--text-secondary);
 }
-.sched-conflict-note {
-  margin-top: 6px;
-  margin-left: 26px;
-  font-size: 11.5px;
+
+/* Lock button — a pin, distinct from the checkbox (see SectionRow.jsx for
+   why the checkbox itself gets disabled+forced-checked while locked). */
+.sched-lock-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: none;
+  font-size: 13px;
+  opacity: .55;
+}
+.sched-lock-btn:hover { opacity: 1; background: var(--cream-dark); }
+.sched-lock-btn.is-locked { opacity: 1; }
+
+/* Collapsed conflict summary — expands to the full per-conflict list on
+   click; the `title` attribute on the button also surfaces it on hover. */
+.sched-conflict-summary {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0 0 23px;
+  border: none;
+  background: none;
+  font-size: 11px;
   color: var(--warning-text);
-  line-height: 1.5;
+  text-align: left;
+}
+.sched-conflict-summary:hover { text-decoration: underline; }
+.sched-conflict-summary-caret { font-size: 8px; opacity: .8; }
+.sched-conflict-detail {
+  flex-basis: 100%;
+  margin: 0 0 0 23px;
+  padding-left: 14px;
+  font-size: 11px;
+  color: var(--warning-text);
+  line-height: 1.6;
 }
 
 /* ===== Generate + results ===== */
@@ -294,16 +387,6 @@ html[data-theme='dark'] {
 .sched-generate-btn:disabled { opacity: .45; cursor: default; }
 .sched-generate-hint { font-size: 12px; color: var(--text-muted); }
 
-.sched-generated { margin-top: 8px; }
-.sched-generated-header {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
-}
-.sched-generated-header h3 { font-size: 14px; font-weight: 700; }
-.sched-generated-truncated-note { font-size: 11.5px; color: var(--warning-text); }
 .sched-generated-empty {
   padding: 16px;
   font-size: 12.5px;
@@ -312,40 +395,34 @@ html[data-theme='dark'] {
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
 }
-.sched-generated-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.sched-generated-row {
+
+/* ===== Schedule browsing stepper (right panel, above the grid) ===== */
+.sched-stepper {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.sched-stepper-count { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.sched-stepper-truncated { font-weight: 400; color: var(--warning-text); }
+.sched-stepper-controls {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.sched-stepper-controls button {
+  padding: 5px 9px;
   border-radius: var(--radius-sm);
-  border: 1.5px solid var(--border-light);
+  border: 1.5px solid var(--border);
   background: var(--white);
-  text-align: left;
-  font-size: 12.5px;
-}
-.sched-generated-row:hover { border-color: var(--scarlet); }
-.sched-generated-row.is-active { border-color: var(--scarlet); background: var(--scarlet-pale); }
-.sched-generated-row-index { flex-shrink: 0; font-weight: 700; color: var(--text-muted); width: 28px; }
-.sched-generated-row-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sched-generated-row-credits { flex-shrink: 0; font-weight: 600; color: var(--text-secondary); }
-.sched-show-more-btn {
-  margin-top: 8px;
-  width: 100%;
-  padding: 8px;
-  border-radius: var(--radius-sm);
-  border: 1.5px dashed var(--border);
-  background: none;
-  color: var(--text-secondary);
-  font-size: 12.5px;
+  color: var(--text);
+  font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
 }
-.sched-show-more-btn:hover { border-color: var(--scarlet); color: var(--scarlet); }
+.sched-stepper-controls button:hover:not(:disabled) { border-color: var(--scarlet); color: var(--scarlet); }
+.sched-stepper-controls button:disabled { opacity: .35; cursor: default; }
 
 /* ===== RIGHT: header + grid + saved schedules ===== */
 .sched-right-header {

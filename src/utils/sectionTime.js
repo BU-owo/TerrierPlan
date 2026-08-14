@@ -70,4 +70,21 @@ export function describeSectionTime(section) {
   return `${dayLetters} ${formatClock(meeting.startMin)}–${formatClock(meeting.endMin)}`;
 }
 
+// Chronological sort (earliest day, then earliest start time) — the
+// section picker's default order. Sections with no scheduled meeting
+// (async/TBA) have no time to sort by, so they sink to the bottom, tied
+// among themselves by classSection.
+export function compareSectionsByTime(a, b) {
+  const meetingA = sectionMeeting(a);
+  const meetingB = sectionMeeting(b);
+  if (!meetingA && !meetingB) return (a.classSection || '').localeCompare(b.classSection || '');
+  if (!meetingA) return 1;
+  if (!meetingB) return -1;
+  const dayA = Math.min(...meetingA.days.map((d) => DAY_ORDER.indexOf(d)));
+  const dayB = Math.min(...meetingB.days.map((d) => DAY_ORDER.indexOf(d)));
+  if (dayA !== dayB) return dayA - dayB;
+  if (meetingA.startMin !== meetingB.startMin) return meetingA.startMin - meetingB.startMin;
+  return (a.classSection || '').localeCompare(b.classSection || '');
+}
+
 export { DAY_ORDER };

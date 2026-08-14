@@ -19,7 +19,7 @@ import { useAuth } from '../hooks/useAuth';
 import HeaderNav from '../components/HeaderNav';
 import SchedulerSearch from '../components/scheduler/SchedulerSearch';
 import DraftCourseCard from '../components/scheduler/DraftCourseCard';
-import GeneratedList, { PAGE_SIZE } from '../components/scheduler/GeneratedList';
+import ScheduleStepper from '../components/scheduler/ScheduleStepper';
 import WeeklyGrid from '../components/scheduler/WeeklyGrid';
 import SavedSchedulesPanel from '../components/scheduler/SavedSchedulesPanel';
 import { CURRENT_TERM, CURRENT_TERM_LABEL } from '../utils/term';
@@ -77,20 +77,25 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const { user, loading: authLoading } = useAuth();
 
   // ── Draft (in-progress, unsaved schedule-building) state ──────────────────
-  // [{ courseKey, considering: sectionId[] }] — deliberately not persisted
-  // anywhere (guest or signed-in): SCHEMA.md only has a slot for *saved*
-  // schedules, so a work-in-progress draft resets on reload, the same way
-  // an unsubmitted search query would. Order = the order courses were added.
+  // [{ courseKey, considering: sectionId[], lockedSectionId: string|null }]
+  // — deliberately not persisted anywhere (guest or signed-in): SCHEMA.md
+  // only has a slot for *saved* schedules, so a work-in-progress draft
+  // resets on reload, the same way an unsubmitted search query would.
+  // Order = the order courses were added. `lockedSectionId` is a stronger
+  // constraint than `considering` — see scheduleCombos.js.
   const [draftCourses, setDraftCourses] = useState([]);
   const [courseMap, setCourseMap] = useState({}); // courseKey -> course doc
   const [sectionsByCourse, setSectionsByCourse] = useState({}); // courseKey -> sectionDoc[]
   const [loadingSectionsFor, setLoadingSectionsFor] = useState(new Set());
+  // 'time' (default, chronological) | 'section' (classSection letter order)
+  // — one control for every course card, not per-card, since it's a display
+  // preference rather than something that varies course to course.
+  const [sectionSortMode, setSectionSortMode] = useState('time');
 
   // ── Generated combinations + preview ───────────────────────────────────────
   const [generated, setGenerated] = useState(null); // { schedules: sectionId[][], truncated } | null
   const [previewIndex, setPreviewIndex] = useState(null); // index into generated.schedules, or null
   const [previewSectionIds, setPreviewSectionIds] = useState([]); // what the grid is currently showing
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // ── Saved/favorited schedules ───────────────────────────────────────────────
   const [savedSchedules, setSavedSchedules] = useState([]);
@@ -224,20 +229,20 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     return map;
   }, [draftCourses, sectionsById, courseMap]);
 
-  const canGenerate = draftCourses.length > 0 && draftCourses.every((c) => c.considering.length > 0);
+  const canGenerate = draftCourses.length > 0 &&
+    draftCourses.every((c) => c.lockedSectionId || c.considering.length > 0);
 
   function invalidateGenerated() {
     setGenerated(null);
     setPreviewIndex(null);
     setPreviewSectionIds([]);
     setActiveSavedId(null);
-    setVisibleCount(PAGE_SIZE);
   }
 
   // ── Draft handlers ──────────────────────────────────────────────────────────
   function handleAddCourse(courseKey) {
     if (draftCourseKeys.has(courseKey)) return;
-    setDraftCourses((prev) => [...prev, { courseKey, considering: [] }]);
+    setDraftCourses((prev) => [...prev, { courseKey, considering: [], lockedSectionId: null }]);
     invalidateGenerated();
     if (!courseMap[courseKey]) fetchCourseDocs([courseKey]);
     if (!sectionsByCourse[courseKey]) fetchSectionsForCourse(courseKey);
@@ -251,13 +256,52 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   function handleToggleSection(courseKey, sectionId) {
     setDraftCourses((prev) =>
       prev.map((c) => {
-        if (c.courseKey !== courseKey) return c;
+        if (c.courseKey !== courseKey || c.lockedSectionId === sectionId) return c;
         const already = c.considering.includes(sectionId);
         return {
           ...c,
           considering: already ? c.considering.filter((id) => id !== sectionId) : [...c.considering, sectionId],
         };
       }),
+    );
+    invalidateGenerated();
+  }
+
+  // "Locking" is a stronger constraint than checking (see scheduleCombos.js)
+  // — only one section per course can be locked, so locking a section
+  // replaces both the lock and the checked set with just that section.
+  // Clicking the already-locked section's lock button releases it, leaving
+  // it checked (not clearing the draft's only selection out from under the
+  // student).
+  function handleToggleLock(courseKey, sectionId) {
+    setDraftCourses((prev) =>
+      prev.map((c) => {
+        if (c.courseKey !== courseKey) return c;
+        const isCurrentlyLocked = c.lockedSectionId === sectionId;
+        return {
+          ...c,
+          lockedSectionId: isCurrentlyLocked ? null : sectionId,
+          considering: isCurrentlyLocked ? c.considering : [sectionId],
+        };
+      }),
+    );
+    invalidateGenerated();
+  }
+
+  function handleSelectAllSections(courseKey) {
+    const sections = sectionsByCourse[courseKey] || [];
+    setDraftCourses((prev) =>
+      prev.map((c) => (c.courseKey === courseKey ? { ...c, considering: sections.map((s) => s.id) } : c)),
+    );
+    invalidateGenerated();
+  }
+
+  // Scoped to the checkbox pool only — a lock is released via its own pin
+  // button, not swept up by "select/deselect all", so the two controls each
+  // stay predictable on their own.
+  function handleDeselectAllSections(courseKey) {
+    setDraftCourses((prev) =>
+      prev.map((c) => (c.courseKey === courseKey ? { ...c, considering: [] } : c)),
     );
     invalidateGenerated();
   }
@@ -270,7 +314,6 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   function handleGenerate() {
     const result = generateSchedules(draftCourses, sectionsById);
     setGenerated(result);
-    setVisibleCount(PAGE_SIZE);
     setActiveSavedId(null);
     if (result.schedules.length > 0) {
       setPreviewIndex(0);
@@ -279,6 +322,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       setPreviewIndex(null);
       setPreviewSectionIds([]);
     }
+    setMobileView('preview');
   }
 
   function handlePreview(index) {
@@ -286,11 +330,6 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     setPreviewIndex(index);
     setPreviewSectionIds(generated.schedules[index]);
     setActiveSavedId(null);
-  }
-
-  function handleShowMore() {
-    if (!generated) return;
-    setVisibleCount((v) => Math.min(v + PAGE_SIZE, generated.schedules.length));
   }
 
   // ── Saved schedule handlers ──────────────────────────────────────────────────
@@ -382,6 +421,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     setDraftCourses(
       Object.entries(byCourse).map(([courseKey, secs]) => ({
         courseKey,
+        lockedSectionId: null,
         considering: [secs[0].id],
       })),
     );
@@ -395,7 +435,6 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     setGenerated(null);
     setPreviewIndex(null);
     setPreviewSectionIds(ids);
-    setVisibleCount(PAGE_SIZE);
     setActiveSavedId(schedule.id);
     setMobileView('preview');
   }
@@ -474,14 +513,32 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
         <main className="scheduler-center">
           <div className="sched-draft-toolbar">
             <h2>Your Schedule Draft — {CURRENT_TERM_LABEL}</h2>
-            <button
-              type="button"
-              className="sched-clear-all-btn"
-              onClick={handleClearAll}
-              disabled={draftCourses.length === 0}
-            >
-              Clear all
-            </button>
+            <div className="sched-draft-toolbar-actions">
+              <div className="hub-year-toggle-group sched-sort-toggle">
+                <button
+                  type="button"
+                  className={`hub-year-toggle-btn${sectionSortMode === 'time' ? ' active' : ''}`}
+                  onClick={() => setSectionSortMode('time')}
+                >
+                  Time
+                </button>
+                <button
+                  type="button"
+                  className={`hub-year-toggle-btn${sectionSortMode === 'section' ? ' active' : ''}`}
+                  onClick={() => setSectionSortMode('section')}
+                >
+                  Section
+                </button>
+              </div>
+              <button
+                type="button"
+                className="sched-clear-all-btn"
+                onClick={handleClearAll}
+                disabled={draftCourses.length === 0}
+              >
+                Clear all
+              </button>
+            </div>
           </div>
 
           {draftCourses.length === 0 && (
@@ -490,7 +547,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             </div>
           )}
 
-          {draftCourses.map(({ courseKey, considering }) => (
+          {draftCourses.map(({ courseKey, considering, lockedSectionId }) => (
             <DraftCourseCard
               key={courseKey}
               courseKey={courseKey}
@@ -498,8 +555,13 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
               sections={sectionsByCourse[courseKey] || []}
               loading={loadingSectionsFor.has(courseKey)}
               considering={new Set(considering)}
+              lockedSectionId={lockedSectionId}
               conflictMap={conflictMap}
+              sortMode={sectionSortMode}
               onToggleSection={(sectionId) => handleToggleSection(courseKey, sectionId)}
+              onToggleLock={(sectionId) => handleToggleLock(courseKey, sectionId)}
+              onSelectAll={() => handleSelectAllSections(courseKey)}
+              onDeselectAll={() => handleDeselectAllSections(courseKey)}
               onRemoveCourse={() => handleRemoveCourse(courseKey)}
             />
           ))}
@@ -510,20 +572,10 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                 Generate schedules
               </button>
               {!canGenerate && (
-                <span className="sched-generate-hint">Pick at least one section for every course above</span>
+                <span className="sched-generate-hint">Pick (or lock) at least one section for every course above</span>
               )}
             </div>
           )}
-
-          <GeneratedList
-            generated={generated}
-            sectionsById={sectionsById}
-            courseMap={courseMap}
-            visibleCount={visibleCount}
-            onShowMore={handleShowMore}
-            previewIndex={previewIndex}
-            onPreview={handlePreview}
-          />
         </main>
 
         <aside className="scheduler-right">
@@ -531,7 +583,19 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             <h2>{activeSavedId && savedSchedules.find((s) => s.id === activeSavedId)?.name || 'Preview'}</h2>
             {previewCreditsLabel && <span className="sched-right-credits">{previewCreditsLabel}</span>}
           </div>
-          <WeeklyGrid sectionIds={previewSectionIds} sectionsById={sectionsById} courseMap={courseMap} />
+
+          {generated && generated.schedules.length === 0 ? (
+            <div className="sched-generated-empty">
+              No conflict-free combination exists for the sections currently in consideration — try
+              checking an additional section for one of your courses.
+            </div>
+          ) : (
+            <>
+              <ScheduleStepper generated={generated} previewIndex={previewIndex} onJump={handlePreview} />
+              <WeeklyGrid sectionIds={previewSectionIds} sectionsById={sectionsById} courseMap={courseMap} />
+            </>
+          )}
+
           <SavedSchedulesPanel
             previewSectionIds={previewSectionIds}
             creditsLabel={previewCreditsLabel}

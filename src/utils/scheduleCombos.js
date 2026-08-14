@@ -9,18 +9,25 @@ import { sectionsConflict } from './sectionTime';
 export const MAX_EXPLORED = 200_000;
 export const MAX_RESULTS = 2_000;
 
-// draftCourses: [{ courseKey, considering: sectionId[] }]. sectionsById:
-// { sectionId: sectionDoc }. Backtracks course-by-course (rather than
-// building the full cartesian product then filtering) so a conflict prunes
-// an entire branch early instead of being discovered after the fact.
-// Courses with an empty `considering` list are skipped entirely — callers
-// should gate the "Generate" action on every draft course having at least
-// one section selected instead, so an accidental all-courses schedule
-// silently missing one course never happens.
+// draftCourses: [{ courseKey, considering: sectionId[], lockedSectionId?:
+// string|null }]. sectionsById: { sectionId: sectionDoc }. Backtracks
+// course-by-course (rather than building the full cartesian product then
+// filtering) so a conflict prunes an entire branch early instead of being
+// discovered after the fact. Courses with an empty `considering` list (and
+// no lock) are skipped entirely — callers should gate the "Generate" action
+// on every draft course having at least one section selected or a lock
+// instead, so an accidental all-courses schedule silently missing one
+// course never happens.
+//
+// A locked course collapses to a single-option list regardless of what's
+// still checked in `considering` — "skip generating alternates for that
+// course entirely" holds even if the UI's checkbox state ever drifts from
+// the lock (e.g. a stale re-check), since the lock is the stronger,
+// authoritative constraint.
 export function generateSchedules(draftCourses, sectionsById) {
   const lists = draftCourses
-    .filter((c) => c.considering.length > 0)
-    .map((c) => c.considering);
+    .filter((c) => c.lockedSectionId || c.considering.length > 0)
+    .map((c) => (c.lockedSectionId ? [c.lockedSectionId] : c.considering));
 
   const schedules = [];
   let explored = 0;
