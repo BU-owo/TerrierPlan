@@ -24,7 +24,8 @@ import WeeklyGrid from '../components/scheduler/WeeklyGrid';
 import SavedSchedulesPanel from '../components/scheduler/SavedSchedulesPanel';
 import { CURRENT_TERM, CURRENT_TERM_LABEL } from '../utils/term';
 import { sectionsConflict, describeSectionTime } from '../utils/sectionTime';
-import { generateSchedules, totalCredits } from '../utils/scheduleCombos';
+import { classifyComponent, groupSectionsByComponent } from '../utils/sectionComponents';
+import { generateSchedules, buildGenerationSlots, isCourseReady, totalCredits } from '../utils/scheduleCombos';
 import './planner.css';
 import './scheduler.css';
 import '../App.css';
@@ -77,12 +78,14 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const { user, loading: authLoading } = useAuth();
 
   // ── Draft (in-progress, unsaved schedule-building) state ──────────────────
-  // [{ courseKey, considering: sectionId[], lockedSectionId: string|null }]
-  // — deliberately not persisted anywhere (guest or signed-in): SCHEMA.md
-  // only has a slot for *saved* schedules, so a work-in-progress draft
-  // resets on reload, the same way an unsubmitted search query would.
-  // Order = the order courses were added. `lockedSectionId` is a stronger
-  // constraint than `considering` — see scheduleCombos.js.
+  // [{ courseKey, considering: { lecture: sectionId[], companion:
+  // sectionId[] }, locked: sectionId[] }] — deliberately not persisted
+  // anywhere (guest or signed-in): SCHEMA.md only has a slot for *saved*
+  // schedules, so a work-in-progress draft resets on reload, the same way
+  // an unsubmitted search query would. Order = the order courses were
+  // added. `locked` has no size cap — any number of sections can be locked
+  // at once (e.g. both a required discussion AND a required lab for the
+  // same course); see scheduleCombos.js's buildGenerationSlots.
   const [draftCourses, setDraftCourses] = useState([]);
   const [courseMap, setCourseMap] = useState({}); // courseKey -> course doc
   const [sectionsByCourse, setSectionsByCourse] = useState({}); // courseKey -> sectionDoc[]
@@ -205,18 +208,32 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const draftCourseKeys = useMemo(() => new Set(draftCourses.map((c) => c.courseKey)), [draftCourses]);
 
   // sectionId -> [{ sectionId, label }] — pairwise time conflicts among
-  // currently in-consideration sections from OTHER courses (two sections of
-  // the SAME course are alternatives, never both in a final schedule, so
-  // they're never flagged against each other). This is the "before
+  // every currently locked-or-considering section. Two sections are only
+  // exempt from being flagged against each other when they're alternatives
+  // within the exact same (course, component) pool — a course's own
+  // Lecture pick and its own Discussion/Lab pick are DIFFERENT components,
+  // so they're checked against each other too (BU schedules them not to
+  // conflict, but this shouldn't just assume that). This is the "before
   // generation" heads-up; actual generation re-derives conflicts itself.
   const conflictMap = useMemo(() => {
-    const flat = draftCourses.flatMap((c) => c.considering.map((id) => ({ id, courseKey: c.courseKey })));
+    const flat = draftCourses.flatMap((course) => {
+      const consideringEntries = Object.entries(course.considering).flatMap(([groupKey, ids]) =>
+        ids.map((id) => ({ id, courseKey: course.courseKey, groupKey })),
+      );
+      const lockedIds = new Set(course.locked);
+      const lockedEntries = course.locked.map((id) => ({
+        id,
+        courseKey: course.courseKey,
+        groupKey: classifyComponent(sectionsById[id]),
+      }));
+      return [...lockedEntries, ...consideringEntries.filter((e) => !lockedIds.has(e.id))];
+    });
     const map = {};
     for (let i = 0; i < flat.length; i++) {
       for (let j = i + 1; j < flat.length; j++) {
         const a = flat[i];
         const b = flat[j];
-        if (a.courseKey === b.courseKey) continue;
+        if (a.courseKey === b.courseKey && a.groupKey === b.groupKey) continue;
         const secA = sectionsById[a.id];
         const secB = sectionsById[b.id];
         if (!secA || !secB || !sectionsConflict(secA, secB)) continue;
@@ -230,7 +247,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   }, [draftCourses, sectionsById, courseMap]);
 
   const canGenerate = draftCourses.length > 0 &&
-    draftCourses.every((c) => c.lockedSectionId || c.considering.length > 0);
+    draftCourses.every((course) => isCourseReady(course, sectionsByCourse[course.courseKey] || [], sectionsById));
 
   function invalidateGenerated() {
     setGenerated(null);
@@ -242,7 +259,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // ── Draft handlers ──────────────────────────────────────────────────────────
   function handleAddCourse(courseKey) {
     if (draftCourseKeys.has(courseKey)) return;
-    setDraftCourses((prev) => [...prev, { courseKey, considering: [], lockedSectionId: null }]);
+    setDraftCourses((prev) => [...prev, { courseKey, considering: {}, locked: [] }]);
     invalidateGenerated();
     if (!courseMap[courseKey]) fetchCourseDocs([courseKey]);
     if (!sectionsByCourse[courseKey]) fetchSectionsForCourse(courseKey);
@@ -253,45 +270,71 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     invalidateGenerated();
   }
 
-  function handleToggleSection(courseKey, sectionId) {
+  function handleToggleSection(courseKey, groupKey, sectionId) {
     setDraftCourses((prev) =>
       prev.map((c) => {
-        if (c.courseKey !== courseKey || c.lockedSectionId === sectionId) return c;
-        const already = c.considering.includes(sectionId);
+        if (c.courseKey !== courseKey || c.locked.includes(sectionId)) return c;
+        const current = c.considering[groupKey] || [];
+        const already = current.includes(sectionId);
         return {
           ...c,
-          considering: already ? c.considering.filter((id) => id !== sectionId) : [...c.considering, sectionId],
+          considering: {
+            ...c.considering,
+            [groupKey]: already ? current.filter((id) => id !== sectionId) : [...current, sectionId],
+          },
         };
       }),
     );
     invalidateGenerated();
   }
 
-  // "Locking" is a stronger constraint than checking (see scheduleCombos.js)
-  // — only one section per course can be locked, so locking a section
-  // replaces both the lock and the checked set with just that section.
-  // Clicking the already-locked section's lock button releases it, leaving
-  // it checked (not clearing the draft's only selection out from under the
-  // student).
-  function handleToggleLock(courseKey, sectionId) {
+  // Locking is a stronger constraint than checking (see scheduleCombos.js's
+  // buildGenerationSlots) — and, unlike a plain checkbox, more than one
+  // section can be locked for the same course at once. That's deliberate:
+  // BU's export has no structured way to tell "these are alternative time
+  // slots for one requirement" apart from "these are two separately
+  // mandatory pieces" (e.g. a discussion AND a lab) — see
+  // sectionComponents.js — so a course that genuinely needs both is handled
+  // by the student locking both, after reading each section's notes, not by
+  // this app guessing. Locking one section clears OTHER currently-checked
+  // (non-locked) alternatives within that SAME component — they're moot
+  // once one from that group is mandatory — but leaves the other component
+  // and any other existing locks untouched. Unlocking releases it back into
+  // that component's checked pool rather than just dropping it.
+  function handleToggleLock(courseKey, groupKey, sectionId) {
     setDraftCourses((prev) =>
       prev.map((c) => {
         if (c.courseKey !== courseKey) return c;
-        const isCurrentlyLocked = c.lockedSectionId === sectionId;
+        const isLocked = c.locked.includes(sectionId);
+        if (isLocked) {
+          const current = c.considering[groupKey] || [];
+          return {
+            ...c,
+            locked: c.locked.filter((id) => id !== sectionId),
+            considering: {
+              ...c.considering,
+              [groupKey]: current.includes(sectionId) ? current : [...current, sectionId],
+            },
+          };
+        }
         return {
           ...c,
-          lockedSectionId: isCurrentlyLocked ? null : sectionId,
-          considering: isCurrentlyLocked ? c.considering : [sectionId],
+          locked: [...c.locked, sectionId],
+          considering: { ...c.considering, [groupKey]: [] },
         };
       }),
     );
     invalidateGenerated();
   }
 
-  function handleSelectAllSections(courseKey) {
-    const sections = sectionsByCourse[courseKey] || [];
+  function handleSelectAllSections(courseKey, groupKey) {
+    const sections = (sectionsByCourse[courseKey] || []).filter((s) => classifyComponent(s) === groupKey);
     setDraftCourses((prev) =>
-      prev.map((c) => (c.courseKey === courseKey ? { ...c, considering: sections.map((s) => s.id) } : c)),
+      prev.map((c) =>
+        c.courseKey === courseKey
+          ? { ...c, considering: { ...c.considering, [groupKey]: sections.map((s) => s.id) } }
+          : c,
+      ),
     );
     invalidateGenerated();
   }
@@ -299,9 +342,9 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // Scoped to the checkbox pool only — a lock is released via its own pin
   // button, not swept up by "select/deselect all", so the two controls each
   // stay predictable on their own.
-  function handleDeselectAllSections(courseKey) {
+  function handleDeselectAllSections(courseKey, groupKey) {
     setDraftCourses((prev) =>
-      prev.map((c) => (c.courseKey === courseKey ? { ...c, considering: [] } : c)),
+      prev.map((c) => (c.courseKey === courseKey ? { ...c, considering: { ...c.considering, [groupKey]: [] } } : c)),
     );
     invalidateGenerated();
   }
@@ -312,7 +355,8 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   }
 
   function handleGenerate() {
-    const result = generateSchedules(draftCourses, sectionsById);
+    const slots = buildGenerationSlots(draftCourses, sectionsByCourse, sectionsById);
+    const result = generateSchedules(slots, sectionsById);
     setGenerated(result);
     setActiveSavedId(null);
     if (result.schedules.length > 0) {
@@ -383,9 +427,13 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   }
 
   // Restores a saved schedule into the grid AND back into the editable
-  // draft (grouped by course, each course's `considering` seeded with the
-  // section that was actually committed) — not just the raw ID list, so
-  // the student can keep tweaking from where they left off.
+  // draft (grouped by course and component, each seeded with the section(s)
+  // that were actually committed — a course with both a lecture and a
+  // companion piece restores both) — not just the raw ID list, so the
+  // student can keep tweaking from where they left off. Nothing is
+  // restored as locked (SCHEMA.md's saved schedule doc has no slot for
+  // lock state), so if the course needed more than one companion piece,
+  // the student may want to re-lock it after loading.
   async function handleLoadSchedule(schedule) {
     const ids = schedule.selectedSectionIds || [];
     if (ids.length === 0) return;
@@ -419,11 +467,14 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     });
 
     setDraftCourses(
-      Object.entries(byCourse).map(([courseKey, secs]) => ({
-        courseKey,
-        lockedSectionId: null,
-        considering: [secs[0].id],
-      })),
+      Object.entries(byCourse).map(([courseKey, secs]) => {
+        const considering = {};
+        secs.forEach((s) => {
+          const key = classifyComponent(s);
+          (considering[key] ??= []).push(s.id);
+        });
+        return { courseKey, considering, locked: [] };
+      }),
     );
 
     fetchCourseDocs(Object.keys(byCourse));
@@ -547,21 +598,21 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             </div>
           )}
 
-          {draftCourses.map(({ courseKey, considering, lockedSectionId }) => (
+          {draftCourses.map(({ courseKey, considering, locked }) => (
             <DraftCourseCard
               key={courseKey}
               courseKey={courseKey}
               courseData={courseMap[courseKey]}
               sections={sectionsByCourse[courseKey] || []}
               loading={loadingSectionsFor.has(courseKey)}
-              considering={new Set(considering)}
-              lockedSectionId={lockedSectionId}
+              considering={considering}
+              lockedIds={new Set(locked)}
               conflictMap={conflictMap}
               sortMode={sectionSortMode}
-              onToggleSection={(sectionId) => handleToggleSection(courseKey, sectionId)}
-              onToggleLock={(sectionId) => handleToggleLock(courseKey, sectionId)}
-              onSelectAll={() => handleSelectAllSections(courseKey)}
-              onDeselectAll={() => handleDeselectAllSections(courseKey)}
+              onToggleSection={(groupKey, sectionId) => handleToggleSection(courseKey, groupKey, sectionId)}
+              onToggleLock={(groupKey, sectionId) => handleToggleLock(courseKey, groupKey, sectionId)}
+              onSelectAll={(groupKey) => handleSelectAllSections(courseKey, groupKey)}
+              onDeselectAll={(groupKey) => handleDeselectAllSections(courseKey, groupKey)}
               onRemoveCourse={() => handleRemoveCourse(courseKey)}
             />
           ))}

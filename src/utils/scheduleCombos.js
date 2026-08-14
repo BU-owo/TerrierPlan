@@ -1,4 +1,5 @@
 import { sectionsConflict } from './sectionTime';
+import { classifyComponent, groupSectionsByComponent } from './sectionComponents';
 
 // Safety valves against a pathological input (e.g. 8 courses × 6 sections
 // each = 1.6M raw combinations) freezing the tab — NOT the "artificial cap
@@ -9,25 +10,15 @@ import { sectionsConflict } from './sectionTime';
 export const MAX_EXPLORED = 200_000;
 export const MAX_RESULTS = 2_000;
 
-// draftCourses: [{ courseKey, considering: sectionId[], lockedSectionId?:
-// string|null }]. sectionsById: { sectionId: sectionDoc }. Backtracks
-// course-by-course (rather than building the full cartesian product then
+// slots: [{ options: sectionId[] }] — a generic "pick exactly one from each
+// slot, with no time conflict against anything else picked" combinatorics
+// core. It has no notion of "course" or "component"; see
+// buildGenerationSlots below for how draftCourses become slots. Backtracks
+// slot-by-slot (rather than building the full cartesian product then
 // filtering) so a conflict prunes an entire branch early instead of being
-// discovered after the fact. Courses with an empty `considering` list (and
-// no lock) are skipped entirely — callers should gate the "Generate" action
-// on every draft course having at least one section selected or a lock
-// instead, so an accidental all-courses schedule silently missing one
-// course never happens.
-//
-// A locked course collapses to a single-option list regardless of what's
-// still checked in `considering` — "skip generating alternates for that
-// course entirely" holds even if the UI's checkbox state ever drifts from
-// the lock (e.g. a stale re-check), since the lock is the stronger,
-// authoritative constraint.
-export function generateSchedules(draftCourses, sectionsById) {
-  const lists = draftCourses
-    .filter((c) => c.lockedSectionId || c.considering.length > 0)
-    .map((c) => (c.lockedSectionId ? [c.lockedSectionId] : c.considering));
+// discovered after the fact.
+export function generateSchedules(slots, sectionsById) {
+  const lists = slots.filter((s) => s.options.length > 0).map((s) => s.options);
 
   const schedules = [];
   let explored = 0;
@@ -61,8 +52,68 @@ export function generateSchedules(draftCourses, sectionsById) {
   return { schedules, truncated };
 }
 
-// Sum of `credits` across a set of sectionIds — used for the generated-combo
-// summary and the grid/save panel's credit total.
+// draftCourses: [{ courseKey, considering: { lecture: sectionId[],
+// companion: sectionId[] }, locked: sectionId[] }]. Turns that per-course
+// state into flat generation slots — one slot per required component.
+//
+// `locked` deliberately has no size limit and isn't scoped to "one per
+// component": a course that genuinely needs two simultaneous companion
+// pieces (e.g. MA 213's separately-required discussion AND lab, both
+// Non-Enroll) is handled by letting the student lock both — each locked
+// section becomes its OWN forced single-option slot, so any number of
+// locks within the same component all survive into every generated
+// schedule together, rather than being treated as alternatives to each
+// other. An unlocked component's checked alternatives become one ordinary
+// "pick one" slot.
+export function buildGenerationSlots(draftCourses, sectionsByCourse, sectionsById) {
+  const slots = [];
+  for (const course of draftCourses) {
+    const sections = sectionsByCourse[course.courseKey] || [];
+    const groups = groupSectionsByComponent(sections);
+    const lockedByGroup = {};
+    for (const id of course.locked) {
+      const key = classifyComponent(sectionsById[id]);
+      (lockedByGroup[key] ??= []).push(id);
+    }
+    for (const group of groups) {
+      const locked = lockedByGroup[group.key] || [];
+      if (locked.length > 0) {
+        locked.forEach((id) => slots.push({ options: [id] }));
+      } else {
+        const considering = course.considering[group.key] || [];
+        if (considering.length > 0) slots.push({ options: considering });
+      }
+    }
+  }
+  return slots;
+}
+
+// A course is ready to generate once every component it actually has
+// sections for (Lecture, and Discussion/Lab if the course has any
+// Non-Enroll sections) has at least one locked or considered option.
+export function isCourseReady(course, sections, sectionsById) {
+  const groups = groupSectionsByComponent(sections);
+  if (groups.length === 0) return false;
+  return groups.every((group) => {
+    const lockedInGroup = course.locked.some((id) => classifyComponent(sectionsById[id]) === group.key);
+    return lockedInGroup || (course.considering[group.key]?.length ?? 0) > 0;
+  });
+}
+
+// Sum of `credits` across a set of sectionIds. BU's export repeats the same
+// Credit Hours value on every companion row of a course (a 4-credit
+// course's discussion/lab section also shows "4.0"), so summing every
+// section naively double-counts once a schedule can include more than one
+// section per course — dedupe by courseKey first.
 export function totalCredits(sectionIds, sectionsById) {
-  return sectionIds.reduce((sum, id) => sum + (sectionsById[id]?.credits ?? 0), 0);
+  const creditsByCourse = {};
+  for (const id of sectionIds) {
+    const section = sectionsById[id];
+    if (!section) continue;
+    const credits = section.credits ?? 0;
+    if (!(section.courseKey in creditsByCourse) || credits > creditsByCourse[section.courseKey]) {
+      creditsByCourse[section.courseKey] = credits;
+    }
+  }
+  return Object.values(creditsByCourse).reduce((sum, c) => sum + c, 0);
 }

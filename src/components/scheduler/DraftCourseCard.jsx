@@ -1,45 +1,15 @@
 import { compareSectionsByTime } from '../../utils/sectionTime';
+import { groupSectionsByComponent } from '../../utils/sectionComponents';
 import SectionRow from './SectionRow';
 
-// BU's PeopleSoft export only distinguishes sections by "Enrollment" vs
-// "Non-Enroll" classType — internal jargon that doesn't mean anything to a
-// student. Regrouping into labeled Lecture / Discussion-Lab buckets (with a
-// header explaining the relationship) replaces that raw badge instead of
-// showing it per-row. Anything with an unrecognized classType still shows
-// up (never silently dropped) under its own group rather than being folded
-// into one of these two and mislabeled.
-const GROUPS = [
-  {
-    key: 'lecture',
-    label: 'Lecture',
-    hint: 'Pick the lecture section you plan to attend.',
-    match: (s) => s.classType === 'Enrollment',
-  },
-  {
-    key: 'discussion',
-    label: 'Discussion / Lab',
-    hint: "Tied to a lecture section above — check the lecture's notes for which one pairs with it.",
-    match: (s) => s.classType === 'Non-Enroll',
-  },
-];
-
-function groupSections(sections, sortMode) {
-  const comparator = sortMode === 'time'
-    ? compareSectionsByTime
-    : (a, b) => (a.classSection || '').localeCompare(b.classSection || '');
-
-  const groups = GROUPS.map((g) => ({ ...g, sections: [] }));
-  const otherSections = [];
-  for (const section of sections) {
-    const group = groups.find((g) => g.match(section));
-    (group ? group.sections : otherSections).push(section);
+function groupStatusLabel(considering, lockedIdsInGroup) {
+  const consideringCount = considering.length;
+  if (lockedIdsInGroup.length > 0) {
+    return `📌 ${lockedIdsInGroup.length > 1 ? `${lockedIdsInGroup.length} locked` : 'Locked'}${
+      consideringCount > 0 ? ` + ${consideringCount} more in consideration` : ''
+    }`;
   }
-  groups.forEach((g) => g.sections.sort(comparator));
-  otherSections.sort(comparator);
-  if (otherSections.length > 0) {
-    groups.push({ key: 'other', label: 'Other', hint: null, sections: otherSections });
-  }
-  return groups.filter((g) => g.sections.length > 0);
+  return consideringCount === 0 ? 'Pick at least one section' : `${consideringCount} in consideration`;
 }
 
 export default function DraftCourseCard({
@@ -48,7 +18,7 @@ export default function DraftCourseCard({
   sections,
   loading,
   considering,
-  lockedSectionId,
+  lockedIds,
   conflictMap,
   sortMode,
   onToggleSection,
@@ -58,9 +28,10 @@ export default function DraftCourseCard({
   onRemoveCourse,
 }) {
   const courseLabel = courseData?.courseNumber ?? courseKey;
-  const consideringCount = considering.size;
-  const allSelected = sections.length > 0 && consideringCount >= sections.length;
-  const groups = groupSections(sections, sortMode);
+  const comparator = sortMode === 'time'
+    ? compareSectionsByTime
+    : (a, b) => (a.classSection || '').localeCompare(b.classSection || '');
+  const groups = groupSectionsByComponent(sections, comparator);
 
   return (
     <div className="sched-draft-card">
@@ -69,33 +40,15 @@ export default function DraftCourseCard({
           <div className="sched-draft-card-code">{courseLabel}</div>
           <div className="sched-draft-card-name">{courseData?.name ?? '—'}</div>
         </div>
-        <div className="sched-draft-card-header-right">
-          {lockedSectionId ? (
-            <span className="sched-draft-card-hint is-locked">📌 Locked to a section</span>
-          ) : consideringCount === 0 ? (
-            <span className="sched-draft-card-hint">Pick at least one section</span>
-          ) : (
-            <span className="sched-draft-card-hint">{consideringCount} in consideration</span>
-          )}
-          {sections.length > 0 && (
-            <button
-              type="button"
-              className="sched-select-all-btn"
-              onClick={() => (allSelected ? onDeselectAll() : onSelectAll())}
-            >
-              {allSelected ? 'Deselect all' : 'Select all'}
-            </button>
-          )}
-          <button
-            type="button"
-            className="sched-remove-course-btn"
-            onClick={onRemoveCourse}
-            aria-label={`Remove ${courseLabel} from schedule draft`}
-            title="Remove course"
-          >
-            ×
-          </button>
-        </div>
+        <button
+          type="button"
+          className="sched-remove-course-btn"
+          onClick={onRemoveCourse}
+          aria-label={`Remove ${courseLabel} from schedule draft`}
+          title="Remove course"
+        >
+          ×
+        </button>
       </div>
 
       {loading && <div className="sched-draft-card-loading">Loading sections…</div>}
@@ -104,27 +57,48 @@ export default function DraftCourseCard({
         <div className="sched-draft-card-empty">No sections found for this term.</div>
       )}
 
-      {!loading && groups.map((group) => (
-        <div className="sched-section-group" key={group.key}>
-          <div className="sched-section-group-header">
-            <span className="sched-section-group-label">{group.label}</span>
-            {group.hint && <span className="sched-section-group-hint">{group.hint}</span>}
+      {!loading && groups.map((group) => {
+        const groupConsidering = considering[group.key] || [];
+        const groupLockedIds = group.sections
+          .map((s) => s.id)
+          .filter((id) => lockedIds.has(id));
+        const allSelected = group.sections.length > 0 && groupConsidering.length + groupLockedIds.length >= group.sections.length;
+
+        return (
+          <div className="sched-section-group" key={group.key}>
+            <div className="sched-section-group-header">
+              <span className="sched-section-group-label">{group.label}</span>
+              <span className={`sched-section-group-hint${group.commonNotes ? ' is-notes' : ''}`}>
+                {group.commonNotes || group.hint}
+              </span>
+              <span className={`sched-draft-card-hint${groupLockedIds.length > 0 ? ' is-locked' : ''}`}>
+                {groupStatusLabel(groupConsidering, groupLockedIds)}
+              </span>
+              <button
+                type="button"
+                className="sched-select-all-btn"
+                onClick={() => (allSelected ? onDeselectAll(group.key) : onSelectAll(group.key))}
+              >
+                {allSelected ? 'Deselect all' : 'Select all'}
+              </button>
+            </div>
+            <div className="sched-section-list">
+              {group.sections.map((section) => (
+                <SectionRow
+                  key={section.id}
+                  section={section}
+                  checked={groupConsidering.includes(section.id)}
+                  locked={lockedIds.has(section.id)}
+                  conflicts={conflictMap[section.id]}
+                  notes={!group.commonNotes ? section.notes : null}
+                  onToggle={() => onToggleSection(group.key, section.id)}
+                  onToggleLock={() => onToggleLock(group.key, section.id)}
+                />
+              ))}
+            </div>
           </div>
-          <div className="sched-section-list">
-            {group.sections.map((section) => (
-              <SectionRow
-                key={section.id}
-                section={section}
-                checked={considering.has(section.id)}
-                locked={lockedSectionId === section.id}
-                conflicts={conflictMap[section.id]}
-                onToggle={() => onToggleSection(section.id)}
-                onToggleLock={() => onToggleLock(section.id)}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

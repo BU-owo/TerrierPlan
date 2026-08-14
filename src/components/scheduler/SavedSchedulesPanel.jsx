@@ -61,7 +61,9 @@ export default function SavedSchedulesPanel({
               title="Load into the grid"
             >
               <span className="sched-saved-row-name">{schedule.name}</span>
-              <span className="sched-saved-row-count">{schedule.selectedSectionIds.length} courses</span>
+              {/* "sections", not "courses" — a course with a companion piece
+                  (discussion/lab) contributes more than one section id. */}
+              <span className="sched-saved-row-count">{schedule.selectedSectionIds.length} sections</span>
             </button>
             <button
               type="button"

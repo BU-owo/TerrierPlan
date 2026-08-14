@@ -181,12 +181,6 @@ html[data-theme='dark'] {
   font-weight: 600;
   color: var(--text);
 }
-.sched-draft-card-header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
 .sched-draft-card-hint {
   font-size: 11px;
   color: var(--text-muted);
@@ -236,8 +230,8 @@ html[data-theme='dark'] {
 }
 .sched-section-group-header {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 5px 10px;
   flex-wrap: wrap;
   padding: 0 2px 4px;
 }
@@ -247,10 +241,28 @@ html[data-theme='dark'] {
   text-transform: uppercase;
   letter-spacing: .4px;
   color: var(--text-secondary);
+  flex-shrink: 0;
 }
 .sched-section-group-hint {
   font-size: 11px;
   color: var(--text-muted);
+  flex: 1 1 160px;
+  min-width: 120px;
+}
+/* BU's own note (shown when every section in the group shares one) instead
+   of the generic app-authored hint — italicized to read as "quoted"
+   authoritative text rather than app copy. */
+.sched-section-group-hint.is-notes {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+/* Pushes the status text + Select all button to the right edge, wrapping
+   under the label/hint on narrow widths rather than overflowing. */
+.sched-section-group-header .sched-draft-card-hint {
+  margin-left: auto;
+}
+.sched-section-group-header .sched-select-all-btn {
+  flex-shrink: 0;
 }
 
 /* ===== Section rows ===== */
@@ -321,6 +333,16 @@ html[data-theme='dark'] {
   gap: 3px 8px;
   font-size: 11px;
   color: var(--text-secondary);
+}
+/* BU's own registration instructions for this exact section — shown only
+   when it isn't already covered by the group's shared commonNotes (see
+   sectionComponents.js), so identical text doesn't repeat on every row. */
+.sched-section-row-notes {
+  margin-top: 3px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-muted);
+  line-height: 1.5;
 }
 
 /* Lock button — a pin, distinct from the checkbox (see SectionRow.jsx for
