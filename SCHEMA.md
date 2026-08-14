@@ -25,6 +25,12 @@ One doc per catalog course. Source: full bulletin scrape (periodic).
 | description | string | |
 | hubUnits | string[] | e.g. `["SI1", "CRI"]` — derived from one-hot columns |
 | lastScraped | timestamp | |
+| offeringPattern | string \| null | Historical offering frequency, e.g. `"Fall"`, `"Fall and Spring"`, `"Alternating Fall"`, `"Alternating Spring"`, `"Not offered in 5 years"`, `"Random"`, `"Insufficient data"`. Merged separately from the fields above — see `offeringHistory` and Import order below. Absent (not just null) on courses the offering-data import never matched. |
+| offeredSeasons | string[] | e.g. `["Fall", "Summer"]` |
+| fallRatio, springRatio, summerRatio | number \| null | Fraction of offered terms in each season, over the dataset window |
+| firstOfferedYear, lastOfferedYear | number \| null | |
+| datasetYearsAvailable | number \| null | How many years of history the ratios above are computed over |
+| offeringDataUpdatedAt | timestamp | Set by `import-offering-data.cjs`, separate from `lastScraped` |
 
 Note: this CSV has no credit-hours column. Credits come from `sections` —
 if a course has no current sections (e.g. not offered this term), credits
@@ -51,6 +57,24 @@ collapse into one doc with an `instructors` array.
 | notes | string | Free text — linked lecture/discussion info lives here, unstructured |
 | finalExam | string | |
 | importedAt | timestamp | |
+
+### `offeringHistory/{courseKey}`
+Full per-term offering history, written alongside the summary fields on
+`courses/{courseKey}` above by the same `import-offering-data.cjs` run.
+Split into its own collection instead of embedding on the course doc
+because it can run to dozens of entries per course.
+
+| Field | Type | Notes |
+|---|---|---|
+| history | object[] | `{ term, year, season, sectionCount }[]` |
+| updatedAt | timestamp | |
+
+**Known gap:** `firestore.rules` has no `match` block for this collection,
+so — unlike `courses`/`sections`/`bulletinPages` — it is currently
+unreadable from the client (Firestore default-denies unmatched paths).
+Nothing in the app reads it yet, so this hasn't broken anything in
+practice, but add a public-read rule here (matching `courses`) before
+building anything that needs it.
 
 ### `bulletinPages/{majorSlug}`
 Stored bulletin text per major, for the planner's side panel (manual
@@ -144,3 +168,8 @@ degree audit.
 3. Sections reference `courseKey`, so step 1 should generally run first, but the
    scripts don't hard-fail on a missing course doc — a section can exist
    before its course doc if the catalog scrape lags the schedule import.
+4. Run `import-offering-data.cjs` against a historical-offerings JSON
+   (courseKey → offering pattern/history) any time after step 1 — it only
+   merges onto courseKeys that already have a `courses` doc, skipping the
+   rest (e.g. non-catalog entries) rather than creating stray docs.
+   Idempotent (`set` with `merge: true`), safe to re-run.

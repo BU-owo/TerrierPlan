@@ -70,6 +70,9 @@ future deploys. Confirm `pwd` shows the repo root before deploying.
 - `HUB_REQUIREMENTS.md` — BU HUB requirement tables (first-year + transfer)
 - `.github/copilot-instructions.md` — project conventions and scope boundaries for Copilot
 - `scripts/` — one-off Firestore import/patch scripts (see above for credentials)
+- `QUEUE.md` — working queue of what's next / recently done
+- `To_Do.md` — known bugs, not-yet-built features, and items needing manual verification
+- `TERRIERPLAN_HANDOFF.md` — fuller project handoff summary (stack, data model, feature-by-feature status)
 
 ## Tech stack
 
