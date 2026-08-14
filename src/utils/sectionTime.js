@@ -49,7 +49,11 @@ export function sectionsConflict(a, b) {
   return meetingA.startMin < meetingB.endMin && meetingB.startMin < meetingA.endMin;
 }
 
-function formatClock(min) {
+// Exported (not just used internally by describeSectionTime) so callers
+// that already have a day figured out — the weekly grid, which positions a
+// block on one specific day column — can render just the time portion
+// without repeating day letters that would be redundant there.
+export function formatClock(min) {
   const h24 = Math.floor(min / 60);
   const m = min % 60;
   const meridiem = h24 >= 12 ? 'pm' : 'am';
@@ -85,6 +89,20 @@ export function compareSectionsByTime(a, b) {
   if (dayA !== dayB) return dayA - dayB;
   if (meetingA.startMin !== meetingB.startMin) return meetingA.startMin - meetingB.startMin;
   return (a.classSection || '').localeCompare(b.classSection || '');
+}
+
+// "14:00" (24-hour, from an <input type="time">) -> 840. Kept distinct from
+// parseTimeToMinutes, which expects PeopleSoft's "01:25PM" export format —
+// this is for the section-picker's time-range filter, a different input
+// shape entirely.
+export function parse24HourTimeToMinutes(value) {
+  if (!value) return null;
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const hour = parseInt(match[1], 10);
+  const minute = parseInt(match[2], 10);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+  return hour * 60 + minute;
 }
 
 export { DAY_ORDER };

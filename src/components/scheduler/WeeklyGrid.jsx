@@ -1,9 +1,10 @@
-import { DAY_ORDER, sectionMeeting, describeSectionTime } from '../../utils/sectionTime';
+import { DAY_ORDER, sectionMeeting, describeSectionTime, formatClock } from '../../utils/sectionTime';
 import { courseColorIndex } from '../../utils/scheduleColors';
 
-const PX_PER_MIN = 1.4;
+const PX_PER_MIN = 2;
 const DEFAULT_START = 8 * 60; // 8:00am floor, so an empty/light schedule still reads as a normal day
 const DEFAULT_END = 18 * 60; // 6:00pm ceiling
+const MIN_BLOCK_HEIGHT = 62; // tall enough for code/time/prof/room even on a short class
 
 function formatHourLabel(hour) {
   const h = hour % 24;
@@ -12,10 +13,20 @@ function formatHourLabel(hour) {
 }
 
 // Renders one schedule (a set of committed sectionIds) as a Mon–Fri (+
-// Sat/Sun if actually used) time grid. Pure display component — which
-// schedule it's showing (a generated combo, a saved one being previewed, or
-// nothing yet) is decided by the caller.
-export default function WeeklyGrid({ sectionIds, sectionsById, courseMap }) {
+// Sat/Sun if actually used) time grid. `lockedSectionIds`/`onToggleLock`/
+// `onEliminate` make each block itself interactive — locking or
+// eliminating a section right from the grid is meant to feel identical to
+// doing it from the draft picker; the caller (SchedulerPage) re-generates
+// immediately afterward so the schedule shown here never drifts out of
+// sync with what's actually locked/considered.
+export default function WeeklyGrid({
+  sectionIds,
+  sectionsById,
+  courseMap,
+  lockedSectionIds = new Set(),
+  onToggleLock = () => {},
+  onEliminate = () => {},
+}) {
   const sections = sectionIds.map((id) => sectionsById[id]).filter(Boolean);
   const withMeeting = sections
     .map((section) => ({ section, meeting: sectionMeeting(section) }))
@@ -68,22 +79,51 @@ export default function WeeklyGrid({ sectionIds, sectionsById, courseMap }) {
             <div key={day} className="sched-grid-day-col">
               {withMeeting
                 .filter((m) => m.meeting.days.includes(day))
-                .map(({ section, meeting }) => (
-                  <div
-                    key={`${section.id}-${day}`}
-                    className={`sched-grid-block sched-color-${courseColorIndex(section.courseKey)}`}
-                    style={{
-                      top: (meeting.startMin - gridStart) * PX_PER_MIN,
-                      height: Math.max(20, (meeting.endMin - meeting.startMin) * PX_PER_MIN),
-                    }}
-                    title={`${courseMap[section.courseKey]?.courseNumber ?? section.courseKey} — Section ${section.classSection} — ${describeSectionTime(section)}${section.facilId ? ` — ${section.facilId}` : ''}`}
-                  >
-                    <span className="sched-grid-block-code">
-                      {courseMap[section.courseKey]?.courseNumber ?? section.courseKey}
-                    </span>
-                    {section.facilId && <span className="sched-grid-block-room">{section.facilId}</span>}
-                  </div>
-                ))}
+                .map(({ section, meeting }) => {
+                  const courseCode = courseMap[section.courseKey]?.courseNumber ?? section.courseKey;
+                  const isLocked = lockedSectionIds.has(section.id);
+                  const profLastName = section.instructors?.[0]?.last || null;
+                  const roomAndNbr = [section.facilId, section.classNbr ? `#${section.classNbr}` : null]
+                    .filter(Boolean)
+                    .join(' · ');
+
+                  return (
+                    <div
+                      key={`${section.id}-${day}`}
+                      className={`sched-grid-block sched-color-${courseColorIndex(section.courseKey)}${isLocked ? ' is-locked' : ''}`}
+                      style={{
+                        top: (meeting.startMin - gridStart) * PX_PER_MIN,
+                        height: Math.max(MIN_BLOCK_HEIGHT, (meeting.endMin - meeting.startMin) * PX_PER_MIN),
+                      }}
+                      title={`${courseCode} — Section ${section.classSection} — ${describeSectionTime(section)}${section.facilId ? ` — ${section.facilId}` : ''}`}
+                    >
+                      <div className="sched-grid-block-actions">
+                        <button
+                          type="button"
+                          className={`sched-grid-block-action-btn${isLocked ? ' is-locked' : ''}`}
+                          onClick={(e) => { e.stopPropagation(); onToggleLock(section.id); }}
+                          aria-label={isLocked ? `Unlock ${courseCode} section ${section.classSection}` : `Lock ${courseCode} section ${section.classSection} into every generated schedule`}
+                          title={isLocked ? 'Locked into every generated schedule — click to unlock' : 'Lock this section into every generated schedule'}
+                        >
+                          {isLocked ? '📌' : '📍'}
+                        </button>
+                        <button
+                          type="button"
+                          className="sched-grid-block-action-btn sched-grid-block-eliminate-btn"
+                          onClick={(e) => { e.stopPropagation(); onEliminate(section.id); }}
+                          aria-label={`Remove ${courseCode} section ${section.classSection} from consideration`}
+                          title="Remove from consideration — won't appear in any future generated schedule"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <span className="sched-grid-block-code">{courseCode} {section.classSection}</span>
+                      <span className="sched-grid-block-time">{formatClock(meeting.startMin)}–{formatClock(meeting.endMin)}</span>
+                      {profLastName && <span className="sched-grid-block-prof">{profLastName}</span>}
+                      {roomAndNbr && <span className="sched-grid-block-room">{roomAndNbr}</span>}
+                    </div>
+                  );
+                })}
             </div>
           ))}
         </div>

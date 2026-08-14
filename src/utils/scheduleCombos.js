@@ -93,17 +93,30 @@ export function buildGenerationSlots(draftCourses, sectionsByCourse, sectionsByI
   return slots;
 }
 
+// Which of a course's required component groups still need a locked or
+// considered pick. Returns [] when the course is fully ready, or null when
+// there's no section data to judge readiness from at all (still loading,
+// or genuinely no sections this term) — callers should treat null as "not
+// ready" too, but it's kept distinct from [] so a blocker explanation (see
+// SchedulerPage's "why is Generate disabled" list) can say "still loading"
+// instead of misreporting zero missing groups.
+export function missingGroupsForCourse(course, sections, sectionsById) {
+  const groups = groupSectionsByComponent(sections);
+  if (groups.length === 0) return null;
+  return groups.filter((group) => {
+    const lockedInGroup = course.locked.some((id) => classifyComponent(sectionsById[id]) === group.key);
+    const consideringCount = course.considering[group.key]?.length ?? 0;
+    return !lockedInGroup && consideringCount === 0;
+  });
+}
+
 // A course is ready to generate once every distinct component it actually
 // has sections for (however many that turns out to be — one for an
 // independent-study-only course, three for LEC+DIS+LAB, ...) has at least
 // one locked or considered option.
 export function isCourseReady(course, sections, sectionsById) {
-  const groups = groupSectionsByComponent(sections);
-  if (groups.length === 0) return false;
-  return groups.every((group) => {
-    const lockedInGroup = course.locked.some((id) => classifyComponent(sectionsById[id]) === group.key);
-    return lockedInGroup || (course.considering[group.key]?.length ?? 0) > 0;
-  });
+  const missing = missingGroupsForCourse(course, sections, sectionsById);
+  return missing !== null && missing.length === 0;
 }
 
 // Sum of `credits` across a set of sectionIds. BU's export repeats the same

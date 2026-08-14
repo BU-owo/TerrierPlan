@@ -63,7 +63,7 @@ html[data-theme='dark'] {
   padding: 14px 16px 24px;
 }
 .scheduler-right {
-  width: 400px;
+  width: 460px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -164,10 +164,35 @@ html[data-theme='dark'] {
 }
 .sched-draft-card-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
+}
+/* The whole clickable collapse/expand target — a reset <button> so the
+   chevron, titles, and (when collapsed) summary all toggle together. */
+.sched-draft-card-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 2px 0;
+}
+.sched-draft-card-chevron {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 12px;
+}
+.sched-draft-card-titles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex-shrink: 1;
 }
 .sched-draft-card-code {
   font-size: 12px;
@@ -180,7 +205,19 @@ html[data-theme='dark'] {
   font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.sched-draft-card-summary {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.sched-draft-card-summary.is-ready { color: var(--success-strong); }
 .sched-draft-card-hint {
   font-size: 11px;
   color: var(--text-muted);
@@ -223,6 +260,84 @@ html[data-theme='dark'] {
   font-size: 12.5px;
   color: var(--text-muted);
 }
+
+/* ===== Global time filter — applies to every course's section list at
+   once, alongside (not instead of) each course's own filter bar below.
+   Scarlet-tinted so it reads as a different, higher-scope control at a
+   glance rather than "one more course's filter bar" — see
+   SchedulerPage.jsx, which owns this state (DraftCourseCard's per-course
+   filters are lifted there too, for the same reason: the "why is Generate
+   disabled" blocker list needs to see both). ===== */
+.sched-global-filter-bar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: var(--scarlet-pale);
+  border: 1.5px solid var(--scarlet-light);
+  border-radius: var(--radius-sm);
+}
+.sched-global-filter-label {
+  flex-basis: 100%;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--scarlet);
+}
+.sched-global-filter-hint {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  align-self: center;
+}
+.sched-global-filter-bar .sched-filter-clear { color: var(--scarlet); }
+
+/* ===== Per-course filters (time range + professor) — hides non-matching
+   rows only, never touches considering/locked state. Combines (AND) with
+   the global time filter above; see sectionFilters.js. ===== */
+.sched-filter-bar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: var(--cream);
+  border-radius: var(--radius-sm);
+}
+.sched-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.sched-filter-field input {
+  padding: 4px 7px;
+  border-radius: var(--radius-xs);
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  font-size: 12px;
+  color: var(--text);
+}
+.sched-filter-field input:focus { outline: none; border-color: var(--scarlet); }
+.sched-filter-field-professor { flex: 1 1 120px; }
+.sched-filter-field-professor input { width: 100%; }
+.sched-filter-clear {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: var(--radius-xs);
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.sched-filter-clear:hover { color: var(--scarlet); }
 
 /* ===== Section groups (Lecture / Discussion-Lab / Other) ===== */
 .sched-section-group + .sched-section-group {
@@ -391,10 +506,11 @@ html[data-theme='dark'] {
 /* ===== Generate + results ===== */
 .sched-generate-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   margin: 16px 0;
 }
+.sched-generate-row .sched-generate-btn { flex-shrink: 0; }
 .sched-generate-btn {
   font-size: 13.5px;
   font-weight: 700;
@@ -407,7 +523,17 @@ html[data-theme='dark'] {
 }
 .sched-generate-btn:hover:not(:disabled) { background: var(--scarlet-dark); }
 .sched-generate-btn:disabled { opacity: .45; cursor: default; }
-.sched-generate-hint { font-size: 12px; color: var(--text-muted); }
+/* "Why is Generate disabled" — one line per course still missing a pick,
+   instead of the button just going dark with no explanation. */
+.sched-generate-blockers {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.sched-generate-blockers strong { color: var(--text-secondary); font-weight: 700; }
 
 .sched-generated-empty {
   padding: 16px;
@@ -508,15 +634,50 @@ html[data-theme='dark'] {
   left: 2px;
   right: 2px;
   border-left: 3px solid;
-  border-radius: 4px;
-  padding: 3px 5px;
+  border-radius: 5px;
+  padding: 5px 6px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
-.sched-grid-block-code { font-size: 10.5px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sched-grid-block-room { font-size: 9.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sched-grid-block.is-locked { box-shadow: inset 0 0 0 1.5px var(--badge-warm-text); }
+/* Lock/eliminate — same actions as the draft picker's SectionRow, just
+   reachable from the generated-schedule preview too (see WeeklyGrid.jsx).
+   Its own row so it never eats into the text lines below it. */
+.sched-grid-block-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  margin: -2px -3px 0 0;
+}
+.sched-grid-block-action-btn {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,.55);
+  font-size: 9.5px;
+  line-height: 1;
+  opacity: .75;
+}
+html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3); }
+.sched-grid-block-action-btn:hover { opacity: 1; }
+.sched-grid-block-action-btn.is-locked { opacity: 1; }
+.sched-grid-block-eliminate-btn { font-size: 12px; color: var(--text-secondary); }
+.sched-grid-block-eliminate-btn:hover { color: var(--warning-border); background: var(--warning-surface); }
+.sched-grid-block-code { font-size: 11px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sched-grid-block-time,
+.sched-grid-block-prof,
+.sched-grid-block-room { font-size: 10px; color: var(--text-secondary); }
+/* Room/class-nbr is the lowest-priority line — truncates with an ellipsis
+   instead of wrapping, so it never hard-clips mid-digit on a short block
+   the way an unbounded wrap would. */
+.sched-grid-block-room { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sched-grid-no-meeting {
   margin-top: 10px;
   font-size: 11.5px;

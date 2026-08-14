@@ -25,7 +25,14 @@ import SavedSchedulesPanel from '../components/scheduler/SavedSchedulesPanel';
 import { CURRENT_TERM, CURRENT_TERM_LABEL } from '../utils/term';
 import { sectionsConflict, describeSectionTime } from '../utils/sectionTime';
 import { classifyComponent, groupSectionsByComponent } from '../utils/sectionComponents';
-import { generateSchedules, buildGenerationSlots, isCourseReady, totalCredits } from '../utils/scheduleCombos';
+import {
+  generateSchedules,
+  buildGenerationSlots,
+  isCourseReady,
+  missingGroupsForCourse,
+  totalCredits,
+} from '../utils/scheduleCombos';
+import { EMPTY_COURSE_FILTERS, EMPTY_GLOBAL_FILTERS, filterBlockDetail } from '../utils/sectionFilters';
 import './planner.css';
 import './scheduler.css';
 import '../App.css';
@@ -74,6 +81,51 @@ async function migrateGuestSchedulesIfNeeded(uid) {
   return guestScheduleMigrationPromise;
 }
 
+// Pure draftCourses transforms, shared between the draft picker's own lock
+// button and the Preview grid's lock/eliminate controls (see
+// handlePreviewToggleLock/handlePreviewEliminate) so both go through
+// identical logic rather than two hand-maintained copies of it.
+function toggleLockInCourses(courses, courseKey, groupKey, sectionId) {
+  return courses.map((c) => {
+    if (c.courseKey !== courseKey) return c;
+    const isLocked = c.locked.includes(sectionId);
+    if (isLocked) {
+      const current = c.considering[groupKey] || [];
+      return {
+        ...c,
+        locked: c.locked.filter((id) => id !== sectionId),
+        considering: {
+          ...c.considering,
+          [groupKey]: current.includes(sectionId) ? current : [...current, sectionId],
+        },
+      };
+    }
+    return {
+      ...c,
+      locked: [...c.locked, sectionId],
+      considering: { ...c.considering, [groupKey]: [] },
+    };
+  });
+}
+
+// Removes a section from consideration entirely — un-checks it and
+// releases any lock on it — distinct from a plain uncheck (which only
+// applies while it isn't locked); this is the Preview grid's "eliminate"
+// control, which can drop a section even if it's currently locked.
+function eliminateFromCourses(courses, courseKey, groupKey, sectionId) {
+  return courses.map((c) => {
+    if (c.courseKey !== courseKey) return c;
+    return {
+      ...c,
+      locked: c.locked.filter((id) => id !== sectionId),
+      considering: {
+        ...c.considering,
+        [groupKey]: (c.considering[groupKey] || []).filter((id) => id !== sectionId),
+      },
+    };
+  });
+}
+
 export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const { user, loading: authLoading } = useAuth();
 
@@ -95,6 +147,22 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // — one control for every course card, not per-card, since it's a display
   // preference rather than something that varies course to course.
   const [sectionSortMode, setSectionSortMode] = useState('time');
+  // { startTime, endTime } — applies to every course's section list at
+  // once, e.g. "hide everything before 10am" across the whole draft. Kept
+  // separate from `courseFilters` below: it has no `professor` field
+  // (disjoint instructor pools across different courses make a global
+  // professor filter meaningless — it'd just zero out every course but
+  // one), and it's cleared independently of any single course's filters.
+  const [globalTimeFilter, setGlobalTimeFilter] = useState(EMPTY_GLOBAL_FILTERS);
+  // { [courseKey]: { startTime, endTime, professor } } — lifted up from
+  // DraftCourseCard (rather than kept as that component's own local state)
+  // specifically so the "why is Generate disabled" blocker list can see
+  // whether a missing pick is because a filter is hiding every option, not
+  // just because nothing's been picked yet — see generateBlockers and
+  // sectionFilters.js's filterBlockDetail. A course with no entry here
+  // hasn't touched its filters; DraftCourseCard is handed
+  // EMPTY_COURSE_FILTERS as the default wherever it's read.
+  const [courseFilters, setCourseFilters] = useState({});
 
   // ── Generated combinations + preview ───────────────────────────────────────
   const [generated, setGenerated] = useState(null); // { schedules: sectionId[][], truncated } | null
@@ -185,6 +253,32 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
         .filter((s) => s.term === CURRENT_TERM)
         .sort((a, b) => (a.classSection || '').localeCompare(b.classSection || ''));
       setSectionsByCourse((prev) => ({ ...prev, [courseKey]: sections }));
+
+      // Auto-check any component group that has exactly one option — with
+      // nothing to actually decide between, it shouldn't sit there blocking
+      // Generate. Only touches a group that's still untouched (no picks, no
+      // lock) at the moment this resolves, so it never overrides a
+      // student's deliberate uncheck or a saved-schedule restore that
+      // already seeded this group (handleLoadSchedule sets `considering`
+      // before calling this).
+      const singleOptionGroups = groupSectionsByComponent(sections).filter((g) => g.sections.length === 1);
+      if (singleOptionGroups.length > 0) {
+        setDraftCourses((prev) => prev.map((c) => {
+          if (c.courseKey !== courseKey) return c;
+          let considering = c.considering;
+          let changed = false;
+          for (const group of singleOptionGroups) {
+            const sectionId = group.sections[0].id;
+            const already = considering[group.key] || [];
+            if (already.length === 0 && !c.locked.includes(sectionId)) {
+              if (!changed) considering = { ...considering };
+              considering[group.key] = [sectionId];
+              changed = true;
+            }
+          }
+          return changed ? { ...c, considering } : c;
+        }));
+      }
     } catch (err) {
       console.error('Failed to load sections for', courseKey, err);
     } finally {
@@ -207,6 +301,14 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   }, [sectionsByCourse]);
 
   const draftCourseKeys = useMemo(() => new Set(draftCourses.map((c) => c.courseKey)), [draftCourses]);
+
+  // Flattened across every course — the Preview grid's lock icon on a
+  // block only needs to know "is this specific section locked," not which
+  // course/component it belongs to.
+  const allLockedSectionIds = useMemo(
+    () => new Set(draftCourses.flatMap((c) => c.locked)),
+    [draftCourses],
+  );
 
   // sectionId -> [{ sectionId, label }] — pairwise time conflicts among
   // every currently locked-or-considering section. Two sections are only
@@ -247,8 +349,45 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     return map;
   }, [draftCourses, sectionsById, courseMap]);
 
-  const canGenerate = draftCourses.length > 0 &&
-    draftCourses.every((course) => isCourseReady(course, sectionsByCourse[course.courseKey] || [], sectionsById));
+  // [{ courseKey, label, reason }] — every course still blocking Generate,
+  // in draftCourses order. Reused both to disable the Generate button
+  // (canGenerate = blockers.length === 0) and to explain exactly what's
+  // missing underneath it, instead of the button just going dark with no
+  // explanation.
+  const generateBlockers = useMemo(() => {
+    function articleFor(word) {
+      return /^[aeiou]/i.test(word) ? 'an' : 'a';
+    }
+    return draftCourses.flatMap((course) => {
+      const label = courseMap[course.courseKey]?.courseNumber ?? course.courseKey;
+      const sections = sectionsByCourse[course.courseKey];
+      if (sections === undefined || loadingSectionsFor.has(course.courseKey)) {
+        return [{ courseKey: course.courseKey, label, reason: 'sections still loading' }];
+      }
+      if (sections.length === 0) {
+        return [{ courseKey: course.courseKey, label, reason: 'no sections found for this term' }];
+      }
+      const missing = missingGroupsForCourse(course, sections, sectionsById);
+      if (!missing || missing.length === 0) return [];
+      const courseFilter = courseFilters[course.courseKey] ?? EMPTY_COURSE_FILTERS;
+      const parts = missing.map((g) => {
+        const groupLabel = g.label === 'Other' ? 'one of the ungrouped sections' : `${articleFor(g.label)} ${g.label}`;
+        // A missing pick can mean "nothing's been checked yet" OR "a
+        // filter is hiding every option in this group" — those call for
+        // different next steps from the student, so say which one it is
+        // instead of a blanket "pick a Discussion Section" that'd be
+        // misleading if there's nothing visible to pick from at all.
+        const detail = filterBlockDetail(g.sections, courseFilter, globalTimeFilter);
+        if (detail === 'global') return `${groupLabel} (all hidden by your global time filter)`;
+        if (detail === 'course') return `${groupLabel} (all hidden by this course's filter)`;
+        if (detail === 'both') return `${groupLabel} (all hidden by your global and course filters)`;
+        return groupLabel;
+      });
+      return [{ courseKey: course.courseKey, label, reason: `pick ${parts.join(' and ')}` }];
+    });
+  }, [draftCourses, sectionsByCourse, sectionsById, courseMap, loadingSectionsFor, courseFilters, globalTimeFilter]);
+
+  const canGenerate = draftCourses.length > 0 && generateBlockers.length === 0;
 
   function invalidateGenerated() {
     setGenerated(null);
@@ -268,7 +407,20 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   function handleRemoveCourse(courseKey) {
     setDraftCourses((prev) => prev.filter((c) => c.courseKey !== courseKey));
+    setCourseFilters((prev) => {
+      if (!(courseKey in prev)) return prev;
+      const next = { ...prev };
+      delete next[courseKey];
+      return next;
+    });
     invalidateGenerated();
+  }
+
+  // Per-course filters only ever hide rows (see DraftCourseCard) — never
+  // touch `considering`/locked — so changing them doesn't invalidate
+  // anything already generated the way a real pick/lock change does.
+  function handleCourseFilterChange(courseKey, filters) {
+    setCourseFilters((prev) => ({ ...prev, [courseKey]: filters }));
   }
 
   function handleToggleSection(courseKey, groupKey, sectionId) {
@@ -300,37 +452,19 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // it back into that component's checked pool rather than just dropping
   // it.
   function handleToggleLock(courseKey, groupKey, sectionId) {
-    setDraftCourses((prev) =>
-      prev.map((c) => {
-        if (c.courseKey !== courseKey) return c;
-        const isLocked = c.locked.includes(sectionId);
-        if (isLocked) {
-          const current = c.considering[groupKey] || [];
-          return {
-            ...c,
-            locked: c.locked.filter((id) => id !== sectionId),
-            considering: {
-              ...c.considering,
-              [groupKey]: current.includes(sectionId) ? current : [...current, sectionId],
-            },
-          };
-        }
-        return {
-          ...c,
-          locked: [...c.locked, sectionId],
-          considering: { ...c.considering, [groupKey]: [] },
-        };
-      }),
-    );
+    setDraftCourses((prev) => toggleLockInCourses(prev, courseKey, groupKey, sectionId));
     invalidateGenerated();
   }
 
-  function handleSelectAllSections(courseKey, groupKey) {
-    const sections = (sectionsByCourse[courseKey] || []).filter((s) => classifyComponent(s) === groupKey);
+  // sectionIds is the explicit list to select, not "every section in the
+  // group" — DraftCourseCard passes only the currently-visible (post-
+  // filter) ones, so "Select all" while a time/professor filter is active
+  // selects what's shown, not sections hidden by the filter.
+  function handleSelectAllSections(courseKey, groupKey, sectionIds) {
     setDraftCourses((prev) =>
       prev.map((c) =>
         c.courseKey === courseKey
-          ? { ...c, considering: { ...c.considering, [groupKey]: sections.map((s) => s.id) } }
+          ? { ...c, considering: { ...c.considering, [groupKey]: sectionIds } }
           : c,
       ),
     );
@@ -372,6 +506,61 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     setPreviewIndex(index);
     setPreviewSectionIds(generated.schedules[index]);
     setActiveSavedId(null);
+  }
+
+  // Re-runs generation from an already-computed draftCourses state (used by
+  // the Preview grid's lock/eliminate controls, which need the stepper's
+  // combination count to update immediately rather than waiting on a
+  // separate "Generate schedules" click). Bails out to the normal "not
+  // ready" empty state instead of generating anything if the edit left some
+  // course's component group with zero options — eliminating a section can
+  // do that, and silently producing a schedule missing that piece would be
+  // exactly the incomplete-schedule bug this app exists to avoid.
+  function regenerateFrom(nextDraftCourses) {
+    const allReady = nextDraftCourses.length > 0 && nextDraftCourses.every((course) =>
+      isCourseReady(course, sectionsByCourse[course.courseKey] || [], sectionsById),
+    );
+    if (!allReady) {
+      setGenerated(null);
+      setPreviewIndex(null);
+      setPreviewSectionIds([]);
+      setActiveSavedId(null);
+      return;
+    }
+    const slots = buildGenerationSlots(nextDraftCourses, sectionsByCourse, sectionsById);
+    const result = generateSchedules(slots, sectionsById);
+    setGenerated(result);
+    setActiveSavedId(null);
+    if (result.schedules.length > 0) {
+      setPreviewIndex(0);
+      setPreviewSectionIds(result.schedules[0]);
+    } else {
+      setPreviewIndex(null);
+      setPreviewSectionIds([]);
+    }
+  }
+
+  // Lock/eliminate controls on the Preview grid's blocks themselves — same
+  // underlying state changes as the draft picker's controls, just triggered
+  // from the other side of the screen and immediately followed by a
+  // regenerate so the stepper reflects the new combination count right
+  // away instead of showing a stale count until the next manual Generate.
+  function handlePreviewToggleLock(sectionId) {
+    const section = sectionsById[sectionId];
+    if (!section) return;
+    const groupKey = classifyComponent(section);
+    const next = toggleLockInCourses(draftCourses, section.courseKey, groupKey, sectionId);
+    setDraftCourses(next);
+    regenerateFrom(next);
+  }
+
+  function handlePreviewEliminate(sectionId) {
+    const section = sectionsById[sectionId];
+    if (!section) return;
+    const groupKey = classifyComponent(section);
+    const next = eliminateFromCourses(draftCourses, section.courseKey, groupKey, sectionId);
+    setDraftCourses(next);
+    regenerateFrom(next);
   }
 
   // ── Saved schedule handlers ──────────────────────────────────────────────────
@@ -595,6 +784,38 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             </div>
           )}
 
+          {draftCourses.length > 0 && (
+            <div className="sched-global-filter-bar">
+              <span className="sched-global-filter-label">Global time filter</span>
+              <label className="sched-filter-field">
+                <span>Starts after</span>
+                <input
+                  type="time"
+                  value={globalTimeFilter.startTime}
+                  onChange={(e) => setGlobalTimeFilter((f) => ({ ...f, startTime: e.target.value }))}
+                />
+              </label>
+              <label className="sched-filter-field">
+                <span>Starts before</span>
+                <input
+                  type="time"
+                  value={globalTimeFilter.endTime}
+                  onChange={(e) => setGlobalTimeFilter((f) => ({ ...f, endTime: e.target.value }))}
+                />
+              </label>
+              {(globalTimeFilter.startTime || globalTimeFilter.endTime) && (
+                <button
+                  type="button"
+                  className="sched-filter-clear"
+                  onClick={() => setGlobalTimeFilter(EMPTY_GLOBAL_FILTERS)}
+                >
+                  Clear global filter
+                </button>
+              )}
+              <span className="sched-global-filter-hint">Applies to every course below, alongside each course's own filters.</span>
+            </div>
+          )}
+
           {draftCourses.map(({ courseKey, considering, locked }) => (
             <DraftCourseCard
               key={courseKey}
@@ -606,9 +827,12 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
               lockedIds={new Set(locked)}
               conflictMap={conflictMap}
               sortMode={sectionSortMode}
+              filters={courseFilters[courseKey] ?? EMPTY_COURSE_FILTERS}
+              globalTimeFilter={globalTimeFilter}
+              onFilterChange={(filters) => handleCourseFilterChange(courseKey, filters)}
               onToggleSection={(groupKey, sectionId) => handleToggleSection(courseKey, groupKey, sectionId)}
               onToggleLock={(groupKey, sectionId) => handleToggleLock(courseKey, groupKey, sectionId)}
-              onSelectAll={(groupKey) => handleSelectAllSections(courseKey, groupKey)}
+              onSelectAll={(groupKey, sectionIds) => handleSelectAllSections(courseKey, groupKey, sectionIds)}
               onDeselectAll={(groupKey) => handleDeselectAllSections(courseKey, groupKey)}
               onRemoveCourse={() => handleRemoveCourse(courseKey)}
             />
@@ -619,8 +843,14 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
               <button type="button" className="sched-generate-btn" onClick={handleGenerate} disabled={!canGenerate}>
                 Generate schedules
               </button>
-              {!canGenerate && (
-                <span className="sched-generate-hint">Pick (or lock) at least one section for every course above</span>
+              {generateBlockers.length > 0 && (
+                <ul className="sched-generate-blockers">
+                  {generateBlockers.map((b) => (
+                    <li key={b.courseKey}>
+                      <strong>{b.label}</strong>: {b.reason}
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           )}
@@ -640,7 +870,14 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           ) : (
             <>
               <ScheduleStepper generated={generated} previewIndex={previewIndex} onJump={handlePreview} />
-              <WeeklyGrid sectionIds={previewSectionIds} sectionsById={sectionsById} courseMap={courseMap} />
+              <WeeklyGrid
+                sectionIds={previewSectionIds}
+                sectionsById={sectionsById}
+                courseMap={courseMap}
+                lockedSectionIds={allLockedSectionIds}
+                onToggleLock={handlePreviewToggleLock}
+                onEliminate={handlePreviewEliminate}
+              />
             </>
           )}
 
