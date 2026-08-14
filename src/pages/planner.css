@@ -37,6 +37,27 @@
   display: block;
   flex-shrink: 0;
 }
+/* ===== HEADER NAV (Planner <-> Scheduler) ===== */
+.app-header-nav {
+  display: flex;
+  gap: 2px;
+  background: rgba(255,255,255,.12);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  flex-shrink: 0;
+}
+.app-header-nav-link {
+  padding: 5px 12px;
+  border-radius: var(--radius-xs);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: rgba(255,255,255,.8);
+  white-space: nowrap;
+  transition: background .15s, color .15s;
+}
+.app-header-nav-link:hover { color: #fff; }
+.app-header-nav-link.active { background: rgba(255,255,255,.22); color: #fff; }
+
 .planner-header-center {
   flex: 1;
   display: flex;
@@ -2406,6 +2427,7 @@ html[data-theme='dark'] .external-credit-no-hub { background: var(--white); }
   .btn-import-transcript-icon { display: inline; }
   .btn-import-transcript-label { display: none; }
   .btn-import-transcript { padding: 7px; }
+  .app-header-nav-link { padding: 5px 8px; font-size: 11.5px; }
 
   .mobile-tab-bar { display: flex; }
 

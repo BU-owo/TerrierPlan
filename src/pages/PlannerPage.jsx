@@ -34,6 +34,7 @@ import BulletinPanel from '../components/planner/BulletinPanel';
 import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
 import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
 import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
+import HeaderNav from '../components/HeaderNav';
 import { normalizeExternalCredits, normalizeExternalCredit } from '../utils/externalCredits';
 import { normalizeSemesters, normalizeGridSummerTerms, entryCourseKey } from '../utils/courseEntry';
 import { semesterLabel } from '../utils/hubConstants';
@@ -1140,6 +1141,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           />
           TerrierPlan
         </div>
+
+        <HeaderNav active="planner" />
 
         <div className="planner-header-center">
           {user ? (
