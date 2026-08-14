@@ -310,6 +310,15 @@
   background: var(--cream);
   color: var(--text);
 }
+.search-subject-mode-banner {
+  margin: 2px 0 8px;
+  padding: 4px 8px;
+  background: var(--cream);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs, 3px);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
 .search-results {
   flex: 1;
   overflow-y: auto;

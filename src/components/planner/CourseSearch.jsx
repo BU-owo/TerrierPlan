@@ -3,7 +3,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { HUB_COLOR_FOR } from '../../utils/hubConstants';
-import { parseCourseKey } from '../../utils/courseKey';
+import { parseCourseKey, normalizeCourseKey } from '../../utils/courseKey';
 import { getOfferingBadge } from '../../utils/offeringPattern';
 import SemesterPickerModal from './SemesterPickerModal';
 
@@ -154,6 +154,31 @@ function HubFilterSelect({ selected, onChange }) {
   );
 }
 
+// Stash toggle glyph — filled paw = stashed, outline paw = not. `currentColor`
+// so it inherits the button's own color (scarlet / stashed-amber / hover
+// white — see .search-result-stash-btn in planner.css), same as the star
+// glyphs it replaces, so dark mode needs no extra handling here.
+function PawIcon({ filled }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="13"
+      height="13"
+      aria-hidden="true"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    >
+      <ellipse cx="5.3" cy="10.1" rx="2.1" ry="2.6" />
+      <ellipse cx="9.5" cy="5.9" rx="2.1" ry="2.7" />
+      <ellipse cx="14.5" cy="5.9" rx="2.1" ry="2.7" />
+      <ellipse cx="18.7" cy="10.1" rx="2.1" ry="2.6" />
+      <path d="M12 12.4c-3.2 0-5.9 2.35-5.9 5.05 0 1.9 1.65 3 3.5 3 .9 0 1.55-.3 2.4-.3s1.5.3 2.4.3c1.85 0 3.5-1.1 3.5-3 0-2.7-2.7-5.05-5.9-5.05z" />
+    </svg>
+  );
+}
+
 function SearchResultCard({
   course,
   alreadyAdded,
@@ -240,7 +265,7 @@ function SearchResultCard({
         aria-label={isStashed ? `Remove ${courseLabel} from Paw-tential Courses` : `Add ${courseLabel} to Paw-tential Courses`}
         title={isStashed ? 'Remove from Paw-tential Courses' : 'Add to Paw-tential Courses'}
       >
-        {isStashed ? '★' : '☆'}
+        <PawIcon filled={isStashed} />
       </button>
     </div>
   );
@@ -266,7 +291,24 @@ export default function CourseSearch({
   const [selectedCourseForPicker, setSelectedCourseForPicker] = useState(null);
   const [allCourses, setAllCourses] = useState([]);
   const [coursesLoaded, setCoursesLoaded] = useState(false);
+  // { label, count } while a subject-prefix search ("CASCS", "CAS CS") is
+  // active, so the results list can show "Showing all N CAS CS courses"
+  // instead of a keyword-search list — see the filter effect below.
+  const [subjectModeInfo, setSubjectModeInfo] = useState(null);
   const debounceRef = useRef(null);
+
+  // Real subject prefixes present in the loaded catalog (e.g. "CASCS",
+  // "ENGEK", "QSTMF") — derived from courseKey, not hardcoded, so it can't
+  // drift from actual data. Used to decide whether a query "looks like" a
+  // subject code rather than treating every short alpha query as one.
+  const subjectPrefixes = useMemo(() => {
+    const set = new Set();
+    for (const course of allCourses) {
+      const parsed = parseCourseKey(course.id);
+      if (parsed) set.add(parsed.subject);
+    }
+    return set;
+  }, [allCourses]);
 
   // A fresh range filter (e.g. from "Browse eligible courses" in the
   // Requirements panel) replaces whatever the user was searching for, rather
@@ -304,6 +346,7 @@ export default function CourseSearch({
 
     if (!term && !hasHubFilter && !hasRangeFilter) {
       setResults([]);
+      setSubjectModeInfo(null);
       setLoading(false);
       return;
     }
@@ -316,51 +359,101 @@ export default function CourseSearch({
     debounceRef.current = setTimeout(() => {
       setLoading(true);
 
-      // Normalize query: strip spaces, uppercase
-      const normalizedQuery = term
-        ? term.replace(/\s+/g, '').toUpperCase()
-        : '';
+      // Normalize the same way courseKey itself is normalized (strip
+      // spaces, uppercase) — reused here so "CAS CS", "cascs", and "CASCS"
+      // all resolve identically.
+      const normalizedQuery = term ? normalizeCourseKey(term) : '';
       const excludeSet = new Set(rangeFilter?.exclude ?? []);
 
-      const matches = allCourses.filter((course) => {
-        let textMatch = true;
-        if (normalizedQuery) {
-          const normalizedCourseNum = (course.courseNumber || '')
-            .replace(/\s+/g, '')
-            .toUpperCase();
-          const normalizedCourseName = (course.name || '').toUpperCase();
-          textMatch =
-            normalizedCourseNum.includes(normalizedQuery) ||
-            normalizedCourseName.includes(normalizedQuery);
-        }
+      // Subject-prefix mode: the query, once normalized, IS a real subject
+      // code from the loaded catalog (not just alpha-looking) — e.g.
+      // "CASCS" for CAS CS, not an arbitrary short word. Guards against
+      // hijacking ordinary short keyword searches.
+      const isSubjectMode =
+        Boolean(normalizedQuery) &&
+        /^[A-Z]+$/.test(normalizedQuery) &&
+        subjectPrefixes.has(normalizedQuery);
 
-        let hubMatch = true;
-        if (hasHubFilter) {
-          const units = course.hubUnits ?? [];
-          // OR: course matches if it has ANY of the selected HUB codes
-          hubMatch = hubFilters.some((code) => units.includes(code));
-        }
+      let matches;
+      if (isSubjectMode) {
+        matches = allCourses
+          .filter((course) => {
+            if (!course.id.startsWith(normalizedQuery)) return false;
 
-        let rangeMatch = true;
-        if (hasRangeFilter) {
-          const parsed = parseCourseKey(course.id);
-          rangeMatch =
-            Boolean(parsed) &&
-            parsed.subject === rangeFilter.subject &&
-            parsed.number >= rangeFilter.min &&
-            parsed.number <= rangeFilter.max &&
-            !excludeSet.has(course.id);
-        }
+            let hubMatch = true;
+            if (hasHubFilter) {
+              const units = course.hubUnits ?? [];
+              hubMatch = hubFilters.some((code) => units.includes(code));
+            }
 
-        return textMatch && hubMatch && rangeMatch;
-      });
+            let rangeMatch = true;
+            if (hasRangeFilter) {
+              const parsed = parseCourseKey(course.id);
+              rangeMatch =
+                Boolean(parsed) &&
+                parsed.subject === rangeFilter.subject &&
+                parsed.number >= rangeFilter.min &&
+                parsed.number <= rangeFilter.max &&
+                !excludeSet.has(course.id);
+            }
 
-      setResults(matches.slice(0, 20));
+            return hubMatch && rangeMatch;
+          })
+          .sort(
+            (a, b) =>
+              (parseCourseKey(a.id)?.number ?? 0) -
+              (parseCourseKey(b.id)?.number ?? 0)
+          );
+      } else {
+        matches = allCourses.filter((course) => {
+          let textMatch = true;
+          if (normalizedQuery) {
+            const normalizedCourseNum = normalizeCourseKey(course.courseNumber || '');
+            const normalizedCourseName = (course.name || '').toUpperCase();
+            textMatch =
+              normalizedCourseNum.includes(normalizedQuery) ||
+              normalizedCourseName.includes(normalizedQuery);
+          }
+
+          let hubMatch = true;
+          if (hasHubFilter) {
+            const units = course.hubUnits ?? [];
+            // OR: course matches if it has ANY of the selected HUB codes
+            hubMatch = hubFilters.some((code) => units.includes(code));
+          }
+
+          let rangeMatch = true;
+          if (hasRangeFilter) {
+            const parsed = parseCourseKey(course.id);
+            rangeMatch =
+              Boolean(parsed) &&
+              parsed.subject === rangeFilter.subject &&
+              parsed.number >= rangeFilter.min &&
+              parsed.number <= rangeFilter.max &&
+              !excludeSet.has(course.id);
+          }
+
+          return textMatch && hubMatch && rangeMatch;
+        });
+      }
+
+      if (isSubjectMode && matches.length > 0) {
+        // Prefer the real, spaced display form ("CAS CS") over the bare
+        // normalized query ("CASCS") — derived from an actual course's
+        // courseNumber rather than guessed, so it matches however the
+        // catalog actually spaces/labels that subject.
+        const sampleLabel = (matches[0].courseNumber || normalizedQuery).replace(/\s*\d+\s*$/, '').trim();
+        setSubjectModeInfo({ label: sampleLabel || normalizedQuery, count: matches.length });
+        setResults(matches);
+      } else {
+        setSubjectModeInfo(null);
+        setResults(matches.slice(0, 20));
+      }
       setLoading(false);
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [searchQuery, hubFilters, rangeFilter, coursesLoaded, allCourses]);
+  }, [searchQuery, hubFilters, rangeFilter, coursesLoaded, allCourses, subjectPrefixes]);
 
   const hasActiveQuery = Boolean(searchQuery.trim()) || hubFilters.length > 0 || Boolean(rangeFilter);
   const stashSet = useMemo(() => new Set(stash), [stash]);
@@ -452,6 +545,13 @@ export default function CourseSearch({
             />
             Search by course code or name, then click a result to add it to a
             semester.
+          </div>
+        )}
+
+        {!loading && subjectModeInfo && results.length > 0 && (
+          <div className="search-subject-mode-banner">
+            Showing all {subjectModeInfo.count} {subjectModeInfo.label} course
+            {subjectModeInfo.count === 1 ? '' : 's'}
           </div>
         )}
 

@@ -124,7 +124,7 @@ export default function StashPanel({
               width={28}
               height={28}
             />
-            Nothing saved yet — use the bookmark button (☆) on a search result
+            Nothing saved yet — use the paw button on a search result
             to stash it here for later.
           </div>
         )}
