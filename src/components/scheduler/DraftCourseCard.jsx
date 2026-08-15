@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { compareSectionsByTime } from '../../utils/sectionTime';
 import { groupSectionsByComponent } from '../../utils/sectionComponents';
-import { EMPTY_COURSE_FILTERS, matchesFilters, isCourseFilterActive } from '../../utils/sectionFilters';
+import { matchesFilters, isGlobalFilterActive } from '../../utils/sectionFilters';
 import SectionRow from './SectionRow';
 
 function groupStatusLabel(considering, lockedIdsInGroup) {
@@ -23,23 +23,35 @@ export default function DraftCourseCard({
   lockedIds,
   conflictMap,
   sortMode,
-  filters = EMPTY_COURSE_FILTERS,
   globalTimeFilter,
-  onFilterChange,
   onToggleSection,
   onToggleLock,
   onSelectAll,
   onDeselectAll,
   onRemoveCourse,
+  collapseSignal,
 }) {
   // Collapse state is deliberately local (not lifted to SchedulerPage) —
   // it's a per-card view preference, not something that needs to survive
   // a page reload. Newly-added cards default to expanded so the student
-  // sees what they just added. `filters` (time range + professor), unlike
-  // collapse, IS lifted to SchedulerPage — the "why is Generate disabled"
-  // blocker list needs visibility into per-course filter state too (see
-  // SchedulerPage's generateBlockers), so it's a controlled prop here.
+  // sees what they just added.
   const [collapsed, setCollapsed] = useState(false);
+
+  // `collapseSignal` is a counter SchedulerPage bumps every time a course
+  // gets added to the draft — see handleAddCourse. Any card already
+  // mounted when that happens auto-collapses, so the student isn't stuck
+  // scrolling past everything they already set up to reach the new one.
+  // The ref skips the very first effect run (on this card's own mount, for
+  // both a freshly-added course and one restored from a saved schedule) so
+  // a card doesn't collapse itself the moment it appears.
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setCollapsed(true);
+  }, [collapseSignal]);
 
   const courseLabel = courseData?.courseNumber ?? courseKey;
   const comparator = sortMode === 'time'
@@ -48,13 +60,15 @@ export default function DraftCourseCard({
   const groups = groupSectionsByComponent(sections, comparator).map((group) => {
     const groupConsidering = considering[group.key] || [];
     const groupLockedIds = group.sections.map((s) => s.id).filter((id) => lockedIds.has(id));
-    const visibleSections = group.sections.filter((s) => matchesFilters(s, filters, globalTimeFilter));
-    return { ...group, groupConsidering, groupLockedIds, visibleSections };
+    const matchingIds = new Set(
+      group.sections.filter((s) => matchesFilters(s, globalTimeFilter)).map((s) => s.id),
+    );
+    return { ...group, groupConsidering, groupLockedIds, matchingIds };
   });
 
   const isReady = groups.length > 0 && groups.every((g) => g.groupConsidering.length > 0 || g.groupLockedIds.length > 0);
   const creditsLabel = sections[0]?.credits != null ? `${sections[0].credits} cr` : null;
-  const filtersActive = isCourseFilterActive(filters);
+  const anyFilterActive = isGlobalFilterActive(globalTimeFilter);
 
   return (
     <div className="sched-draft-card">
@@ -94,44 +108,11 @@ export default function DraftCourseCard({
         <div className="sched-draft-card-empty">No sections found for this term.</div>
       )}
 
-      {!collapsed && !loading && sections.length > 0 && (
-        <div className="sched-filter-bar">
-          <label className="sched-filter-field">
-            <span>Starts after</span>
-            <input
-              type="time"
-              value={filters.startTime}
-              onChange={(e) => onFilterChange({ ...filters, startTime: e.target.value })}
-            />
-          </label>
-          <label className="sched-filter-field">
-            <span>Starts before</span>
-            <input
-              type="time"
-              value={filters.endTime}
-              onChange={(e) => onFilterChange({ ...filters, endTime: e.target.value })}
-            />
-          </label>
-          <label className="sched-filter-field sched-filter-field-professor">
-            <span>Professor</span>
-            <input
-              type="text"
-              placeholder="e.g. Smith"
-              value={filters.professor}
-              onChange={(e) => onFilterChange({ ...filters, professor: e.target.value })}
-            />
-          </label>
-          {filtersActive && (
-            <button type="button" className="sched-filter-clear" onClick={() => onFilterChange(EMPTY_COURSE_FILTERS)}>
-              Clear filters
-            </button>
-          )}
-        </div>
-      )}
-
       {!collapsed && !loading && groups.map((group) => {
-        const allVisibleSelected = group.visibleSections.length > 0 &&
-          group.visibleSections.every((s) => group.groupConsidering.includes(s.id) || group.groupLockedIds.includes(s.id));
+        const matchingCount = group.matchingIds.size;
+        const allMatchingSelected = matchingCount > 0 &&
+          group.sections.every((s) => !group.matchingIds.has(s.id) ||
+            group.groupConsidering.includes(s.id) || group.groupLockedIds.includes(s.id));
 
         return (
           <div className="sched-section-group" key={group.key}>
@@ -143,36 +124,36 @@ export default function DraftCourseCard({
               <span className={`sched-draft-card-hint${group.groupLockedIds.length > 0 ? ' is-locked' : ''}`}>
                 {groupStatusLabel(group.groupConsidering, group.groupLockedIds)}
               </span>
-              {group.visibleSections.length > 0 && (
+              {matchingCount > 0 && (
                 <button
                   type="button"
                   className="sched-select-all-btn"
-                  onClick={() => (allVisibleSelected
+                  onClick={() => (allMatchingSelected
                     ? onDeselectAll(group.key)
-                    : onSelectAll(group.key, group.visibleSections.map((s) => s.id)))}
+                    : onSelectAll(group.key, group.sections.filter((s) => group.matchingIds.has(s.id)).map((s) => s.id)))}
                 >
-                  {allVisibleSelected ? 'Deselect all' : 'Select all'}
+                  {allMatchingSelected ? 'Deselect all' : 'Select all'}
                 </button>
               )}
             </div>
-            {group.visibleSections.length === 0 ? (
-              <div className="sched-draft-card-empty">No sections match your filters.</div>
-            ) : (
-              <div className="sched-section-list">
-                {group.visibleSections.map((section) => (
-                  <SectionRow
-                    key={section.id}
-                    section={section}
-                    checked={group.groupConsidering.includes(section.id)}
-                    locked={lockedIds.has(section.id)}
-                    conflicts={conflictMap[section.id]}
-                    notes={!group.commonNotes ? section.notes : null}
-                    onToggle={() => onToggleSection(group.key, section.id)}
-                    onToggleLock={() => onToggleLock(group.key, section.id)}
-                  />
-                ))}
-              </div>
+            {anyFilterActive && matchingCount === 0 && (
+              <div className="sched-draft-card-empty">No sections match the global time filter — shown dimmed below.</div>
             )}
+            <div className="sched-section-list">
+              {group.sections.map((section) => (
+                <SectionRow
+                  key={section.id}
+                  section={section}
+                  checked={group.groupConsidering.includes(section.id)}
+                  locked={lockedIds.has(section.id)}
+                  conflicts={conflictMap[section.id]}
+                  notes={!group.commonNotes ? section.notes : null}
+                  filteredOut={!group.matchingIds.has(section.id)}
+                  onToggle={() => onToggleSection(group.key, section.id)}
+                  onToggleLock={() => onToggleLock(group.key, section.id)}
+                />
+              ))}
+            </div>
           </div>
         );
       })}

@@ -12,7 +12,7 @@ import { describeSectionTime } from '../../utils/sectionTime';
 // (the lock already implies it's "in", and un-checking it while leaving the
 // lock in place would be a confusing state to be in), and it gets its own
 // pin/border treatment distinct from a plain checked row.
-export default function SectionRow({ section, checked, locked, conflicts, notes, onToggle, onToggleLock }) {
+export default function SectionRow({ section, checked, locked, conflicts, notes, filteredOut, onToggle, onToggleLock }) {
   const [conflictExpanded, setConflictExpanded] = useState(false);
 
   const instructorLabel = section.instructors?.length
@@ -30,6 +30,7 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
         checked ? 'is-checked' : '',
         locked ? 'is-locked' : '',
         conflictCount > 0 ? 'has-conflict' : '',
+        filteredOut ? 'is-filtered-out' : '',
       ].filter(Boolean).join(' ')}
     >
       <label className="sched-section-row-main">
@@ -46,6 +47,9 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
             <span className={`sched-enrl-badge ${isOpen ? 'is-open' : 'is-closed'}`}>
               {section.enrlStat || '—'}
             </span>
+            {filteredOut && (
+              <span className="sched-filtered-out-badge" title="Doesn't fit your time filter">Outside filter</span>
+            )}
           </div>
           <div className="sched-section-row-details">
             <span>{describeSectionTime(section)}</span>

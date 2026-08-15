@@ -19,6 +19,7 @@ import { useAuth } from '../hooks/useAuth';
 import HeaderNav from '../components/HeaderNav';
 import SchedulerSearch from '../components/scheduler/SchedulerSearch';
 import DraftCourseCard from '../components/scheduler/DraftCourseCard';
+import GlobalTimeFilter from '../components/scheduler/GlobalTimeFilter';
 import ScheduleStepper from '../components/scheduler/ScheduleStepper';
 import WeeklyGrid from '../components/scheduler/WeeklyGrid';
 import SavedSchedulesPanel from '../components/scheduler/SavedSchedulesPanel';
@@ -32,7 +33,7 @@ import {
   missingGroupsForCourse,
   totalCredits,
 } from '../utils/scheduleCombos';
-import { EMPTY_COURSE_FILTERS, EMPTY_GLOBAL_FILTERS, filterBlockDetail } from '../utils/sectionFilters';
+import { EMPTY_GLOBAL_FILTERS, filterBlockDetail } from '../utils/sectionFilters';
 import './planner.css';
 import './scheduler.css';
 import '../App.css';
@@ -140,6 +141,12 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // Order = the order courses were added. `locked` has no size cap — see
   // scheduleCombos.js's buildGenerationSlots.
   const [draftCourses, setDraftCourses] = useState([]);
+  // Bumped every time a course is added — DraftCourseCard watches this to
+  // auto-collapse itself (unless it's the card that just mounted), so
+  // adding another course doesn't leave the student scrolling past every
+  // card they already finished setting up. See DraftCourseCard's
+  // collapseSignal effect.
+  const [collapseSignal, setCollapseSignal] = useState(0);
   const [courseMap, setCourseMap] = useState({}); // courseKey -> course doc
   const [sectionsByCourse, setSectionsByCourse] = useState({}); // courseKey -> sectionDoc[]
   const [loadingSectionsFor, setLoadingSectionsFor] = useState(new Set());
@@ -147,22 +154,15 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // — one control for every course card, not per-card, since it's a display
   // preference rather than something that varies course to course.
   const [sectionSortMode, setSectionSortMode] = useState('time');
-  // { startTime, endTime } — applies to every course's section list at
-  // once, e.g. "hide everything before 10am" across the whole draft. Kept
-  // separate from `courseFilters` below: it has no `professor` field
-  // (disjoint instructor pools across different courses make a global
-  // professor filter meaningless — it'd just zero out every course but
-  // one), and it's cleared independently of any single course's filters.
+  // { mode, global, perDay } — applies to every course's section list at
+  // once, e.g. "hide everything before 10am" across the whole draft, with
+  // an optional per-weekday override (see sectionFilters.js and
+  // GlobalTimeFilter.jsx). Time is intentionally global-only — there's no
+  // per-course time filter — since a student picks one time preference for
+  // their whole schedule, not one per class; a section outside it is
+  // dimmed rather than removed (see DraftCourseCard) so overriding for one
+  // specific section doesn't need its own control.
   const [globalTimeFilter, setGlobalTimeFilter] = useState(EMPTY_GLOBAL_FILTERS);
-  // { [courseKey]: { startTime, endTime, professor } } — lifted up from
-  // DraftCourseCard (rather than kept as that component's own local state)
-  // specifically so the "why is Generate disabled" blocker list can see
-  // whether a missing pick is because a filter is hiding every option, not
-  // just because nothing's been picked yet — see generateBlockers and
-  // sectionFilters.js's filterBlockDetail. A course with no entry here
-  // hasn't touched its filters; DraftCourseCard is handed
-  // EMPTY_COURSE_FILTERS as the default wherever it's read.
-  const [courseFilters, setCourseFilters] = useState({});
 
   // ── Generated combinations + preview ───────────────────────────────────────
   const [generated, setGenerated] = useState(null); // { schedules: sectionId[][], truncated } | null
@@ -369,23 +369,20 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       }
       const missing = missingGroupsForCourse(course, sections, sectionsById);
       if (!missing || missing.length === 0) return [];
-      const courseFilter = courseFilters[course.courseKey] ?? EMPTY_COURSE_FILTERS;
       const parts = missing.map((g) => {
         const groupLabel = g.label === 'Other' ? 'one of the ungrouped sections' : `${articleFor(g.label)} ${g.label}`;
-        // A missing pick can mean "nothing's been checked yet" OR "a
-        // filter is hiding every option in this group" — those call for
-        // different next steps from the student, so say which one it is
-        // instead of a blanket "pick a Discussion Section" that'd be
+        // A missing pick can mean "nothing's been checked yet" OR "the
+        // global time filter is hiding every option in this group" — those
+        // call for different next steps from the student, so say which one
+        // it is instead of a blanket "pick a Discussion Section" that'd be
         // misleading if there's nothing visible to pick from at all.
-        const detail = filterBlockDetail(g.sections, courseFilter, globalTimeFilter);
+        const detail = filterBlockDetail(g.sections, globalTimeFilter);
         if (detail === 'global') return `${groupLabel} (all hidden by your global time filter)`;
-        if (detail === 'course') return `${groupLabel} (all hidden by this course's filter)`;
-        if (detail === 'both') return `${groupLabel} (all hidden by your global and course filters)`;
         return groupLabel;
       });
       return [{ courseKey: course.courseKey, label, reason: `pick ${parts.join(' and ')}` }];
     });
-  }, [draftCourses, sectionsByCourse, sectionsById, courseMap, loadingSectionsFor, courseFilters, globalTimeFilter]);
+  }, [draftCourses, sectionsByCourse, sectionsById, courseMap, loadingSectionsFor, globalTimeFilter]);
 
   const canGenerate = draftCourses.length > 0 && generateBlockers.length === 0;
 
@@ -400,6 +397,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   function handleAddCourse(courseKey) {
     if (draftCourseKeys.has(courseKey)) return;
     setDraftCourses((prev) => [...prev, { courseKey, considering: {}, locked: [] }]);
+    setCollapseSignal((n) => n + 1);
     invalidateGenerated();
     if (!courseMap[courseKey]) fetchCourseDocs([courseKey]);
     if (!sectionsByCourse[courseKey]) fetchSectionsForCourse(courseKey);
@@ -407,20 +405,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   function handleRemoveCourse(courseKey) {
     setDraftCourses((prev) => prev.filter((c) => c.courseKey !== courseKey));
-    setCourseFilters((prev) => {
-      if (!(courseKey in prev)) return prev;
-      const next = { ...prev };
-      delete next[courseKey];
-      return next;
-    });
     invalidateGenerated();
-  }
-
-  // Per-course filters only ever hide rows (see DraftCourseCard) — never
-  // touch `considering`/locked — so changing them doesn't invalidate
-  // anything already generated the way a real pick/lock change does.
-  function handleCourseFilterChange(courseKey, filters) {
-    setCourseFilters((prev) => ({ ...prev, [courseKey]: filters }));
   }
 
   function handleToggleSection(courseKey, groupKey, sectionId) {
@@ -785,35 +770,11 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           )}
 
           {draftCourses.length > 0 && (
-            <div className="sched-global-filter-bar">
-              <span className="sched-global-filter-label">Global time filter</span>
-              <label className="sched-filter-field">
-                <span>Starts after</span>
-                <input
-                  type="time"
-                  value={globalTimeFilter.startTime}
-                  onChange={(e) => setGlobalTimeFilter((f) => ({ ...f, startTime: e.target.value }))}
-                />
-              </label>
-              <label className="sched-filter-field">
-                <span>Starts before</span>
-                <input
-                  type="time"
-                  value={globalTimeFilter.endTime}
-                  onChange={(e) => setGlobalTimeFilter((f) => ({ ...f, endTime: e.target.value }))}
-                />
-              </label>
-              {(globalTimeFilter.startTime || globalTimeFilter.endTime) && (
-                <button
-                  type="button"
-                  className="sched-filter-clear"
-                  onClick={() => setGlobalTimeFilter(EMPTY_GLOBAL_FILTERS)}
-                >
-                  Clear global filter
-                </button>
-              )}
-              <span className="sched-global-filter-hint">Applies to every course below, alongside each course's own filters.</span>
-            </div>
+            <GlobalTimeFilter
+              value={globalTimeFilter}
+              onChange={setGlobalTimeFilter}
+              onClear={() => setGlobalTimeFilter(EMPTY_GLOBAL_FILTERS)}
+            />
           )}
 
           {draftCourses.map(({ courseKey, considering, locked }) => (
@@ -827,9 +788,8 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
               lockedIds={new Set(locked)}
               conflictMap={conflictMap}
               sortMode={sectionSortMode}
-              filters={courseFilters[courseKey] ?? EMPTY_COURSE_FILTERS}
               globalTimeFilter={globalTimeFilter}
-              onFilterChange={(filters) => handleCourseFilterChange(courseKey, filters)}
+              collapseSignal={collapseSignal}
               onToggleSection={(groupKey, sectionId) => handleToggleSection(courseKey, groupKey, sectionId)}
               onToggleLock={(groupKey, sectionId) => handleToggleLock(courseKey, groupKey, sectionId)}
               onSelectAll={(groupKey, sectionIds) => handleSelectAllSections(courseKey, groupKey, sectionIds)}
@@ -868,7 +828,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
               checking an additional section for one of your courses.
             </div>
           ) : (
-            <>
+            <div className="sched-preview-scroll">
               <ScheduleStepper generated={generated} previewIndex={previewIndex} onJump={handlePreview} />
               <WeeklyGrid
                 sectionIds={previewSectionIds}
@@ -878,7 +838,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                 onToggleLock={handlePreviewToggleLock}
                 onEliminate={handlePreviewEliminate}
               />
-            </>
+            </div>
           )}
 
           <SavedSchedulesPanel

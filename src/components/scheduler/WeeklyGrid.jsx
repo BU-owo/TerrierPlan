@@ -1,10 +1,24 @@
 import { DAY_ORDER, sectionMeeting, describeSectionTime, formatClock } from '../../utils/sectionTime';
 import { courseColorIndex } from '../../utils/scheduleColors';
 
-const PX_PER_MIN = 2;
-const DEFAULT_START = 8 * 60; // 8:00am floor, so an empty/light schedule still reads as a normal day
-const DEFAULT_END = 18 * 60; // 6:00pm ceiling
-const MIN_BLOCK_HEIGHT = 62; // tall enough for code/time/prof/room even on a short class
+const PX_PER_MIN = 1.6;
+const DEFAULT_START = 8 * 60; // 8:00am — only used as the empty-schedule fallback range
+const DEFAULT_END = 18 * 60; // 6:00pm
+const RANGE_PAD_MIN = 30; // small buffer above the earliest and below the latest class
+const MIN_RANGE_SPAN_MIN = 5 * 60; // never show less than a 5-hour window, so one class doesn't look like a sliver
+
+// A block's minimum height only needs to guarantee the course code + time
+// line fit — professor/room are extra detail, shown only once there's
+// genuinely room for them (see showProf/showRoom below). This is what
+// keeps a short class's block from either forcing everything else taller
+// than it needs to be, or cramming 4 lines into a box that only fits 2 and
+// having the bottom ones clip.
+const BLOCK_PADDING_V = 10;
+const ACTIONS_ROW_H = 17;
+const LINE_H = 14;
+const MIN_BLOCK_HEIGHT = BLOCK_PADDING_V + ACTIONS_ROW_H + LINE_H * 2;
+const PROF_LINE_THRESHOLD = MIN_BLOCK_HEIGHT + LINE_H;
+const ROOM_LINE_THRESHOLD = PROF_LINE_THRESHOLD + LINE_H;
 
 function formatHourLabel(hour) {
   const h = hour % 24;
@@ -46,8 +60,20 @@ export default function WeeklyGrid({
 
   const rawMin = withMeeting.length > 0 ? Math.min(...withMeeting.map((m) => m.meeting.startMin)) : DEFAULT_START;
   const rawMax = withMeeting.length > 0 ? Math.max(...withMeeting.map((m) => m.meeting.endMin)) : DEFAULT_END;
-  const gridStart = Math.floor(Math.min(rawMin, DEFAULT_START) / 60) * 60;
-  const gridEnd = Math.ceil(Math.max(rawMax, DEFAULT_END) / 60) * 60;
+  // Fit the grid to the actual classes (plus a small buffer) instead of
+  // always forcing a full 8am–6pm span — a schedule that only runs
+  // 10am–2pm shouldn't render 10 hours tall just because that's a "normal
+  // day." A floor keeps a single class from looking like a razor-thin
+  // sliver, and everything's clamped to a real day (0–24h).
+  let gridStart = Math.floor((rawMin - RANGE_PAD_MIN) / 60) * 60;
+  let gridEnd = Math.ceil((rawMax + RANGE_PAD_MIN) / 60) * 60;
+  if (gridEnd - gridStart < MIN_RANGE_SPAN_MIN) {
+    const mid = (gridStart + gridEnd) / 2;
+    gridStart = Math.floor((mid - MIN_RANGE_SPAN_MIN / 2) / 60) * 60;
+    gridEnd = gridStart + MIN_RANGE_SPAN_MIN;
+  }
+  gridStart = Math.max(gridStart, 0);
+  gridEnd = Math.min(gridEnd, 24 * 60);
 
   const hours = [];
   for (let t = gridStart; t <= gridEnd; t += 60) hours.push(t / 60);
@@ -86,6 +112,14 @@ export default function WeeklyGrid({
                   const roomAndNbr = [section.facilId, section.classNbr ? `#${section.classNbr}` : null]
                     .filter(Boolean)
                     .join(' · ');
+                  // Course code + time always show; professor/room only
+                  // once the block is actually tall enough for them, so a
+                  // short class shows fewer, complete lines instead of a
+                  // 4th line clipped halfway through — see the threshold
+                  // constants above.
+                  const blockHeight = Math.max(MIN_BLOCK_HEIGHT, (meeting.endMin - meeting.startMin) * PX_PER_MIN);
+                  const showProf = Boolean(profLastName) && blockHeight >= PROF_LINE_THRESHOLD;
+                  const showRoom = Boolean(roomAndNbr) && blockHeight >= ROOM_LINE_THRESHOLD;
 
                   return (
                     <div
@@ -93,7 +127,7 @@ export default function WeeklyGrid({
                       className={`sched-grid-block sched-color-${courseColorIndex(section.courseKey)}${isLocked ? ' is-locked' : ''}`}
                       style={{
                         top: (meeting.startMin - gridStart) * PX_PER_MIN,
-                        height: Math.max(MIN_BLOCK_HEIGHT, (meeting.endMin - meeting.startMin) * PX_PER_MIN),
+                        height: blockHeight,
                       }}
                       title={`${courseCode} — Section ${section.classSection} — ${describeSectionTime(section)}${section.facilId ? ` — ${section.facilId}` : ''}`}
                     >
@@ -119,8 +153,8 @@ export default function WeeklyGrid({
                       </div>
                       <span className="sched-grid-block-code">{courseCode} {section.classSection}</span>
                       <span className="sched-grid-block-time">{formatClock(meeting.startMin)}–{formatClock(meeting.endMin)}</span>
-                      {profLastName && <span className="sched-grid-block-prof">{profLastName}</span>}
-                      {roomAndNbr && <span className="sched-grid-block-room">{roomAndNbr}</span>}
+                      {showProf && <span className="sched-grid-block-prof">{profLastName}</span>}
+                      {showRoom && <span className="sched-grid-block-room">{roomAndNbr}</span>}
                     </div>
                   );
                 })}

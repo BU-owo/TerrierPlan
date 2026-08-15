@@ -267,12 +267,12 @@ html[data-theme='dark'] {
    glance rather than "one more course's filter bar" — see
    SchedulerPage.jsx, which owns this state (DraftCourseCard's per-course
    filters are lifted there too, for the same reason: the "why is Generate
-   disabled" blocker list needs to see both). ===== */
+   disabled" blocker list needs to see both). Starts collapsed (see
+   GlobalTimeFilter.jsx) behind a one-line summary, reusing DraftCourseCard's
+   toggle/chevron classes for the header. ===== */
 .sched-global-filter-bar {
   display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 8px 10px;
+  flex-direction: column;
   margin-bottom: 12px;
   padding: 8px 10px;
   background: var(--scarlet-pale);
@@ -280,52 +280,41 @@ html[data-theme='dark'] {
   border-radius: var(--radius-sm);
 }
 .sched-global-filter-label {
-  flex-basis: 100%;
   font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .4px;
   color: var(--scarlet);
+  white-space: nowrap;
+}
+.sched-global-filter-summary {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.sched-global-filter-summary.is-active { color: var(--scarlet); }
+.sched-global-filter-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.sched-global-filter-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
 }
 .sched-global-filter-hint {
   font-size: 10.5px;
   color: var(--text-muted);
-  align-self: center;
 }
 .sched-global-filter-bar .sched-filter-clear { color: var(--scarlet); }
 
-/* ===== Per-course filters (time range + professor) — hides non-matching
-   rows only, never touches considering/locked state. Combines (AND) with
-   the global time filter above; see sectionFilters.js. ===== */
-.sched-filter-bar {
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  margin-bottom: 10px;
-  padding: 8px 10px;
-  background: var(--cream);
-  border-radius: var(--radius-sm);
-}
-.sched-filter-field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-.sched-filter-field input {
-  padding: 4px 7px;
-  border-radius: var(--radius-xs);
-  border: 1.5px solid var(--border);
-  background: var(--white);
-  font-size: 12px;
-  color: var(--text);
-}
-.sched-filter-field input:focus { outline: none; border-color: var(--scarlet); }
-.sched-filter-field-professor { flex: 1 1 120px; }
-.sched-filter-field-professor input { width: 100%; }
+/* ===== Clear button — reused by the global time filter's "Clear global
+   filter" (see GlobalTimeFilter.jsx). ===== */
 .sched-filter-clear {
   font-size: 11px;
   font-weight: 600;
@@ -338,6 +327,160 @@ html[data-theme='dark'] {
   white-space: nowrap;
 }
 .sched-filter-clear:hover { color: var(--scarlet); }
+
+/* ===== Global time filter (GlobalTimeFilter.jsx + TimeSelect.jsx) — every
+   time value is picked from <select> dropdowns, never typed. Kept
+   compact: an unset bound is a small "+ Earliest"/"+ Latest" button, not a
+   disabled dropdown trio sitting there taking up space. ===== */
+.sched-global-time-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-basis: 100%;
+}
+.sched-time-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.sched-time-preset-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.sched-time-preset-chip:hover { border-color: var(--scarlet-light); }
+.sched-time-preset-chip.active {
+  background: var(--scarlet);
+  border-color: var(--scarlet);
+  color: #fff;
+}
+
+/* Unset bound — just a small "add" affordance. */
+.sched-time-pill-add {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1.5px dashed var(--border);
+  background: none;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.sched-time-pill-add:hover { border-color: var(--scarlet-light); color: var(--scarlet); }
+
+/* Set bound — label + dropdown trio + clear, as one compact pill. */
+.sched-time-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 20px;
+  border: 1.5px solid var(--scarlet-light);
+  background: var(--white);
+}
+.sched-time-pill-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--scarlet);
+  white-space: nowrap;
+}
+.sched-time-pill-clear {
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+}
+.sched-time-pill-clear:hover { color: var(--scarlet); }
+
+/* Hour / minute / AM-PM dropdown trio — see TimeSelect.jsx. */
+.sched-time-select {
+  display: inline-flex;
+  gap: 3px;
+}
+.sched-time-select select {
+  padding: 2px 3px;
+  border-radius: var(--radius-xs);
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  font-size: 11px;
+  color: var(--text);
+}
+.sched-time-select select:focus { outline: none; border-color: var(--scarlet); }
+
+/* "Customize by day" toggle switch. */
+.sched-time-mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  width: fit-content;
+}
+.sched-time-mode-switch input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.sched-time-mode-switch-track {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border-radius: 20px;
+  background: var(--border);
+  transition: background .15s;
+  flex-shrink: 0;
+}
+.sched-time-mode-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--white);
+  transition: left .15s;
+}
+.sched-time-mode-switch input:checked + .sched-time-mode-switch-track {
+  background: var(--scarlet);
+}
+.sched-time-mode-switch input:checked + .sched-time-mode-switch-track .sched-time-mode-switch-thumb {
+  left: 14px;
+}
+.sched-time-mode-switch input:focus-visible + .sched-time-mode-switch-track {
+  outline: 2px solid var(--scarlet);
+  outline-offset: 2px;
+}
+
+/* Per-day rows, shown only in 'custom' mode — one compact line per day; a
+   day with nothing set here just inherits the same-every-day row above
+   (see sectionFilters.js), so there's nothing else to show on that line. */
+.sched-time-day-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.sched-time-day-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sched-time-day-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 26px;
+  flex-shrink: 0;
+}
 
 /* ===== Section groups (Lecture / Discussion-Lab / Other) ===== */
 .sched-section-group + .sched-section-group {
@@ -407,6 +550,27 @@ html[data-theme='dark'] {
 .sched-section-row.is-locked {
   border-color: var(--badge-warm-text);
   background: var(--badge-warm-bg);
+}
+/* Doesn't fit the active time filter(s) — dimmed rather than removed from
+   the list, so a section is still visible and pickable if the student
+   wants to override the filter for this one case (see sectionFilters.js
+   and DraftCourseCard, which stopped filtering sections out of the list
+   entirely for exactly this reason). */
+.sched-section-row.is-filtered-out {
+  opacity: .45;
+}
+.sched-section-row.is-filtered-out:hover {
+  opacity: .75;
+}
+.sched-filtered-out-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  background: var(--border-light);
+  color: var(--text-muted);
 }
 .sched-section-row-main {
   display: flex;
@@ -582,6 +746,15 @@ html[data-theme='dark'] {
 .sched-right-header h2 { font-size: 13px; font-weight: 700; color: var(--text); }
 .sched-right-credits { font-size: 12px; color: var(--text-muted); font-weight: 600; }
 
+/* Wraps the stepper + grid (not the saved-schedules panel below). Its own
+   gap replaces the one `.scheduler-right`'s flex layout used to provide
+   when these were direct siblings there. */
+.sched-preview-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .sched-grid-empty {
   padding: 32px 12px;
   text-align: center;
@@ -604,9 +777,17 @@ html[data-theme='dark'] {
   padding-bottom: 4px;
   border-bottom: 1.5px solid var(--border);
 }
+/* Bounded + independently scrollable: day labels above stay pinned in
+   view, and the calendar itself no longer forces the whole right panel
+   (including the saved-schedules list below it) to scroll just to see the
+   bottom of a tall week — see WeeklyGrid.jsx, which also now sizes the
+   actual time range to the classes shown rather than always rendering a
+   fixed 8am–6pm span, so this scrollbar should rarely even appear. */
 .sched-grid-body {
   position: relative;
   display: flex;
+  max-height: 56vh;
+  overflow-y: auto;
 }
 .sched-grid-time-gutter { position: relative; }
 .sched-grid-hour-label {
@@ -670,14 +851,22 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
 .sched-grid-block-action-btn.is-locked { opacity: 1; }
 .sched-grid-block-eliminate-btn { font-size: 12px; color: var(--text-secondary); }
 .sched-grid-block-eliminate-btn:hover { color: var(--warning-border); background: var(--warning-surface); }
-.sched-grid-block-code { font-size: 11px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sched-grid-block-code { font-size: 11px; font-weight: 700; color: var(--text); }
 .sched-grid-block-time,
 .sched-grid-block-prof,
 .sched-grid-block-room { font-size: 10px; color: var(--text-secondary); }
-/* Room/class-nbr is the lowest-priority line — truncates with an ellipsis
-   instead of wrapping, so it never hard-clips mid-digit on a short block
-   the way an unbounded wrap would. */
-.sched-grid-block-room { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Every line truncates with an ellipsis instead of wrapping — a narrow
+   column would otherwise wrap a line onto a second row and push later
+   lines out of the block's (fixed-height) bottom edge, which reads as text
+   getting cut off rather than cleanly shortened. */
+.sched-grid-block-code,
+.sched-grid-block-time,
+.sched-grid-block-prof,
+.sched-grid-block-room {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .sched-grid-no-meeting {
   margin-top: 10px;
   font-size: 11.5px;

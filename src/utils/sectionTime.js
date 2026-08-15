@@ -91,18 +91,4 @@ export function compareSectionsByTime(a, b) {
   return (a.classSection || '').localeCompare(b.classSection || '');
 }
 
-// "14:00" (24-hour, from an <input type="time">) -> 840. Kept distinct from
-// parseTimeToMinutes, which expects PeopleSoft's "01:25PM" export format —
-// this is for the section-picker's time-range filter, a different input
-// shape entirely.
-export function parse24HourTimeToMinutes(value) {
-  if (!value) return null;
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
-  if (!match) return null;
-  const hour = parseInt(match[1], 10);
-  const minute = parseInt(match[2], 10);
-  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
-  return hour * 60 + minute;
-}
-
 export { DAY_ORDER };
