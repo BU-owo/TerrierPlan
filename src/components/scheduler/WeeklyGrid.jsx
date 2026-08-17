@@ -1,5 +1,6 @@
+import { useEffect, useRef, useState } from 'react';
 import { DAY_ORDER, sectionMeeting, describeSectionTime, formatClock } from '../../utils/sectionTime';
-import { courseColorIndex } from '../../utils/scheduleColors';
+import { SCHED_COLOR_COUNT, resolvedCourseColorIndex } from '../../utils/scheduleColors';
 
 const PX_PER_MIN = 1.6;
 const DEFAULT_START = 8 * 60; // 8:00am — only used as the empty-schedule fallback range
@@ -26,6 +27,47 @@ function formatHourLabel(hour) {
   return `${h12} ${h < 12 ? 'AM' : 'PM'}`;
 }
 
+// One swatch-pick popover, anchored under whichever legend chip opened it —
+// lives in the legend row (normal document flow) rather than inside a grid
+// block, so it never gets clipped by sched-grid-body's own scroll area.
+function ColorPickerPopover({ current, onPick, onClose }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function onPointerDown(e) {
+      if (ref.current && !ref.current.contains(e.target)) onClose();
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="sched-color-popover" ref={ref} role="menu">
+      {Array.from({ length: SCHED_COLOR_COUNT }, (_, i) => (
+        <button
+          key={i}
+          type="button"
+          role="menuitemradio"
+          aria-checked={current === i}
+          className={`sched-color-swatch sched-color-${i}${current === i ? ' is-selected' : ''}`}
+          onClick={() => onPick(i)}
+          aria-label={`Color ${i + 1}`}
+        />
+      ))}
+      <button type="button" className="sched-color-popover-auto" onClick={() => onPick(null)}>
+        Reset to auto
+      </button>
+    </div>
+  );
+}
+
 // Renders one schedule (a set of committed sectionIds) as a Mon–Fri (+
 // Sat/Sun if actually used) time grid. `lockedSectionIds`/`onToggleLock`/
 // `onEliminate` make each block itself interactive — locking or
@@ -40,7 +82,11 @@ export default function WeeklyGrid({
   lockedSectionIds = new Set(),
   onToggleLock = () => {},
   onEliminate = () => {},
+  colorOverrides = {},
+  onSetColor = () => {},
 }) {
+  const [openColorFor, setOpenColorFor] = useState(null); // courseKey, or null
+
   const sections = sectionIds.map((id) => sectionsById[id]).filter(Boolean);
   const withMeeting = sections
     .map((section) => ({ section, meeting: sectionMeeting(section) }))
@@ -53,6 +99,20 @@ export default function WeeklyGrid({
         Generate schedules or load a saved one to preview it here.
       </div>
     );
+  }
+
+  // One legend entry per distinct course actually shown — order follows
+  // first appearance in sectionIds so it's stable while a preview stays on
+  // the same combo, not alphabetical/hash order.
+  const seenCourseKeys = new Set();
+  const legendCourses = [];
+  for (const section of sections) {
+    if (seenCourseKeys.has(section.courseKey)) continue;
+    seenCourseKeys.add(section.courseKey);
+    legendCourses.push({
+      courseKey: section.courseKey,
+      label: courseMap[section.courseKey]?.courseNumber ?? section.courseKey,
+    });
   }
 
   const usedDays = new Set(withMeeting.flatMap((m) => m.meeting.days));
@@ -83,6 +143,32 @@ export default function WeeklyGrid({
 
   return (
     <div className="sched-grid-wrap">
+      <div className="sched-color-legend">
+        {legendCourses.map(({ courseKey, label }) => (
+          <div className="sched-color-legend-item" key={courseKey}>
+            <button
+              type="button"
+              className={`sched-color-legend-swatch sched-color-${resolvedCourseColorIndex(courseKey, colorOverrides)}`}
+              onClick={() => setOpenColorFor((cur) => (cur === courseKey ? null : courseKey))}
+              aria-haspopup="true"
+              aria-expanded={openColorFor === courseKey}
+              aria-label={`Change color for ${label}`}
+              title={`Change color for ${label}`}
+            />
+            <span className="sched-color-legend-label">{label}</span>
+            {openColorFor === courseKey && (
+              <ColorPickerPopover
+                current={resolvedCourseColorIndex(courseKey, colorOverrides)}
+                onPick={(idx) => {
+                  onSetColor(courseKey, idx);
+                  setOpenColorFor(null);
+                }}
+                onClose={() => setOpenColorFor(null)}
+              />
+            )}
+          </div>
+        ))}
+      </div>
       <div className="sched-grid-header">
         <div className="sched-grid-time-gutter" />
         {days.map((d) => (
@@ -124,7 +210,7 @@ export default function WeeklyGrid({
                   return (
                     <div
                       key={`${section.id}-${day}`}
-                      className={`sched-grid-block sched-color-${courseColorIndex(section.courseKey)}${isLocked ? ' is-locked' : ''}`}
+                      className={`sched-grid-block sched-color-${resolvedCourseColorIndex(section.courseKey, colorOverrides)}${isLocked ? ' is-locked' : ''}`}
                       style={{
                         top: (meeting.startMin - gridStart) * PX_PER_MIN,
                         height: blockHeight,

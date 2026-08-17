@@ -12,3 +12,13 @@ export function courseColorIndex(courseKey) {
   }
   return Math.abs(hash) % SCHED_COLOR_COUNT;
 }
+
+// The hash above is just the default — a student can override it per course
+// (see WeeklyGrid's legend + SchedulerPage's courseColorOverrides, persisted
+// to localStorage). `overrides` is a plain { [courseKey]: paletteIndex }
+// map; every color-consuming call site should go through this instead of
+// calling courseColorIndex directly, so an override is never missed.
+export function resolvedCourseColorIndex(courseKey, overrides) {
+  const override = overrides?.[courseKey];
+  return override != null ? override : courseColorIndex(courseKey);
+}

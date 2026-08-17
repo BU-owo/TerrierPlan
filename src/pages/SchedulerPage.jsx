@@ -40,6 +40,12 @@ import '../App.css';
 
 const SCHEDULES_LOCAL_KEY = 'terrierplan_scheduler_schedules';
 const PREVIEW_WIDTH_LOCAL_KEY = 'terrierplan_scheduler_preview_width';
+// Per-course color overrides — { [courseKey]: paletteIndex } — a purely
+// cosmetic viewing preference, so (like preview width) it's local-only and
+// not tied to sign-in state or any one saved schedule: recoloring CS 111
+// once means it's that color everywhere you see it in this browser, draft
+// or saved. See scheduleColors.js's resolvedCourseColorIndex.
+const COURSE_COLORS_LOCAL_KEY = 'terrierplan_scheduler_course_colors';
 // Mirrors scheduler.css's .scheduler-right min-width — the drag can widen
 // the preview past its CSS default, never shrink it past this floor.
 const PREVIEW_MIN_WIDTH = 460;
@@ -223,6 +229,30 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   useEffect(() => {
     if (previewWidth != null) localStorage.setItem(PREVIEW_WIDTH_LOCAL_KEY, String(Math.round(previewWidth)));
   }, [previewWidth]);
+
+  // ── Per-course color overrides ──────────────────────────────────────────────
+  const [courseColorOverrides, setCourseColorOverrides] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(COURSE_COLORS_LOCAL_KEY)) || {};
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(COURSE_COLORS_LOCAL_KEY, JSON.stringify(courseColorOverrides));
+  }, [courseColorOverrides]);
+
+  // index === null clears back to the automatic hash color (see
+  // WeeklyGrid's "Reset to auto").
+  function handleSetCourseColor(courseKey, index) {
+    setCourseColorOverrides((prev) => {
+      if (index == null) {
+        return Object.fromEntries(Object.entries(prev).filter(([key]) => key !== courseKey));
+      }
+      return { ...prev, [courseKey]: index };
+    });
+  }
 
   const hasLoadedSchedulesRef = useRef(false);
 
@@ -898,6 +928,8 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                 lockedSectionIds={allLockedSectionIds}
                 onToggleLock={handlePreviewToggleLock}
                 onEliminate={handlePreviewEliminate}
+                colorOverrides={courseColorOverrides}
+                onSetColor={handleSetCourseColor}
               />
             </div>
           )}
