@@ -47,7 +47,7 @@ html[data-theme='dark'] {
   overflow: hidden;
 }
 .scheduler-left {
-  width: 260px;
+  width: 220px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -57,13 +57,15 @@ html[data-theme='dark'] {
 }
 .scheduler-center {
   flex: 1;
-  min-width: 0;
+  min-width: 280px;
   overflow-y: auto;
   background: var(--cream);
   padding: 14px 16px 24px;
 }
 .scheduler-right {
-  width: 460px;
+  width: 46%;
+  min-width: 460px;
+  max-width: 720px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -786,7 +788,7 @@ html[data-theme='dark'] {
 .sched-grid-body {
   position: relative;
   display: flex;
-  max-height: 56vh;
+  max-height: 74vh;
   overflow-y: auto;
 }
 .sched-grid-time-gutter { position: relative; }
