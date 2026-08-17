@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import {
@@ -29,6 +29,7 @@ import { classifyComponent, groupSectionsByComponent } from '../utils/sectionCom
 import {
   generateSchedules,
   buildGenerationSlots,
+  diagnoseNoSchedule,
   isCourseReady,
   missingGroupsForCourse,
   totalCredits,
@@ -464,6 +465,14 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   }, [draftCourses, sectionsByCourse, sectionsById, courseMap, loadingSectionsFor, globalTimeFilter]);
 
   const canGenerate = draftCourses.length > 0 && generateBlockers.length === 0;
+
+  // Only computed once generation has actually come back empty — points at
+  // which course(s) to blame instead of leaving the student to guess
+  // between a time restriction, a pinned section, and a genuine clash.
+  const noScheduleCulprits = useMemo(() => {
+    if (!generated || generated.schedules.length > 0) return [];
+    return diagnoseNoSchedule(draftCourses, sectionsByCourse, sectionsById);
+  }, [generated, draftCourses, sectionsByCourse, sectionsById]);
 
   function invalidateGenerated() {
     setGenerated(null);
@@ -915,8 +924,39 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
           {generated && generated.schedules.length === 0 ? (
             <div className="sched-generated-empty">
-              No conflict-free combination exists for the sections currently in consideration — try
-              checking an additional section for one of your courses.
+              <p>
+                No conflict-free combination exists for the sections currently in consideration — try
+                checking an additional section for one of your courses.
+              </p>
+              {draftCourses.length === 1 && noScheduleCulprits.length === 1 && (
+                <p className="sched-generated-empty-culprit">
+                  The problem is within{' '}
+                  <strong>{courseMap[noScheduleCulprits[0]]?.courseNumber ?? noScheduleCulprits[0]}</strong> itself —
+                  none of its checked/pinned sections across components (Lecture, Discussion, Lab, …) leave a
+                  conflict-free pairing. Try considering a different section for one of its parts.
+                </p>
+              )}
+              {draftCourses.length > 1 && noScheduleCulprits.length > 0 && (
+                <p className="sched-generated-empty-culprit">
+                  Likely culprit{noScheduleCulprits.length > 1 ? 's' : ''}:{' '}
+                  {noScheduleCulprits.map((key, idx) => (
+                    <Fragment key={key}>
+                      {idx > 0 && (idx === noScheduleCulprits.length - 1 ? ' or ' : ', ')}
+                      <strong>{courseMap[key]?.courseNumber ?? key}</strong>
+                    </Fragment>
+                  ))}
+                  . Removing {noScheduleCulprits.length === 1 ? 'it' : noScheduleCulprits.length === 2 ? 'either one' : 'any one'}{' '}
+                  — or considering more sections for {noScheduleCulprits.length === 1 ? 'it' : 'one of them'} — would
+                  unblock a schedule. If it's pinned, check whether that's the section forcing the clash.
+                </p>
+              )}
+              {draftCourses.length > 1 && noScheduleCulprits.length === 0 && (
+                <p className="sched-generated-empty-culprit">
+                  No single course explains it — at least two of your courses are each unsatisfiable on their own
+                  (or the clash only shows up across three or more together). Try temporarily removing courses one
+                  at a time to isolate it.
+                </p>
+              )}
             </div>
           ) : (
             <div className="sched-preview-scroll">

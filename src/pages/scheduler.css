@@ -749,6 +749,9 @@ html[data-theme='dark'] {
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
 }
+.sched-generated-empty p { margin: 0; }
+.sched-generated-empty p + p { margin-top: 10px; }
+.sched-generated-empty-culprit strong { color: var(--text-secondary); font-weight: 700; }
 
 /* ===== Schedule browsing stepper (right panel, above the grid) ===== */
 .sched-stepper {

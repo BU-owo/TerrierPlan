@@ -17,7 +17,7 @@ export const MAX_RESULTS = 2_000;
 // slot-by-slot (rather than building the full cartesian product then
 // filtering) so a conflict prunes an entire branch early instead of being
 // discovered after the fact.
-export function generateSchedules(slots, sectionsById) {
+export function generateSchedules(slots, sectionsById, { limit = MAX_RESULTS } = {}) {
   const lists = slots.filter((s) => s.options.length > 0).map((s) => s.options);
 
   const schedules = [];
@@ -27,7 +27,7 @@ export function generateSchedules(slots, sectionsById) {
   function backtrack(i, chosen) {
     if (i === lists.length) {
       schedules.push([...chosen]);
-      if (schedules.length >= MAX_RESULTS) truncated = true;
+      if (schedules.length >= limit) truncated = true;
       return;
     }
     for (const sectionId of lists[i]) {
@@ -91,6 +91,36 @@ export function buildGenerationSlots(draftCourses, sectionsByCourse, sectionsByI
     }
   }
   return slots;
+}
+
+// When generateSchedules comes back empty, this points at which course(s)
+// are implicated, by re-running generation with each course dropped in
+// turn — a course whose absence lets a schedule through is a culprit. Each
+// re-run stops at the first schedule found (limit: 1), so this stays cheap
+// even though it's O(courses) backtracking passes.
+//
+// A single course by itself can only fail this way if its OWN components
+// don't leave any conflict-free pairing (e.g. every Lecture option overlaps
+// every Discussion option), so with one course there's nothing to remove —
+// that course itself is reported directly.
+//
+// An empty result (with 2+ courses) means no single removal fixes it: at
+// least two courses are independently unsatisfiable, or the clash only
+// emerges from three-or-more courses at once. Neither is nameable as "the"
+// culprit, so callers should fall back to a "try removing courses one at a
+// time" hint in that case.
+export function diagnoseNoSchedule(draftCourses, sectionsByCourse, sectionsById) {
+  if (draftCourses.length === 0) return [];
+  if (draftCourses.length === 1) return [draftCourses[0].courseKey];
+
+  const culprits = [];
+  for (let i = 0; i < draftCourses.length; i++) {
+    const without = draftCourses.filter((_, idx) => idx !== i);
+    const slots = buildGenerationSlots(without, sectionsByCourse, sectionsById);
+    const { schedules } = generateSchedules(slots, sectionsById, { limit: 1 });
+    if (schedules.length > 0) culprits.push(draftCourses[i].courseKey);
+  }
+  return culprits;
 }
 
 // Which of a course's required component groups still need a locked or
