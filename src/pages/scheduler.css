@@ -1,24 +1,34 @@
 /* ===== SCHEDULER — term/course color palette ===== */
 /* 10-color categorical palette for the weekly grid — a course's color is a
    pure hash of its courseKey (see scheduleColors.js), not draw order, so it
-   never shifts across reloads or when switching between generated combos. */
+   never shifts across reloads or when switching between generated combos.
+   Hues were chosen by maximizing pairwise OKLab separation (validated with
+   the dataviz skill's validate_palette.js against this panel's actual
+   light/dark surfaces) — each of the 10 reads as a clearly different color
+   name (blue/orange/green/red/violet/teal/pink/yellow/brown/sky), unlike
+   the old set where two different slots both read as "yellow-green" and
+   another pair (blue/indigo) was nearly indistinguishable. c1/c7/c9 get
+   separate dark-mode accent steps because their light-mode hex falls
+   outside the dark lightness band (too light against a dark surface); the
+   rest are reused as-is. */
 :root {
-  --sched-c0: #2563EB; --sched-c0-bg: #E0EAFD;
-  --sched-c1: #16A34A; --sched-c1-bg: #DCFCE7;
-  --sched-c2: #7C3AED; --sched-c2-bg: #EDE4FC;
-  --sched-c3: #D97706; --sched-c3-bg: #FEF3C7;
-  --sched-c4: #0D9488; --sched-c4-bg: #CCFBF1;
-  --sched-c5: #DB2777; --sched-c5-bg: #FCE7F3;
-  --sched-c6: #4F46E5; --sched-c6-bg: #E0E7FF;
-  --sched-c7: #DC2626; --sched-c7-bg: #FEE2E2;
-  --sched-c8: #0891B2; --sched-c8-bg: #CFFAFE;
-  --sched-c9: #65A30D; --sched-c9-bg: #ECFCCB;
+  --sched-c0: #2563EB; --sched-c0-bg: #E1ECFF; /* blue */
+  --sched-c1: #F97316; --sched-c1-bg: #FFE5D9; /* orange */
+  --sched-c2: #15803D; --sched-c2-bg: #D7F4DC; /* green */
+  --sched-c3: #B91C1C; --sched-c3-bg: #FFE4E0; /* red */
+  --sched-c4: #7E22CE; --sched-c4-bg: #EFE6FF; /* violet */
+  --sched-c5: #0D9488; --sched-c5-bg: #CBF6EF; /* teal */
+  --sched-c6: #DB2777; --sched-c6-bg: #FFE3EA; /* pink */
+  --sched-c7: #EAB308; --sched-c7-bg: #F9EACA; /* yellow */
+  --sched-c8: #A16207; --sched-c8-bg: #FFE6CF; /* brown */
+  --sched-c9: #0EA5E9; --sched-c9-bg: #D8EFFF; /* sky */
 }
 html[data-theme='dark'] {
-  --sched-c0-bg: #1c2b4d; --sched-c1-bg: #14311f; --sched-c2-bg: #2c2149;
-  --sched-c3-bg: #3d2b0c; --sched-c4-bg: #103330; --sched-c5-bg: #3a1930;
-  --sched-c6-bg: #221f4d; --sched-c7-bg: #3a1414; --sched-c8-bg: #0f3238;
-  --sched-c9-bg: #263310;
+  --sched-c1: #D45E00; --sched-c7: #A09600; --sched-c9: #008AC4;
+  --sched-c0-bg: #0D1C39; --sched-c1-bg: #331201; --sched-c2-bg: #02240D;
+  --sched-c3-bg: #340F0C; --sched-c4-bg: #221534; --sched-c5-bg: #00231F;
+  --sched-c6-bg: #320F1B; --sched-c7-bg: #271B00; --sched-c8-bg: #2D1700;
+  --sched-c9-bg: #002032;
 }
 .sched-color-0 { background: var(--sched-c0-bg); border-color: var(--sched-c0); }
 .sched-color-1 { background: var(--sched-c1-bg); border-color: var(--sched-c1); }

@@ -46,8 +46,11 @@ function dayBoundsActive(bounds) {
 function passesBounds(section, startMin, endMin) {
   const meeting = sectionMeeting(section);
   if (!meeting) return false; // no determinable time — can't match a time bound
+  // Earliest/latest bound the whole meeting, not just its start — "latest
+  // 4pm" means the student is out of the classroom by 4pm, so a section
+  // has to both START at/after `startMin` AND END at/before `endMin`.
   if (startMin != null && meeting.startMin < startMin) return false;
-  if (endMin != null && meeting.startMin > endMin) return false;
+  if (endMin != null && meeting.endMin > endMin) return false;
   return true;
 }
 

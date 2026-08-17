@@ -15,6 +15,11 @@ import TimeSelect from './TimeSelect';
 // "+ Earliest"/"+ Latest" button, not a disabled dropdown trio sitting
 // there taking up space — the dropdowns only appear once a bound is on.
 const DAY_LABEL = { Mon: 'Mon', Tue: 'Tue', Wed: 'Wed', Thu: 'Thu', Fri: 'Fri', Sat: 'Sat', Sun: 'Sun' };
+// "Customize by day" only offers weekdays — a Sat/Sun section (labs mostly)
+// still respects the "same every day" global bounds via
+// effectiveBoundsForDay's fallback (see sectionFilters.js), it just can't
+// get its own override from this list.
+const CUSTOMIZABLE_DAYS = DAY_ORDER.filter((d) => d !== 'Sat' && d !== 'Sun');
 const DEFAULT_START = 8 * 60; // 8:00 AM — only used the moment "Earliest" is first turned on
 const DEFAULT_END = 18 * 60; // 6:00 PM — only used the moment "Latest" is first turned on
 
@@ -114,7 +119,7 @@ export default function GlobalTimeFilter({ value, onChange, onClear }) {
 
           {mode === 'custom' && (
             <div className="sched-time-day-list">
-              {DAY_ORDER.map((day) => {
+              {CUSTOMIZABLE_DAYS.map((day) => {
                 const dayBounds = value.perDay[day] || EMPTY_DAY_BOUNDS;
                 return (
                   <div className="sched-time-day-row" key={day}>
