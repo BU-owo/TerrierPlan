@@ -62,18 +62,48 @@ html[data-theme='dark'] {
   background: var(--cream);
   padding: 14px 16px 24px;
 }
+/* Default (pre-drag) width — ResizeHandle below lets the student drag this
+   wider; this 46%/460px pairing is then just the floor it starts at, not a
+   hard cap (see SchedulerPage's rightWidth state, applied as an inline
+   style that overrides this once the student has dragged). */
 .scheduler-right {
   width: 46%;
   min-width: 460px;
-  max-width: 720px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
   background: var(--white);
-  border-left: 1px solid var(--border);
   overflow-y: auto;
   padding: 14px;
+}
+
+/* Draggable divider between the draft builder and the preview — sits where
+   scheduler-right's border used to be (that border moved onto this
+   element's ::after so the visible line and the grab target can differ:
+   a 2px line inside a wider invisible hit zone, easier to grab than a bare
+   1px border). See SchedulerPage's handleResizeStart. */
+.sched-resize-handle {
+  width: 7px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  position: relative;
+  z-index: 2;
+}
+.sched-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: var(--border);
+}
+.sched-resize-handle:hover::after,
+.sched-resize-handle.is-dragging::after {
+  left: 1px;
+  width: 3px;
+  background: var(--scarlet);
 }
 
 /* ===== LEFT: search-result-card is a <button> here (no drag) — reset the
@@ -959,7 +989,8 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
 @media (max-width: 860px) {
   .scheduler-left,
   .scheduler-center,
-  .scheduler-right {
+  .scheduler-right,
+  .sched-resize-handle {
     display: none;
   }
   .scheduler-body[data-mobile-view="search"] .scheduler-left {

@@ -39,6 +39,16 @@ import './scheduler.css';
 import '../App.css';
 
 const SCHEDULES_LOCAL_KEY = 'terrierplan_scheduler_schedules';
+const PREVIEW_WIDTH_LOCAL_KEY = 'terrierplan_scheduler_preview_width';
+// Mirrors scheduler.css's .scheduler-right min-width — the drag can widen
+// the preview past its CSS default, never shrink it past this floor.
+const PREVIEW_MIN_WIDTH = 460;
+// Matching fixed/floor widths for the other two panes (scheduler-left's
+// fixed 220px, scheduler-center's min-width 280px) plus the handle itself,
+// so a drag can't squeeze search or the draft builder out of existence.
+const LEFT_WIDTH = 220;
+const CENTER_MIN_WIDTH = 280;
+const HANDLE_WIDTH = 7;
 
 // Shared across Strict Mode double-invokes, same trick as PlannerPage's
 // guestMigrationPromise — only migrate (and clear localStorage) once per
@@ -174,6 +184,45 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const [activeSavedId, setActiveSavedId] = useState(null); // which saved schedule (if any) the grid mirrors exactly
 
   const [mobileView, setMobileView] = useState('search'); // 'search' | 'build' | 'preview'
+
+  // ── Preview panel width (desktop drag-resize) ───────────────────────────────
+  // null = use scheduler.css's default (46%, floor 460px); once the student
+  // drags the handle this becomes an explicit px value that overrides it.
+  const [previewWidth, setPreviewWidth] = useState(() => {
+    const raw = Number(localStorage.getItem(PREVIEW_WIDTH_LOCAL_KEY));
+    return Number.isFinite(raw) && raw >= PREVIEW_MIN_WIDTH ? raw : null;
+  });
+  const [isResizingPreview, setIsResizingPreview] = useState(false);
+  const rightPanelRef = useRef(null);
+
+  function handleResizeStart(e) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = rightPanelRef.current?.getBoundingClientRect().width ?? previewWidth ?? PREVIEW_MIN_WIDTH;
+    setIsResizingPreview(true);
+
+    function onMove(ev) {
+      // Handle sits to the left of the preview pane, so dragging left
+      // (cursor moves toward startX's origin) widens it.
+      const maxWidth = Math.max(
+        PREVIEW_MIN_WIDTH,
+        window.innerWidth - LEFT_WIDTH - CENTER_MIN_WIDTH - HANDLE_WIDTH,
+      );
+      const next = Math.min(Math.max(startWidth + (startX - ev.clientX), PREVIEW_MIN_WIDTH), maxWidth);
+      setPreviewWidth(next);
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      setIsResizingPreview(false);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+
+  useEffect(() => {
+    if (previewWidth != null) localStorage.setItem(PREVIEW_WIDTH_LOCAL_KEY, String(Math.round(previewWidth)));
+  }, [previewWidth]);
 
   const hasLoadedSchedulesRef = useRef(false);
 
@@ -816,7 +865,19 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           )}
         </main>
 
-        <aside className="scheduler-right">
+        <div
+          className={`sched-resize-handle${isResizingPreview ? ' is-dragging' : ''}`}
+          onMouseDown={handleResizeStart}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize preview panel"
+        />
+
+        <aside
+          className="scheduler-right"
+          ref={rightPanelRef}
+          style={previewWidth != null ? { width: `${previewWidth}px` } : undefined}
+        >
           <div className="sched-right-header">
             <h2>{activeSavedId && savedSchedules.find((s) => s.id === activeSavedId)?.name || 'Preview'}</h2>
             {previewCreditsLabel && <span className="sched-right-credits">{previewCreditsLabel}</span>}
