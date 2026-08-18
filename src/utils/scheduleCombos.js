@@ -149,6 +149,14 @@ export function isCourseReady(course, sections, sectionsById) {
   return missing !== null && missing.length === 0;
 }
 
+// Canonical identity for a generated combination — order-independent, so
+// the same combination flags/unflags consistently even if backtracking
+// would ever visit its sections in a different order across runs (e.g.
+// after a regenerate triggered by an unrelated lock/eliminate elsewhere).
+export function scheduleKey(sectionIds) {
+  return [...sectionIds].sort().join('|');
+}
+
 // Sum of `credits` across a set of sectionIds. BU's export repeats the same
 // Credit Hours value on every companion row of a course (a 4-credit
 // course's discussion/lab section also shows "4.0"), so summing every

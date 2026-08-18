@@ -30,6 +30,7 @@ import {
   generateSchedules,
   buildGenerationSlots,
   diagnoseNoSchedule,
+  scheduleKey,
   isCourseReady,
   missingGroupsForCourse,
   totalCredits,
@@ -185,6 +186,15 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const [generated, setGenerated] = useState(null); // { schedules: sectionId[][], truncated } | null
   const [previewIndex, setPreviewIndex] = useState(null); // index into generated.schedules, or null
   const [previewSectionIds, setPreviewSectionIds] = useState([]); // what the grid is currently showing
+
+  // Unsaved shortlist while browsing generated combinations — "maybe this
+  // one," flippable back to without committing to Save yet. Keyed by the
+  // combination's own section ids (scheduleKey) rather than array index, so
+  // a flag still means the same thing if the schedule ever reappears at a
+  // different position (e.g. after a regenerate from the preview grid's
+  // lock/eliminate controls) instead of silently pointing at whatever now
+  // happens to sit at that index.
+  const [flaggedKeys, setFlaggedKeys] = useState(() => new Set());
 
   // ── Saved/favorited schedules ───────────────────────────────────────────────
   const [savedSchedules, setSavedSchedules] = useState([]);
@@ -474,6 +484,31 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     return diagnoseNoSchedule(draftCourses, sectionsByCourse, sectionsById);
   }, [generated, draftCourses, sectionsByCourse, sectionsById]);
 
+  // Indices (into the CURRENT generated.schedules) of every flagged
+  // combination, in order — recomputed from the content-keyed set so a
+  // flag automatically "follows" its schedule if regeneration reorders it,
+  // and just as automatically stops applying once that exact combination
+  // is no longer reachable.
+  const flaggedIndices = useMemo(() => {
+    if (!generated) return [];
+    const indices = [];
+    generated.schedules.forEach((ids, i) => {
+      if (flaggedKeys.has(scheduleKey(ids))) indices.push(i);
+    });
+    return indices;
+  }, [generated, flaggedKeys]);
+
+  function handleToggleFlag(index) {
+    if (!generated) return;
+    const key = scheduleKey(generated.schedules[index]);
+    setFlaggedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   function invalidateGenerated() {
     setGenerated(null);
     setPreviewIndex(null);
@@ -556,6 +591,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   function handleClearAll() {
     setDraftCourses([]);
+    setFlaggedKeys(new Set());
     invalidateGenerated();
   }
 
@@ -960,7 +996,13 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             </div>
           ) : (
             <div className="sched-preview-scroll">
-              <ScheduleStepper generated={generated} previewIndex={previewIndex} onJump={handlePreview} />
+              <ScheduleStepper
+                generated={generated}
+                previewIndex={previewIndex}
+                onJump={handlePreview}
+                flaggedIndices={flaggedIndices}
+                onToggleFlag={handleToggleFlag}
+              />
               <WeeklyGrid
                 sectionIds={previewSectionIds}
                 sectionsById={sectionsById}

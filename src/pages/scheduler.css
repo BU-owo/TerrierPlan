@@ -780,6 +780,36 @@ html[data-theme='dark'] {
 }
 .sched-stepper-controls button:hover:not(:disabled) { border-color: var(--scarlet); color: var(--scarlet); }
 .sched-stepper-controls button:disabled { opacity: .35; cursor: default; }
+.sched-stepper-controls .sched-flag-btn {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+}
+.sched-stepper-controls .sched-flag-btn:hover,
+.sched-stepper-controls .sched-flag-btn.is-flagged { color: var(--badge-warm-text); border-color: var(--badge-warm-text); }
+
+/* Quick-jump strip between only the flagged combinations — appears once
+   there's at least one, so a shortlist can be flipped through without
+   stepping past every unflagged schedule in between. */
+.sched-stepper-flagged-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11.5px;
+}
+.sched-stepper-flagged-nav button {
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--badge-warm-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sched-stepper-flagged-nav button:hover { border-color: var(--badge-warm-text); }
+.sched-stepper-flagged-count { color: var(--text-muted); }
 
 /* ===== RIGHT: header + grid + saved schedules ===== */
 .sched-right-header {
