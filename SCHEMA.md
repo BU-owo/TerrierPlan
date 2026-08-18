@@ -161,6 +161,40 @@ degree audit.
 | favorited | boolean | |
 | createdAt, updatedAt | timestamp | |
 
+### `siteStats/global`
+Singleton doc backing the "X students have used TerrierPlan" line in the
+global footer (`useSiteStats.js`). A rough, approximate counter, not a
+strict unique-visitor count — incremented client-side, once per browser,
+the first time that browser is ever seen (guest or signed-in), gated by a
+`terrierplan_visitor_id` value in `localStorage`.
+
+| Field | Type | Notes |
+|---|---|---|
+| totalUsersEver | number | Only ever created at `1` or incremented by exactly `+1` — enforced in `firestore.rules`, not just app code, since the increment is a client-side transaction. |
+
+### `presence/{sessionId}`
+One doc per active browser tab, backing the "Y online now" line in the
+footer. `sessionId` is the signed-in `uid` when there is one, otherwise
+the same guest `terrierplan_visitor_id` used by `siteStats/global` above.
+Written every ~30s while a tab is open (`useSiteStats.js`); "online now" =
+count of docs with `lastSeen` inside the last ~2 minutes, read via a
+`getCountFromServer` aggregation query, refreshed every ~45s.
+
+| Field | Type | Notes |
+|---|---|---|
+| lastSeen | timestamp | `serverTimestamp()`, refreshed every heartbeat. Query cutoff for "online now" is client-computed (`now - 2min`), not stored. |
+| expiresAt | timestamp | `now + 10min` at write time, refreshed every heartbeat. Written for a Firestore TTL policy to eventually consume — **no such policy is configured yet.** |
+
+**Known follow-up:** nothing currently deletes stale `presence` docs after
+a tab closes (an unmount-based cleanup wouldn't reliably fire on tab
+close anyway, and this hook is mounted once for the app's lifetime, not
+per-route). `expiresAt` is written specifically so a Firestore TTL policy
+can be turned on for this collection later (Firebase console → Firestore
+→ TTL, field `expiresAt`) to auto-delete them; until that's configured,
+stale docs just accumulate. Harmless for the online-now count itself
+(the `lastSeen` cutoff already excludes them from the query), just
+unbounded storage growth over time.
+
 ---
 
 ## Import order

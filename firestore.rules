@@ -31,6 +31,34 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
+
+    // Site-wide vanity stats shown in the footer (see useSiteStats.js).
+    // Approximate by design, not security-sensitive (no PII, nothing
+    // gated on it) — client-side writes are allowed but pinned to exactly
+    // the shape/delta the app itself ever needs, so a browser console
+    // can inflate totalUsersEver by at most 1 per write, not arbitrarily.
+    match /siteStats/global {
+      allow read: if true;
+      // Bootstraps the doc on the very first write anyone ever makes.
+      allow create: if request.resource.data.keys().hasOnly(['totalUsersEver'])
+        && request.resource.data.totalUsersEver == 1;
+      // Every write after that may only increment by exactly 1.
+      allow update: if request.resource.data.keys().hasOnly(['totalUsersEver'])
+        && request.resource.data.totalUsersEver == resource.data.totalUsersEver + 1;
+    }
+
+    // Rough "who's here right now" heartbeat docs (see useSiteStats.js).
+    // Guests have no auth.uid to check writes against, so this can't be
+    // scoped to "only the owning session may write their own doc" the way
+    // users/{userId} is — anyone can write any presence/{sessionId} doc.
+    // Low stakes: worst case is a spoofed online-now number, no user data
+    // is stored here. Shape is pinned to exactly the two heartbeat fields.
+    match /presence/{sessionId} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasOnly(['lastSeen', 'expiresAt'])
+        && request.resource.data.lastSeen is timestamp
+        && request.resource.data.expiresAt is timestamp;
+    }
   }
 }
 // force redeploy

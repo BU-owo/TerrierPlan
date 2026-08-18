@@ -18,11 +18,50 @@
   }
 }
 
+/* Outer 100dvh flex column: routed page content (flexible, own scrolling)
+   on top, GlobalFooter (shrink-to-fit) pinned below it — see App.jsx. */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+.app-shell-routes {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .app-footer {
-  margin-top: 2rem;
-  padding: 1.5rem 1rem;
+  flex-shrink: 0;
+  padding: 10px 16px;
   border-top: 1px solid var(--border);
   color: var(--text-muted);
   font-size: .75rem;
+  line-height: 1.5;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.app-footer-line { max-width: 640px; }
+.app-footer-disclaimer strong { color: var(--text-secondary); }
+.app-footer a { color: var(--scarlet); text-decoration: underline; text-underline-offset: 2px; }
+.app-footer a:hover { color: var(--scarlet-dark); }
+.app-footer-stats { color: var(--text-secondary); font-weight: 600; }
+.app-footer-help-btn {
+  margin-top: 4px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--white);
+  color: var(--text-secondary);
+  font-size: .75rem;
+  font-weight: 600;
+}
+.app-footer-help-btn:hover { border-color: var(--scarlet); color: var(--scarlet); }
+
+@media (max-width: 480px) {
+  .app-footer { padding: 8px 12px; font-size: .7rem; }
 }

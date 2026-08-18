@@ -1,36 +1,36 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
 import PlannerPage from './pages/PlannerPage';
 import SchedulerPage from './pages/SchedulerPage';
+import GlobalFooter from './components/GlobalFooter';
 import { useState, useEffect } from 'react';
 import './App.css';
 
 const THEME_STORAGE_KEY = 'terrierplan_theme';
 
+// Planner/Scheduler are full-height app shells (their own .planner-layout
+// is height:100%, filling .app-shell-routes below) with internally-
+// scrolling panels; Login just fills whatever height it's given and
+// centers its card. Wrapping all three in one 100dvh flex column — routed
+// content as the flexible middle, GlobalFooter as a shrink-to-fit row
+// underneath — means the footer sits at the bottom of every page without
+// creating a second, outer page-level scrollbar on top of the app shells'
+// own internal scrolling.
 function AppRoutes({ theme, onToggleTheme }) {
-  const location = useLocation();
-  // Both are full-height app shells (100dvh, internal scroll) — the footer
-  // only makes sense on the marketing-style login page.
-  const isAppShell = location.pathname.startsWith('/planner') || location.pathname.startsWith('/scheduler');
-
   return (
-    <>
-      <Routes>
-        <Route path="/login" element={<LoginPage theme={theme} onToggleTheme={onToggleTheme} />} />
-        <Route path="/planner" element={<PlannerPage theme={theme} onToggleTheme={onToggleTheme} />} />
-        <Route path="/scheduler" element={<SchedulerPage theme={theme} onToggleTheme={onToggleTheme} />} />
-        <Route path="*" element={<Navigate to="/planner" replace />} />
-      </Routes>
+    <div className="app-shell">
+      <div className="app-shell-routes">
+        <Routes>
+          <Route path="/login" element={<LoginPage theme={theme} onToggleTheme={onToggleTheme} />} />
+          <Route path="/planner" element={<PlannerPage theme={theme} onToggleTheme={onToggleTheme} />} />
+          <Route path="/scheduler" element={<SchedulerPage theme={theme} onToggleTheme={onToggleTheme} />} />
+          <Route path="*" element={<Navigate to="/planner" replace />} />
+        </Routes>
+      </div>
 
-      {!isAppShell && (
-        <footer className="app-footer">
-          Not affiliated with or endorsed by Boston University. This is an
-          independent, community-made tool built with AI assistance. Data is sourced from BU's official catalog and website. Use at your
-          own discretion.
-        </footer>
-      )}
-    </>
+      <GlobalFooter />
+    </div>
   );
 }
 

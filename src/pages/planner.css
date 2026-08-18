@@ -1,8 +1,11 @@
 /* ===== PLANNER LAYOUT ===== */
+/* Fills .app-shell-routes (see App.jsx/App.css), not the raw viewport —
+   App.css's .app-shell is the one that owns 100dvh now, so GlobalFooter
+   has room to sit below this without a second outer scrollbar. */
 .planner-layout {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  height: 100%;
   overflow: hidden;
 }
 
