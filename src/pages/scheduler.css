@@ -756,6 +756,17 @@ html[data-theme='dark'] {
 /* ===== Schedule browsing stepper (right panel, above the grid) ===== */
 .sched-stepper {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sched-stepper.is-bookmarked-mode {
+  padding: 8px;
+  margin: -8px -8px 0;
+  border-radius: var(--radius-md);
+  background: var(--badge-warm-bg);
+}
+.sched-stepper-top {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
@@ -763,10 +774,39 @@ html[data-theme='dark'] {
 }
 .sched-stepper-count { font-size: 12.5px; font-weight: 600; color: var(--text); }
 .sched-stepper-truncated { font-weight: 400; color: var(--warning-text); }
+
+/* All / Bookmarked (N) — an explicit mode switch rather than a second nav
+   row, so which universe Prev/Next/First/Last is stepping through is never
+   ambiguous while flipping through a shortlist. */
+.sched-stepper-mode-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--cream);
+  flex-shrink: 0;
+}
+.sched-stepper-mode-toggle button {
+  padding: 4px 9px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sched-stepper-mode-toggle button.is-active {
+  background: var(--white);
+  color: var(--badge-warm-text);
+  box-shadow: var(--shadow-sm);
+}
+
 .sched-stepper-controls {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 .sched-stepper-controls button {
   padding: 5px 9px;
@@ -780,36 +820,23 @@ html[data-theme='dark'] {
 }
 .sched-stepper-controls button:hover:not(:disabled) { border-color: var(--scarlet); color: var(--scarlet); }
 .sched-stepper-controls button:disabled { opacity: .35; cursor: default; }
-.sched-stepper-controls .sched-flag-btn {
-  font-size: 14px;
-  line-height: 1;
-  color: var(--text-muted);
-}
-.sched-stepper-controls .sched-flag-btn:hover,
-.sched-stepper-controls .sched-flag-btn.is-flagged { color: var(--badge-warm-text); border-color: var(--badge-warm-text); }
 
-/* Quick-jump strip between only the flagged combinations — appears once
-   there's at least one, so a shortlist can be flipped through without
-   stepping past every unflagged schedule in between. */
-.sched-stepper-flagged-nav {
-  display: flex;
+/* Flag toggle — icon + explicit "Bookmark"/"Bookmarked" text (not a bare
+   glyph) so its purpose reads on its own, and a flag shape rather than a
+   star so it's never confused with "favorited" in the Saved list below. */
+.sched-stepper-controls .sched-flag-btn {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  font-size: 11.5px;
+  gap: 5px;
+  color: var(--text-muted);
+  margin-left: auto;
 }
-.sched-stepper-flagged-nav button {
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  border: 1.5px solid var(--border);
-  background: var(--white);
+.sched-stepper-controls .sched-flag-btn:hover { border-color: var(--badge-warm-text); color: var(--badge-warm-text); }
+.sched-stepper-controls .sched-flag-btn.is-flagged {
+  border-color: var(--badge-warm-text);
   color: var(--badge-warm-text);
-  font-size: 11.5px;
-  font-weight: 600;
-  white-space: nowrap;
+  background: var(--badge-warm-bg);
 }
-.sched-stepper-flagged-nav button:hover { border-color: var(--badge-warm-text); }
-.sched-stepper-flagged-count { color: var(--text-muted); }
 
 /* ===== RIGHT: header + grid + saved schedules ===== */
 .sched-right-header {
@@ -1023,6 +1050,97 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   line-height: 1.5;
 }
 
+/* ===== Bookmarked schedules — lightweight, unsaved shortlist ===== */
+.sched-bookmarks-panel {
+  border-top: 1px solid var(--border-light);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sched-bookmarks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sched-bookmarks-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--badge-warm-text);
+}
+.sched-bookmarks-clear-btn {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border: none;
+  background: none;
+  padding: 2px 4px;
+}
+.sched-bookmarks-clear-btn:hover { color: var(--warning-border); }
+.sched-bookmarks-list { display: flex; flex-direction: column; gap: 4px; }
+.sched-bookmark-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--badge-warm-text);
+  background: var(--badge-warm-bg);
+}
+.sched-bookmark-row.is-active { border-color: var(--scarlet); }
+.sched-bookmark-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  text-align: left;
+  background: none;
+  border: none;
+}
+.sched-bookmark-row-summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sched-bookmark-row-credits { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.sched-bookmark-save-btn {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  margin-right: 2px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--scarlet);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sched-bookmark-save-btn:hover { background: var(--scarlet-dark); }
+.sched-bookmark-remove-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.sched-bookmark-remove-btn:hover { color: var(--warning-border); }
+
+/* ===== Saved schedules — deliberate, preserved contenders ===== */
 .sched-saved-panel {
   border-top: 1px solid var(--border-light);
   padding-top: 12px;
@@ -1030,30 +1148,36 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   flex-direction: column;
   gap: 8px;
 }
-.sched-save-form { display: flex; gap: 6px; }
-.sched-save-name-input {
-  flex: 1;
-  min-width: 0;
-  padding: 7px 10px;
-  border-radius: var(--radius-sm);
-  border: 1.5px solid var(--border);
-  background: var(--cream);
-  font-size: 12.5px;
-}
-.sched-save-name-input:focus { outline: none; border-color: var(--scarlet); background: var(--white); }
+.sched-save-section { display: flex; flex-direction: column; gap: 6px; }
+.sched-save-heading { font-size: 11.5px; font-weight: 600; color: var(--text-muted); }
+/* Save is the one control here that actually preserves something, so it
+   leads — full-width, solid scarlet, its own row — with the name field
+   demoted underneath as a small optional/secondary input, instead of the
+   two competing for attention side by side. */
+.sched-save-form { display: flex; flex-direction: column; gap: 6px; }
 .sched-save-btn {
-  flex-shrink: 0;
-  padding: 7px 14px;
+  padding: 10px 14px;
   border-radius: var(--radius-sm);
   border: none;
   background: var(--scarlet);
   color: #fff;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
-  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
 }
 .sched-save-btn:hover:not(:disabled) { background: var(--scarlet-dark); }
-.sched-save-btn:disabled { opacity: .4; cursor: default; }
+.sched-save-btn:disabled { opacity: .4; cursor: default; box-shadow: none; }
+.sched-save-name-input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border-light);
+  background: var(--cream);
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+.sched-save-name-input:focus { outline: none; border-color: var(--scarlet); background: var(--white); color: var(--text); }
 
 .sched-saved-list { display: flex; flex-direction: column; gap: 4px; }
 .sched-saved-empty { padding: 12px 4px; }
@@ -1077,6 +1201,13 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   background: none;
   border: none;
 }
+.sched-saved-row-main.is-editing { cursor: default; }
+.sched-saved-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
 .sched-saved-row-name {
   font-size: 12.5px;
   font-weight: 600;
@@ -1084,7 +1215,27 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Compact contents preview — course numbers only; the full per-section
+   breakdown (with times) is available as a hover tooltip via the row's
+   title attribute rather than crowding this line. */
+.sched-saved-row-contents {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sched-saved-row-name-input {
+  width: 100%;
+  padding: 3px 5px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--scarlet);
+  background: var(--white);
+  font-size: 12.5px;
+  font-weight: 600;
+}
 .sched-saved-row-count { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.sched-rename-btn,
 .sched-favorite-btn,
 .sched-delete-btn {
   flex-shrink: 0;
@@ -1098,6 +1249,7 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   color: var(--text-muted);
   font-size: 14px;
 }
+.sched-rename-btn:hover { color: var(--scarlet); }
 .sched-favorite-btn:hover,
 .sched-favorite-btn.is-favorited { color: var(--badge-warm-text); }
 .sched-delete-btn:hover { color: var(--warning-border); }

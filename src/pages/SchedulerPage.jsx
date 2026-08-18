@@ -22,6 +22,7 @@ import DraftCourseCard from '../components/scheduler/DraftCourseCard';
 import GlobalTimeFilter from '../components/scheduler/GlobalTimeFilter';
 import ScheduleStepper from '../components/scheduler/ScheduleStepper';
 import WeeklyGrid from '../components/scheduler/WeeklyGrid';
+import BookmarkedSchedulesPanel from '../components/scheduler/BookmarkedSchedulesPanel';
 import SavedSchedulesPanel from '../components/scheduler/SavedSchedulesPanel';
 import { CURRENT_TERM, CURRENT_TERM_LABEL } from '../utils/term';
 import { sectionsConflict, describeSectionTime } from '../utils/sectionTime';
@@ -188,13 +189,16 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const [previewSectionIds, setPreviewSectionIds] = useState([]); // what the grid is currently showing
 
   // Unsaved shortlist while browsing generated combinations — "maybe this
-  // one," flippable back to without committing to Save yet. Keyed by the
-  // combination's own section ids (scheduleKey) rather than array index, so
-  // a flag still means the same thing if the schedule ever reappears at a
-  // different position (e.g. after a regenerate from the preview grid's
-  // lock/eliminate controls) instead of silently pointing at whatever now
-  // happens to sit at that index.
-  const [flaggedKeys, setFlaggedKeys] = useState(() => new Set());
+  // one," flippable back to without committing to Save yet. Map of
+  // scheduleKey -> sectionIds (not just a Set of keys, and not array
+  // indices) so a bookmark: (a) still means the same combination if it
+  // reappears at a different position after a regenerate, (b) can still be
+  // previewed/promoted to a real save even once the course search has
+  // moved on and that combination no longer appears in `generated` at all.
+  // Deliberately NOT cleared by "Clear all" / any draft edit — only the
+  // panel's own "Clear all" wipes it, so a shortlist survives exploring a
+  // completely different set of courses.
+  const [bookmarks, setBookmarks] = useState(() => new Map());
 
   // ── Saved/favorited schedules ───────────────────────────────────────────────
   const [savedSchedules, setSavedSchedules] = useState([]);
@@ -484,29 +488,80 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     return diagnoseNoSchedule(draftCourses, sectionsByCourse, sectionsById);
   }, [generated, draftCourses, sectionsByCourse, sectionsById]);
 
-  // Indices (into the CURRENT generated.schedules) of every flagged
-  // combination, in order — recomputed from the content-keyed set so a
-  // flag automatically "follows" its schedule if regeneration reorders it,
-  // and just as automatically stops applying once that exact combination
-  // is no longer reachable.
-  const flaggedIndices = useMemo(() => {
+  // [{ key, sectionIds }], in bookmarking order — the full shortlist,
+  // independent of whatever's currently generated. Feeds
+  // BookmarkedSchedulesPanel directly.
+  const bookmarkList = useMemo(
+    () => Array.from(bookmarks.entries()).map(([key, sectionIds]) => ({ key, sectionIds })),
+    [bookmarks],
+  );
+
+  // Indices (into the CURRENT generated.schedules) where a bookmark
+  // happens to overlap this batch — recomputed from the content-keyed map
+  // so a bookmark automatically "follows" its schedule if regeneration
+  // reorders it, and just as automatically stops applying to the stepper
+  // once that exact combination isn't reachable in THIS batch (it's still
+  // in the bookmark list either way).
+  const bookmarkedIndices = useMemo(() => {
     if (!generated) return [];
     const indices = [];
     generated.schedules.forEach((ids, i) => {
-      if (flaggedKeys.has(scheduleKey(ids))) indices.push(i);
+      if (bookmarks.has(scheduleKey(ids))) indices.push(i);
     });
     return indices;
-  }, [generated, flaggedKeys]);
+  }, [generated, bookmarks]);
 
-  function handleToggleFlag(index) {
+  function handleToggleBookmark(index) {
     if (!generated) return;
-    const key = scheduleKey(generated.schedules[index]);
-    setFlaggedKeys((prev) => {
-      const next = new Set(prev);
+    const ids = generated.schedules[index];
+    const key = scheduleKey(ids);
+    setBookmarks((prev) => {
+      const next = new Map(prev);
       if (next.has(key)) next.delete(key);
-      else next.add(key);
+      else next.set(key, ids);
       return next;
     });
+  }
+
+  function handleRemoveBookmark(key) {
+    setBookmarks((prev) => {
+      const next = new Map(prev);
+      next.delete(key);
+      return next;
+    });
+  }
+
+  function handleClearBookmarks() {
+    setBookmarks(new Map());
+  }
+
+  // Loads a bookmarked combination into the grid directly — it may or may
+  // not still be part of the CURRENT `generated` batch, so the stepper
+  // only re-syncs to it (previewIndex) when it happens to still be there;
+  // otherwise the grid still shows it fine via previewSectionIds alone,
+  // the stepper just hides until Prev/Next/Generate moves on.
+  function handlePreviewBookmark(sectionIds) {
+    setPreviewSectionIds(sectionIds);
+    setActiveSavedId(null);
+    if (generated) {
+      const key = scheduleKey(sectionIds);
+      const idx = generated.schedules.findIndex((ids) => scheduleKey(ids) === key);
+      setPreviewIndex(idx >= 0 ? idx : null);
+    } else {
+      setPreviewIndex(null);
+    }
+  }
+
+  // "Turning a flag into a saved" in one click — reuses the same save path
+  // as the form below, just with explicit sectionIds instead of whatever's
+  // currently previewed, and an auto-generated name (the student can
+  // rename it afterward via the saved row's rename button) since asking
+  // for a name here would defeat the "one click" point. Consumes the
+  // bookmark on success: once it's a real saved schedule, the bookmark's
+  // job — "don't lose this candidate" — is done.
+  async function handlePromoteBookmark(key, sectionIds) {
+    await handleSaveSchedule(`Schedule ${savedSchedules.length + 1}`, sectionIds);
+    handleRemoveBookmark(key);
   }
 
   function invalidateGenerated() {
@@ -591,7 +646,6 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   function handleClearAll() {
     setDraftCourses([]);
-    setFlaggedKeys(new Set());
     invalidateGenerated();
   }
 
@@ -673,13 +727,21 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   }
 
   // ── Saved schedule handlers ──────────────────────────────────────────────────
-  async function handleSaveSchedule(name) {
-    if (previewSectionIds.length === 0) return;
+  // sectionIds defaults to whatever's previewed (the normal Save-form path)
+  // but can be passed explicitly — handlePromoteBookmark uses this to save
+  // a bookmarked combination directly without first loading it into preview.
+  // Only marks the new save "active" (highlighted, in the right-panel
+  // title) when it's the thing actually on screen right now — promoting a
+  // DIFFERENT bookmark than whatever's currently previewed shouldn't hijack
+  // the header to name something the grid isn't showing.
+  async function handleSaveSchedule(name, sectionIds = previewSectionIds) {
+    if (sectionIds.length === 0) return;
+    const isPreviewed = scheduleKey(sectionIds) === scheduleKey(previewSectionIds);
     if (user) {
       const ref = await addDoc(collection(db, 'users', user.uid, 'schedules'), {
         name,
         term: CURRENT_TERM,
-        selectedSectionIds: previewSectionIds,
+        selectedSectionIds: sectionIds,
         favorited: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -687,20 +749,30 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       const q = query(collection(db, 'users', user.uid, 'schedules'), orderBy('updatedAt', 'desc'));
       const snap = await getDocs(q);
       setSavedSchedules(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      setActiveSavedId(ref.id);
+      if (isPreviewed) setActiveSavedId(ref.id);
     } else {
       const schedule = {
         id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         name,
         term: CURRENT_TERM,
-        selectedSectionIds: previewSectionIds,
+        selectedSectionIds: sectionIds,
         favorited: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
       setSavedSchedules((prev) => [schedule, ...prev]);
-      setActiveSavedId(schedule.id);
+      if (isPreviewed) setActiveSavedId(schedule.id);
     }
+  }
+
+  async function handleRenameSchedule(schedule, name) {
+    if (user) {
+      await updateDoc(doc(db, 'users', user.uid, 'schedules', schedule.id), {
+        name,
+        updatedAt: serverTimestamp(),
+      });
+    }
+    setSavedSchedules((prev) => prev.map((s) => (s.id === schedule.id ? { ...s, name } : s)));
   }
 
   async function handleToggleFavorite(schedule) {
@@ -1000,8 +1072,8 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                 generated={generated}
                 previewIndex={previewIndex}
                 onJump={handlePreview}
-                flaggedIndices={flaggedIndices}
-                onToggleFlag={handleToggleFlag}
+                bookmarkedIndices={bookmarkedIndices}
+                onToggleBookmark={handleToggleBookmark}
               />
               <WeeklyGrid
                 sectionIds={previewSectionIds}
@@ -1016,12 +1088,26 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             </div>
           )}
 
+          <BookmarkedSchedulesPanel
+            bookmarks={bookmarkList}
+            sectionsById={sectionsById}
+            courseMap={courseMap}
+            activeKey={previewSectionIds.length > 0 ? scheduleKey(previewSectionIds) : null}
+            onPreview={handlePreviewBookmark}
+            onPromote={handlePromoteBookmark}
+            onRemove={handleRemoveBookmark}
+            onClearAll={handleClearBookmarks}
+          />
+
           <SavedSchedulesPanel
             previewSectionIds={previewSectionIds}
             creditsLabel={previewCreditsLabel}
             savedSchedules={savedSchedules}
             activeSavedId={activeSavedId}
+            sectionsById={sectionsById}
+            courseMap={courseMap}
             onSave={handleSaveSchedule}
+            onRename={handleRenameSchedule}
             onToggleFavorite={handleToggleFavorite}
             onDelete={handleDeleteSchedule}
             onLoad={handleLoadSchedule}

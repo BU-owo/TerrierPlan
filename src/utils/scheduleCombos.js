@@ -1,4 +1,4 @@
-import { sectionsConflict } from './sectionTime';
+import { sectionsConflict, describeSectionTime } from './sectionTime';
 import { classifyComponent, groupSectionsByComponent } from './sectionComponents';
 
 // Safety valves against a pathological input (e.g. 8 courses × 6 sections
@@ -173,4 +173,27 @@ export function totalCredits(sectionIds, sectionsById) {
     }
   }
   return Object.values(creditsByCourse).reduce((sum, c) => sum + c, 0);
+}
+
+// Human-readable contents of a combination — used anywhere a bookmarked or
+// saved schedule needs to say what's actually in it instead of just a
+// section count. `compact` is course numbers only (fits in a row without
+// wrapping); `lines` is one "COURSE NUM Section (days time)" entry per
+// section, in course order, for a full-detail tooltip. Sections whose
+// data hasn't loaded (e.g. a bookmark outliving the course being removed
+// from the draft) are silently skipped rather than showing a raw id.
+export function describeSectionSet(sectionIds, sectionsById, courseMap) {
+  const sections = sectionIds.map((id) => sectionsById[id]).filter(Boolean);
+  const seenCourses = new Set();
+  const compactParts = [];
+  const lines = [];
+  for (const section of sections) {
+    const courseLabel = courseMap[section.courseKey]?.courseNumber ?? section.courseKey;
+    if (!seenCourses.has(section.courseKey)) {
+      seenCourses.add(section.courseKey);
+      compactParts.push(courseLabel);
+    }
+    lines.push(`${courseLabel} ${section.classSection} (${describeSectionTime(section)})`);
+  }
+  return { compact: compactParts.join(', '), lines };
 }
