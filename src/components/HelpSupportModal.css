@@ -67,38 +67,10 @@
   letter-spacing: .04em;
   color: var(--text-muted);
 }
-.help-section form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.help-textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--cream);
-  color: var(--text);
-  font: inherit;
-  font-size: 13.5px;
-  resize: vertical;
-}
-.help-textarea:focus { outline: none; border-color: var(--scarlet); background: var(--white); }
-
-.help-email-input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--cream);
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-}
-.help-email-input:focus { outline: none; border-color: var(--scarlet); background: var(--white); }
-
-.help-primary-btn {
+/* Email and Discord are now the only two actions in the modal, so they're
+   styled as parallel, equal-weight buttons rather than a primary/fallback
+   pair. */
+.help-secondary-btn {
   align-self: flex-start;
   padding: 9px 18px;
   border: none;
@@ -109,30 +81,7 @@
   font-weight: 700;
   box-shadow: var(--shadow-sm);
 }
-.help-primary-btn:hover:not(:disabled) { background: var(--scarlet-dark); }
-.help-primary-btn:disabled { opacity: .45; cursor: default; box-shadow: none; }
-
-.help-sent-note {
-  margin: 0;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--success-surface);
-  color: var(--success-text);
-  font-size: 12.5px;
-  line-height: 1.5;
-}
-
-.help-secondary-btn {
-  align-self: flex-start;
-  padding: 8px 14px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--cream);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 600;
-}
-.help-secondary-btn:hover { border-color: var(--scarlet); color: var(--scarlet); }
+.help-secondary-btn:hover { background: var(--scarlet-dark); }
 
 .help-discord-btn {
   align-self: flex-start;
