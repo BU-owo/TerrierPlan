@@ -98,13 +98,24 @@ export default function LoginPage({ theme = 'light', onToggleTheme }) {
           gap: 8px;
           z-index: 10;
         }
-        .login-help-btn,
         .login-theme-toggle {
           border: 1px solid rgba(255,255,255,.7);
           border-radius: 6px;
           padding: 7px 10px;
           background: rgba(0,0,0,.15);
           color: #fff;
+        }
+        .login-help-btn {
+          border: 1px solid #fff;
+          border-radius: 20px;
+          padding: 7px 14px;
+          background: #fff;
+          color: var(--scarlet);
+          font-weight: 800;
+          box-shadow: 0 1px 4px rgba(0,0,0,.25);
+        }
+        .login-help-btn:hover {
+          box-shadow: 0 2px 6px rgba(0,0,0,.3);
         }
         .login-card {
           background: var(--white);

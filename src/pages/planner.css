@@ -2277,27 +2277,44 @@
 }
 .theme-toggle:hover { background: rgba(255,255,255,.22); }
 
-/* "?" in a circle — opens HelpSupportModal. Deliberately an opaque near-
-   white badge (not the ghost/outline treatment theme-toggle uses) so it
-   reads as a distinct, findable landmark rather than blending into the
-   header alongside preference toggles. Sits on the header's permanent
-   scarlet bar (unaffected by the light/dark toggle — see .planner-header),
-   so like its neighbors it uses raw white-based rgba rather than the
-   --white token, which itself flips dark in dark mode and would go muddy
-   here; var(--scarlet) for the glyph is still a token, not a hex literal. */
+/* Opens HelpSupportModal. A solid white pill with a scarlet label — NOT
+   the ghost/outline treatment theme-toggle and sign-out use — so it reads
+   as an obvious, findable CTA rather than blending in among preference
+   toggles. Sits on the header's permanent scarlet bar (unaffected by the
+   light/dark toggle — see .planner-header), so like its neighbors it uses
+   raw white rather than the --white token, which itself flips dark in
+   dark mode and would go muddy here; var(--scarlet) for the text/icon is
+   still a token, not a hex literal. Collapses to icon-only at the same
+   breakpoint as Import Transcript so its label doesn't get squeezed. */
 .header-help-btn {
-  width: 30px;
-  height: 30px;
-  border: 1px solid rgba(255,255,255,.55);
-  border-radius: 50%;
-  background: rgba(255,255,255,.85);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #fff;
+  border-radius: 20px;
+  padding: 6px 12px;
+  background: #fff;
   color: var(--scarlet);
-  font-size: 14px;
+  font-size: 12.5px;
   font-weight: 800;
   line-height: 1;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.header-help-btn:hover { background: var(--scarlet-light, #fff); box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+.header-help-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--scarlet);
+  color: #fff;
+  font-size: 11px;
   flex-shrink: 0;
 }
-.header-help-btn:hover { background: #fff; }
 
 /* Transcript import and imported-credit panels */
 .btn-import-transcript {
@@ -2449,6 +2466,8 @@ html[data-theme='dark'] .external-credit-no-hub { background: var(--white); }
   .btn-import-transcript-icon { display: inline; }
   .btn-import-transcript-label { display: none; }
   .btn-import-transcript { padding: 7px; }
+  .header-help-btn-label { display: none; }
+  .header-help-btn { padding: 6px; }
   .app-header-nav-link { padding: 5px 8px; font-size: 11.5px; }
 
   .mobile-tab-bar { display: flex; }

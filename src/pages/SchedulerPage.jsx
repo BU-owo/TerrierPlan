@@ -904,7 +904,8 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             aria-label="Help & feedback"
             title="Help & feedback"
           >
-            ?
+            <span className="header-help-btn-icon" aria-hidden="true">?</span>
+            <span className="header-help-btn-label">Help</span>
           </button>
           <button
             type="button"
