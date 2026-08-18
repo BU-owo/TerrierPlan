@@ -17,6 +17,7 @@ import {
 import { auth, db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
 import HeaderNav from '../components/HeaderNav';
+import HelpSupportModal from '../components/HelpSupportModal';
 import SchedulerSearch from '../components/scheduler/SchedulerSearch';
 import DraftCourseCard from '../components/scheduler/DraftCourseCard';
 import GlobalTimeFilter from '../components/scheduler/GlobalTimeFilter';
@@ -205,6 +206,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const [activeSavedId, setActiveSavedId] = useState(null); // which saved schedule (if any) the grid mirrors exactly
 
   const [mobileView, setMobileView] = useState('search'); // 'search' | 'build' | 'preview'
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   // ── Preview panel width (desktop drag-resize) ───────────────────────────────
   // null = use scheduler.css's default (46%, floor 460px); once the student
@@ -897,6 +899,15 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
         <div className="planner-header-user">
           <button
             type="button"
+            className="header-help-btn"
+            onClick={() => setShowHelpModal(true)}
+            aria-label="Help & feedback"
+            title="Help & feedback"
+          >
+            ?
+          </button>
+          <button
+            type="button"
             className="theme-toggle"
             onClick={onToggleTheme}
             aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
@@ -1135,6 +1146,8 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           Preview
         </button>
       </nav>
+
+      <HelpSupportModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
     </div>
   );
 }

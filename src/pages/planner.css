@@ -2277,6 +2277,28 @@
 }
 .theme-toggle:hover { background: rgba(255,255,255,.22); }
 
+/* "?" in a circle — opens HelpSupportModal. Deliberately an opaque near-
+   white badge (not the ghost/outline treatment theme-toggle uses) so it
+   reads as a distinct, findable landmark rather than blending into the
+   header alongside preference toggles. Sits on the header's permanent
+   scarlet bar (unaffected by the light/dark toggle — see .planner-header),
+   so like its neighbors it uses raw white-based rgba rather than the
+   --white token, which itself flips dark in dark mode and would go muddy
+   here; var(--scarlet) for the glyph is still a token, not a hex literal. */
+.header-help-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255,255,255,.55);
+  border-radius: 50%;
+  background: rgba(255,255,255,.85);
+  color: var(--scarlet);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.header-help-btn:hover { background: #fff; }
+
 /* Transcript import and imported-credit panels */
 .btn-import-transcript {
   display: flex;

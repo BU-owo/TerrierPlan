@@ -35,6 +35,7 @@ import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
 import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
 import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
 import HeaderNav from '../components/HeaderNav';
+import HelpSupportModal from '../components/HelpSupportModal';
 import { normalizeExternalCredits, normalizeExternalCredit } from '../utils/externalCredits';
 import { normalizeSemesters, normalizeGridSummerTerms, entryCourseKey } from '../utils/courseEntry';
 import { semesterLabel } from '../utils/hubConstants';
@@ -136,6 +137,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverlay, setDragOverlay] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const [deletePlanId, setDeletePlanId] = useState(null); // non-null → confirm-delete modal open for this plan id
 
   // Full-screen Requirements view — an in-page overlay/mode, not a route (see
@@ -1184,6 +1186,15 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         <div className="planner-header-user">
           <button
             type="button"
+            className="header-help-btn"
+            onClick={() => setShowHelpModal(true)}
+            aria-label="Help & feedback"
+            title="Help & feedback"
+          >
+            ?
+          </button>
+          <button
+            type="button"
             className="theme-toggle"
             onClick={onToggleTheme}
             aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
@@ -1357,6 +1368,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         externalCredits={externalCredits}
         onImport={handleTranscriptImport}
       />
+
+      <HelpSupportModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
 
       {/* ── Mobile tab bar (hidden on wide screens via CSS; stays bottom-most
            so the bulletin panel expands upward above it) ── */}

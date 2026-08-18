@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '../firebase';
 import { useNavigate } from 'react-router-dom';
+import HelpSupportModal from '../components/HelpSupportModal';
 
 export default function LoginPage({ theme = 'light', onToggleTheme }) {
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   async function handleGoogleSignIn() {
     setError('');
@@ -25,14 +27,24 @@ export default function LoginPage({ theme = 'light', onToggleTheme }) {
 
   return (
     <div className="login-page">
-      <button
-        type="button"
-        className="login-theme-toggle"
-        onClick={onToggleTheme}
-        aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-      >
-        {theme === 'dark' ? '☀ Light mode' : '☾ Dark mode'}
-      </button>
+      <div className="login-header-actions">
+        <button
+          type="button"
+          className="login-help-btn"
+          onClick={() => setShowHelpModal(true)}
+          aria-label="Help & feedback"
+        >
+          ? Help
+        </button>
+        <button
+          type="button"
+          className="login-theme-toggle"
+          onClick={onToggleTheme}
+          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+        >
+          {theme === 'dark' ? '☀ Light mode' : '☾ Dark mode'}
+        </button>
+      </div>
       <div className="login-card">
         <img
           className="login-mascot"
@@ -67,6 +79,8 @@ export default function LoginPage({ theme = 'light', onToggleTheme }) {
         </p>
       </div>
 
+      <HelpSupportModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
+
       <style>{`
         .login-page {
           min-height: 100dvh;
@@ -76,10 +90,16 @@ export default function LoginPage({ theme = 'light', onToggleTheme }) {
           background: linear-gradient(150deg, #CC0000 0%, #8B0000 100%);
           padding: 24px;
         }
-        .login-theme-toggle {
+        .login-header-actions {
           position: fixed;
           top: 16px;
           right: 16px;
+          display: flex;
+          gap: 8px;
+          z-index: 10;
+        }
+        .login-help-btn,
+        .login-theme-toggle {
           border: 1px solid rgba(255,255,255,.7);
           border-radius: 6px;
           padding: 7px 10px;
