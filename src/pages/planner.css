@@ -2335,7 +2335,7 @@
 .external-credit-row { display: flex; justify-content: space-between; gap: 8px; padding: 9px 0; border-top: 1px solid var(--border); }
 .external-credit-main { display: flex; gap: 8px; min-width: 0; }.external-credit-type { height: fit-content; padding: 2px 5px; border-radius: 4px; background: var(--badge-cool-bg); color: var(--badge-cool-text); font-size: 10px; font-weight: 700; }
 .type-ap { background: var(--badge-warm-bg); color: var(--badge-warm-text); }.type-transfer { background: var(--badge-success-bg); color: var(--badge-success-text); }.external-credit-title { font-size: 13px; font-weight: 600; }.external-credit-meta { display: flex; gap: 8px; }
-.external-credit-row.needs-review { border-left: 3px solid var(--warning-border); padding-left: 9px; background: var(--warning-surface); }.external-credit-row.needs-review .external-credit-title { color: var(--warning-text); }.external-credit-row.needs-review .external-credit-meta { color: var(--warning-text); }.external-credit-warning, .import-incomplete-warning { margin-top: 7px; color: var(--warning-text); font-size: 12px; font-weight: 600; }.external-credit-warning input { display: block; width: 150px; margin-top: 6px; padding: 5px; border: 1px solid var(--warning-border); border-radius: 4px; }.external-credit-hub { margin-top: 5px; color: var(--success-text); font-size: 12px; font-weight: 600; }.external-credit-hub-picker { display: grid; gap: 4px; margin-top: 7px; color: var(--text); font-weight: 600; }.external-credit-hub-picker select { min-height: 100px; padding: 4px; border: 1px solid var(--warning-border); border-radius: 4px; background: var(--white); color: var(--text); }.external-credit-no-hub { margin-top: 7px; border: 1px solid var(--scarlet); border-radius: 4px; background: var(--white); color: var(--scarlet); cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; padding: 5px 7px; }.external-credit-no-hub:hover { background: var(--scarlet-pale); }.import-incomplete-warning { padding: 10px; border: 1px solid var(--warning-border); border-radius: 6px; background: var(--warning-surface); }
+.external-credit-row.needs-review { border-left: 3px solid var(--warning-border); padding-left: 9px; background: var(--warning-surface); }.external-credit-row.needs-review .external-credit-title { color: var(--warning-text); }.external-credit-row.needs-review .external-credit-meta { color: var(--warning-text); }.external-credit-warning, .import-incomplete-warning { margin-top: 7px; color: var(--warning-text); font-size: 12px; font-weight: 600; }.external-credit-warning input { display: block; width: 150px; margin-top: 6px; padding: 5px; border: 1px solid var(--warning-border); border-radius: 4px; }.external-credit-hub { color: var(--success-text); font-weight: 600; }.external-credit-hub-picker { display: grid; gap: 4px; margin-top: 7px; color: var(--text); font-weight: 600; }.external-credit-hub-picker select { min-height: 100px; padding: 4px; border: 1px solid var(--warning-border); border-radius: 4px; background: var(--white); color: var(--text); }.external-credit-no-hub { margin-top: 7px; border: 1px solid var(--scarlet); border-radius: 4px; background: var(--white); color: var(--scarlet); cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; padding: 5px 7px; }.external-credit-no-hub:hover { background: var(--scarlet-pale); }.import-incomplete-warning { padding: 10px; border: 1px solid var(--warning-border); border-radius: 6px; background: var(--warning-surface); }
 .import-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 18px; background: rgba(0, 0, 0, 0.48); }
 .import-modal { width: min(820px, 100%); max-height: calc(100vh - 36px); display: flex; flex-direction: column; background: var(--white); border-radius: 12px; box-shadow: 0 16px 50px rgba(0,0,0,.3); }
 .import-modal-header, .import-modal-footer { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
@@ -2386,6 +2386,23 @@
 .external-credit-score-note { margin: 2px 0 0; color: var(--text-muted); font-size: 11px; }
 .external-credit-add-preview { padding: 7px 9px; border-radius: 4px; background: var(--cream-dark); color: var(--text-secondary); font-size: 12px; font-weight: 600; }
 .external-credit-add-actions { display: flex; gap: 6px; margin-top: 2px; }
+.external-credit-exam-row-block { position: relative; display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--white); }
+.external-credit-exam-row-remove { position: absolute; top: 6px; right: 6px; }
+.external-credit-badges { width: 60px; flex-shrink: 0; }
+.external-credit-body { min-width: 0; flex: 1; }
+.external-credit-course-code { font-family: monospace; color: var(--scarlet); font-weight: 700; }
+.external-credit-unmapped-tag { color: var(--text-muted); font-weight: 500; font-style: italic; }
+.external-credit-row-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.external-credit-score-edit-link { margin-left: auto; border: 0; background: transparent; padding: 0; color: var(--scarlet); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.external-credit-score-edit-link:hover { text-decoration: underline; }
+.external-credit-manual-tag { margin-left: 5px; padding: 1px 5px; border-radius: 4px; background: var(--cream-dark); color: var(--text-muted); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; vertical-align: middle; }
+.external-credit-advisor-note { color: var(--text-secondary); font-style: italic; }
+.external-credit-override-link { margin-left: 6px; border: 0; background: transparent; padding: 0; color: var(--scarlet); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.external-credit-override-link:hover { text-decoration: underline; }
+.external-credit-override-editor { display: grid; gap: 8px; margin-top: 7px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--cream); font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+.external-credit-override-field { display: grid; gap: 3px; font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+.external-credit-override-field input { padding: 5px; border: 1px solid var(--border); border-radius: 4px; background: var(--white); color: var(--text); font: inherit; font-size: 12.5px; width: 100%; box-sizing: border-box; }
+.external-credit-override-error { margin: 0; color: var(--warning-text); font-size: 11px; font-weight: 600; }
 @media (max-width: 640px) { .import-steps { gap: 8px; }.import-step-label { display: none; }.import-transfer-fields { width: 100%; }.import-transfer-fields input { width: 100%; } }
 
 html[data-theme='dark'] .search-picker-modal,
@@ -2397,6 +2414,8 @@ html[data-theme='dark'] .plan-side-panel,
 html[data-theme='dark'] .external-credit-hub-picker select,
 html[data-theme='dark'] .external-credit-no-hub,
 html[data-theme='dark'] .external-credit-add-form,
+html[data-theme='dark'] .external-credit-exam-row-block,
+html[data-theme='dark'] .external-credit-override-editor,
 html[data-theme='dark'] .external-credit-add-row select,
 html[data-theme='dark'] .external-credit-add-row input { background: var(--white); }
 

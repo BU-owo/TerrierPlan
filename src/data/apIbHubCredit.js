@@ -53,20 +53,37 @@ export const AP_HUB_CREDIT = {
     },
   },
   'calculus ab': { hub: ['QR2'], credits: 4, courseKey: 'CASMA123' },
-  // BU's real rule for AP Calc BC scores 1-3 depends on the AB subscore
-  // (main score 1-3 + subscore 4/5 => 4 credits; no qualifying subscore
-  // => 0 credits) — a field this app has no way to collect. Scores 1-3
-  // are deliberately left unmodeled here rather than guessed at; the
-  // score picker in the UI derives its options from these byScore keys,
-  // so it only ever offers 4 and 5 for this exam.
+  // Calculus BC is the one AP exam in BU's chart whose credit at low main
+  // scores hinges on a secondary "AB subscore" College Board reports
+  // alongside the main BC score: main score 1-3 + subscore >= 4 earns the
+  // same credit as an AP Calc AB score of 4-5 (4 credits, CAS MA 123); a
+  // main score 1-3 with no qualifying subscore earns nothing. `subscoreRule`
+  // captures that as data instead of leaving it unmodeled — `byScore` alone
+  // still covers the ordinary 4/5 outcomes. If another AP exam is ever
+  // found to key off a secondary subscore like this, give it its own
+  // `subscoreRule` the same way rather than special-casing it in code.
   'calculus bc': {
     byScore: {
       4: { hub: ['QR2'], credits: 8, courses: ['CASMA123', 'CASMA124'] },
       5: { hub: ['QR2'], credits: 8, courses: ['CASMA123', 'CASMA124'] },
     },
+    subscoreRule: {
+      appliesWhenScore: [1, 2, 3],
+      minSubscore: 4,
+      onQualify: { hub: ['QR2'], credits: 4, courseKey: 'CASMA123' },
+      onFail: { hub: [], credits: 0, courseKey: null }, // documented outcome, not "unresolved"
+    },
   },
   chemistry: { hub: ['SI1'], credits: 4, courseKey: 'CASCH131' },
-  'chinese language and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LC 212 at score 4, or CAS LC 311 at score 5' },
+  // Both scores map to a specific, unambiguous course (no "or", no advisor
+  // sign-off needed) — byScore rather than a flat courseNote so score 4 and
+  // 5 each resolve to a real courseKey, not a note describing both.
+  'chinese language and culture': {
+    byScore: {
+      4: { hub: ['GCI'], credits: 4, courseKey: 'CASLC212' },
+      5: { hub: ['GCI'], credits: 4, courseKey: 'CASLC311' },
+    },
+  },
   'computer science a': { hub: ['QR2'], credits: 4, courseKey: 'CASCS111' },
   'computer science principles': { hub: ['QR1'], credits: 4, courseNote: 'CAS CS 101 or CDS DS 100' },
   macroeconomics: { hub: ['SO1'], credits: 4, courseKey: 'CASEC102' },
@@ -75,13 +92,38 @@ export const AP_HUB_CREDIT = {
   'english literature and composition': { hub: [], credits: 4, courseKey: 'CASEN100' },
   'environmental science': { hub: ['SO1'], credits: 4, courseKey: 'CASEE100' }, // as printed in BU's chart — not SI1
   'european history': { hub: [], credits: 4, courseNote: 'No fixed BU course equivalent (elective credit only)' },
-  'french language and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LF 212 at score 4, or an advisor-approved CAS LF 3xx course at score 5' },
-  'german language and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LG 212 at score 4, or an advisor-approved CAS LG 3xx course at score 5' },
+  // Score 4 maps to a single confident course; score 5 extends into an
+  // advisor-approved CAS LF 3xx course with no fixed number, so that half
+  // is a courseNote rather than a fabricated key — same shape as Latin.
+  'french language and culture': {
+    byScore: {
+      4: { hub: ['GCI'], credits: 4, courseKey: 'CASLF212' },
+      5: { hub: ['GCI'], credits: 4, courseNote: 'CAS LF 3xx, advisor-approved' },
+    },
+  },
+  'german language and culture': {
+    byScore: {
+      4: { hub: ['GCI'], credits: 4, courseKey: 'CASLG212' },
+      5: { hub: ['GCI'], credits: 4, courseNote: 'CAS LG 3xx, advisor-approved' },
+    },
+  },
   'comparative government and politics': { hub: ['SO1'], credits: 4, courseKey: 'CASPO151' },
   'united states government and politics': { hub: ['SO1'], credits: 4, courseKey: 'CASPO111' },
   'human geography': { hub: ['SO1'], credits: 4, courseKey: 'CASEE100' },
-  'italian language and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LI 212 at score 4, or an advisor-approved CAS LI 3xx course at score 5' },
-  'japanese language and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LJ 212 at score 4, or CAS LJ 303 at score 5' },
+  'italian language and culture': {
+    byScore: {
+      4: { hub: ['GCI'], credits: 4, courseKey: 'CASLI212' },
+      5: { hub: ['GCI'], credits: 4, courseNote: 'CAS LI 3xx, advisor-approved' },
+    },
+  },
+  // Unlike French/German/Italian/Spanish, both scores here map to a
+  // specific unambiguous course — no advisor sign-off needed at 5.
+  'japanese language and culture': {
+    byScore: {
+      4: { hub: ['GCI'], credits: 4, courseKey: 'CASLJ212' },
+      5: { hub: ['GCI'], credits: 4, courseKey: 'CASLJ303' },
+    },
+  },
   // Score 4 maps to a single confident course; score 5 extends into an
   // advisor-approved CAS CL 3TR (topics) course with no fixed number, so
   // that half is a courseNote rather than a fabricated key.
@@ -97,8 +139,21 @@ export const AP_HUB_CREDIT = {
   'physics c mechanics': { hub: ['SI1'], credits: 4, courseNote: 'CAS PY 211 or CAS PY 251' },
   'physics c electricity and magnetism': { hub: ['SI2'], credits: 4, courseNote: 'CAS PY 212 or CAS PY 252' },
   psychology: { hub: ['SO1'], credits: 4, courseKey: 'CASPS101' },
-  'spanish language and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LS 212 at score 4, or an advisor-approved CAS LS 3xx course at score 5' },
-  'spanish literature and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LS 212 at score 4, or CAS LS 307 at score 5' },
+  'spanish language and culture': {
+    byScore: {
+      4: { hub: ['GCI'], credits: 4, courseKey: 'CASLS212' },
+      5: { hub: ['GCI'], credits: 4, courseNote: 'CAS LS 3xx, advisor-approved' },
+    },
+  },
+  // Distinct College Board exam from Spanish Language & Culture above, not
+  // a duplicate — diverges at score 5 (a real course, not an advisor-
+  // approved placeholder), so keep both entries separate.
+  'spanish literature and culture': {
+    byScore: {
+      4: { hub: ['GCI'], credits: 4, courseKey: 'CASLS212' },
+      5: { hub: ['GCI'], credits: 4, courseKey: 'CASLS307' },
+    },
+  },
   statistics: { hub: ['QR2'], credits: 4, courseKey: 'CASMA115' },
   'united states history': { hub: [], credits: 4, courseNote: 'No fixed BU course equivalent (elective credit only)' },
 };
@@ -275,19 +330,41 @@ export function isApScoreDependent(rawSubject) {
 }
 
 /**
+ * Resolves a subscore-gated outcome for an AP entry, if applicable.
+ * @returns {object|null|undefined} the matched entry's subscoreRule doesn't
+ *   apply to this score at all -> undefined (caller should fall back to its
+ *   normal byScore lookup). subscoreRule applies but no subscore was given
+ *   -> null (unresolved, same "flag for review" contract as a missing main
+ *   score). subscoreRule applies and a subscore was given -> the entry's
+ *   onQualify or onFail outcome (both are fully resolved answers, even
+ *   onFail's 0 credits/empty hub — that's a documented "no credit" result,
+ *   not a gap).
+ */
+function resolveApSubscoreOutcome(entry, score, subscore) {
+  if (!entry.subscoreRule || !entry.subscoreRule.appliesWhenScore.includes(score)) return undefined;
+  if (subscore == null) return null;
+  const { minSubscore, onQualify, onFail } = entry.subscoreRule;
+  return subscore >= minSubscore ? onQualify : onFail;
+}
+
+/**
  * Look up HUB units granted for an AP exam.
  * @param {string} rawSubject - as printed on the transcript, e.g. "AP Biology"
- * @param {number} [score] - required only for score-dependent exams (Biology, Latin, Calculus BC)
+ * @param {number} [score] - required only for score-dependent exams (any entry with `byScore` — e.g. Biology, Latin, Calculus BC, the AP language exams)
+ * @param {number} [subscore] - AP Calc BC only: the AB subscore, required only when `score` is 1-3
  * @returns {string[]|null} HUB unit codes (may be empty array = no HUB),
- *   or null if the exam is unrecognized / score is required but missing —
- *   callers should treat null as "flag for manual review", not "no HUB".
+ *   or null if the exam is unrecognized / score (or subscore, when needed)
+ *   is required but missing — callers should treat null as "flag for
+ *   manual review", not "no HUB".
  */
-export function getApHub(rawSubject, score) {
+export function getApHub(rawSubject, score, subscore) {
   const key = fuzzyMatchKey(normalize(rawSubject), AP_HUB_CREDIT, AP_ALIASES);
   if (!key) return null;
   const entry = AP_HUB_CREDIT[key];
   if (entry.byScore) {
     if (score == null) return null;
+    const subscoreOutcome = resolveApSubscoreOutcome(entry, score, subscore);
+    if (subscoreOutcome !== undefined) return subscoreOutcome ? subscoreOutcome.hub : null;
     const scoped = entry.byScore[score];
     return scoped ? scoped.hub : [];
   }
@@ -296,19 +373,25 @@ export function getApHub(rawSubject, score) {
 
 /**
  * Look up the BU credit hours granted for an AP exam — same resolution as
- * getApHub (fuzzy subject match, byScore lookup for score-dependent exams).
+ * getApHub (fuzzy subject match, byScore lookup for score-dependent exams,
+ * subscoreRule lookup for AP Calc BC scores 1-3).
  * @param {string} rawSubject
  * @param {number} [score] - required only for score-dependent exams
+ * @param {number} [subscore] - AP Calc BC only: the AB subscore, required only when `score` is 1-3
  * @returns {number|null} credit hours, or null if unresolved (unknown
- *   exam, or a score-dependent exam with a missing/unmodeled score —
- *   deliberately null rather than a guessed 0, e.g. AP Calc BC scores 1-3).
+ *   exam, a score-dependent exam with a missing/unmodeled score, or Calc BC
+ *   with score 1-3 and no subscore yet — deliberately null rather than a
+ *   guessed value; a resolved 0-credit outcome, e.g. Calc BC with a
+ *   non-qualifying subscore, returns 0, not null).
  */
-export function getApCredits(rawSubject, score) {
+export function getApCredits(rawSubject, score, subscore) {
   const key = fuzzyMatchKey(normalize(rawSubject), AP_HUB_CREDIT, AP_ALIASES);
   if (!key) return null;
   const entry = AP_HUB_CREDIT[key];
   if (entry.byScore) {
     if (score == null) return null;
+    const subscoreOutcome = resolveApSubscoreOutcome(entry, score, subscore);
+    if (subscoreOutcome !== undefined) return subscoreOutcome ? subscoreOutcome.credits : null;
     const scoped = entry.byScore[score];
     return scoped ? scoped.credits : null;
   }
@@ -320,17 +403,29 @@ export function getApCredits(rawSubject, score) {
  * getApHub/getApCredits.
  * @param {string} rawSubject
  * @param {number} [score] - required only for score-dependent exams
+ * @param {number} [subscore] - AP Calc BC only: the AB subscore, required only when `score` is 1-3
  * @returns {{courseKey: string|null, courses: string[]|null, courseNote: string|null}|null}
  *   null if unresolved. Otherwise exactly one of courseKey (single course),
  *   courses (a required multi-course sequence), or courseNote (no single
  *   confident answer — e.g. an "or" list, or a topics-placeholder course)
- *   is populated; the others are null.
+ *   is populated; the others are null (this includes Calc BC's onFail
+ *   outcome, which resolves with courseKey/courses/courseNote all null).
  */
-export function getApCourseInfo(rawSubject, score) {
+export function getApCourseInfo(rawSubject, score, subscore) {
   const key = fuzzyMatchKey(normalize(rawSubject), AP_HUB_CREDIT, AP_ALIASES);
   if (!key) return null;
   const entry = AP_HUB_CREDIT[key];
-  const scoped = entry.byScore ? (score != null ? entry.byScore[score] : null) : entry;
+  let scoped;
+  if (entry.byScore) {
+    if (score == null) {
+      scoped = null;
+    } else {
+      const subscoreOutcome = resolveApSubscoreOutcome(entry, score, subscore);
+      scoped = subscoreOutcome !== undefined ? subscoreOutcome : entry.byScore[score];
+    }
+  } else {
+    scoped = entry;
+  }
   if (!scoped) return null;
   return {
     courseKey: scoped.courseKey ?? null,

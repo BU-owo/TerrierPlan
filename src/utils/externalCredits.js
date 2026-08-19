@@ -27,17 +27,40 @@ function normalizeCourseKey(value) {
   return normalized || null;
 }
 
+// Free-text advisor note, trimmed to null when blank — same "null means
+// absent" convention as courseKey, so callers can check truthiness instead
+// of also handling empty-string.
+function normalizeAdvisorNote(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
 function normalizeStatus(type, status, courseKey) {
   if (type !== 'transfer') return status || undefined;
   if (status === 'mapped' || status === 'needs_mapping') return status;
   return courseKey ? 'mapped' : 'needs_mapping';
 }
 
+// manualCourseKey / advisorNote are a student-entered override for AP/IB
+// rows that auto-resolved with no single confident course (courseNote-only,
+// shown as "Not mapped") — e.g. "my advisor confirmed CAS BI 108" or just a
+// free-text note when there's no clean course to name. Same shape/intent as
+// the existing manualHubUnits override: a manual annotation layered on top
+// of the auto-resolved result, not a replacement for it. Notably this only
+// annotates which course maps to the credit — it does NOT change `credits`
+// or `manualHubUnits`, which still come from getApCredits/getApHub. If a
+// student's real situation would also change the credit amount (e.g. an
+// advisor granting a different number of credits than the standard chart),
+// that's a separate, out-of-scope problem — this field isn't meant to
+// re-negotiate credit totals, only to record a course mapping.
 export function normalizeExternalCredit(credit) {
   if (!credit || typeof credit !== 'object') return null;
 
   const type = normalizeType(credit.type, credit.institution ? 'transfer' : undefined);
   const courseKey = normalizeCourseKey(credit.courseKey);
+  const manualCourseKey = normalizeCourseKey(credit.manualCourseKey);
+  const advisorNote = normalizeAdvisorNote(credit.advisorNote);
   const id = normalizeCreditId(credit.id) || createExternalCreditId();
 
   const normalized = {
@@ -45,6 +68,8 @@ export function normalizeExternalCredit(credit) {
     id,
     type,
     courseKey,
+    manualCourseKey,
+    advisorNote,
     status: normalizeStatus(type, credit.status, courseKey),
   };
 

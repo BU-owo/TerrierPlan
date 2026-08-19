@@ -978,10 +978,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setIsDirty(true);
   }
 
-  function handleAddExternalCredit(newCredit) {
-    const normalized = normalizeExternalCredit(newCredit);
-    if (!normalized) return;
-    setExternalCredits((prev) => [...prev, normalized]);
+  function handleAddExternalCredit(newCredits) {
+    const normalized = normalizeExternalCredits(Array.isArray(newCredits) ? newCredits : [newCredits]);
+    if (!normalized.length) return;
+    setExternalCredits((prev) => [...prev, ...normalized]);
     setIsDirty(true);
   }
 

@@ -22,11 +22,12 @@ function debugExternalCredits(stage, payload) {
   console.log(`[DEBUG ExternalCreditsPanel] ${stage}`, payload);
 }
 
-// BU never grants IB credit below a 5, regardless of exam — fixed and
-// small enough for a dropdown. AP's equivalent range is per-exam (most
-// exams aren't score-dependent at all) and is derived from AP_HUB_CREDIT's
-// byScore keys below rather than hardcoded here.
-const IB_SCORE_OPTIONS = [5, 6, 7];
+// The add form doesn't collect an IB score at all — BU only grants IB
+// credit for HL scored 5-7, and credits/course are identical across that
+// range (verified against the source chart), so any value in [5,7] would
+// resolve identically. This fixed value is what getIbCredits/getIbCourseInfo
+// /getIbHub are called with internally.
+const IB_SCORE = 5;
 
 // AP_EXAM_SUBJECTS / IB_EXAM_SUBJECTS keys are normalize()-safe lowercase
 // word strings (e.g. "calculus ab"), not display text — title-case them for
@@ -46,10 +47,21 @@ function formatSubjectLabel(key) {
 }
 
 // courseKey convention throughout the app is school+dept+number with no
-// spaces (e.g. "CASMA123") — this is display-only, purely cosmetic.
+// spaces (e.g. "CASMA123") — shared by the display formatter below and by
+// the manual-override input's format validation.
+const COURSE_KEY_PATTERN = /^([A-Z]{3})([A-Z]{2})(\d+)$/;
+
 function formatCourseKeyDisplay(courseKey) {
-  const m = String(courseKey).match(/^([A-Z]{3})([A-Z]{2})(\d+)$/);
+  const m = String(courseKey).match(COURSE_KEY_PATTERN);
   return m ? `${m[1]} ${m[2]} ${m[3]}` : courseKey;
+}
+
+// Format-only check for a manually-entered courseKey override — this is an
+// exception path for a student typing in what their advisor told them, so
+// it deliberately doesn't check the key is a *real* BU course, only that it
+// looks like one (three-letter school + two-letter dept + course number).
+function isValidCourseKeyFormat(rawValue) {
+  return COURSE_KEY_PATTERN.test(String(rawValue).replace(/\s+/g, '').toUpperCase());
 }
 
 function formatCreditsPreview(credits, courseInfo) {
@@ -80,180 +92,342 @@ function resolveCourseKeyForEntry(courseInfo) {
   return null;
 }
 
-const AddExternalCreditForm = memo(function AddExternalCreditForm({ onAdd, onCancel }) {
-  const [examType, setExamType] = useState('ap');
-  const [subject, setSubject] = useState('');
-  const [level, setLevel] = useState('');
-  const [score, setScore] = useState('');
-  const [error, setError] = useState('');
+// The advisor-override affordance is only for BU's own chart being
+// genuinely ambiguous at this exam/score (an "or" list, no fixed course,
+// etc — i.e. getApCourseInfo/getIbCourseInfo came back with a courseNote
+// and nothing else) — never for an exam BU's chart already answers
+// unambiguously. Deliberately checks the raw courseInfo shape (courseKey
+// AND courseNote), not just "is there a `courses` array" or any stored/
+// cached field, and never branches on exam name or type — a `courses`
+// sequence (e.g. Calc BC's CAS MA 123 + 124) is just as unambiguous as a
+// single courseKey and must not offer this override either.
+function isCourseNoteOnlyInfo(courseInfo) {
+  return Boolean(courseInfo) && courseInfo.courseKey == null && courseInfo.courseNote != null;
+}
 
-  const subjectOptions = examType === 'ap' ? AP_EXAM_SUBJECTS : IB_EXAM_SUBJECTS;
-  // IB HUB resolution always needs a score (getIbHub requires one to return
-  // anything but null), so IB never skips the score field the way most AP
-  // exams do — only Biology, Latin, and Calculus BC vary by AP score.
-  const scoreDependent = examType === 'ib' ? true : Boolean(subject && isApScoreDependent(subject));
-  // Derived straight from the data (never a hardcoded 1-5/4-5 range): for
-  // AP this is exactly the score keys the exam's byScore object models —
-  // e.g. Calc BC only lists 4 and 5, so that's all that's offered here.
-  const apByScoreKeys = examType === 'ap' && subject && AP_HUB_CREDIT[subject]?.byScore
-    ? Object.keys(AP_HUB_CREDIT[subject].byScore).map(Number).sort((a, b) => a - b)
-    : null;
-  const scoreOptions = examType === 'ib' ? IB_SCORE_OPTIONS : (apByScoreKeys || []);
-  const restrictedApScoreRange = examType === 'ap' && apByScoreKeys && Math.min(...apByScoreKeys) > 1;
+let rowIdSeq = 0;
+function createEmptyExamRow() {
+  rowIdSeq += 1;
+  return {
+    id: `add-exam-row-${rowIdSeq}`, examType: 'ap', subject: '', score: '', subscore: '',
+    // Same advisor-override annotation as CourseMappingOverrideEditor offers
+    // on an already-added row — collected up front here so a courseNote-only
+    // exam doesn't have to be added first and then edited. If the planned
+    // checklist-style add UI (check off several exams at once) replaces this
+    // form later, carry this same manualCourseKey/advisorNote pair-per-row
+    // over rather than re-deriving the pattern — the fields themselves are
+    // already part of the external-credit shape (utils/externalCredits.js),
+    // so only the UI wiring needs to move.
+    manualCourseKey: '', advisorNote: '',
+  };
+}
+
+// Any of College Board's 1-5 AB subscore values are valid — this doesn't
+// vary per exam (unlike the main score range), so it's not derived from
+// the data the way scoreOptions is.
+const AB_SUBSCORE_OPTIONS = [1, 2, 3, 4, 5];
+
+// Resolves one row's exam/score(/subscore) selection to its credit outcome,
+// purely from AP_HUB_CREDIT/IB_HUB_CREDIT data — nothing here branches on
+// the exam's name, so a new exam only needs a data entry, never a UI
+// change. That includes `subscoreRule`: any AP entry that has one gets the
+// second "AB Subscore" dropdown automatically, not just Calculus BC.
+// IB is hardcoded to isHigherLevel=true throughout: BU only ever grants IB
+// credit for HL exams, so SL isn't collected as a state at all.
+function resolveExamRow(row) {
+  const { examType, subject, score, subscore } = row;
+  if (!subject) {
+    return {
+      scoreDependent: false, scoreOptions: [], scoreNote: null,
+      needsSubscore: false, subscoreOptions: [],
+      resolvedCredits: null, resolvedCourseInfo: null, previewText: null,
+      isCourseNoteOnly: false,
+    };
+  }
 
   const scoreValue = score === '' ? null : Number(score);
-  const isHigherLevel = examType === 'ib' ? level === 'hl' : undefined;
 
-  const ibReady = examType === 'ib' && level === 'hl' && scoreValue != null;
-  const apReady = examType === 'ap' && subject && (!scoreDependent || scoreValue != null);
+  if (examType === 'ib') {
+    // BU only ever grants IB credit for HL exams scored 5-7, and per the
+    // source chart the credit outcome (hub/credits/course) is identical
+    // across that whole range — there's nothing for the score to change,
+    // so it's not collected at all. IB_SCORE, not a user selection, feeds
+    // getIbCredits/getIbCourseInfo/getIbHub as a fixed representative
+    // value; only "is this exam eligible" (i.e. does a mapping exist)
+    // varies row to row.
+    const resolvedCredits = getIbCredits(subject, IB_SCORE, true);
+    const resolvedCourseInfo = getIbCourseInfo(subject, IB_SCORE, true);
+    return {
+      scoreDependent: false,
+      scoreOptions: [],
+      scoreNote: 'Only Higher Level (HL) exams scored 5-7 earn BU credit.',
+      needsSubscore: false,
+      subscoreOptions: [],
+      resolvedCredits,
+      resolvedCourseInfo,
+      previewText: resolvedCredits == null ? null : formatCreditsPreview(resolvedCredits, resolvedCourseInfo),
+      isCourseNoteOnly: resolvedCredits != null && isCourseNoteOnlyInfo(resolvedCourseInfo),
+    };
+  }
 
-  // Same resolution the panel already uses to render imported AP/IB rows
-  // (see testHub in the main component below) — reused here so a
-  // manually-added row lands in exactly the same auto-resolved /
-  // needs-review state, and shows exactly the same credits/course, as an
-  // imported one would.
-  const resolvedCredits = examType === 'ib'
-    ? (ibReady ? getIbCredits(subject, scoreValue, isHigherLevel) : null)
-    : (apReady ? getApCredits(subject, scoreDependent ? scoreValue : undefined) : null);
-  const resolvedCourseInfo = examType === 'ib'
-    ? (ibReady ? getIbCourseInfo(subject, scoreValue, isHigherLevel) : null)
-    : (apReady ? getApCourseInfo(subject, scoreDependent ? scoreValue : undefined) : null);
+  const entry = AP_HUB_CREDIT[subject];
+  const byScoreKeys = entry?.byScore
+    ? Object.keys(entry.byScore).map(Number).sort((a, b) => a - b)
+    : null;
+  const subscoreRule = entry?.subscoreRule || null;
+  const scoreDependent = Boolean(byScoreKeys) || Boolean(subscoreRule);
+  // The dropdown offers every score that resolves to *something* — the
+  // exam's ordinary byScore keys, plus (for an exam like Calc BC) the
+  // scores gated behind a subscore. Union, not just byScore, so a
+  // subscoreRule-only score (e.g. Calc BC's 1-3) still shows up.
+  const scoreOptions = scoreDependent
+    ? Array.from(new Set([...(byScoreKeys || []), ...(subscoreRule?.appliesWhenScore || [])])).sort((a, b) => a - b)
+    : [];
+  const needsSubscore = Boolean(subscoreRule) && scoreValue != null && subscoreRule.appliesWhenScore.includes(scoreValue);
+  const subscoreValue = subscore === '' || subscore == null ? null : Number(subscore);
+
+  const ready = !scoreDependent
+    ? true
+    : scoreValue == null
+      ? false
+      : (!needsSubscore || subscoreValue != null);
+
+  const resolvedCredits = ready
+    ? getApCredits(subject, scoreDependent ? scoreValue : undefined, needsSubscore ? subscoreValue : undefined)
+    : null;
+  const resolvedCourseInfo = ready
+    ? getApCourseInfo(subject, scoreDependent ? scoreValue : undefined, needsSubscore ? subscoreValue : undefined)
+    : null;
+
+  // An exam with its own subscoreRule resolves scores below the ordinary
+  // byScore range directly (via the AB Subscore field below) rather than
+  // needing this caveat — the note is still available for any other exam
+  // that models a restricted score range without a way to resolve the rest.
+  const scoreNote = !scoreDependent || subscoreRule
+    ? null
+    : entry?.apSubscoreCaveat
+      ? "Only scores of 4-5 are shown — credit for lower scores depends on your AB subscore; contact BU Academic Advising directly."
+      : 'Only scores of 4-5 earn BU credit.';
 
   let previewText = null;
-  if (subject) {
-    if (examType === 'ib' && !level) {
-      previewText = 'Select HL or SL to see credit details.';
-    } else if (examType === 'ib' && level === 'sl') {
-      previewText = "IB Standard Level exams don't earn BU credit.";
-    } else if (scoreDependent && scoreValue == null) {
-      previewText = 'Select a score to see credit details.';
-    } else if (resolvedCredits == null) {
-      previewText = 'Not eligible for BU credit at that score — contact BU Academic Advising.';
-    } else {
-      previewText = formatCreditsPreview(resolvedCredits, resolvedCourseInfo);
-    }
+  if (ready) {
+    previewText = resolvedCredits === 0
+      ? "0 cr — this combination doesn't earn BU credit."
+      : resolvedCredits == null
+        ? 'Not eligible for BU credit at that score — contact BU Academic Advising.'
+        : formatCreditsPreview(resolvedCredits, resolvedCourseInfo);
   }
 
-  function handleTypeChange(nextType) {
-    setExamType(nextType);
-    setSubject('');
-    setLevel('');
-    setScore('');
+  return {
+    scoreDependent,
+    scoreOptions,
+    scoreNote,
+    needsSubscore,
+    subscoreOptions: needsSubscore ? AB_SUBSCORE_OPTIONS : [],
+    resolvedCredits,
+    resolvedCourseInfo,
+    previewText,
+    // Only a genuinely credit-earning, courseNote-only result offers the
+    // advisor override below — the 0-credit dead end (e.g. Calc BC with a
+    // non-qualifying subscore) has no course to map in the first place.
+    isCourseNoteOnly: resolvedCredits != null && resolvedCredits > 0 && isCourseNoteOnlyInfo(resolvedCourseInfo),
+  };
+}
+
+const AddExternalCreditForm = memo(function AddExternalCreditForm({ onAdd, onCancel }) {
+  const [rows, setRows] = useState(() => [createEmptyExamRow()]);
+  const [error, setError] = useState('');
+
+  function updateRow(id, patch) {
     setError('');
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
 
-  function handleSubjectChange(nextSubject) {
-    setSubject(nextSubject);
-    setScore('');
+  function addRow() {
+    setRows((prev) => [...prev, createEmptyExamRow()]);
   }
+
+  function removeRow(id) {
+    setRows((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  const resolvedRows = rows.map((row) => ({ row, resolution: resolveExamRow(row) }));
+  // A resolved-but-zero outcome (e.g. Calc BC score 1-3 with a
+  // non-qualifying AB subscore) is a real, correct answer — not a gap —
+  // but there's nothing meaningful to add to the plan for it, so it
+  // doesn't count toward "Add N credits" or get submitted.
+  const readyRows = resolvedRows.filter(({ resolution }) => resolution.resolvedCredits != null && resolution.resolvedCredits > 0);
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!subject) {
-      setError('Choose an exam.');
-      return;
-    }
-    if (examType === 'ib' && !level) {
-      setError('Choose HL or SL.');
-      return;
-    }
-    if (resolvedCredits == null) {
-      setError('This exam/score combination isn’t resolved to BU credit yet.');
+    if (readyRows.length === 0) {
+      setError('Add at least one exam with a resolved score.');
       return;
     }
 
-    const hubUnits = examType === 'ib'
-      ? getIbHub(subject, scoreValue, isHigherLevel)
-      : (scoreDependent ? getApHub(subject, scoreValue) : getApHub(subject));
+    const entries = readyRows.map(({ row, resolution }) => {
+      const isIb = row.examType === 'ib';
+      const scoreValue = row.score === '' ? null : Number(row.score);
+      const subscoreValue = resolution.needsSubscore && row.subscore !== '' ? Number(row.subscore) : undefined;
+      const hubUnits = isIb
+        ? getIbHub(row.subject, IB_SCORE, true)
+        : (resolution.scoreDependent ? getApHub(row.subject, scoreValue, subscoreValue) : getApHub(row.subject));
 
-    const entry = normalizeExternalCredit({
-      type: examType,
-      testSubject: subject,
-      sourceTitle: `${examType.toUpperCase()} ${formatSubjectLabel(subject)}`,
-      credits: resolvedCredits,
-      courseKey: resolveCourseKeyForEntry(resolvedCourseInfo),
-      score: scoreValue,
-      ...(examType === 'ib' ? { isHigherLevel } : {}),
-      manualHubUnits: Array.isArray(hubUnits) ? hubUnits : undefined,
-      status: hubUnits === null ? 'needs_review' : 'auto_hub_resolved',
+      // Advisor override only applies where auto-resolution came back
+      // courseNote-only, and only carries through when the typed courseKey
+      // is either blank or syntactically valid — an invalid one is silently
+      // dropped rather than blocking the whole batch (the field itself
+      // shows a validation error live, see the row JSX below).
+      const trimmedManualKey = resolution.isCourseNoteOnly ? row.manualCourseKey.trim() : '';
+      const manualCourseKey = trimmedManualKey && isValidCourseKeyFormat(trimmedManualKey) ? trimmedManualKey : undefined;
+      const advisorNote = resolution.isCourseNoteOnly ? row.advisorNote.trim() || undefined : undefined;
+
+      return normalizeExternalCredit({
+        type: row.examType,
+        testSubject: row.subject,
+        sourceTitle: `${row.examType.toUpperCase()} ${formatSubjectLabel(row.subject)}`,
+        credits: resolution.resolvedCredits,
+        courseKey: resolveCourseKeyForEntry(resolution.resolvedCourseInfo),
+        manualCourseKey,
+        advisorNote,
+        // IB doesn't collect a score at all (see resolveExamRow) — only
+        // AP entries carry one.
+        ...(isIb ? { isHigherLevel: true } : { score: scoreValue }),
+        manualHubUnits: Array.isArray(hubUnits) ? hubUnits : undefined,
+        status: hubUnits === null ? 'needs_review' : 'auto_hub_resolved',
+      });
     });
 
-    onAdd(entry);
+    onAdd(entries);
+    setRows([createEmptyExamRow()]);
+    setError('');
   }
 
   return (
     <form className="external-credit-add-form" onSubmit={handleSubmit}>
-      <div className="external-credit-add-row external-credit-type-toggle">
-        <button
-          type="button"
-          className={`import-chip-btn ${examType === 'ap' ? 'active' : ''}`}
-          onClick={() => handleTypeChange('ap')}
-        >
-          AP
-        </button>
-        <button
-          type="button"
-          className={`import-chip-btn ${examType === 'ib' ? 'active' : ''}`}
-          onClick={() => handleTypeChange('ib')}
-        >
-          IB
-        </button>
-      </div>
+      {resolvedRows.map(({ row, resolution }, index) => {
+        const subjectOptions = row.examType === 'ap' ? AP_EXAM_SUBJECTS : IB_EXAM_SUBJECTS;
+        return (
+          <div className="external-credit-exam-row-block" key={row.id}>
+            {rows.length > 1 && (
+              <button
+                type="button"
+                className="external-credit-remove external-credit-exam-row-remove"
+                onClick={() => removeRow(row.id)}
+                aria-label={`Remove exam ${index + 1}`}
+              >
+                ×
+              </button>
+            )}
 
-      <div className="external-credit-add-row">
-        <label>
-          Exam
-          <select value={subject} onChange={(e) => handleSubjectChange(e.target.value)}>
-            <option value="">Select exam…</option>
-            {subjectOptions.map((key) => (
-              <option key={key} value={key}>{formatSubjectLabel(key)}</option>
-            ))}
-          </select>
-        </label>
-      </div>
+            <div className="external-credit-add-row external-credit-type-toggle">
+              <button
+                type="button"
+                className={`import-chip-btn ${row.examType === 'ap' ? 'active' : ''}`}
+                onClick={() => updateRow(row.id, { examType: 'ap', subject: '', score: '', subscore: '' })}
+              >
+                AP
+              </button>
+              <button
+                type="button"
+                className={`import-chip-btn ${row.examType === 'ib' ? 'active' : ''}`}
+                onClick={() => updateRow(row.id, { examType: 'ib', subject: '', score: '', subscore: '' })}
+              >
+                IB
+              </button>
+            </div>
 
-      {examType === 'ib' && (
-        <div className="external-credit-add-row">
-          <label>
-            Level
-            <select value={level} onChange={(e) => { setLevel(e.target.value); setScore(''); }}>
-              <option value="">Select level…</option>
-              <option value="hl">Higher Level (HL)</option>
-              <option value="sl">Standard Level (SL)</option>
-            </select>
-          </label>
-        </div>
-      )}
+            <div className="external-credit-add-row">
+              <label>
+                Exam
+                <select value={row.subject} onChange={(e) => updateRow(row.id, { subject: e.target.value, score: '', subscore: '' })}>
+                  <option value="">Select exam…</option>
+                  {subjectOptions.map((key) => (
+                    <option key={key} value={key}>{formatSubjectLabel(key)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
-      {/* SL never earns BU credit, so there's no score to ask for until HL is chosen. */}
-      {subject && scoreDependent && (examType === 'ap' || level === 'hl') && (
-        <div className="external-credit-add-row external-credit-add-score-row">
-          <label>
-            Score
-            <select value={score} onChange={(e) => setScore(e.target.value)}>
-              <option value="">—</option>
-              {scoreOptions.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </label>
-          {restrictedApScoreRange && (
-            <p className="external-credit-score-note">
-              Scored below what's listed? Credit may depend on additional factors — contact BU Academic Advising directly.
-            </p>
-          )}
-        </div>
-      )}
+            {row.subject && (resolution.scoreDependent || resolution.scoreNote) && (
+              <div className="external-credit-add-row external-credit-add-score-row">
+                <div className="external-credit-add-row">
+                  {resolution.scoreDependent && (
+                    <label>
+                      Score
+                      <select value={row.score} onChange={(e) => updateRow(row.id, { score: e.target.value, subscore: '' })}>
+                        <option value="">—</option>
+                        {resolution.scoreOptions.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {resolution.needsSubscore && (
+                    <label>
+                      AB Subscore
+                      <select value={row.subscore} onChange={(e) => updateRow(row.id, { subscore: e.target.value })}>
+                        <option value="">—</option>
+                        {resolution.subscoreOptions.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+                {resolution.scoreNote && (
+                  <p className="external-credit-score-note">{resolution.scoreNote}</p>
+                )}
+              </div>
+            )}
 
-      {previewText && (
-        <div className="external-credit-add-preview">{previewText}</div>
-      )}
+            {resolution.previewText && (
+              <div className="external-credit-add-preview">{resolution.previewText}</div>
+            )}
+
+            {resolution.isCourseNoteOnly && (
+              <div className="external-credit-override-editor">
+                Advisor-confirmed mapping (optional) — doesn't change the credits/HUB above
+                <div className="external-credit-add-row">
+                  <label className="external-credit-override-field">
+                    Course key
+                    <input
+                      type="text"
+                      placeholder="e.g. CAS BI 108"
+                      value={row.manualCourseKey}
+                      onChange={(e) => updateRow(row.id, { manualCourseKey: e.target.value })}
+                    />
+                  </label>
+                  <label className="external-credit-override-field">
+                    Advisor note
+                    <input
+                      type="text"
+                      placeholder="e.g. granted elective credit only, no HUB"
+                      value={row.advisorNote}
+                      onChange={(e) => updateRow(row.id, { advisorNote: e.target.value })}
+                    />
+                  </label>
+                </div>
+                {row.manualCourseKey.trim() && !isValidCourseKeyFormat(row.manualCourseKey.trim()) && (
+                  <p className="external-credit-override-error">
+                    Course key should look like "CAS MA 123" — won't be saved until fixed.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      <button type="button" className="external-credit-add-btn" onClick={addRow}>
+        + Add another exam
+      </button>
 
       {error && <div className="external-credit-warning">{error}</div>}
 
       <div className="external-credit-add-actions">
-        <button type="submit" className="import-primary-btn" disabled={resolvedCredits == null}>
-          Add credit
+        <button type="submit" className="import-primary-btn" disabled={readyRows.length === 0}>
+          Add {readyRows.length} credit{readyRows.length === 1 ? '' : 's'}
         </button>
         <button type="button" className="import-secondary-btn" onClick={onCancel}>Cancel</button>
       </div>
@@ -319,9 +493,86 @@ const TransferExternalCreditRow = memo(function TransferExternalCreditRow({
   );
 });
 
+// Manual course-mapping override for an AP/IB row whose auto-resolution
+// came back courseNote-only ("Not mapped") — lets a student record what
+// their advisor actually told them (a courseKey, a free-text note, or
+// both) without this app pretending to know a single confident BU course.
+// Persists through the same onUpdate path as every other row edit (score
+// editing, transfer courseKey mapping, manual HUB confirmation) — no new
+// write function. Purely an annotation: it never touches credits or
+// manualHubUnits, which stay auto-resolved (see the header comment on
+// normalizeExternalCredit in utils/externalCredits.js).
+const CourseMappingOverrideEditor = memo(function CourseMappingOverrideEditor({ credit, creditId, onUpdate, onDone }) {
+  const [courseKeyDraft, setCourseKeyDraft] = useState(credit.manualCourseKey || '');
+  const [noteDraft, setNoteDraft] = useState(credit.advisorNote || '');
+  const [formatError, setFormatError] = useState('');
+
+  useEffect(() => {
+    setCourseKeyDraft(credit.manualCourseKey || '');
+    setNoteDraft(credit.advisorNote || '');
+  }, [credit.manualCourseKey, credit.advisorNote]);
+
+  function handleSave() {
+    const trimmedKey = courseKeyDraft.trim();
+    if (trimmedKey && !isValidCourseKeyFormat(trimmedKey)) {
+      setFormatError('Course key should look like "CAS MA 123" — school, department, number.');
+      return;
+    }
+    setFormatError('');
+    onUpdate?.(creditId, {
+      manualCourseKey: trimmedKey ? trimmedKey.replace(/\s+/g, '').toUpperCase() : null,
+      advisorNote: noteDraft.trim() || null,
+    });
+    onDone?.();
+  }
+
+  function handleClear() {
+    setCourseKeyDraft('');
+    setNoteDraft('');
+    setFormatError('');
+    onUpdate?.(creditId, { manualCourseKey: null, advisorNote: null });
+    onDone?.();
+  }
+
+  return (
+    <div className="external-credit-override-editor">
+      Advisor-confirmed mapping (optional) — doesn't change the auto-resolved credits or HUB units above
+      <label className="external-credit-override-field">
+        Course key
+        <input
+          type="text"
+          aria-label={`Advisor-confirmed course for ${credit.sourceTitle}`}
+          placeholder="e.g. CAS BI 108"
+          value={courseKeyDraft}
+          onChange={(e) => setCourseKeyDraft(e.target.value)}
+        />
+      </label>
+      <label className="external-credit-override-field">
+        Advisor note
+        <input
+          type="text"
+          aria-label={`Advisor note for ${credit.sourceTitle}`}
+          placeholder="e.g. granted elective credit only, no HUB"
+          value={noteDraft}
+          onChange={(e) => setNoteDraft(e.target.value)}
+        />
+      </label>
+      {formatError && <p className="external-credit-override-error">{formatError}</p>}
+      <div className="external-credit-score-actions">
+        <button type="button" className="external-credit-score-btn" onClick={handleSave}>Save</button>
+        {(credit.manualCourseKey || credit.advisorNote) && (
+          <button type="button" className="external-credit-score-btn" onClick={handleClear}>Clear</button>
+        )}
+        <button type="button" className="external-credit-score-btn" onClick={onDone}>Cancel</button>
+      </div>
+    </div>
+  );
+});
+
 export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpdate, onAdd }) {
   const [collapsed, setCollapsed] = useState(false);
   const [editingScoreCreditId, setEditingScoreCreditId] = useState(null);
+  const [editingOverrideCreditId, setEditingOverrideCreditId] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const credits = Array.isArray(externalCredits) ? externalCredits : [];
   debugExternalCredits('render-props', {
@@ -411,6 +662,23 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
             && testHub === null
             && normalized.score == null;
           const showScoreEditor = apScoreDependent && (hasKnownApScorePath || editingScoreCreditId === creditId);
+          // Manual course-mapping override is only for genuine ambiguity in
+          // BU's own chart (courseNote, no courseKey) — never for an exam
+          // that already resolves to a confident course (e.g. AP French at
+          // score 4 -> CASLF212, AP US Gov -> CASPO111). Recomputed fresh
+          // via getApCourseInfo/getIbCourseInfo rather than trusting the
+          // stored courseKey alone, and gated on the courseInfo shape
+          // itself (see isCourseNoteOnlyInfo) — never on exam name or type.
+          // IB doesn't store a score on rows this app creates (see IB_SCORE
+          // above), so it falls back to that same fixed representative
+          // score, which resolves identically to any real 5-7.
+          const courseMappingInfo = isTestCredit
+            ? (type === 'ib'
+              ? getIbCourseInfo(normalized.testSubject, normalized.score ?? IB_SCORE, normalized.isHigherLevel ?? true)
+              : getApCourseInfo(normalized.testSubject, normalized.score))
+            : null;
+          const canOverrideCourseMapping = isTestCredit && !normalized.courseKey && isCourseNoteOnlyInfo(courseMappingInfo);
+          const showOverrideEditor = canOverrideCourseMapping && editingOverrideCreditId === creditId;
           const needsMapping = type === 'transfer' && (normalized.status === 'needs_mapping' || !normalized.courseKey);
           const needsApReview = (type === 'ib' && testHub === null) || (type === 'ap' && testHub === null && !apScoreDependent);
           const needsReview = needsMapping || needsApReview;
@@ -420,22 +688,57 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
             className={`external-credit-row ${needsReview ? 'needs-review' : ''}`}
           >
             <div className="external-credit-main">
-              <span className={`external-credit-type type-${type}`}>
-                {type === 'ap' ? 'AP' : type === 'ib' ? 'IB' : 'Transfer'}
-              </span>
-              <div>
+              <div className="external-credit-badges">
+                <span className={`external-credit-type type-${type}`}>
+                  {type === 'ap' ? 'AP' : type === 'ib' ? 'IB' : 'Transfer'}
+                </span>
+              </div>
+              <div className="external-credit-body">
                 <div className="external-credit-title">
-                  {normalized.courseKey || 'Unmapped'} · {normalized.sourceTitle}
+                  {normalized.sourceTitle}
+                  {normalized.courseKey ? (
+                    <>
+                      {' · '}
+                      <span className="external-credit-course-code">{normalized.courseKey}</span>
+                    </>
+                  ) : normalized.manualCourseKey ? (
+                    <>
+                      {' · '}
+                      <span className="external-credit-course-code">{normalized.manualCourseKey}</span>
+                      <span className="external-credit-manual-tag">manual</span>
+                    </>
+                  ) : isTestCredit ? (
+                    <>
+                      {' · '}
+                      <span className="external-credit-unmapped-tag">Not mapped</span>
+                    </>
+                  ) : null}
+                  {canOverrideCourseMapping && (
+                    <button
+                      type="button"
+                      className="external-credit-override-link"
+                      onClick={() => setEditingOverrideCreditId((prev) => (prev === creditId ? null : creditId))}
+                    >
+                      {(normalized.manualCourseKey || normalized.advisorNote) ? 'Edit override' : 'Add advisor note / override'}
+                    </button>
+                  )}
                 </div>
                 <div className="external-credit-meta">
-                  {normalized.testSubject && <span>{normalized.testSubject}</span>}
                   {normalized.score != null && <span>Score {normalized.score}</span>}
                   {normalized.institution && <span>{normalized.institution}</span>}
                   <span>{normalized.credits} cr</span>
+                  {isTestCredit && Array.isArray(testHub) && (
+                    <span className="external-credit-hub">
+                      {testHub.length > 0 ? `HUB: ${testHub.join(' · ')}` : 'No HUB confirmed'}
+                    </span>
+                  )}
+                  {normalized.advisorNote && (
+                    <span className="external-credit-advisor-note">Note: {normalized.advisorNote}</span>
+                  )}
                   {apScoreDependent && normalized.score != null && (
                     <button
                       type="button"
-                      className="external-credit-score-edit-btn"
+                      className="external-credit-score-edit-link"
                       onClick={() => setEditingScoreCreditId((prev) => (prev === creditId ? null : creditId))}
                     >
                       Edit score
@@ -447,6 +750,14 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
                     credit={normalized}
                     creditId={creditId}
                     onUpdate={onUpdate}
+                  />
+                )}
+                {showOverrideEditor && (
+                  <CourseMappingOverrideEditor
+                    credit={normalized}
+                    creditId={creditId}
+                    onUpdate={onUpdate}
+                    onDone={() => setEditingOverrideCreditId(null)}
                   />
                 )}
                 {showScoreEditor && (
@@ -513,22 +824,19 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
                     </button>
                   </div>
                 )}
-                {isTestCredit && Array.isArray(testHub) && (
-                  <div className="external-credit-hub">
-                    {testHub.length > 0 ? `HUB: ${testHub.join(' · ')}` : 'No HUB confirmed'}
-                  </div>
-                )}
               </div>
             </div>
             {onRemove && (
-              <button
-                type="button"
-                className="external-credit-remove"
-                onClick={() => onRemove(creditId)}
-                aria-label="Remove external credit"
-              >
-                ×
-              </button>
+              <div className="external-credit-row-actions">
+                <button
+                  type="button"
+                  className="external-credit-remove"
+                  onClick={() => onRemove(creditId)}
+                  aria-label="Remove external credit"
+                >
+                  ×
+                </button>
+              </div>
             )}
           </li>
           );
