@@ -1,10 +1,13 @@
 // AP / IB → BU Hub credit eligibility
 //
-// Source: BU Advanced Credit Guide 2026-2027
-//   https://www.bu.edu/admissions/files/2018/06/Advanced-Credit-Guide.pdf
-// Source: BU International Baccalaureate Guide 2024-2025
-//   https://www.bu.edu/admissions/files/2018/05/ib_course_equivalence.pdf
-// (Reference copies also saved to docs/reference/ in this repo.)
+// Source: BU Advanced Credit Guide 2025-2026
+//   https://www.bu.edu/admissions/files/2025/03/FINAL_AP-Guide-2025-2026.pdf
+// Source: BU International Baccalaureate Guide 2025-2026
+//   https://www.bu.edu/admissions/files/2025/03/FINAL_IB_course-equivalence-2025-2026.pdf
+// (Reference copies also saved to docs/reference/ in this repo. These are
+// also the two links surfaced directly in the "Add External Credit"
+// checklist UI for students to consult if they're unsure which exam/score
+// applies to them — see ExternalCreditsPanel.jsx.)
 //
 // IMPORTANT POLICY, straight from the Advanced Credit Guide:
 // "Courses taken through other universities do not meet BU Hub
@@ -31,6 +34,19 @@
 // equivalent at all). Never fabricate a courseKey out of an "or" list or
 // a TR placeholder — use courseNote instead so callers know to show a
 // human-readable note rather than a course chip.
+//
+// When a courseNote's "or" list is itself a *finite, fully specific* set
+// of options (not a "3xx, advisor-approved" placeholder with no fixed
+// number), that entry also carries `courseNoteOptions` — an array where
+// each item is either a single courseKey string or an array of courseKeys
+// (for an "A & B" combo option, e.g. Biology score 5's paired courses).
+// This lets the UI offer an actual picker instead of a bare text box for
+// exams like Computer Science Principles or Physics C. Only include a
+// combo/option here when every course in it has a real, fixed number —
+// e.g. Biology score 5's "BI 1TR & 108" option is deliberately left out of
+// courseNoteOptions (BI 1TR has no fixed section) even though the prose
+// courseNote still describes it for completeness; a student in that
+// specific case still has the free-text override as a fallback.
 
 // ---------------------------------------------------------------------
 // AP
@@ -48,8 +64,19 @@ export const AP_HUB_CREDIT = {
   'african american studies': { hub: [], credits: 4, courseNote: 'No fixed BU course equivalent (elective credit only)' },
   biology: {
     byScore: {
-      4: { hub: ['SI1'], credits: 4, courseNote: 'CAS BI 105, BI 107, or BI 108 (advisor determines exact course)' },
-      5: { hub: ['SI1', 'SI2'], credits: 8, courseNote: 'CAS BI 107 & 108, BI 105 & 107, or BI 1TR & 108 (advisor determines exact pairing)' },
+      4: {
+        hub: ['SI1'], credits: 4,
+        courseNote: 'CAS BI 105, BI 107, or BI 108 (advisor determines exact course)',
+        courseNoteOptions: ['CASBI105', 'CASBI107', 'CASBI108'],
+      },
+      5: {
+        hub: ['SI1', 'SI2'], credits: 8,
+        courseNote: 'CAS BI 107 & 108, BI 105 & 107, or BI 1TR & 108 (advisor determines exact pairing)',
+        // The third textual option (BI 1TR & 108) is excluded here — BI 1TR
+        // has no fixed section number, so it isn't a pickable option, only
+        // a described one; the free-text override still covers it.
+        courseNoteOptions: [['CASBI107', 'CASBI108'], ['CASBI105', 'CASBI107']],
+      },
     },
   },
   'calculus ab': { hub: ['QR2'], credits: 4, courseKey: 'CASMA123' },
@@ -85,7 +112,11 @@ export const AP_HUB_CREDIT = {
     },
   },
   'computer science a': { hub: ['QR2'], credits: 4, courseKey: 'CASCS111' },
-  'computer science principles': { hub: ['QR1'], credits: 4, courseNote: 'CAS CS 101 or CDS DS 100' },
+  'computer science principles': {
+    hub: ['QR1'], credits: 4,
+    courseNote: 'CAS CS 101 or CDS DS 100',
+    courseNoteOptions: ['CASCS101', 'CDSDS100'],
+  },
   macroeconomics: { hub: ['SO1'], credits: 4, courseKey: 'CASEC102' },
   microeconomics: { hub: ['SO1'], credits: 4, courseKey: 'CASEC101' },
   'english language and composition': { hub: [], credits: 4, courseNote: 'No fixed BU course equivalent (elective credit only)' },
@@ -136,8 +167,16 @@ export const AP_HUB_CREDIT = {
   'music theory': { hub: ['AEX'], credits: 4, courseKey: 'CASMT105' },
   'physics 1': { hub: ['SI1'], credits: 4, courseKey: 'CASPY105' },
   'physics 2': { hub: ['SI2'], credits: 4, courseKey: 'CASPY106' },
-  'physics c mechanics': { hub: ['SI1'], credits: 4, courseNote: 'CAS PY 211 or CAS PY 251' },
-  'physics c electricity and magnetism': { hub: ['SI2'], credits: 4, courseNote: 'CAS PY 212 or CAS PY 252' },
+  'physics c mechanics': {
+    hub: ['SI1'], credits: 4,
+    courseNote: 'CAS PY 211 or CAS PY 251',
+    courseNoteOptions: ['CASPY211', 'CASPY251'],
+  },
+  'physics c electricity and magnetism': {
+    hub: ['SI2'], credits: 4,
+    courseNote: 'CAS PY 212 or CAS PY 252',
+    courseNoteOptions: ['CASPY212', 'CASPY252'],
+  },
   psychology: { hub: ['SO1'], credits: 4, courseKey: 'CASPS101' },
   'spanish language and culture': {
     byScore: {
@@ -252,7 +291,10 @@ export const IB_NO_CREDIT = [
 // Lookup helpers
 // ---------------------------------------------------------------------
 
-function normalize(str) {
+// Exported so callers with their own fuzzy-ish matching needs (e.g. the
+// exam-picker search filter in ExternalCreditsPanel.jsx) can normalize the
+// same way fuzzyMatchKey does internally, instead of re-implementing it.
+export function normalize(str) {
   let s = String(str || '')
     .toLowerCase()
     .replace(/^ap\s+/, '')
@@ -404,12 +446,15 @@ export function getApCredits(rawSubject, score, subscore) {
  * @param {string} rawSubject
  * @param {number} [score] - required only for score-dependent exams
  * @param {number} [subscore] - AP Calc BC only: the AB subscore, required only when `score` is 1-3
- * @returns {{courseKey: string|null, courses: string[]|null, courseNote: string|null}|null}
+ * @returns {{courseKey: string|null, courses: string[]|null, courseNote: string|null, courseNoteOptions: Array<string|string[]>|null}|null}
  *   null if unresolved. Otherwise exactly one of courseKey (single course),
  *   courses (a required multi-course sequence), or courseNote (no single
  *   confident answer — e.g. an "or" list, or a topics-placeholder course)
  *   is populated; the others are null (this includes Calc BC's onFail
  *   outcome, which resolves with courseKey/courses/courseNote all null).
+ *   courseNoteOptions is only ever populated alongside courseNote, and only
+ *   when that "or" list is a finite, fully-specific set of pickable
+ *   courses — see the AP_HUB_CREDIT header comment.
  */
 export function getApCourseInfo(rawSubject, score, subscore) {
   const key = fuzzyMatchKey(normalize(rawSubject), AP_HUB_CREDIT, AP_ALIASES);
@@ -431,6 +476,7 @@ export function getApCourseInfo(rawSubject, score, subscore) {
     courseKey: scoped.courseKey ?? null,
     courses: scoped.courses ?? null,
     courseNote: scoped.courseNote ?? null,
+    courseNoteOptions: scoped.courseNoteOptions ?? null,
   };
 }
 
@@ -488,11 +534,14 @@ export function getIbCredits(rawSubject, score, isHigherLevel) {
  * @param {string} rawSubject
  * @param {number} [score]
  * @param {boolean} [isHigherLevel]
- * @returns {{courses: string[]|null, courseNote: string|null}|null}
+ * @returns {{courses: string[]|null, courseNote: string|null, courseNoteOptions: Array<string|string[]>|null}|null}
  *   null if unresolved/not-yet-eligible. Otherwise `courses` holds every
  *   confidently-known course in BU's required sequence (may be a partial
  *   list) and `courseNote` is set whenever that list is incomplete or
- *   there's no confident course at all.
+ *   there's no confident course at all. courseNoteOptions is only ever
+ *   populated alongside courseNote — see the AP_HUB_CREDIT header comment
+ *   (no current IB entry has one, but the shape matches getApCourseInfo so
+ *   a future entry with a finite "or" list can add it the same way).
  */
 export function getIbCourseInfo(rawSubject, score, isHigherLevel) {
   const { key, noCredit } = resolveIbKey(rawSubject, score, isHigherLevel);
@@ -501,5 +550,6 @@ export function getIbCourseInfo(rawSubject, score, isHigherLevel) {
   return {
     courses: entry.courses ?? null,
     courseNote: entry.courseNote ?? null,
+    courseNoteOptions: entry.courseNoteOptions ?? null,
   };
 }

@@ -2378,7 +2378,7 @@
 .external-credit-add-btn:hover { background: var(--scarlet-pale); }
 .external-credit-empty { margin-top: 10px; }
 .external-credit-add-form { display: grid; gap: 8px; margin-top: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--cream); }
-.external-credit-add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.external-credit-add-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
 .external-credit-type-toggle { gap: 6px; }
 .external-credit-add-row label { flex: 1; display: grid; gap: 3px; min-width: 140px; font-size: 11px; color: var(--text-secondary); }
 .external-credit-add-row select, .external-credit-add-row input { padding: 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--white); color: var(--text); font: inherit; font-size: 12.5px; }
@@ -2403,6 +2403,22 @@
 .external-credit-override-field { display: grid; gap: 3px; font-size: 11px; color: var(--text-secondary); font-weight: 600; }
 .external-credit-override-field input { padding: 5px; border: 1px solid var(--border); border-radius: 4px; background: var(--white); color: var(--text); font: inherit; font-size: 12.5px; width: 100%; box-sizing: border-box; }
 .external-credit-override-error { margin: 0; color: var(--warning-text); font-size: 11px; font-weight: 600; }
+.external-credit-checklist-search { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--white); color: var(--text); font: inherit; font-size: 12.5px; }
+.external-credit-checklist-guides { margin: 0; color: var(--text-muted); font-size: 11px; }
+.external-credit-checklist-guides a { color: var(--scarlet); font-weight: 600; text-decoration: none; }
+.external-credit-checklist-guides a:hover { text-decoration: underline; }
+.external-credit-checklist-section { display: grid; gap: 4px; }
+.external-credit-checklist-heading { margin: 4px 0 0; font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; }
+.external-credit-checklist-list { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 6px; background: var(--white); }
+.external-credit-checklist-list .external-credit-row { padding: 7px 9px; }
+.external-credit-checklist-list .external-credit-row:first-child { border-top: none; }
+.external-credit-checklist-list .external-credit-row:hover { background: var(--cream); }
+.external-credit-checklist-empty { padding: 10px 9px; color: var(--text-muted); font-size: 12px; }
+.external-credit-checklist-checkbox { margin-top: 2px; width: 15px; height: 15px; cursor: pointer; }
+.external-credit-checklist-checkbox:disabled { cursor: not-allowed; }
+.external-credit-checklist-item.already-added { opacity: .55; }
+.external-credit-checklist-list .external-credit-row.already-added:hover { background: none; }
+.external-credit-checklist-footer { position: sticky; bottom: 0; background: inherit; padding-top: 4px; }
 @media (max-width: 640px) { .import-steps { gap: 8px; }.import-step-label { display: none; }.import-transfer-fields { width: 100%; }.import-transfer-fields input { width: 100%; } }
 
 html[data-theme='dark'] .search-picker-modal,

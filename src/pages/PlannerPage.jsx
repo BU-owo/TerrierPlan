@@ -1082,11 +1082,21 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   // Unlike HUB (which excludes externalCredits entirely), the requirements
   // engine should see transfer/AP-equivalent courses too — they can satisfy
-  // a major requirement even though they never count toward HUB.
+  // a major requirement even though they never count toward HUB. Falls back
+  // to a student's manual course-mapping override (manualCourses/
+  // manualCourseKey — see ExternalCreditsPanel.jsx) when auto-resolution
+  // came back courseNote-only with no courseKey, e.g. AP Biology — without
+  // this fallback, a confirmed override was invisible to every requirement
+  // node even though it displayed correctly in the External Credit panel.
   const requirementsCourseKeys = [
     ...gridCourseKeys,
     ...extraCourseKeys,
-    ...externalCredits.map((c) => c?.courseKey).filter(Boolean),
+    ...externalCredits.flatMap((c) =>
+      c?.courseKey ? [c.courseKey]
+        : Array.isArray(c?.manualCourses) ? c.manualCourses
+        : c?.manualCourseKey ? [c.manualCourseKey]
+        : []
+    ),
   ];
 
   const planCourseCredits = [...gridCourseKeys, ...extraCourseKeys]
