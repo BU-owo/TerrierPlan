@@ -34,34 +34,80 @@
 
 .app-footer {
   flex-shrink: 0;
-  padding: 10px 16px;
+  padding: 10px 20px;
   border-top: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: .75rem;
+  background: var(--cream-dark);
+  font-size: .78rem;
   line-height: 1.5;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
 }
-.app-footer-line { max-width: 640px; }
-.app-footer-disclaimer strong { color: var(--text-secondary); }
-.app-footer a { color: var(--scarlet); text-decoration: underline; text-underline-offset: 2px; }
-.app-footer a:hover { color: var(--scarlet-dark); }
-.app-footer-stats { color: var(--text-secondary); font-weight: 600; }
+.app-footer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  column-gap: 14px;
+  row-gap: 4px;
+}
+.app-footer-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+.app-footer-dot { color: var(--text-muted); }
+.app-footer a { color: var(--text-secondary); text-decoration: none; font-weight: 600; }
+.app-footer a:hover { color: var(--scarlet); text-decoration: underline; text-underline-offset: 2px; }
+
 .app-footer-help-btn {
-  margin-top: 4px;
-  padding: 4px 12px;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--text-secondary);
+  font: inherit;
+  font-weight: 600;
+}
+.app-footer-help-btn:hover { color: var(--scarlet); text-decoration: underline; text-underline-offset: 2px; }
+
+/* The one number the user actually cares about — set apart as its own
+   badge (border, pill shape, live dot) instead of another line of plain
+   gray text, so it doesn't get lost among the contact links. */
+.app-footer-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
   border: 1px solid var(--border);
   border-radius: 20px;
   background: var(--white);
   color: var(--text-secondary);
-  font-size: .75rem;
   font-weight: 600;
+  white-space: nowrap;
 }
-.app-footer-help-btn:hover { border-color: var(--scarlet); color: var(--scarlet); }
+.app-footer-stats-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+  color: var(--success-text);
+}
+.app-footer-stats-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success-strong);
+  box-shadow: 0 0 0 2px var(--success-surface);
+}
+
+.app-footer-disclaimer {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: .7rem;
+  text-align: center;
+}
 
 @media (max-width: 480px) {
-  .app-footer { padding: 8px 12px; font-size: .7rem; }
+  .app-footer { padding: 8px 12px; }
+  .app-footer-row { flex-direction: column; gap: 6px; }
 }

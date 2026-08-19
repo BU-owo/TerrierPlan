@@ -1050,6 +1050,213 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   line-height: 1.5;
 }
 
+/* ===== Section-swap — "preview every other section for one slot" ===== */
+/* Desktop banner, sits above the color legend whenever a slot is being
+   browsed. Ghost blocks (below) are the spatial half of this same feature;
+   both are hidden under the mobile breakpoint in favor of
+   SectionSwapSheet — see the RESPONSIVE section at the bottom. */
+.sched-swap-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--scarlet-pale);
+  border: 1px solid var(--scarlet-light);
+  font-size: 11.5px;
+}
+.sched-swap-banner-title { color: var(--text); flex: 1; min-width: 160px; }
+.sched-swap-banner-title strong { color: var(--scarlet); }
+.sched-swap-banner-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.sched-swap-banner-btn {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sched-swap-banner-btn:hover { border-color: var(--warning-border); color: var(--warning-border); }
+.sched-swap-banner-cancel:hover { border-color: var(--scarlet); color: var(--scarlet); }
+
+/* One ghost per (candidate section × day it meets), absolutely positioned
+   inside the same .sched-grid-day-col as real blocks, using the SAME
+   top/height math and the SAME per-course color as the real blocks (see
+   resolvedCourseColorIndex) — just a dashed, translucent treatment
+   instead of a solid fill, and layered on top (z-index) so they're always
+   reachable even where they happen to sit behind/near a real block.
+   Lane packing (see layoutGhostsForDay in WeeklyGrid.jsx) splits the
+   day-column's width among ghosts that overlap each other in time. */
+.sched-grid-ghost-block {
+  position: absolute;
+  z-index: 2;
+  border-width: 1.5px;
+  border-style: dashed;
+  border-radius: 5px;
+  padding: 3px 5px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  opacity: .68;
+  cursor: pointer;
+}
+/* Border color and the pale fill both come from whichever sched-color-N
+   class is applied alongside this one (same course-color system real
+   blocks use) — deliberately not set here, so this rule only supplies the
+   properties that make a ghost READ as a ghost (dashed, translucent)
+   without introducing a second, parallel color system. */
+.sched-grid-ghost-block:hover,
+.sched-grid-ghost-block:focus-visible { opacity: .92; outline: none; }
+.sched-grid-ghost-block.has-conflict {
+  border-color: var(--warning-border);
+  border-style: solid;
+  box-shadow: 0 0 0 1.5px var(--warning-border);
+}
+.sched-grid-ghost-block-code { font-size: 10px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sched-grid-ghost-block-time { font-size: 9px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ===== Section-swap mobile bottom sheet ===== */
+.sched-swap-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: none; /* shown only under the mobile breakpoint, see RESPONSIVE */
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.48);
+}
+.sched-swap-sheet {
+  width: 100%;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--white);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-lg);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.sched-swap-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 8px;
+}
+/* border-left-color comes from whichever sched-color-N class is applied
+   alongside this one (same system WeeklyGrid's legend/blocks use) —
+   deliberately not set here. */
+.sched-swap-sheet-title {
+  margin: 0 0 2px;
+  padding-left: 10px;
+  border-left-width: 4px;
+  border-left-style: solid;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.sched-swap-sheet-subtitle { margin: 0; padding-left: 14px; font-size: 12px; color: var(--text-secondary); }
+.sched-swap-sheet-close {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 22px;
+  line-height: 1;
+}
+.sched-swap-sheet-close:hover { color: var(--text); }
+.sched-swap-sheet-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 16px 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.sched-swap-sheet-filter-hint { color: var(--text-muted); }
+.sched-swap-sheet-list {
+  overflow-y: auto;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* A <div>, not a <button> — see SectionSwapSheet.jsx for why (the current
+   row needs a real nested <button> for its pin toggle, and interactive
+   content can't legally nest inside a <button>). Non-current rows get
+   role="button"/tabIndex from the component instead. */
+.sched-swap-sheet-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  text-align: left;
+  cursor: pointer;
+}
+.sched-swap-sheet-row:not(.is-current):hover { border-color: var(--scarlet); }
+.sched-swap-sheet-row.is-current { border-color: var(--scarlet); background: var(--scarlet-pale); cursor: default; }
+.sched-swap-sheet-row.has-conflict { border-color: var(--warning-border); }
+.sched-swap-sheet-row-top { display: flex; align-items: center; gap: 8px; }
+.sched-swap-sheet-row-section { font-size: 13px; font-weight: 700; color: var(--text); }
+.sched-swap-sheet-row-current-badge {
+  padding: 1px 8px;
+  border-radius: 20px;
+  background: var(--scarlet);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+.sched-swap-sheet-pin-btn {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+}
+.sched-swap-sheet-pin-btn.is-locked { color: var(--badge-warm-text); }
+.sched-swap-sheet-row-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.sched-swap-sheet-row-conflict { font-size: 11px; color: var(--warning-text); font-weight: 600; }
+.sched-swap-sheet-empty { padding: 20px 4px; text-align: center; color: var(--text-muted); font-size: 12.5px; }
+.sched-swap-sheet-footer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-light);
+}
+.sched-swap-sheet-clear-btn,
+.sched-swap-sheet-cancel-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+}
+.sched-swap-sheet-clear-btn { border: 1.5px solid var(--warning-border); background: var(--warning-surface); color: var(--warning-text); }
+.sched-swap-sheet-cancel-btn { border: 1.5px solid var(--border); background: var(--white); color: var(--text); }
+
 /* ===== Bookmarked schedules — lightweight, unsaved shortlist ===== */
 .sched-bookmarks-panel {
   border-top: 1px solid var(--border-light);
@@ -1278,5 +1485,17 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
     width: 100%;
     flex: 1;
     border-left: none;
+  }
+
+  /* Section-swap: the cramped single-column grid is no place for several
+     overlapping translucent blocks (see WeeklyGrid.jsx's swapSlot doc
+     comment) — hide the desktop banner/ghost layer and show
+     SectionSwapSheet's bottom sheet instead. */
+  .sched-swap-banner,
+  .sched-grid-ghost-block {
+    display: none;
+  }
+  .sched-swap-sheet-overlay {
+    display: flex;
   }
 }

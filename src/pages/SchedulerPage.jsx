@@ -23,6 +23,7 @@ import DraftCourseCard from '../components/scheduler/DraftCourseCard';
 import GlobalTimeFilter from '../components/scheduler/GlobalTimeFilter';
 import ScheduleStepper from '../components/scheduler/ScheduleStepper';
 import WeeklyGrid from '../components/scheduler/WeeklyGrid';
+import SectionSwapSheet from '../components/scheduler/SectionSwapSheet';
 import BookmarkedSchedulesPanel from '../components/scheduler/BookmarkedSchedulesPanel';
 import SavedSchedulesPanel from '../components/scheduler/SavedSchedulesPanel';
 import { CURRENT_TERM, CURRENT_TERM_LABEL } from '../utils/term';
@@ -147,6 +148,45 @@ function eliminateFromCourses(courses, courseKey, groupKey, sectionId) {
   });
 }
 
+// Section-swap's "click a ghost to swap it in" — replaces WHATEVER was
+// considered/locked for one (course, component) slot with a single
+// specific section. Deliberately doesn't lock the new pick (the student
+// can still pin it separately via the grid's pin button) — it just makes
+// it the sole consideration for that group, same as checking exactly one
+// box and unchecking everything else. `sectionsById` is needed (unlike
+// the two functions above) because `c.locked` is a flat array that can mix
+// locks from more than one of this course's component groups at once
+// (e.g. a locked Lecture AND a locked Discussion) — only the lock actually
+// belonging to THIS group should be cleared.
+function selectSoleSectionInCourses(courses, courseKey, groupKey, sectionId, sectionsById) {
+  return courses.map((c) => {
+    if (c.courseKey !== courseKey) return c;
+    return {
+      ...c,
+      locked: c.locked.filter((id) => classifyComponent(sectionsById[id]) !== groupKey),
+      considering: { ...c.considering, [groupKey]: [sectionId] },
+    };
+  });
+}
+
+// Section-swap's "unassign this slot" — clears every considered AND
+// locked section in one (course, component) group, leaving it required-
+// but-unfilled (the same state as a course that's never had anything
+// picked for that group — see missingGroupsForCourse/generateBlockers,
+// which already renders the "pick a ___" blocker for exactly this case).
+// Distinct from eliminateFromCourses, which only drops ONE section from
+// ever being reconsidered but leaves the rest of the group's picks alone.
+function clearSlotInCourses(courses, courseKey, groupKey, sectionsById) {
+  return courses.map((c) => {
+    if (c.courseKey !== courseKey) return c;
+    return {
+      ...c,
+      locked: c.locked.filter((id) => classifyComponent(sectionsById[id]) !== groupKey),
+      considering: { ...c.considering, [groupKey]: [] },
+    };
+  });
+}
+
 export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const { user, loading: authLoading } = useAuth();
 
@@ -207,6 +247,18 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   const [mobileView, setMobileView] = useState('search'); // 'search' | 'build' | 'preview'
   const [showHelpModal, setShowHelpModal] = useState(false);
+
+  // ── Section-swap ("preview all sections for one slot") ─────────────────────
+  // { courseKey, component, currentSectionId } | null. Purely a client-side
+  // view state, same spirit as previewIndex above but a DIFFERENT kind of
+  // "preview" (browsing alternatives for one grid slot, not stepping
+  // through whole generated combinations) — named distinctly from
+  // previewSlot/previewX so it's never confused with the existing
+  // generated-schedule preview machinery already using that word.
+  const [sectionSwapSlot, setSectionSwapSlot] = useState(null);
+  // Reset to false every time a NEW slot is opened (see
+  // handleOpenSectionSwap) — "respect filters by default" per slot.
+  const [sectionSwapIgnoreFilters, setSectionSwapIgnoreFilters] = useState(false);
 
   // ── Preview panel width (desktop drag-resize) ───────────────────────────────
   // null = use scheduler.css's default (46%, floor 460px); once the student
@@ -405,6 +457,30 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     () => new Set(draftCourses.flatMap((c) => c.locked)),
     [draftCourses],
   );
+
+  // Every section sharing sectionSwapSlot's (courseKey, component) — the
+  // full candidate pool for the ghost overlay / mobile sheet, not just
+  // whichever subset happens to be checked/locked. `sectionsByCourse`
+  // already holds every section for a course once it's been fetched (see
+  // fetchSectionsForCourse), so this is just a component-key filter, no
+  // extra fetch needed.
+  const sectionSwapCandidates = useMemo(() => {
+    if (!sectionSwapSlot) return [];
+    const sections = sectionsByCourse[sectionSwapSlot.courseKey] || [];
+    return sections.filter((s) => classifyComponent(s) === sectionSwapSlot.component);
+  }, [sectionSwapSlot, sectionsByCourse]);
+
+  // Esc exits section-swap without changing the current selection — same
+  // "cancel" as the banner/sheet's own Cancel button, just keyboard-
+  // reachable. Only listens while a slot is actually open.
+  useEffect(() => {
+    if (!sectionSwapSlot) return undefined;
+    function onKeyDown(e) {
+      if (e.key === 'Escape') setSectionSwapSlot(null);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [sectionSwapSlot]);
 
   // sectionId -> [{ sectionId, label }] — pairwise time conflicts among
   // every currently locked-or-considering section. Two sections are only
@@ -728,6 +804,38 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     regenerateFrom(next);
   }
 
+  // ── Section-swap handlers ───────────────────────────────────────────────────
+  function handleOpenSectionSwap(courseKey, component, currentSectionId) {
+    setSectionSwapSlot({ courseKey, component, currentSectionId });
+    setSectionSwapIgnoreFilters(false);
+  }
+
+  function handleCloseSectionSwap() {
+    setSectionSwapSlot(null);
+  }
+
+  function handleSelectSwapSection(sectionId) {
+    if (!sectionSwapSlot) return;
+    const next = selectSoleSectionInCourses(
+      draftCourses,
+      sectionSwapSlot.courseKey,
+      sectionSwapSlot.component,
+      sectionId,
+      sectionsById,
+    );
+    setDraftCourses(next);
+    regenerateFrom(next);
+    setSectionSwapSlot(null);
+  }
+
+  function handleClearSwapSlot() {
+    if (!sectionSwapSlot) return;
+    const next = clearSlotInCourses(draftCourses, sectionSwapSlot.courseKey, sectionSwapSlot.component, sectionsById);
+    setDraftCourses(next);
+    regenerateFrom(next);
+    setSectionSwapSlot(null);
+  }
+
   // ── Saved schedule handlers ──────────────────────────────────────────────────
   // sectionIds defaults to whatever's previewed (the normal Save-form path)
   // but can be passed explicitly — handlePromoteBookmark uses this to save
@@ -904,8 +1012,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             aria-label="Help & feedback"
             title="Help & feedback"
           >
-            <span className="header-help-btn-icon" aria-hidden="true">?</span>
-            <span className="header-help-btn-label">Help</span>
+            ?
           </button>
           <button
             type="button"
@@ -1096,6 +1203,15 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                 onEliminate={handlePreviewEliminate}
                 colorOverrides={courseColorOverrides}
                 onSetColor={handleSetCourseColor}
+                swapSlot={sectionSwapSlot}
+                swapCandidates={sectionSwapCandidates}
+                swapIgnoreFilters={sectionSwapIgnoreFilters}
+                globalTimeFilter={globalTimeFilter}
+                onOpenSwap={handleOpenSectionSwap}
+                onSelectSwapSection={handleSelectSwapSection}
+                onCloseSwap={handleCloseSectionSwap}
+                onToggleSwapIgnoreFilters={() => setSectionSwapIgnoreFilters((v) => !v)}
+                onClearSwapSlot={handleClearSwapSlot}
               />
             </div>
           )}
@@ -1149,6 +1265,31 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       </nav>
 
       <HelpSupportModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
+
+      {/* Rendered outside .scheduler-right/aside deliberately — that
+          element is display:none on mobile whenever a different bottom
+          tab is active (see scheduler.css), which would otherwise yank
+          this fixed-position sheet off-screen the instant the student
+          tapped away, even though it's meant to behave like an
+          independent modal. */}
+      {sectionSwapSlot && (
+        <SectionSwapSheet
+          slot={sectionSwapSlot}
+          candidates={sectionSwapCandidates}
+          sectionsById={sectionsById}
+          courseMap={courseMap}
+          committedSectionIds={previewSectionIds}
+          lockedSectionIds={allLockedSectionIds}
+          colorOverrides={courseColorOverrides}
+          ignoreFilters={sectionSwapIgnoreFilters}
+          globalTimeFilter={globalTimeFilter}
+          onToggleIgnoreFilters={() => setSectionSwapIgnoreFilters((v) => !v)}
+          onSelect={handleSelectSwapSection}
+          onToggleLock={handlePreviewToggleLock}
+          onClearSlot={handleClearSwapSlot}
+          onClose={handleCloseSectionSwap}
+        />
+      )}
     </div>
   );
 }

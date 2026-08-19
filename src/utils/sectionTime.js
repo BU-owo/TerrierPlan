@@ -74,6 +74,21 @@ export function describeSectionTime(section) {
   return `${dayLetters} ${formatClock(meeting.startMin)}–${formatClock(meeting.endMin)}`;
 }
 
+// "Open — 12/30 seats" / "Closed — waitlist available (3/10)" / "Closed" —
+// used by the section-swap ghost tooltip and mobile sheet. `enrlStat` is
+// the raw "Open"/"Closed" BU exports (see SCHEMA.md); waitlist detail only
+// shows up when the section actually has waitlist capacity.
+export function describeSeatStatus(section) {
+  const status = (section.enrlStat || '').trim();
+  const seatsLabel = section.capEnrl != null ? `${section.totEnrl ?? 0}/${section.capEnrl} seats` : null;
+  if (status.toLowerCase() === 'closed' && section.waitCap > 0) {
+    const waitLabel = section.waitTot != null ? ` (${section.waitTot}/${section.waitCap})` : '';
+    return `Closed — waitlist available${waitLabel}`;
+  }
+  if (status) return seatsLabel ? `${status} — ${seatsLabel}` : status;
+  return seatsLabel || 'Seat status unknown';
+}
+
 // Chronological sort (earliest day, then earliest start time) — the
 // section picker's default order. Sections with no scheduled meeting
 // (async/TBA) have no time to sort by, so they sink to the bottom, tied

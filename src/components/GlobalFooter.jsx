@@ -15,31 +15,37 @@ export default function GlobalFooter() {
 
   return (
     <footer className="app-footer">
-      <p className="app-footer-line app-footer-disclaimer">
-        <strong>Disclaimer:</strong> Not affiliated with or endorsed by Boston University. This is an
-        independent, community-made, mostly vibe-coded tool. Use at your own discretion.
+      <div className="app-footer-row">
+        <div className="app-footer-links">
+          <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+          <span className="app-footer-dot" aria-hidden="true">·</span>
+          <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer">
+            Terrier Hub Discord
+          </a>
+          <span className="app-footer-dot" aria-hidden="true">·</span>
+          <button type="button" className="app-footer-help-btn" onClick={() => setShowHelp(true)}>
+            Need help?
+          </button>
+        </div>
+
+        {/* Withheld (not "0 · 0") until both numbers actually arrive, so a
+            slow/offline read doesn't flash a wrong zero before correcting
+            itself a moment later. */}
+        {totalUsersEver != null && onlineNow != null && (
+          <div className="app-footer-stats">
+            <span>{pluralizeStudents(totalUsersEver)}</span>
+            <span className="app-footer-stats-online">
+              <span className="app-footer-stats-dot" aria-hidden="true" />
+              {onlineNow.toLocaleString()} online now
+            </span>
+          </div>
+        )}
+      </div>
+
+      <p className="app-footer-disclaimer">
+        Not affiliated with or endorsed by Boston University. This is an independent, community-made,
+        mostly vibe-coded tool. Use at your own discretion.
       </p>
-      <p className="app-footer-line">
-        Questions or issues? Email <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
-      </p>
-      <p className="app-footer-line">
-        Need more help with course planning and registration? Join{' '}
-        <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer">
-          Terrier Hub Discord
-        </a>{' '}
-        for community support!
-      </p>
-      {/* Withheld (not "0 · 0") until both numbers actually arrive, so a
-          slow/offline read doesn't flash a wrong zero before correcting
-          itself a moment later. */}
-      {totalUsersEver != null && onlineNow != null && (
-        <p className="app-footer-line app-footer-stats">
-          {pluralizeStudents(totalUsersEver)} have used TerrierPlan · {onlineNow.toLocaleString()} online now
-        </p>
-      )}
-      <button type="button" className="app-footer-help-btn" onClick={() => setShowHelp(true)}>
-        Need help?
-      </button>
 
       <HelpSupportModal open={showHelp} onClose={() => setShowHelp(false)} />
     </footer>
