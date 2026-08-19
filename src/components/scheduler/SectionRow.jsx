@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { describeSectionTime } from '../../utils/sectionTime';
-import PinIcon from './PinIcon';
 
 // One selectable section under a DraftCourseCard. Checkbox membership is
 // the "in consideration" set for its course — multiple rows can be checked
@@ -72,7 +71,7 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
         aria-label={locked ? `Unlock section ${section.classSection}` : `Lock section ${section.classSection} into every generated schedule`}
         title={locked ? 'Locked into every generated schedule — click to unlock' : 'Lock this section into every generated schedule'}
       >
-        <PinIcon filled={locked} />
+        {locked ? '📌' : '📍'}
       </button>
 
       {conflictCount > 0 && (
