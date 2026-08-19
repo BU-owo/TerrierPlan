@@ -2374,6 +2374,15 @@
 .external-credit-score-btn { min-width: 34px; border: 1px solid var(--scarlet); border-radius: 4px; background: var(--white); color: var(--scarlet); font: inherit; font-size: 12px; font-weight: 700; padding: 4px 8px; cursor: pointer; }
 .external-credit-score-btn:hover { background: var(--scarlet-pale); }
 .external-credit-score-btn.active { background: var(--scarlet); color: #fff; }
+.external-credit-add-btn { margin-top: 10px; width: 100%; border: 1px dashed var(--border); border-radius: 6px; background: transparent; color: var(--scarlet); cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; padding: 8px; }
+.external-credit-add-btn:hover { background: var(--scarlet-pale); }
+.external-credit-empty { margin-top: 10px; }
+.external-credit-add-form { display: grid; gap: 8px; margin-top: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--cream); }
+.external-credit-add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.external-credit-type-toggle { gap: 6px; }
+.external-credit-add-row label { flex: 1; display: grid; gap: 3px; min-width: 140px; font-size: 11px; color: var(--text-secondary); }
+.external-credit-add-row select, .external-credit-add-row input { padding: 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--white); color: var(--text); font: inherit; font-size: 12.5px; }
+.external-credit-add-actions { display: flex; gap: 6px; margin-top: 2px; }
 @media (max-width: 640px) { .import-steps { gap: 8px; }.import-step-label { display: none; }.import-transfer-fields { width: 100%; }.import-transfer-fields input { width: 100%; } }
 
 html[data-theme='dark'] .search-picker-modal,
@@ -2383,7 +2392,10 @@ html[data-theme='dark'] .search-input:focus { background: var(--white); }
 html[data-theme='dark'] .hub-year-toggle-btn.active { background: var(--white); }
 html[data-theme='dark'] .plan-side-panel,
 html[data-theme='dark'] .external-credit-hub-picker select,
-html[data-theme='dark'] .external-credit-no-hub { background: var(--white); }
+html[data-theme='dark'] .external-credit-no-hub,
+html[data-theme='dark'] .external-credit-add-form,
+html[data-theme='dark'] .external-credit-add-row select,
+html[data-theme='dark'] .external-credit-add-row input { background: var(--white); }
 
 /* ===== MOBILE TAB BAR ===== */
 /* Hidden on wide screens — the three panels sit side by side instead. */

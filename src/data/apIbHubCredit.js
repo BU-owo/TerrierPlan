@@ -75,6 +75,13 @@ export const AP_ALIASES = {
   'economics micro': 'microeconomics',
 };
 
+// Canonical exam subjects a student can pick from (e.g. for a manual
+// "add external credit" form) — kept as the single source of truth so a
+// picker never drifts out of sync with what getApHub() can actually
+// resolve. Each key here is already normalize()-safe: passing it straight
+// back into getApHub()/isApScoreDependent() as `rawSubject` matches exactly.
+export const AP_EXAM_SUBJECTS = Object.keys(AP_HUB_CREDIT);
+
 // ---------------------------------------------------------------------
 // IB (Higher Level only, score 5-7)
 // ---------------------------------------------------------------------
@@ -116,6 +123,12 @@ export const IB_HUB_CREDIT = {
   'social cultural anthropology': { hub: ['SO1'] },
   'theatre arts': { hub: [] },
 };
+
+// Canonical IB exam subjects a student can pick from — see AP_EXAM_SUBJECTS
+// above for why this is exported rather than re-listed elsewhere. Subjects
+// in IB_NO_CREDIT are deliberately excluded: they should never be
+// selectable in a picker in the first place.
+export const IB_EXAM_SUBJECTS = Object.keys(IB_HUB_CREDIT);
 
 // IB subjects with NO credit at all (not just no HUB) — if one of these
 // is ever encountered, do not create an external-credit entry for it,

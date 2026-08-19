@@ -978,6 +978,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setIsDirty(true);
   }
 
+  function handleAddExternalCredit(newCredit) {
+    const normalized = normalizeExternalCredit(newCredit);
+    if (!normalized) return;
+    setExternalCredits((prev) => [...prev, normalized]);
+    setIsDirty(true);
+  }
+
   function handleUpdateExternalCredit(creditIdOrIndex, patch) {
     setExternalCredits((prev) => prev.map((credit, creditIndex) => {
       const matches = typeof creditIdOrIndex === 'number'
@@ -1292,6 +1299,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               externalCredits={externalCredits}
               onRemove={handleRemoveExternalCredit}
               onUpdate={handleUpdateExternalCredit}
+              onAdd={handleAddExternalCredit}
             />
           </main>
 

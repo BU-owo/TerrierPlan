@@ -1,5 +1,11 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { getApHub, getIbHub, isApScoreDependent } from '../../data/apIbHubCredit';
+import {
+  AP_EXAM_SUBJECTS,
+  IB_EXAM_SUBJECTS,
+  getApHub,
+  getIbHub,
+  isApScoreDependent,
+} from '../../data/apIbHubCredit';
 import { HUB_LABELS } from '../../utils/hubConstants';
 import { normalizeExternalCredit } from '../../utils/externalCredits';
 import { resolveApHubFromScore } from '../../utils/apScoreResolution';
@@ -10,6 +16,176 @@ function debugExternalCredits(stage, payload) {
   if (!DEBUG_EXTERNAL_CREDITS) return;
   console.log(`[DEBUG ExternalCreditsPanel] ${stage}`, payload);
 }
+
+// Valid, self-reportable score ranges — small and fixed, so a dropdown
+// beats a free-text number field (no out-of-range scores to validate).
+const AP_SCORE_OPTIONS = [1, 2, 3, 4, 5];
+const IB_SCORE_OPTIONS = [1, 2, 3, 4, 5, 6, 7];
+
+// AP_EXAM_SUBJECTS / IB_EXAM_SUBJECTS keys are normalize()-safe lowercase
+// word strings (e.g. "calculus ab"), not display text — title-case them for
+// the dropdown, with a couple of exceptions normal title-casing gets wrong.
+const KEEP_LOWERCASE_WORDS = new Set(['and', 'the', 'of']);
+const KEEP_UPPERCASE_WORDS = new Set(['ab', 'bc']);
+
+function formatSubjectLabel(key) {
+  return key
+    .split(' ')
+    .map((word, i) => {
+      if (KEEP_UPPERCASE_WORDS.has(word)) return word.toUpperCase();
+      if (i > 0 && KEEP_LOWERCASE_WORDS.has(word)) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+}
+
+const AddExternalCreditForm = memo(function AddExternalCreditForm({ onAdd, onCancel }) {
+  const [examType, setExamType] = useState('ap');
+  const [subject, setSubject] = useState('');
+  const [level, setLevel] = useState('');
+  const [score, setScore] = useState('');
+  const [credits, setCredits] = useState('');
+  const [error, setError] = useState('');
+
+  const subjectOptions = examType === 'ap' ? AP_EXAM_SUBJECTS : IB_EXAM_SUBJECTS;
+  // IB HUB resolution always needs a score (getIbHub requires one to return
+  // anything but null), so IB never skips the score field the way most AP
+  // exams do — only Biology currently varies its HUB result by AP score.
+  const scoreDependent = examType === 'ib' ? true : Boolean(subject && isApScoreDependent(subject));
+  const scoreOptions = examType === 'ib' ? IB_SCORE_OPTIONS : AP_SCORE_OPTIONS;
+
+  function handleTypeChange(nextType) {
+    setExamType(nextType);
+    setSubject('');
+    setLevel('');
+    setScore('');
+    setError('');
+  }
+
+  function handleSubjectChange(nextSubject) {
+    setSubject(nextSubject);
+    setScore('');
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (!subject) {
+      setError('Choose an exam.');
+      return;
+    }
+    if (examType === 'ib' && !level) {
+      setError('Choose HL or SL.');
+      return;
+    }
+    const parsedCredits = Number(credits);
+    if (!credits || !Number.isFinite(parsedCredits) || parsedCredits <= 0) {
+      setError('Enter the number of credits.');
+      return;
+    }
+
+    const scoreValue = score === '' ? null : Number(score);
+    const isHigherLevel = examType === 'ib' ? level === 'hl' : undefined;
+    // Same resolution the panel already uses to render imported AP/IB rows
+    // (see testHub below) — reused here so a manually-added row lands in
+    // exactly the same auto-resolved / needs-review state as an imported one.
+    const hubUnits = examType === 'ib'
+      ? getIbHub(subject, scoreValue, isHigherLevel)
+      : (scoreDependent ? getApHub(subject, scoreValue) : getApHub(subject));
+
+    const entry = normalizeExternalCredit({
+      type: examType,
+      testSubject: subject,
+      sourceTitle: `${examType.toUpperCase()} ${formatSubjectLabel(subject)}`,
+      credits: parsedCredits,
+      score: scoreValue,
+      ...(examType === 'ib' ? { isHigherLevel } : {}),
+      manualHubUnits: Array.isArray(hubUnits) ? hubUnits : undefined,
+      status: hubUnits === null ? 'needs_review' : 'auto_hub_resolved',
+    });
+
+    onAdd(entry);
+  }
+
+  return (
+    <form className="external-credit-add-form" onSubmit={handleSubmit}>
+      <div className="external-credit-add-row external-credit-type-toggle">
+        <button
+          type="button"
+          className={`import-chip-btn ${examType === 'ap' ? 'active' : ''}`}
+          onClick={() => handleTypeChange('ap')}
+        >
+          AP
+        </button>
+        <button
+          type="button"
+          className={`import-chip-btn ${examType === 'ib' ? 'active' : ''}`}
+          onClick={() => handleTypeChange('ib')}
+        >
+          IB
+        </button>
+      </div>
+
+      <div className="external-credit-add-row">
+        <label>
+          Exam
+          <select value={subject} onChange={(e) => handleSubjectChange(e.target.value)}>
+            <option value="">Select exam…</option>
+            {subjectOptions.map((key) => (
+              <option key={key} value={key}>{formatSubjectLabel(key)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {examType === 'ib' && (
+        <div className="external-credit-add-row">
+          <label>
+            Level
+            <select value={level} onChange={(e) => setLevel(e.target.value)}>
+              <option value="">Select level…</option>
+              <option value="hl">Higher Level (HL)</option>
+              <option value="sl">Standard Level (SL)</option>
+            </select>
+          </label>
+        </div>
+      )}
+
+      {subject && scoreDependent && (
+        <div className="external-credit-add-row">
+          <label>
+            Score
+            <select value={score} onChange={(e) => setScore(e.target.value)}>
+              <option value="">—</option>
+              {scoreOptions.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+
+      <div className="external-credit-add-row">
+        <label>
+          Credits
+          <input
+            type="number"
+            min="0"
+            step="0.5"
+            value={credits}
+            onChange={(e) => setCredits(e.target.value)}
+          />
+        </label>
+      </div>
+
+      {error && <div className="external-credit-warning">{error}</div>}
+
+      <div className="external-credit-add-actions">
+        <button type="submit" className="import-primary-btn">Add credit</button>
+        <button type="button" className="import-secondary-btn" onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
+  );
+});
 
 const TransferExternalCreditRow = memo(function TransferExternalCreditRow({
   credit,
@@ -69,9 +245,10 @@ const TransferExternalCreditRow = memo(function TransferExternalCreditRow({
   );
 });
 
-export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpdate }) {
+export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpdate, onAdd }) {
   const [collapsed, setCollapsed] = useState(false);
   const [editingScoreCreditId, setEditingScoreCreditId] = useState(null);
+  const [showAddForm, setShowAddForm] = useState(false);
   const credits = Array.isArray(externalCredits) ? externalCredits : [];
   debugExternalCredits('render-props', {
     collapsed,
@@ -80,7 +257,10 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
     externalCredits: credits,
   });
 
-  if (!credits.length) return null;
+  // Incoming students without a transcript yet are exactly who needs the
+  // "Add External Credit" button, so the panel can't bail out just because
+  // there's nothing imported to show — only skip it once collapsed.
+  if (!credits.length && !onAdd) return null;
 
   if (collapsed) {
     return (
@@ -110,6 +290,32 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
           −
         </button>
       </div>
+
+      {onAdd && (
+        showAddForm ? (
+          <AddExternalCreditForm
+            onAdd={(entry) => {
+              onAdd(entry);
+              setShowAddForm(false);
+            }}
+            onCancel={() => setShowAddForm(false)}
+          />
+        ) : (
+          <button
+            type="button"
+            className="external-credit-add-btn"
+            onClick={() => setShowAddForm(true)}
+          >
+            + Add External Credit
+          </button>
+        )
+      )}
+
+      {credits.length === 0 && !showAddForm && (
+        <p className="plan-side-panel-sub external-credit-empty">
+          No AP or IB scores added yet — self-report one above, no transcript needed.
+        </p>
+      )}
 
       <ul className="external-credits-list">
         {credits.map((ec, i) => {
