@@ -1,8 +1,13 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import {
   AP_EXAM_SUBJECTS,
+  AP_HUB_CREDIT,
   IB_EXAM_SUBJECTS,
+  getApCourseInfo,
+  getApCredits,
   getApHub,
+  getIbCourseInfo,
+  getIbCredits,
   getIbHub,
   isApScoreDependent,
 } from '../../data/apIbHubCredit';
@@ -17,10 +22,11 @@ function debugExternalCredits(stage, payload) {
   console.log(`[DEBUG ExternalCreditsPanel] ${stage}`, payload);
 }
 
-// Valid, self-reportable score ranges — small and fixed, so a dropdown
-// beats a free-text number field (no out-of-range scores to validate).
-const AP_SCORE_OPTIONS = [1, 2, 3, 4, 5];
-const IB_SCORE_OPTIONS = [1, 2, 3, 4, 5, 6, 7];
+// BU never grants IB credit below a 5, regardless of exam — fixed and
+// small enough for a dropdown. AP's equivalent range is per-exam (most
+// exams aren't score-dependent at all) and is derived from AP_HUB_CREDIT's
+// byScore keys below rather than hardcoded here.
+const IB_SCORE_OPTIONS = [5, 6, 7];
 
 // AP_EXAM_SUBJECTS / IB_EXAM_SUBJECTS keys are normalize()-safe lowercase
 // word strings (e.g. "calculus ab"), not display text — title-case them for
@@ -39,20 +45,94 @@ function formatSubjectLabel(key) {
     .join(' ');
 }
 
+// courseKey convention throughout the app is school+dept+number with no
+// spaces (e.g. "CASMA123") — this is display-only, purely cosmetic.
+function formatCourseKeyDisplay(courseKey) {
+  const m = String(courseKey).match(/^([A-Z]{3})([A-Z]{2})(\d+)$/);
+  return m ? `${m[1]} ${m[2]} ${m[3]}` : courseKey;
+}
+
+function formatCreditsPreview(credits, courseInfo) {
+  if (credits == null) return null;
+  const creditsLabel = `${credits} credit${credits === 1 ? '' : 's'}`;
+  if (!courseInfo) return creditsLabel;
+  if (courseInfo.courseNote) return `${creditsLabel} · ${courseInfo.courseNote}`;
+  if (Array.isArray(courseInfo.courses) && courseInfo.courses.length) {
+    return `${creditsLabel} · ${courseInfo.courses.map(formatCourseKeyDisplay).join(', ')}`;
+  }
+  if (courseInfo.courseKey) return `${creditsLabel} · ${formatCourseKeyDisplay(courseInfo.courseKey)}`;
+  return creditsLabel;
+}
+
+// The credit entry's single `courseKey` field only gets a value when we
+// have something unambiguous to put there: one confident course, or (for
+// exams like Calc BC that require a specific multi-course sequence) every
+// course in that sequence joined together. Anything with a courseNote
+// means BU's own guide can't name a single confident answer either — that
+// row should land "Unmapped" like a transcript row nobody's mapped yet,
+// not silently guess at one option from an "or" list.
+function resolveCourseKeyForEntry(courseInfo) {
+  if (!courseInfo || courseInfo.courseNote) return null;
+  if (courseInfo.courseKey) return courseInfo.courseKey;
+  if (Array.isArray(courseInfo.courses) && courseInfo.courses.length) {
+    return courseInfo.courses.join('+');
+  }
+  return null;
+}
+
 const AddExternalCreditForm = memo(function AddExternalCreditForm({ onAdd, onCancel }) {
   const [examType, setExamType] = useState('ap');
   const [subject, setSubject] = useState('');
   const [level, setLevel] = useState('');
   const [score, setScore] = useState('');
-  const [credits, setCredits] = useState('');
   const [error, setError] = useState('');
 
   const subjectOptions = examType === 'ap' ? AP_EXAM_SUBJECTS : IB_EXAM_SUBJECTS;
   // IB HUB resolution always needs a score (getIbHub requires one to return
   // anything but null), so IB never skips the score field the way most AP
-  // exams do — only Biology currently varies its HUB result by AP score.
+  // exams do — only Biology, Latin, and Calculus BC vary by AP score.
   const scoreDependent = examType === 'ib' ? true : Boolean(subject && isApScoreDependent(subject));
-  const scoreOptions = examType === 'ib' ? IB_SCORE_OPTIONS : AP_SCORE_OPTIONS;
+  // Derived straight from the data (never a hardcoded 1-5/4-5 range): for
+  // AP this is exactly the score keys the exam's byScore object models —
+  // e.g. Calc BC only lists 4 and 5, so that's all that's offered here.
+  const apByScoreKeys = examType === 'ap' && subject && AP_HUB_CREDIT[subject]?.byScore
+    ? Object.keys(AP_HUB_CREDIT[subject].byScore).map(Number).sort((a, b) => a - b)
+    : null;
+  const scoreOptions = examType === 'ib' ? IB_SCORE_OPTIONS : (apByScoreKeys || []);
+  const restrictedApScoreRange = examType === 'ap' && apByScoreKeys && Math.min(...apByScoreKeys) > 1;
+
+  const scoreValue = score === '' ? null : Number(score);
+  const isHigherLevel = examType === 'ib' ? level === 'hl' : undefined;
+
+  const ibReady = examType === 'ib' && level === 'hl' && scoreValue != null;
+  const apReady = examType === 'ap' && subject && (!scoreDependent || scoreValue != null);
+
+  // Same resolution the panel already uses to render imported AP/IB rows
+  // (see testHub in the main component below) — reused here so a
+  // manually-added row lands in exactly the same auto-resolved /
+  // needs-review state, and shows exactly the same credits/course, as an
+  // imported one would.
+  const resolvedCredits = examType === 'ib'
+    ? (ibReady ? getIbCredits(subject, scoreValue, isHigherLevel) : null)
+    : (apReady ? getApCredits(subject, scoreDependent ? scoreValue : undefined) : null);
+  const resolvedCourseInfo = examType === 'ib'
+    ? (ibReady ? getIbCourseInfo(subject, scoreValue, isHigherLevel) : null)
+    : (apReady ? getApCourseInfo(subject, scoreDependent ? scoreValue : undefined) : null);
+
+  let previewText = null;
+  if (subject) {
+    if (examType === 'ib' && !level) {
+      previewText = 'Select HL or SL to see credit details.';
+    } else if (examType === 'ib' && level === 'sl') {
+      previewText = "IB Standard Level exams don't earn BU credit.";
+    } else if (scoreDependent && scoreValue == null) {
+      previewText = 'Select a score to see credit details.';
+    } else if (resolvedCredits == null) {
+      previewText = 'Not eligible for BU credit at that score — contact BU Academic Advising.';
+    } else {
+      previewText = formatCreditsPreview(resolvedCredits, resolvedCourseInfo);
+    }
+  }
 
   function handleTypeChange(nextType) {
     setExamType(nextType);
@@ -77,17 +157,11 @@ const AddExternalCreditForm = memo(function AddExternalCreditForm({ onAdd, onCan
       setError('Choose HL or SL.');
       return;
     }
-    const parsedCredits = Number(credits);
-    if (!credits || !Number.isFinite(parsedCredits) || parsedCredits <= 0) {
-      setError('Enter the number of credits.');
+    if (resolvedCredits == null) {
+      setError('This exam/score combination isn’t resolved to BU credit yet.');
       return;
     }
 
-    const scoreValue = score === '' ? null : Number(score);
-    const isHigherLevel = examType === 'ib' ? level === 'hl' : undefined;
-    // Same resolution the panel already uses to render imported AP/IB rows
-    // (see testHub below) — reused here so a manually-added row lands in
-    // exactly the same auto-resolved / needs-review state as an imported one.
     const hubUnits = examType === 'ib'
       ? getIbHub(subject, scoreValue, isHigherLevel)
       : (scoreDependent ? getApHub(subject, scoreValue) : getApHub(subject));
@@ -96,7 +170,8 @@ const AddExternalCreditForm = memo(function AddExternalCreditForm({ onAdd, onCan
       type: examType,
       testSubject: subject,
       sourceTitle: `${examType.toUpperCase()} ${formatSubjectLabel(subject)}`,
-      credits: parsedCredits,
+      credits: resolvedCredits,
+      courseKey: resolveCourseKeyForEntry(resolvedCourseInfo),
       score: scoreValue,
       ...(examType === 'ib' ? { isHigherLevel } : {}),
       manualHubUnits: Array.isArray(hubUnits) ? hubUnits : undefined,
@@ -141,7 +216,7 @@ const AddExternalCreditForm = memo(function AddExternalCreditForm({ onAdd, onCan
         <div className="external-credit-add-row">
           <label>
             Level
-            <select value={level} onChange={(e) => setLevel(e.target.value)}>
+            <select value={level} onChange={(e) => { setLevel(e.target.value); setScore(''); }}>
               <option value="">Select level…</option>
               <option value="hl">Higher Level (HL)</option>
               <option value="sl">Standard Level (SL)</option>
@@ -150,8 +225,9 @@ const AddExternalCreditForm = memo(function AddExternalCreditForm({ onAdd, onCan
         </div>
       )}
 
-      {subject && scoreDependent && (
-        <div className="external-credit-add-row">
+      {/* SL never earns BU credit, so there's no score to ask for until HL is chosen. */}
+      {subject && scoreDependent && (examType === 'ap' || level === 'hl') && (
+        <div className="external-credit-add-row external-credit-add-score-row">
           <label>
             Score
             <select value={score} onChange={(e) => setScore(e.target.value)}>
@@ -161,26 +237,24 @@ const AddExternalCreditForm = memo(function AddExternalCreditForm({ onAdd, onCan
               ))}
             </select>
           </label>
+          {restrictedApScoreRange && (
+            <p className="external-credit-score-note">
+              Scored below what's listed? Credit may depend on additional factors — contact BU Academic Advising directly.
+            </p>
+          )}
         </div>
       )}
 
-      <div className="external-credit-add-row">
-        <label>
-          Credits
-          <input
-            type="number"
-            min="0"
-            step="0.5"
-            value={credits}
-            onChange={(e) => setCredits(e.target.value)}
-          />
-        </label>
-      </div>
+      {previewText && (
+        <div className="external-credit-add-preview">{previewText}</div>
+      )}
 
       {error && <div className="external-credit-warning">{error}</div>}
 
       <div className="external-credit-add-actions">
-        <button type="submit" className="import-primary-btn">Add credit</button>
+        <button type="submit" className="import-primary-btn" disabled={resolvedCredits == null}>
+          Add credit
+        </button>
         <button type="button" className="import-secondary-btn" onClick={onCancel}>Cancel</button>
       </div>
     </form>

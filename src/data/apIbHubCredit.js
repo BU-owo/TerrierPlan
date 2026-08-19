@@ -1,6 +1,6 @@
 // AP / IB → BU Hub credit eligibility
 //
-// Source: BU Advanced Credit Guide 2025-2026
+// Source: BU Advanced Credit Guide 2026-2027
 //   https://www.bu.edu/admissions/files/2018/06/Advanced-Credit-Guide.pdf
 // Source: BU International Baccalaureate Guide 2024-2025
 //   https://www.bu.edu/admissions/files/2018/05/ib_course_equivalence.pdf
@@ -21,49 +21,86 @@
 // for regularly-enrolled students.
 //
 // IB credit only applies to Higher Level exams scored 5, 6, or 7.
+//
+// Every entry (AP flat or per-score, IB) also carries `credits` and either
+// a single confident BU course — `courseKey` (one course) or `courses`
+// (an array, for exams that require a specific multi-course sequence) —
+// or a `courseNote` describing why no single course can be asserted
+// (the source lists multiple options with "or", the second course in a
+// sequence is an unnumbered "topics" placeholder, or there's no fixed
+// equivalent at all). Never fabricate a courseKey out of an "or" list or
+// a TR placeholder — use courseNote instead so callers know to show a
+// human-readable note rather than a course chip.
 
 // ---------------------------------------------------------------------
 // AP
 // ---------------------------------------------------------------------
 
-// Canonical exam name (normalized, see normalize() below) -> HUB result.
-// Most exams give the same HUB unit(s) regardless of score (4 vs 5 only
-// changes credit hours). A few give a different HUB combo per score —
-// those use `byScore` instead of `hub`.
+// Canonical exam name (normalized, see normalize() below) -> HUB result
+// (+ credits + course info, see file header). Most exams give the same
+// HUB unit(s)/credits/course regardless of score (4 vs 5 only changes
+// credit hours for a handful). Exams where hub, credits, or the mapped
+// course actually differ by score use `byScore` instead of the flat
+// hub/credits/course fields — each byScore[score] carries its own
+// hub/credits/courseKey|courses|courseNote, same shape as a flat entry.
 export const AP_HUB_CREDIT = {
-  'art history': { hub: [] },
-  'african american studies': { hub: [] },
-  biology: { byScore: { 4: ['SI1'], 5: ['SI1', 'SI2'] } },
-  'calculus ab': { hub: ['QR2'] },
-  'calculus bc': { hub: ['QR2'] },
-  chemistry: { hub: ['SI1'] },
-  'chinese language and culture': { hub: ['GCI'] },
-  'computer science a': { hub: ['QR2'] },
-  'computer science principles': { hub: ['QR1'] },
-  macroeconomics: { hub: ['SO1'] },
-  microeconomics: { hub: ['SO1'] },
-  'english language and composition': { hub: [] },
-  'english literature and composition': { hub: [] },
-  'environmental science': { hub: ['SO1'] }, // as printed in BU's chart — not SI1
-  'european history': { hub: [] },
-  'french language and culture': { hub: ['GCI'] },
-  'german language and culture': { hub: ['GCI'] },
-  'comparative government and politics': { hub: ['SO1'] },
-  'united states government and politics': { hub: ['SO1'] },
-  'human geography': { hub: ['SO1'] },
-  'italian language and culture': { hub: ['GCI'] },
-  'japanese language and culture': { hub: ['GCI'] },
-  latin: { hub: [] },
-  'music theory': { hub: ['AEX'] },
-  'physics 1': { hub: ['SI1'] },
-  'physics 2': { hub: ['SI2'] },
-  'physics c mechanics': { hub: ['SI1'] },
-  'physics c electricity and magnetism': { hub: ['SI2'] },
-  psychology: { hub: ['SO1'] },
-  'spanish language and culture': { hub: ['GCI'] },
-  'spanish literature and culture': { hub: ['GCI'] },
-  statistics: { hub: ['QR2'] },
-  'united states history': { hub: [] },
+  'art history': { hub: [], credits: 4, courseNote: 'CAS AH 1TR (elective; specific section varies)' },
+  'african american studies': { hub: [], credits: 4, courseNote: 'No fixed BU course equivalent (elective credit only)' },
+  biology: {
+    byScore: {
+      4: { hub: ['SI1'], credits: 4, courseNote: 'CAS BI 105, BI 107, or BI 108 (advisor determines exact course)' },
+      5: { hub: ['SI1', 'SI2'], credits: 8, courseNote: 'CAS BI 107 & 108, BI 105 & 107, or BI 1TR & 108 (advisor determines exact pairing)' },
+    },
+  },
+  'calculus ab': { hub: ['QR2'], credits: 4, courseKey: 'CASMA123' },
+  // BU's real rule for AP Calc BC scores 1-3 depends on the AB subscore
+  // (main score 1-3 + subscore 4/5 => 4 credits; no qualifying subscore
+  // => 0 credits) — a field this app has no way to collect. Scores 1-3
+  // are deliberately left unmodeled here rather than guessed at; the
+  // score picker in the UI derives its options from these byScore keys,
+  // so it only ever offers 4 and 5 for this exam.
+  'calculus bc': {
+    byScore: {
+      4: { hub: ['QR2'], credits: 8, courses: ['CASMA123', 'CASMA124'] },
+      5: { hub: ['QR2'], credits: 8, courses: ['CASMA123', 'CASMA124'] },
+    },
+  },
+  chemistry: { hub: ['SI1'], credits: 4, courseKey: 'CASCH131' },
+  'chinese language and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LC 212 at score 4, or CAS LC 311 at score 5' },
+  'computer science a': { hub: ['QR2'], credits: 4, courseKey: 'CASCS111' },
+  'computer science principles': { hub: ['QR1'], credits: 4, courseNote: 'CAS CS 101 or CDS DS 100' },
+  macroeconomics: { hub: ['SO1'], credits: 4, courseKey: 'CASEC102' },
+  microeconomics: { hub: ['SO1'], credits: 4, courseKey: 'CASEC101' },
+  'english language and composition': { hub: [], credits: 4, courseNote: 'No fixed BU course equivalent (elective credit only)' },
+  'english literature and composition': { hub: [], credits: 4, courseKey: 'CASEN100' },
+  'environmental science': { hub: ['SO1'], credits: 4, courseKey: 'CASEE100' }, // as printed in BU's chart — not SI1
+  'european history': { hub: [], credits: 4, courseNote: 'No fixed BU course equivalent (elective credit only)' },
+  'french language and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LF 212 at score 4, or an advisor-approved CAS LF 3xx course at score 5' },
+  'german language and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LG 212 at score 4, or an advisor-approved CAS LG 3xx course at score 5' },
+  'comparative government and politics': { hub: ['SO1'], credits: 4, courseKey: 'CASPO151' },
+  'united states government and politics': { hub: ['SO1'], credits: 4, courseKey: 'CASPO111' },
+  'human geography': { hub: ['SO1'], credits: 4, courseKey: 'CASEE100' },
+  'italian language and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LI 212 at score 4, or an advisor-approved CAS LI 3xx course at score 5' },
+  'japanese language and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LJ 212 at score 4, or CAS LJ 303 at score 5' },
+  // Score 4 maps to a single confident course; score 5 extends into an
+  // advisor-approved CAS CL 3TR (topics) course with no fixed number, so
+  // that half is a courseNote rather than a fabricated key.
+  latin: {
+    byScore: {
+      4: { hub: [], credits: 4, courseKey: 'CASCL212' },
+      5: { hub: [], credits: 8, courseNote: 'CAS CL 212, followed by an advisor-approved CAS CL 3TR (topics) course' },
+    },
+  },
+  'music theory': { hub: ['AEX'], credits: 4, courseKey: 'CASMT105' },
+  'physics 1': { hub: ['SI1'], credits: 4, courseKey: 'CASPY105' },
+  'physics 2': { hub: ['SI2'], credits: 4, courseKey: 'CASPY106' },
+  'physics c mechanics': { hub: ['SI1'], credits: 4, courseNote: 'CAS PY 211 or CAS PY 251' },
+  'physics c electricity and magnetism': { hub: ['SI2'], credits: 4, courseNote: 'CAS PY 212 or CAS PY 252' },
+  psychology: { hub: ['SO1'], credits: 4, courseKey: 'CASPS101' },
+  'spanish language and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LS 212 at score 4, or an advisor-approved CAS LS 3xx course at score 5' },
+  'spanish literature and culture': { hub: ['GCI'], credits: 4, courseNote: 'CAS LS 212 at score 4, or CAS LS 307 at score 5' },
+  statistics: { hub: ['QR2'], credits: 4, courseKey: 'CASMA115' },
+  'united states history': { hub: [], credits: 4, courseNote: 'No fixed BU course equivalent (elective credit only)' },
 };
 
 // Raw "Test Subject" text as it may actually appear on a BU transcript ->
@@ -86,42 +123,53 @@ export const AP_EXAM_SUBJECTS = Object.keys(AP_HUB_CREDIT);
 // IB (Higher Level only, score 5-7)
 // ---------------------------------------------------------------------
 
+// Every IB exam awards a flat 8 credits and requires HL + score >= 5 (see
+// getIbHub/getIbCredits/getIbCourseInfo below) — no byScore nesting needed
+// here the way AP has it, since score only ever gates on/off, it doesn't
+// change which course(s) apply. `courses` lists every BU course required
+// (BU's IB equivalence is generally a 2-course sequence); when only some
+// of that sequence is confidently known, `courses` holds just the known
+// part and `courseNote` explains the rest — see file header.
 export const IB_HUB_CREDIT = {
-  'art history': { hub: ['AEX', 'HCO'] },
-  biology: { hub: ['SI1', 'SI2'] },
-  chemistry: { hub: ['SI1', 'QR1'] },
-  'classical studies greek': { hub: ['AEX'] },
-  'classical studies latin': { hub: ['AEX'] },
-  'computer science': { hub: ['QR2'] },
-  economics: { hub: ['SO1'] },
+  'art history': { hub: ['AEX', 'HCO'], credits: 8, courses: ['CASAH111', 'CASAH112'] },
+  biology: { hub: ['SI1', 'SI2'], credits: 8, courseNote: 'Course equivalents vary by score combination — contact BU Academic Advising to confirm your CAS BI courses' },
+  chemistry: { hub: ['SI1', 'QR1'], credits: 8, courses: ['CASCH101', 'CASCH102'] },
+  'classical studies greek': { hub: ['AEX'], credits: 8, courses: ['CASCL261', 'CASCL262'] },
+  'classical studies latin': { hub: ['AEX'], credits: 8, courses: ['CASCL211', 'CASCL212'] },
+  'computer science': { hub: ['QR2'], credits: 8, courses: ['CASCS111', 'CASCS112'] },
+  economics: { hub: ['SO1'], credits: 8, courses: ['CASEC101', 'CASEC102'] },
   // "English A: Literature" (earns credit) — do NOT confuse with
   // "English A: Language and Literature" (IB_NO_CREDIT, below)
-  'english language a literature': { hub: ['AEX'] },
-  geography: { hub: ['SI1', 'SO1'] },
-  'global politics': { hub: ['GCI'] },
-  'history africa and the middle east': { hub: ['HCO'] },
-  'history europe': { hub: ['HCO'] },
-  'history the americas': { hub: ['HCO'] },
-  'history asia and oceania': { hub: ['HCO'] },
-  'language arabic': { hub: ['IIC', 'GCI'] },
-  'language chinese': { hub: ['IIC', 'GCI'] },
-  'language mandarin': { hub: ['IIC', 'GCI'] },
-  'language french': { hub: ['IIC', 'GCI'] },
-  'language german': { hub: ['IIC', 'GCI'] },
-  'language italian': { hub: ['IIC', 'GCI'] },
-  'language japanese': { hub: ['IIC', 'GCI'] },
-  'language korean': { hub: ['IIC', 'GCI'] },
-  'language portuguese': { hub: ['IIC', 'GCI'] },
-  'language russian': { hub: ['IIC', 'GCI'] },
-  'language spanish': { hub: ['IIC', 'GCI'] },
-  'language turkish': { hub: ['IIC', 'GCI'] },
-  'mathematics analysis': { hub: ['QR2'] },
-  'mathematics applications and interpretation': { hub: ['QR2'] },
-  philosophy: { hub: ['PLM'] },
-  physics: { hub: ['SI1', 'SI2'] }, // "Physics 1 & 2"
-  psychology: { hub: ['SO1'] },
-  'social cultural anthropology': { hub: ['SO1'] },
-  'theatre arts': { hub: [] },
+  'english language a literature': { hub: ['AEX'], credits: 8, courses: ['CASEN121'], courseNote: 'CAS EN 121 plus a second, advisor-approved English course' },
+  geography: { hub: ['SI1', 'SO1'], credits: 8, courses: ['CASEE101', 'CASEE201'] },
+  'global politics': { hub: ['GCI'], credits: 8, courses: ['CASPO171'], courseNote: 'CAS PO 171 plus a second, advisor-approved course' },
+  'history africa and the middle east': { hub: ['HCO'], credits: 8, courses: ['CASHI176'], courseNote: 'CAS HI 176 plus a second, advisor-approved history course' },
+  'history europe': { hub: ['HCO'], credits: 8, courses: ['CASHI217', 'CASHI218'] },
+  'history the americas': { hub: ['HCO'], credits: 8, courses: ['CASHI152'], courseNote: 'CAS HI 152 plus a second, advisor-approved history course' },
+  'history asia and oceania': { hub: ['HCO'], credits: 8, courses: ['CASHI176'], courseNote: 'CAS HI 176 plus a second, advisor-approved history course' },
+  'language arabic': { hub: ['IIC', 'GCI'], credits: 8, courses: ['CASLY211', 'CASLY212'] },
+  'language chinese': { hub: ['IIC', 'GCI'], credits: 8, courses: ['CASLC211', 'CASLC212'] },
+  'language mandarin': { hub: ['IIC', 'GCI'], credits: 8, courses: ['CASLC211', 'CASLC212'] },
+  'language french': { hub: ['IIC', 'GCI'], credits: 8, courses: ['CASLF211', 'CASLF212'] },
+  'language german': { hub: ['IIC', 'GCI'], credits: 8, courses: ['CASLG211', 'CASLG212'] },
+  'language italian': { hub: ['IIC', 'GCI'], credits: 8, courses: ['CASLI211', 'CASLI212'] },
+  'language japanese': { hub: ['IIC', 'GCI'], credits: 8, courses: ['CASLJ211', 'CASLJ212'] },
+  'language hindi': { hub: ['IIC', 'GCI'], credits: 8, courses: ['CASLN211', 'CASLN212'] },
+  'language korean': { hub: ['IIC', 'GCI'], credits: 8, courses: ['CASLK211', 'CASLK212'] },
+  'language portuguese': { hub: ['IIC', 'GCI'], credits: 8, courses: ['CASLP211', 'CASLP212'] },
+  'language russian': { hub: ['IIC', 'GCI'], credits: 8, courses: ['CASLR211', 'CASLR212'] },
+  'language spanish': { hub: ['IIC', 'GCI'], credits: 8, courses: ['CASLS211', 'CASLS212'] },
+  // Per BU's source PDF, Turkish maps to the same CAS LK 211/212 pair as
+  // Korean — possibly a source typo, but this mirrors the PDF as printed
+  // rather than "fixing" it.
+  'language turkish': { hub: ['IIC', 'GCI'], credits: 8, courses: ['CASLK211', 'CASLK212'] },
+  'mathematics analysis': { hub: ['QR2'], credits: 8, courses: ['CASMA123', 'CASMA124'] },
+  'mathematics applications and interpretation': { hub: ['QR2'], credits: 8, courses: ['CASMA115', 'CASMA123'] },
+  philosophy: { hub: ['PLM'], credits: 8, courses: ['CASPH100'], courseNote: 'CAS PH 100 plus a second, advisor-approved philosophy course' },
+  physics: { hub: ['SI1', 'SI2'], credits: 8, courses: ['CASPY105', 'CASPY106'] }, // "Physics 1 & 2"
+  psychology: { hub: ['SO1'], credits: 8, courses: ['CASPS101'], courseNote: 'CAS PS 101 plus a second, advisor-approved psychology course' },
+  'social cultural anthropology': { hub: ['SO1'], credits: 8, courses: ['CASAN101'], courseNote: 'CAS AN 101 plus a second, advisor-approved anthropology course' },
+  'theatre arts': { hub: [], credits: 8, courseNote: 'CAS TH 1TR (elective; specific section varies)' },
 };
 
 // Canonical IB exam subjects a student can pick from — see AP_EXAM_SUBJECTS
@@ -229,7 +277,7 @@ export function isApScoreDependent(rawSubject) {
 /**
  * Look up HUB units granted for an AP exam.
  * @param {string} rawSubject - as printed on the transcript, e.g. "AP Biology"
- * @param {number} [score] - required only for score-dependent exams (currently just Biology)
+ * @param {number} [score] - required only for score-dependent exams (Biology, Latin, Calculus BC)
  * @returns {string[]|null} HUB unit codes (may be empty array = no HUB),
  *   or null if the exam is unrecognized / score is required but missing —
  *   callers should treat null as "flag for manual review", not "no HUB".
@@ -240,9 +288,73 @@ export function getApHub(rawSubject, score) {
   const entry = AP_HUB_CREDIT[key];
   if (entry.byScore) {
     if (score == null) return null;
-    return entry.byScore[score] ?? [];
+    const scoped = entry.byScore[score];
+    return scoped ? scoped.hub : [];
   }
   return entry.hub;
+}
+
+/**
+ * Look up the BU credit hours granted for an AP exam — same resolution as
+ * getApHub (fuzzy subject match, byScore lookup for score-dependent exams).
+ * @param {string} rawSubject
+ * @param {number} [score] - required only for score-dependent exams
+ * @returns {number|null} credit hours, or null if unresolved (unknown
+ *   exam, or a score-dependent exam with a missing/unmodeled score —
+ *   deliberately null rather than a guessed 0, e.g. AP Calc BC scores 1-3).
+ */
+export function getApCredits(rawSubject, score) {
+  const key = fuzzyMatchKey(normalize(rawSubject), AP_HUB_CREDIT, AP_ALIASES);
+  if (!key) return null;
+  const entry = AP_HUB_CREDIT[key];
+  if (entry.byScore) {
+    if (score == null) return null;
+    const scoped = entry.byScore[score];
+    return scoped ? scoped.credits : null;
+  }
+  return entry.credits;
+}
+
+/**
+ * Look up the BU course equivalent(s) for an AP exam — same resolution as
+ * getApHub/getApCredits.
+ * @param {string} rawSubject
+ * @param {number} [score] - required only for score-dependent exams
+ * @returns {{courseKey: string|null, courses: string[]|null, courseNote: string|null}|null}
+ *   null if unresolved. Otherwise exactly one of courseKey (single course),
+ *   courses (a required multi-course sequence), or courseNote (no single
+ *   confident answer — e.g. an "or" list, or a topics-placeholder course)
+ *   is populated; the others are null.
+ */
+export function getApCourseInfo(rawSubject, score) {
+  const key = fuzzyMatchKey(normalize(rawSubject), AP_HUB_CREDIT, AP_ALIASES);
+  if (!key) return null;
+  const entry = AP_HUB_CREDIT[key];
+  const scoped = entry.byScore ? (score != null ? entry.byScore[score] : null) : entry;
+  if (!scoped) return null;
+  return {
+    courseKey: scoped.courseKey ?? null,
+    courses: scoped.courses ?? null,
+    courseNote: scoped.courseNote ?? null,
+  };
+}
+
+/**
+ * Shared IB gating: no-credit subject, SL, or score < 5 all resolve to "no
+ * credit" (not an error); missing HL/score with an otherwise-real subject
+ * resolves to "can't tell yet"; a genuinely unrecognized subject resolves
+ * to "can't tell yet" too. getIbHub/getIbCredits/getIbCourseInfo all read
+ * from this one place so the gating can't drift between them.
+ * @returns {{key: string|null, noCredit: boolean}}
+ */
+function resolveIbKey(rawSubject, score, isHigherLevel) {
+  const normalized = normalize(rawSubject);
+  const noCreditTable = Object.fromEntries(IB_NO_CREDIT.map((k) => [k, true]));
+  if (fuzzyMatchKey(normalized, noCreditTable, null)) return { key: null, noCredit: true };
+  if (isHigherLevel === false) return { key: null, noCredit: true };
+  if (score != null && score < 5) return { key: null, noCredit: true };
+  if (isHigherLevel == null || score == null) return { key: null, noCredit: false };
+  return { key: fuzzyMatchKey(normalized, IB_HUB_CREDIT, null), noCredit: false };
 }
 
 /**
@@ -255,13 +367,44 @@ export function getApHub(rawSubject, score) {
  *   parsed from the transcript) — treat null as "flag for manual review".
  */
 export function getIbHub(rawSubject, score, isHigherLevel) {
-  const normalized = normalize(rawSubject);
-  const noCreditTable = Object.fromEntries(IB_NO_CREDIT.map((k) => [k, true]));
-  if (fuzzyMatchKey(normalized, noCreditTable, null)) return []; // caller should also skip creating an entry at all, not just zero the HUB
-  if (isHigherLevel === false) return [];
-  if (score != null && score < 5) return [];
-  if (isHigherLevel == null || score == null) return null;
-  const key = fuzzyMatchKey(normalized, IB_HUB_CREDIT, null);
+  const { key, noCredit } = resolveIbKey(rawSubject, score, isHigherLevel);
+  if (noCredit) return [];
   if (!key) return null;
   return IB_HUB_CREDIT[key].hub;
+}
+
+/**
+ * Look up the BU credit hours granted for an IB exam — only non-null when
+ * isHigherLevel is true and score >= 5, matching getIbHub's own gating.
+ * @param {string} rawSubject
+ * @param {number} [score]
+ * @param {boolean} [isHigherLevel]
+ * @returns {number|null}
+ */
+export function getIbCredits(rawSubject, score, isHigherLevel) {
+  const { key, noCredit } = resolveIbKey(rawSubject, score, isHigherLevel);
+  if (noCredit || !key) return null;
+  return IB_HUB_CREDIT[key].credits;
+}
+
+/**
+ * Look up the BU course equivalent(s) for an IB exam — only non-null when
+ * isHigherLevel is true and score >= 5, matching getIbHub's own gating.
+ * @param {string} rawSubject
+ * @param {number} [score]
+ * @param {boolean} [isHigherLevel]
+ * @returns {{courses: string[]|null, courseNote: string|null}|null}
+ *   null if unresolved/not-yet-eligible. Otherwise `courses` holds every
+ *   confidently-known course in BU's required sequence (may be a partial
+ *   list) and `courseNote` is set whenever that list is incomplete or
+ *   there's no confident course at all.
+ */
+export function getIbCourseInfo(rawSubject, score, isHigherLevel) {
+  const { key, noCredit } = resolveIbKey(rawSubject, score, isHigherLevel);
+  if (noCredit || !key) return null;
+  const entry = IB_HUB_CREDIT[key];
+  return {
+    courses: entry.courses ?? null,
+    courseNote: entry.courseNote ?? null,
+  };
 }
