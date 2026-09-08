@@ -33,6 +33,7 @@ export default function SidePanelTabs({
   onSetRequirementOverride,
   onRemoveRequirementOverride,
   onOpenFullView,
+  onOpenHubFullView,
 }) {
   const [activeTab, setActiveTab] = useState('hub');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -99,6 +100,7 @@ export default function SidePanelTabs({
             isTransfer={isTransfer}
             onToggleTransfer={onToggleTransfer}
             onSummaryChange={makeSummaryHandler('hub')}
+            onOpenFullView={onOpenHubFullView}
           />
         </div>
         <div className={activeTab === 'requirements' ? '' : 'side-panel-hidden'}>

@@ -30,6 +30,7 @@ import SemesterBoard from '../components/planner/SemesterBoard';
 import CourseCard from '../components/planner/CourseCard';
 import SidePanelTabs from '../components/planner/SidePanelTabs';
 import RequirementsFullView from '../components/planner/RequirementsFullView';
+import HubFullView from '../components/planner/HubFullView';
 import BulletinPanel from '../components/planner/BulletinPanel';
 import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
 import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
@@ -146,6 +147,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // button support; the URL is the source of truth once the initial load has
   // been applied (see hasAppliedInitialView above).
   const requirementsFullView = hasAppliedInitialView && searchParams.get('view') === 'requirements';
+  // Same pattern, one `view` param slot — see HubFullView.jsx. The two are
+  // mutually exclusive by construction (a single `view` value can't be
+  // both), which matches reality: only one full-screen overlay is ever
+  // open at a time.
+  const hubFullView = hasAppliedInitialView && searchParams.get('view') === 'hub';
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -252,6 +258,22 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   function closeRequirementsFullView() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('view');
+      return next;
+    });
+  }
+
+  function openHubFullView() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('view', 'hub');
+      return next;
+    });
+  }
+
+  function closeHubFullView() {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete('view');
@@ -1335,6 +1357,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               onSetRequirementOverride={handleSetRequirementOverride}
               onRemoveRequirementOverride={handleRemoveRequirementOverride}
               onOpenFullView={openRequirementsFullView}
+              onOpenHubFullView={openHubFullView}
             />
           </aside>
         </div>
@@ -1369,6 +1392,21 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           onRemoveRequirementOverride={handleRemoveRequirementOverride}
           lockStatusMap={lockStatusMap}
           onClose={closeRequirementsFullView}
+        />
+      )}
+
+      {/* ── Full-screen HUB Tracker view (overlay/mode, not a route — see
+           hubFullView above) ── */}
+      {hubFullView && (
+        <HubFullView
+          semesters={semesters}
+          extraCourseKeys={extraCourseKeys}
+          externalCredits={externalCredits}
+          courseMap={courseMap}
+          isTransfer={isTransfer}
+          onToggleTransfer={handleToggleTransfer}
+          lockStatusMap={lockStatusMap}
+          onClose={closeHubFullView}
         />
       )}
 

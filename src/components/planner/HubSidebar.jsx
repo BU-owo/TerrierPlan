@@ -1,14 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
-import {
-  HUB_GROUPS,
-  HUB_LABELS,
-  FIRST_YEAR_REQUIREMENTS,
-  TRANSFER_REQUIREMENTS,
-  OR_GROUP_DISPLAY_NAMES,
-  computeProgress,
-} from '../../utils/hubConstants';
-import { getApHub, getIbHub } from '../../data/apIbHubCredit';
-import { entryCourseKey } from '../../utils/courseEntry';
+import { useState, useEffect } from 'react';
+import { HUB_GROUPS, describeRequirementLabels } from '../../utils/hubConstants';
+import { useHubProgress } from '../../hooks/useHubProgress';
+import HubYearToggle from './HubYearToggle';
 
 export default function HubSidebar({
   semesters,
@@ -18,61 +11,29 @@ export default function HubSidebar({
   isTransfer,
   onToggleTransfer,
   onSummaryChange,
+  onOpenFullView,
 }) {
   // Groups the student has already finished collapse to a one-line summary
   // by default so the groups that still need attention stand out; explicit
   // clicks here override that default either way.
   const [collapsedOverrides, setCollapsedOverrides] = useState({});
 
-  const counts = useMemo(() => {
-    const result = {};
-    const allKeys = [...semesters.flatMap((sem) => sem.map(entryCourseKey)), ...extraCourseKeys];
-    for (const key of allKeys) {
-      for (const unit of courseMap[key]?.hubUnits ?? []) {
-        result[unit] = (result[unit] ?? 0) + 1;
-      }
-    }
-    // BU's AP policy has its own HUB table. Transfer credit is deliberately
-    // omitted: it never fulfills HUB, even when equated to a BU course.
-    for (const credit of externalCredits) {
-      if (credit.type !== 'ap' && credit.type !== 'ib') continue;
-      const units = Array.isArray(credit.manualHubUnits)
-        ? credit.manualHubUnits
-        : credit.type === 'ib'
-          ? getIbHub(credit.testSubject, credit.score, credit.isHigherLevel)
-          : getApHub(credit.testSubject, credit.score);
-      if (!Array.isArray(units)) continue;
-      for (const unit of units) result[unit] = (result[unit] ?? 0) + 1;
-    }
-    return result;
-  }, [semesters, extraCourseKeys, externalCredits, courseMap]);
-
-  const requirements = isTransfer ? TRANSFER_REQUIREMENTS : FIRST_YEAR_REQUIREMENTS;
-
-  const progress = useMemo(() => computeProgress(counts, requirements), [counts, requirements]);
-
-  const totalRequired = requirements.reduce((sum, req) => sum + req.required, 0);
-  const fulfilled = progress.reduce((sum, { requirement, isSatisfied }) => {
-    return isSatisfied ? sum + requirement.required : sum;
-  }, 0);
-  const allFulfilled = fulfilled === totalRequired;
+  // Counts/progress computation lives in useHubProgress now (shared with
+  // HubFullView — see that hook's doc comment) instead of inline here;
+  // this is a pure extraction, the values below are computed identically
+  // to before.
+  const { counts, requirementsByGroup, totalRequired, fulfilled, allFulfilled } = useHubProgress({
+    semesters,
+    extraCourseKeys,
+    externalCredits,
+    courseMap,
+    isTransfer,
+  });
 
   useEffect(() => {
     onSummaryChange?.({ badge: `${fulfilled}/${totalRequired}` });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fulfilled, totalRequired]);
-
-  const requirementsByGroup = useMemo(() => {
-    const groups = {};
-    progress.forEach(({ requirement, isSatisfied }) => {
-      const groupLabel = requirement.groupLabel;
-      if (!groups[groupLabel]) {
-        groups[groupLabel] = [];
-      }
-      groups[groupLabel].push({ requirement, isSatisfied });
-    });
-    return groups;
-  }, [progress]);
 
   function toggleGroup(groupLabel, currentlyCollapsed) {
     setCollapsedOverrides((prev) => ({ ...prev, [groupLabel]: !currentlyCollapsed }));
@@ -80,26 +41,23 @@ export default function HubSidebar({
 
   return (
     <div className="hub-panel">
-      <p className="panel-summary-line">
-        {fulfilled} of {totalRequired} HUB units complete
-      </p>
-
-      <div className="hub-year-toggle-group">
-        <button
-          className={`hub-year-toggle-btn ${!isTransfer ? 'active' : ''}`}
-          onClick={() => onToggleTransfer(false)}
-          title="Show first-year requirements"
-        >
-          First-Year
-        </button>
-        <button
-          className={`hub-year-toggle-btn ${isTransfer ? 'active' : ''}`}
-          onClick={() => onToggleTransfer(true)}
-          title="Show transfer requirements"
-        >
-          Transfer
-        </button>
+      <div className="panel-summary-row">
+        <p className="panel-summary-line">
+          {fulfilled} of {totalRequired} HUB units complete
+        </p>
+        {onOpenFullView && (
+          <button
+            type="button"
+            className="panel-open-full-btn"
+            onClick={onOpenFullView}
+            title="Open full-screen HUB Tracker view"
+          >
+            Open full view ⤢
+          </button>
+        )}
       </div>
+
+      <HubYearToggle isTransfer={isTransfer} onToggleTransfer={onToggleTransfer} />
 
       {allFulfilled && (
         <div className="panel-all-fulfilled">
@@ -144,24 +102,7 @@ export default function HubSidebar({
               {!collapsed && (
                 <div className="hub-group-requirements">
                   {groupReqs.map(({ requirement, isSatisfied }) => {
-                    // Full display label
-                    let displayLabel = requirement.id;
-                    if (requirement.units && requirement.units.length === 1) {
-                      displayLabel = HUB_LABELS[requirement.units[0]] || requirement.id;
-                    } else if (requirement.unitOptions) {
-                      const shortId = requirement.id.replace(/^(fy|tr)-/, '');
-                      displayLabel = OR_GROUP_DISPLAY_NAMES[shortId] || shortId;
-                    }
-
-                    // Short code(s) shown as subtitle
-                    let shortLabel = '';
-                    if (requirement.units) {
-                      shortLabel = requirement.units.join(' · ');
-                    } else if (requirement.unitOptions) {
-                      shortLabel = requirement.unitOptions
-                        .map(optGroup => optGroup.join('+'))
-                        .join(' or ');
-                    }
+                    const { displayLabel, shortLabel } = describeRequirementLabels(requirement);
 
                     // Satisfied count
                     let satisfiedCount = 0;

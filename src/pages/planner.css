@@ -1756,7 +1756,8 @@
   margin-bottom: 10px;
 }
 .panel-summary-row .panel-summary-line { margin: 0; flex: 1; }
-.req-open-full-btn {
+.req-open-full-btn,
+.panel-open-full-btn {
   flex-shrink: 0;
   font-size: 9px;
   font-weight: 600;
@@ -1769,13 +1770,18 @@
   white-space: nowrap;
   transition: background .12s, color .12s;
 }
-.req-open-full-btn:hover { background: var(--scarlet); color: #fff; }
+.req-open-full-btn:hover,
+.panel-open-full-btn:hover { background: var(--scarlet); color: #fff; }
 
-/* ===== REQUIREMENTS — FULL-SCREEN VIEW ===== */
-/* In-page overlay/mode rendered from PlannerPage (see requirementsFullView) —
-   not a route, so no page-load/unmount cost and the exact same plan state as
-   the compact sidebar. */
-.req-full-view {
+/* ===== FULL-SCREEN VIEW SHELL — shared by Requirements and HUB Tracker ===== */
+/* In-page overlay/mode rendered from PlannerPage (see requirementsFullView /
+   hubFullView) — not a route, so no page-load/unmount cost and the exact
+   same plan state as the compact sidebar. Generic `.full-view*` classes so
+   any future full-screen tracker view reuses this shell too; `.req-full-view*`
+   is kept as an alias purely so Requirements' existing markup (which names
+   the class directly) doesn't need to change. */
+.req-full-view,
+.full-view {
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -1783,7 +1789,8 @@
   flex-direction: column;
   background: var(--cream);
 }
-.req-full-view-header {
+.req-full-view-header,
+.full-view-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1794,12 +1801,14 @@
   flex-shrink: 0;
   box-shadow: 0 2px 6px rgba(0,0,0,.2);
 }
-.req-full-view-title {
+.req-full-view-title,
+.full-view-title {
   margin: 0;
   font-size: 18px;
   font-weight: 700;
 }
-.req-full-view-close {
+.req-full-view-close,
+.full-view-close {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1813,13 +1822,16 @@
   cursor: pointer;
   transition: background .15s;
 }
-.req-full-view-close:hover { background: rgba(255,255,255,.24); }
-.req-full-view-body {
+.req-full-view-close:hover,
+.full-view-close:hover { background: rgba(255,255,255,.24); }
+.req-full-view-body,
+.full-view-body {
   flex: 1;
   overflow-y: auto;
   padding: 24px 20px 60px;
 }
-.req-full-view-inner {
+.req-full-view-inner,
+.full-view-inner {
   max-width: 880px;
   margin: 0 auto;
 }
@@ -1945,6 +1957,220 @@
   color: var(--text-muted);
   font-style: italic;
   padding: 6px 0;
+}
+
+/* ===== HUB TRACKER — FULL-SCREEN VIEW ===== */
+/* Sits inside the shared .full-view shell above (not touched here).
+   HubYearToggle is reused as-is. The old single overall progress bar
+   (.req-progress-summary/.req-progress-bar, still used by
+   RequirementsFullView — untouched) is gone from this view entirely,
+   replaced by the overview ring strip below. */
+
+/* Overview strip: one ring per category, small caption beneath (not
+   beside, unlike the card header version further down — same
+   HubProgressRing component, just a different wrapper). Wraps to more
+   rows on narrow viewports instead of scrolling. */
+.hub-full-overview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+}
+.hub-full-overview-heading {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+}
+/* space-between (not a fixed gap) so the row genuinely fills the
+   container width — the browser distributes whatever space is left over
+   between items itself, which is exactly "gap scales with how many
+   categories there are" without computing anything in JS. The `gap`
+   property still applies as a floor so a wrapped, sparser last row never
+   lets items touch. */
+.hub-full-overview {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin: 8px 0 16px;
+}
+/* Real toggles now (see handleOverviewToggle), not status decoration — but
+   the affordance lives on the ring circle only, not the whole button: no
+   resting-state background at all (a rectangle behind ring+label used to
+   look like a permanent hover state, and mismatched width/height once
+   labels wrapped to different line counts). The tint on interaction is a
+   circle sized to the ring itself (.hub-ring-wrap sizes to its SVG child,
+   which is square, so border-radius:50% is a true circle matching the
+   ring's own diameter) rather than a rectangle spanning the label too. */
+.hub-full-overview-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 88px;
+  border: none;
+  background: none;
+  padding: 6px 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.hub-full-overview-item .hub-ring-wrap {
+  border-radius: 50%;
+  transition: background .12s, transform .08s;
+}
+.hub-full-overview-item:hover .hub-ring-wrap,
+.hub-full-overview-item:focus-visible .hub-ring-wrap { background: var(--cream); }
+.hub-full-overview-item:active .hub-ring-wrap { background: var(--cream-dark); transform: scale(.92); }
+.hub-full-overview-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.25;
+  padding-bottom: 3px;
+  border-bottom: 2px solid transparent;
+}
+/* Persistent "this one's currently expanded" cue, now that resting-state
+   background is gone — a thin underline under the label, colored to that
+   category's own ring color (same --hub-* tokens the ring-fill rules
+   below already use, not a new "expanded" color). Transparent at rest so
+   toggling never shifts layout — only the border color changes.
+   hub-ring-<id> is applied on .hub-full-overview-item itself (see
+   HubFullView.jsx) so it can reach this sibling label, not just the ring
+   wrap. */
+.hub-ring-philosophical.hub-full-overview-item[aria-pressed="true"] .hub-full-overview-label { border-bottom-color: var(--hub-phi); }
+.hub-ring-scientific.hub-full-overview-item[aria-pressed="true"] .hub-full-overview-label    { border-bottom-color: var(--hub-sci); }
+.hub-ring-quantitative.hub-full-overview-item[aria-pressed="true"] .hub-full-overview-label  { border-bottom-color: var(--hub-qr); }
+.hub-ring-diversity.hub-full-overview-item[aria-pressed="true"] .hub-full-overview-label     { border-bottom-color: var(--hub-div); }
+.hub-ring-communication.hub-full-overview-item[aria-pressed="true"] .hub-full-overview-label { border-bottom-color: var(--hub-com); }
+.hub-ring-toolkit.hub-full-overview-item[aria-pressed="true"] .hub-full-overview-label       { border-bottom-color: var(--hub-tl); }
+
+/* Ring geometry/label size scale with the `size` prop inline (see
+   HubProgressRing) — color is the only thing set here, through the same
+   --hub-* tokens the existing hub-chip-<id> classes already use
+   (hubConstants.js's HUB_GROUPS — ids match 1:1), not a second system. */
+.hub-ring-wrap { flex-shrink: 0; display: flex; }
+.hub-ring-track { stroke: var(--border-light); }
+.hub-ring-label { font-weight: 700; fill: var(--text); }
+.hub-ring-philosophical .hub-ring-fill { stroke: var(--hub-phi); }
+.hub-ring-scientific .hub-ring-fill    { stroke: var(--hub-sci); }
+.hub-ring-quantitative .hub-ring-fill  { stroke: var(--hub-qr); }
+.hub-ring-diversity .hub-ring-fill     { stroke: var(--hub-div); }
+.hub-ring-communication .hub-ring-fill { stroke: var(--hub-com); }
+.hub-ring-toolkit .hub-ring-fill       { stroke: var(--hub-tl); }
+
+/* Categories render in plan order top to bottom (see segmentGroups in
+   HubFullView.jsx) as a stack of segments: an expanded card is its own
+   full-width flex child here, and a run of consecutive COLLAPSED cards is
+   wrapped in one .hub-full-groups-row, which is where the actual 3/2/1
+   grid lives (breakpoints match the app's existing 860px "goes mobile"
+   and this file's own 640px HUB-tightening cutoff, not new values).
+   Segmenting BEFORE laying out — rather than dropping every card into one
+   grid and spanning the expanded ones — is what keeps a run of collapsed
+   cards packing cleanly regardless of what sits next to it; the old
+   single-grid approach left stray empty cells wherever a spanning card
+   interrupted a partial row. */
+.hub-full-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.hub-full-groups-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.hub-full-group {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+/* Expanded cards specifically get tighter padding on top of the base
+   12px — they're the ones carrying the dense requirement list, where the
+   collapsed grid tiles are fine at the roomier default. */
+.hub-full-group.is-expanded { padding: 9px; }
+.hub-full-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.hub-full-group.is-expanded .hub-full-group-header { margin-bottom: 8px; }
+.hub-full-group-heading { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.hub-full-group-label {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hub-full-group-count { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+.hub-full-group-count.satisfied { color: var(--success-strong); }
+.hub-full-group-caret { flex-shrink: 0; font-size: 11px; color: var(--text-muted); }
+
+/* Requirement rows — a plain divided list inside the card, not a stack of
+   nested cards: no per-row background/border-left/radius, just a hairline
+   between rows. The fulfilled/pending signal already lives on the ✓/○
+   indicator, so the row itself doesn't need its own accent treatment. */
+.hub-full-requirements {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.hub-full-requirement {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-light);
+  line-height: 1.2;
+}
+.hub-full-requirement:last-child { border-bottom: none; padding-bottom: 0; }
+.hub-full-requirement-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.hub-full-requirement-indicator { font-size: 13px; color: var(--text-muted); }
+.hub-full-requirement.fulfilled .hub-full-requirement-indicator { color: var(--success-strong); }
+.hub-full-requirement-label { font-size: 13px; font-weight: 700; color: var(--text); }
+.hub-full-requirement-detail { font-size: 11.5px; color: var(--text-secondary); }
+.hub-full-requirement-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-left: 21px;
+}
+/* Same enlargement req-panel--full gives its own chips, so course/exam
+   chips read at a consistent size between the two full-screen views. */
+.hub-full-requirement-chips .req-pool-chip { font-size: 12px; padding: 5px 9px; }
+/* Dashed, chip-shaped placeholder — reads as "a course would slot in
+   here" rather than a plain fallback string. Deliberately dashed (not the
+   solid .req-pool-chip.eligible border) and no hover/cursor change, so it
+   never implies it's clickable — there's no browse/add action wired to it
+   yet, this is styling/copy only. */
+.hub-full-requirement-empty {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-xs, 3px);
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+@media (max-width: 860px) {
+  .hub-full-groups-row { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .hub-full-groups-row { grid-template-columns: 1fr; }
+  .hub-full-overview-item { width: 76px; }
 }
 
 /* ===== CREDITS PANEL ===== */
@@ -2592,11 +2818,15 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   .banner-content { flex-direction: column; align-items: flex-start; gap: 6px; }
   .banner-signin-link { margin-left: 0; }
 
-  /* Full-screen Requirements view: tighter chrome, single-column body. */
-  .req-full-view-header { padding: 12px 14px; }
-  .req-full-view-title { font-size: 16px; }
-  .req-full-view-close { padding: 5px 10px; font-size: 12px; }
-  .req-full-view-body { padding: 16px 12px 40px; }
+  /* Full-screen Requirements/HUB views: tighter chrome, single-column body. */
+  .req-full-view-header,
+  .full-view-header { padding: 12px 14px; }
+  .req-full-view-title,
+  .full-view-title { font-size: 16px; }
+  .req-full-view-close,
+  .full-view-close { padding: 5px 10px; font-size: 12px; }
+  .req-full-view-body,
+  .full-view-body { padding: 16px 12px 40px; }
   .req-progress-summary { padding: 12px 14px; }
   .req-progress-summary-text { font-size: 13px; }
 }

@@ -194,6 +194,32 @@ export function computeProgress(counts, requirements) {
 }
 
 /**
+ * Human-readable labels for one requirement row — extracted out of
+ * HubSidebar's own inline derivation (verbatim, no behavior change) so
+ * HubFullView renders the exact same label/subtitle text instead of a
+ * second copy of this branching that could drift from it.
+ * @returns {{ displayLabel: string, shortLabel: string }}
+ */
+export function describeRequirementLabels(requirement) {
+  let displayLabel = requirement.id;
+  if (requirement.units && requirement.units.length === 1) {
+    displayLabel = HUB_LABELS[requirement.units[0]] || requirement.id;
+  } else if (requirement.unitOptions) {
+    const shortId = requirement.id.replace(/^(fy|tr)-/, '');
+    displayLabel = OR_GROUP_DISPLAY_NAMES[shortId] || shortId;
+  }
+
+  let shortLabel = '';
+  if (requirement.units) {
+    shortLabel = requirement.units.join(' · ');
+  } else if (requirement.unitOptions) {
+    shortLabel = requirement.unitOptions.map((optGroup) => optGroup.join('+')).join(' or ');
+  }
+
+  return { displayLabel, shortLabel };
+}
+
+/**
  * Semester labels for the year-based layout. Plans aren't fixed at 4 years
  * (see "+ Add Year" in SemesterBoard), so labels are derived from a semester
  * index rather than hardcoded — index 0/1 is Year 1 Fall/Spring, 2/3 is
