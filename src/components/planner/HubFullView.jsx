@@ -9,14 +9,19 @@ import CourseChip from '../requirements/CourseChip';
 // approach as the app's other hand-rolled icons (FlagIcon/PinIcon in the
 // scheduler). Color comes entirely from whatever hub-ring-<id> class the
 // caller wraps it in (see planner.css), which itself just points at the
-// existing --hub-* tokens — this component only knows percentage/geometry.
-// Label font scales with `size` directly (inline, not a CSS class per
-// size) so the same component looks right at 72px and 48px without a
-// third implementation.
-function HubProgressRing({ percent, size = 56, strokeWidth = 6 }) {
+// existing --hub-* tokens. The fill arc is still driven by `percent`; the
+// center label shows the raw "fulfilled/total" count instead (e.g. "2/3")
+// — more directly useful than a percentage, and every real HUB group's
+// counts stay single-digit today, so it's no wider than "67%" was. Font
+// size scales with `size` (inline, not a CSS class per size) and steps
+// down for anything longer than 3 characters (a "10/10"-shaped group,
+// should one ever exist) rather than truncating.
+function HubProgressRing({ percent, fulfilled, total, size = 56, strokeWidth = 6 }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - Math.min(100, Math.max(0, percent)) / 100);
+  const label = `${fulfilled}/${total}`;
+  const fontSize = Math.round(size * (label.length > 3 ? 0.18 : 0.24));
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="hub-ring" aria-hidden="true">
       <circle className="hub-ring-track" cx={size / 2} cy={size / 2} r={radius} strokeWidth={strokeWidth} fill="none" />
@@ -38,9 +43,9 @@ function HubProgressRing({ percent, size = 56, strokeWidth = 6 }) {
         className="hub-ring-label"
         textAnchor="middle"
         dominantBaseline="central"
-        style={{ fontSize: Math.round(size * 0.24) }}
+        style={{ fontSize }}
       >
-        {percent}%
+        {label}
       </text>
     </svg>
   );
@@ -156,7 +161,7 @@ export default function HubFullView({
           aria-expanded={!collapsed}
         >
           <span className={`hub-ring-wrap hub-ring-${group.id}`}>
-            <HubProgressRing percent={percent} size={38} strokeWidth={4} />
+            <HubProgressRing percent={percent} fulfilled={groupFulfilled} total={groupTotal} size={38} strokeWidth={4} />
           </span>
           <div className="hub-full-group-heading">
             <h3 className="hub-full-group-label">{group.label}</h3>
@@ -218,7 +223,24 @@ export default function HubFullView({
     );
   }
 
-  const segments = segmentGroups(groupSummaries, isCollapsed);
+  // The card list (not the overview strip, which stays in fixed category
+  // order) sorts collapsed categories to the top, expanded ones after —
+  // stable on original index within each group, so unrelated cards don't
+  // jitter around when one toggle changes the sort. Since this puts every
+  // collapsed category in one contiguous block up front, segmentGroups'
+  // existing run-detection naturally turns that block into a single
+  // shared grid and leaves each expanded category as its own full-width
+  // row after it — no change needed there, just feeding it pre-sorted input.
+  const cardOrder = groupSummaries
+    .map((groupSummary, index) => ({ groupSummary, index }))
+    .sort((a, b) => {
+      const aRank = isCollapsed(a.groupSummary) ? 0 : 1;
+      const bRank = isCollapsed(b.groupSummary) ? 0 : 1;
+      return aRank !== bRank ? aRank - bRank : a.index - b.index;
+    })
+    .map(({ groupSummary }) => groupSummary);
+
+  const segments = segmentGroups(cardOrder, isCollapsed);
 
   return (
     <div className="full-view" role="dialog" aria-modal="true" aria-label="HUB Tracker">
@@ -251,7 +273,7 @@ export default function HubFullView({
               viewports rather than scrolling horizontally. */}
           <div className="hub-full-overview">
             {groupSummaries.map((groupSummary) => {
-              const { group, percent } = groupSummary;
+              const { group, percent, fulfilled, total } = groupSummary;
               const collapsed = isCollapsed(groupSummary);
               return (
                 <button
@@ -263,7 +285,7 @@ export default function HubFullView({
                   aria-label={`${group.label} — ${percent}% complete, ${collapsed ? 'collapsed' : 'expanded'}. Toggle.`}
                 >
                   <span className={`hub-ring-wrap hub-ring-${group.id}`}>
-                    <HubProgressRing percent={percent} size={72} strokeWidth={6} />
+                    <HubProgressRing percent={percent} fulfilled={fulfilled} total={total} size={72} strokeWidth={6} />
                   </span>
                   <span className="hub-full-overview-label">{group.label}</span>
                 </button>

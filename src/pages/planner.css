@@ -1138,6 +1138,45 @@
   flex-direction: column;
 }
 
+/* Prominent "Open full HUB Tracker view" entry point — the first thing in
+   the panel (see HubSidebar.jsx), a filled full-width banner rather than
+   the small outline link every other "open full view" trigger uses.
+   Fill is the same --scarlet brand accent used throughout the app's own
+   chrome (e.g. .full-view-header), not a new color. Sized to still read
+   comfortably at the desktop sidebar's fixed 244px width, which is
+   actually narrower than the ~320-380px this becomes on mobile (where
+   .planner-right goes full-width) — the 860px-breakpoint downsize below
+   is for polish at that wider-but-still-tight mobile case, not because
+   244px doesn't already fit. */
+.hub-full-view-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--scarlet);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background .12s;
+}
+.hub-full-view-banner:hover { background: var(--scarlet-dark); }
+.hub-full-view-banner-icon {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+@media (max-width: 860px) {
+  .hub-full-view-banner { font-size: 12px; padding: 9px 10px; }
+  .hub-full-view-banner-icon { font-size: 17px; }
+}
+
 .hub-year-toggle-group {
   display: flex;
   gap: 2px;

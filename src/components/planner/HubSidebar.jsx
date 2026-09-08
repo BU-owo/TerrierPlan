@@ -41,21 +41,29 @@ export default function HubSidebar({
 
   return (
     <div className="hub-panel">
-      <div className="panel-summary-row">
-        <p className="panel-summary-line">
-          {fulfilled} of {totalRequired} HUB units complete
-        </p>
-        {onOpenFullView && (
-          <button
-            type="button"
-            className="panel-open-full-btn"
-            onClick={onOpenFullView}
-            title="Open full-screen HUB Tracker view"
-          >
-            Open full view ⤢
-          </button>
-        )}
-      </div>
+      {/* The primary way into the redesigned full-screen tracker — first
+          thing in the panel, not a small link buried next to the summary
+          line, so it's the first thing visible when the HUB tab opens.
+          Deliberately its own class (not .panel-open-full-btn, which
+          RequirementTree's small equivalent button and HubFullView's own
+          "Expand/Collapse all" toggle both still use unchanged) so making
+          this one prominent doesn't balloon those other, genuinely
+          secondary controls. */}
+      {onOpenFullView && (
+        <button
+          type="button"
+          className="hub-full-view-banner"
+          onClick={onOpenFullView}
+          title="Open full-screen HUB Tracker view"
+        >
+          <span className="hub-full-view-banner-icon" aria-hidden="true">⤢</span>
+          Full HUB Tracker View
+        </button>
+      )}
+
+      <p className="panel-summary-line">
+        {fulfilled} of {totalRequired} HUB units complete
+      </p>
 
       <HubYearToggle isTransfer={isTransfer} onToggleTransfer={onToggleTransfer} />
 

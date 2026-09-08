@@ -1,19 +1,39 @@
 # TerrierPlan — Working Queue
 
-Last updated: 2026-08-14
+Last updated: 2026-09-08
 
 ## Queued (in order)
-Nothing queued right now — pick the next item from Ideas or the older
-backlog below.
+- Homepage — build the actual marketing/landing homepage. Concept
+  discussed: 3 feature categories (Plan your degree / Build your
+  schedule / Discover courses), Rhett mascot illustrations per category
+  (user is hand-drawing these), BU scarlet/cream branding leaning into
+  BU-specific visual identity rather than generic SaaS/AI-landing-page
+  aesthetics, product screenshot or live demo in the hero rather than an
+  abstract gradient hero.
+- Onboarding / user details on login — new flow prompting a student to
+  indicate first-year vs. transfer vs. other, and their major, at
+  sign-in/first-use time. Currently `major` (free text, unvalidated) and
+  `isTransfer` (boolean) exist on the plan doc but there's no guided
+  entry point that sets them — they're only ever set incidentally
+  elsewhere in the app.
 
 ## Ideas — not scoped yet
 - "Tracks" — something about tracks/specializations, not yet defined
   what this means concretely.
 - Should locked/completed courses carry across a user's multiple plans,
   or stay per-plan only? (currently per-plan only)
-- Collapse a year row into a compact summary (e.g. "Year 1 — 8 courses,
-  32 credits") instead of always showing full columns.
+- Collapsible/expandable year rows in `SemesterBoard.jsx`'s Year 1–4
+  layout — collapse a year down to a compact summary line (e.g. "Year 1
+  — 8 courses, 32 credits") instead of always showing full columns, so a
+  student can hide years they're not currently focused on, expandable
+  back to the full view on demand.
 - separate minors and majors. highlight or identify which are complete.
+- Requirements sidebar full-view button prominence — the HUB sidebar's
+  "Open full view" button was just redesigned to be prominent (top of
+  sidebar, filled banner, icon, larger). Check whether
+  `RequirementsFullView`'s equivalent entry point in the Requirements
+  sidebar tab is still understated by comparison, and consider matching
+  treatment.
 
 ### Older backlog (pre-dates this queue, from To_Do doc — not urgent)
 - GPA UI (data captured, nothing displayed in planner)
