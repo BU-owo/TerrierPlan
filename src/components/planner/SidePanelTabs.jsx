@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import HubSidebar from './HubSidebar';
-import RequirementsSidebar from './RequirementsSidebar';
+import RequirementsBulletinTab from './RequirementsBulletinTab';
 import CreditsPanel from './CreditsPanel';
 
 const TABS = [
@@ -104,21 +104,16 @@ export default function SidePanelTabs({
           />
         </div>
         <div className={activeTab === 'requirements' ? '' : 'side-panel-hidden'}>
-          <RequirementsSidebar
+          {/* Temporarily just a major picker + bulletin link — see
+              RequirementsBulletinTab.jsx for why. The rest of this
+              component's props (planCourseKeys, onAddCourse, etc.) are
+              still threaded all the way down from PlannerPage even though
+              nothing here consumes them right now, so swapping
+              RequirementsSidebar back in later is a one-line change, not
+              a prop-plumbing project. */}
+          <RequirementsBulletinTab
             majorBulletinUrl={majorBulletinUrl}
-            planCourseKeys={planCourseKeys}
             onMajorSelect={onMajorSelect}
-            onSummaryChange={makeSummaryHandler('requirements')}
-            courseMap={courseMap}
-            activeSemIndex={activeSemIndex}
-            semesterOptions={semesterOptions}
-            onAddCourse={onAddCourse}
-            onEnsureCourseData={onEnsureCourseData}
-            onBrowseRange={onBrowseRange}
-            requirementOverrides={requirementOverrides}
-            onSetRequirementOverride={onSetRequirementOverride}
-            onRemoveRequirementOverride={onRemoveRequirementOverride}
-            onOpenFullView={onOpenFullView}
           />
         </div>
         <div className={activeTab === 'credits' ? '' : 'side-panel-hidden'}>

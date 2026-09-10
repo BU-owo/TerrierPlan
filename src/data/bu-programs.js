@@ -258,3 +258,16 @@ export const BU_SCHOOLS = [
     ],
   },
 ];
+
+// Reverse lookup for a `majorBulletinUrl` plan field back to its
+// { name, degree, url } program entry — used anywhere that needs to show
+// what's actually selected (BulletinPanel, the requirements-bulletin
+// stand-in tab) rather than just holding the raw url.
+export function findProgramByUrl(url) {
+  if (!url) return null;
+  for (const school of BU_SCHOOLS) {
+    const found = school.programs.find((p) => p.url === url);
+    if (found) return found;
+  }
+  return null;
+}
