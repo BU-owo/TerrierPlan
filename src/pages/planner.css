@@ -1319,6 +1319,24 @@
 .hub-requirement.fulfilled .hub-requirement-label { color: var(--success-text); }
 .hub-requirement.fulfilled .hub-requirement-detail { color: var(--success-text); }
 
+/* "This one needs 2 courses, not 1" — a plain "0/2" fraction is easy to
+   scan past next to a row of "0/1"s, so this spells it out in words too,
+   in its own accent color (blue "cool" badge — distinct from the amber
+   "staged" and green "fulfilled" colors already used elsewhere in HUB UI,
+   so it can't be misread as either). */
+.hub-requirement-multi {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .2px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--badge-cool-bg);
+  color: var(--badge-cool-text);
+}
+
 .hub-requirement-count {
   font-size: 9px;
   font-weight: 600;
@@ -1997,6 +2015,21 @@
   color: var(--text-secondary);
 }
 .req-pool-chip--planned .req-pool-chip-status { background: var(--cream-dark); color: var(--text-muted); }
+/* A course staged in Paw-tential Courses, not yet on the plan — same
+   dashed-border "not real yet" language as --planned above, but entirely
+   in the amber "paw-tential" color (matches the stash button's own
+   is-stashed color and the ring's potential arc below), not green: needs
+   `.req-pool-chip.claimed.req-pool-chip--staged` (3 classes), not just
+   `.req-pool-chip--staged` (1 class) — the base `.req-pool-chip.claimed`
+   rule above is 2 classes, so a same-or-lower-specificity override loses
+   to its green background/color regardless of source order, leaving only
+   the (separately-selected) status badge amber and the rest green. */
+.req-pool-chip.claimed.req-pool-chip--staged {
+  background: transparent;
+  border: 1.5px dashed var(--badge-warm-text);
+  color: var(--badge-warm-text);
+}
+.req-pool-chip--staged .req-pool-chip-status { background: var(--badge-warm-bg); color: var(--badge-warm-text); }
 
 /* Large pools (>12 entries, full density only — see CoursePool's
    LARGE_POOL_THRESHOLD) get a scoped text filter and a scrollable list
@@ -2032,6 +2065,102 @@
    (.req-progress-summary/.req-progress-bar, still used by
    RequirementsFullView — untouched) is gone from this view entirely,
    replaced by the overview ring strip below. */
+
+/* Department browse panel — same card look as .hub-full-group below for
+   visual consistency, but its own block since it isn't part of the
+   category-card list/segmenting logic. .search-input, .search-result-card
+   (and its children), .hub-chip, and the stash button are the exact
+   classes CourseSearch.jsx uses for its own results list — reused as-is,
+   not reimplemented. */
+.hub-browse-panel {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-top: 14px;
+}
+.hub-browse-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.hub-browse-input-wrap { flex: 1; min-width: 160px; max-width: 260px; }
+/* Gap-fill search's include/exclude code pickers — label + wrapped row of
+   HubCodeChip toggles (plain .hub-chip buttons, see HubFullView.jsx). */
+.hub-browse-code-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.hub-browse-code-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.hub-browse-results {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* Search Classes + the staging rail (only rendered once something's
+   staged) share one row — align-items: stretch (the default, stated here
+   for clarity) means the rail is exactly as tall as Search Classes, never
+   taller, since it scrolls internally past that (.hub-staging-rail-body's
+   own overflow) instead of growing. HUB Categories is a completely
+   separate, full-width section AFTER this row (see HubFullView.jsx) — not
+   sharing a column with the rail at all, so nothing there can ever end up
+   rendered underneath it. A previous version made the rail a fixed-
+   position bottom sheet on narrow viewports, which (being removed from
+   normal document flow) could visually cover the last rows of the
+   category grid regardless of actual scroll position; stacking normally
+   below Search Classes instead avoids that class of bug entirely. */
+.hub-search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+}
+.hub-search-row > .hub-browse-panel { flex: 1; min-width: 0; }
+
+.hub-staging-rail {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.hub-staging-rail-header {
+  padding: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.hub-staging-rail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+@media (max-width: 860px) {
+  .hub-search-row { flex-direction: column; }
+  .hub-staging-rail { width: auto; max-height: 280px; }
+}
 
 /* Overview strip: one ring per category, small caption beneath (not
    beside, unlike the card header version further down — same
@@ -2122,6 +2251,30 @@
 .hub-ring-wrap { flex-shrink: 0; display: flex; }
 .hub-ring-track { stroke: var(--border-light); }
 .hub-ring-label { font-weight: 700; fill: var(--text); }
+/* Preview arc for "if I added my whole Paw-tential stash" (see
+   HubProgressRing's potentialPercent/describeArcSegment) — distinguished
+   from the real fill below in TWO ways, not one: a dashed stroke (drawn as
+   a <path> segment, not a <circle> — an opacity-only fade read as basically
+   invisible at the small 38px card-header ring size) AND its own uniform
+   amber "paw-tential" color instead of each ring's own hue. A same-color
+   dashed arc still reads as "more real progress, just fainter" at a
+   glance; a solid-colored ring suddenly growing a same-hued dashed tail is
+   genuinely ambiguous. One consistent amber means "staged, not real"
+   reads identically here as it does on the staged requirement chips
+   (.req-pool-chip--staged) and the stash button's own is-stashed color —
+   the same signal wherever staged content shows up, not a per-context one. */
+.hub-ring-potential {
+  /* A dedicated pale yellow rather than --badge-warm-text (used for the
+     staged chip/stash button) — that token reads as brown/olive at the
+     thin ring-stroke weight, not clearly "yellow", even though it works
+     fine on the chip's bigger filled areas. Kept paler/less saturated
+     than a plain gold specifically so it doesn't sit too close to
+     --hub-div (Diversity, Civic, Global's amber-orange, #C77B2E) — this
+     is deliberately more toward true yellow and lighter, not just the
+     same gold at lower opacity. */
+  stroke: #E6D26A;
+  opacity: .8;
+}
 .hub-ring-philosophical .hub-ring-fill { stroke: var(--hub-phi); }
 .hub-ring-scientific .hub-ring-fill    { stroke: var(--hub-sci); }
 .hub-ring-quantitative .hub-ring-fill  { stroke: var(--hub-qr); }
@@ -2206,6 +2359,28 @@
 .hub-full-requirement.fulfilled .hub-full-requirement-indicator { color: var(--success-strong); }
 .hub-full-requirement-label { font-size: 13px; font-weight: 700; color: var(--text); }
 .hub-full-requirement-detail { font-size: 11.5px; color: var(--text-secondary); }
+/* Same "spell it out, don't rely on a fraction's denominator" badge as
+   HubSidebar's .hub-requirement-multi — kept as a separate rule (not a
+   shared class) since the two live in differently-scaled contexts, but
+   same color/shape language. */
+.hub-full-requirement-multi {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--badge-cool-bg);
+  color: var(--badge-cool-text);
+}
+.hub-full-requirement-count {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.hub-full-requirement-count.satisfied { color: var(--success-strong); }
 .hub-full-requirement-chips {
   display: flex;
   flex-wrap: wrap;

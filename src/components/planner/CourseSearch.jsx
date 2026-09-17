@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useDraggable } from '@dnd-kit/core';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../firebase';
 import { HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { parseCourseKey, normalizeCourseKey } from '../../utils/courseKey';
+import { loadAllCourses } from '../../utils/courseQuery';
 import { getOfferingBadge } from '../../utils/offeringPattern';
 import SemesterPickerModal from './SemesterPickerModal';
 
@@ -158,7 +157,7 @@ function HubFilterSelect({ selected, onChange }) {
 // so it inherits the button's own color (scarlet / stashed-amber / hover
 // white — see .search-result-stash-btn in planner.css), same as the star
 // glyphs it replaces, so dark mode needs no extra handling here.
-function PawIcon({ filled }) {
+export function PawIcon({ filled }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -320,21 +319,24 @@ export default function CourseSearch({
     }
   }, [rangeFilter]);
 
-  // Load all courses once on first mount
+  // Load all courses once on first mount — shared cache (see courseQuery.js)
+  // so this and the HUB Tracker's department browse panel don't each open
+  // their own Firestore read of the same collection.
   useEffect(() => {
-    const loadAllCourses = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, 'courses'));
-        const courses = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    let cancelled = false;
+    loadAllCourses()
+      .then((courses) => {
+        if (cancelled) return;
         setAllCourses(courses);
         setCoursesLoaded(true);
-      } catch (err) {
+      })
+      .catch((err) => {
         console.error('Failed to load courses:', err);
-        setCoursesLoaded(true); // Still mark as loaded even on error
-      }
+        if (!cancelled) setCoursesLoaded(true); // Still mark as loaded even on error
+      });
+    return () => {
+      cancelled = true;
     };
-
-    loadAllCourses();
   }, []);
 
   // Filter courses client-side on keystroke / HUB filter / range filter change

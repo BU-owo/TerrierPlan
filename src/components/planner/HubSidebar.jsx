@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { HUB_GROUPS, describeRequirementLabels } from '../../utils/hubConstants';
-import { useHubProgress } from '../../hooks/useHubProgress';
+import { useHubProgress, satisfiedCountForRequirement } from '../../hooks/useHubProgress';
 import HubYearToggle from './HubYearToggle';
 
 export default function HubSidebar({
@@ -111,17 +111,8 @@ export default function HubSidebar({
                 <div className="hub-group-requirements">
                   {groupReqs.map(({ requirement, isSatisfied }) => {
                     const { displayLabel, shortLabel } = describeRequirementLabels(requirement);
-
-                    // Satisfied count
-                    let satisfiedCount = 0;
-                    if (requirement.units) {
-                      satisfiedCount = requirement.units.reduce((sum, code) => sum + (counts[code] ?? 0), 0);
-                    } else if (requirement.unitOptions) {
-                      satisfiedCount = requirement.unitOptions.reduce((sum, optGroup) => {
-                        const optSum = optGroup.reduce((s, code) => s + (counts[code] ?? 0), 0);
-                        return sum + optSum;
-                      }, 0);
-                    }
+                    const satisfiedCount = satisfiedCountForRequirement(requirement, counts);
+                    const needsMultiple = requirement.required > 1;
 
                     return (
                       <div
@@ -137,6 +128,14 @@ export default function HubSidebar({
                           </span>
                           {shortLabel && (
                             <span className="hub-requirement-detail">{shortLabel}</span>
+                          )}
+                          {needsMultiple && (
+                            <span
+                              className="hub-requirement-multi"
+                              title={`Requires ${requirement.required} separate courses to fulfill`}
+                            >
+                              needs {requirement.required}
+                            </span>
                           )}
                         </div>
                         <span className={`hub-requirement-count ${isSatisfied ? 'satisfied' : ''}`}>

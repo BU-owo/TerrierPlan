@@ -1406,6 +1406,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           isTransfer={isTransfer}
           onToggleTransfer={handleToggleTransfer}
           lockStatusMap={lockStatusMap}
+          stash={stash}
+          onAddToStash={handleAddToStash}
+          onRemoveFromStash={handleRemoveFromStash}
           onClose={closeHubFullView}
         />
       )}

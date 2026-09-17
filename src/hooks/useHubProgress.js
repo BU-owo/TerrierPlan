@@ -21,7 +21,14 @@ import { entryCourseKey } from '../utils/courseEntry';
 // the running count — HubSidebar has never needed this (it only ever
 // showed a number), but the full view's "inline course names instead of
 // just codes/counts" redesign does.
-export function useHubProgress({ semesters, extraCourseKeys = [], externalCredits = [], courseMap, isTransfer }) {
+export function useHubProgress({
+  semesters,
+  extraCourseKeys = [],
+  externalCredits = [],
+  courseMap,
+  isTransfer,
+  stashCourseKeys = [],
+}) {
   const { counts, contributorsByUnit } = useMemo(() => {
     const countsResult = {};
     const contributors = {};
@@ -58,8 +65,21 @@ export function useHubProgress({ semesters, extraCourseKeys = [], externalCredit
       }
     }
 
+    // Stashed ("Paw-tential") courses — pushed into contributorsByUnit so
+    // they render in the same requirement rows via contributorsForRequirement,
+    // but through a path that ONLY ever touches `contributors`, never
+    // `countsResult`. That's deliberate: a staged course must show up
+    // alongside real contributors without ever being able to flip a
+    // requirement to satisfied, change `counts`, `progress`, `fulfilled`, or
+    // any group's `satisfied`/`percent` — those all stay real-only.
+    for (const courseKey of stashCourseKeys) {
+      for (const unit of courseMap[courseKey]?.hubUnits ?? []) {
+        (contributors[unit] ??= []).push({ type: 'staged', courseKey });
+      }
+    }
+
     return { counts: countsResult, contributorsByUnit: contributors };
-  }, [semesters, extraCourseKeys, externalCredits, courseMap]);
+  }, [semesters, extraCourseKeys, externalCredits, courseMap, stashCourseKeys]);
 
   const requirements = isTransfer ? TRANSFER_REQUIREMENTS : FIRST_YEAR_REQUIREMENTS;
   const progress = useMemo(() => computeProgress(counts, requirements), [counts, requirements]);
@@ -105,6 +125,27 @@ export function useHubProgress({ semesters, extraCourseKeys = [], externalCredit
     }).filter((g) => g.total > 0);
   }, [requirementsByGroup]);
 
+  // Still-open requirements, derived from `progress`/`counts` alone — no
+  // re-reading HUB_REQUIREMENTS.md or hubConstants beyond what the hook
+  // already has in scope. Shaped for a future course-search feature (not
+  // built here): the unit code(s) a course would need to advance this
+  // requirement, how many more units are needed, and which HUB_GROUPS
+  // label it belongs to (matches requirementsByGroup's own keys).
+  const openRequirements = useMemo(() => {
+    return progress
+      .filter(({ isSatisfied }) => !isSatisfied)
+      .map(({ requirement }) => {
+        const unitCodes = requirementUnitCodes(requirement);
+        const satisfiedCount = unitCodes.reduce((sum, code) => sum + (counts[code] ?? 0), 0);
+        return {
+          requirement,
+          group: requirement.groupLabel,
+          unitCodes,
+          needed: requirement.required - satisfiedCount,
+        };
+      });
+  }, [progress, counts]);
+
   return {
     counts,
     contributorsByUnit,
@@ -112,26 +153,51 @@ export function useHubProgress({ semesters, extraCourseKeys = [], externalCredit
     progress,
     requirementsByGroup,
     groupSummaries,
+    openRequirements,
     totalRequired,
     fulfilled,
     allFulfilled,
   };
 }
 
-// Every contributor (course or AP/IB credit) behind one requirement's
-// satisfied count, across all of its unit codes (a requirement can name
-// several — units: [...] or every code inside every unitOptions group).
-// Used by the full view to show names instead of just a count; HubSidebar
-// doesn't need this.
-export function contributorsForRequirement(requirement, contributorsByUnit) {
-  const codes = requirement.units
+// The unit code(s) that count toward one requirement — its `units` list, or
+// every code across all of its `unitOptions` groups. Shared by
+// contributorsForRequirement and openRequirements (useHubProgress) so both
+// agree on what "this requirement's codes" means.
+function requirementUnitCodes(requirement) {
+  return requirement.units
     ? requirement.units
     : (requirement.unitOptions || []).flat();
+}
+
+// How many real units a requirement has toward its `required` count —
+// the same units/unitOptions-over-counts reduction computeProgress
+// (hubConstants.js) does internally to produce isSatisfied, exposed here
+// as the raw number so a caller can render "1/2" instead of just a
+// satisfied/pending boolean. HubSidebar had its own inline copy of this
+// exact reduction before; both it and HubFullView call this now instead
+// of a requirement satisfying itself uses one reduction, not several.
+export function satisfiedCountForRequirement(requirement, counts) {
+  return requirementUnitCodes(requirement).reduce((sum, code) => sum + (counts[code] ?? 0), 0);
+}
+
+// Every contributor (real course, AP/IB credit, or staged/stashed course)
+// behind one requirement's satisfied count, across all of its unit codes (a
+// requirement can name several — units: [...] or every code inside every
+// unitOptions group). Used by the full view to show names instead of just a
+// count; HubSidebar doesn't need this. Staged contributors ride along here
+// too (see useHubProgress) precisely so callers don't need a second
+// rendering path just to show what's staged.
+export function contributorsForRequirement(requirement, contributorsByUnit) {
+  const codes = requirementUnitCodes(requirement);
   const seen = new Set();
   const result = [];
   for (const code of codes) {
     for (const contributor of contributorsByUnit[code] || []) {
-      const key = contributor.type === 'course' ? `c:${contributor.courseKey}` : `x:${contributor.label}:${code}`;
+      const key =
+        contributor.type === 'course' || contributor.type === 'staged'
+          ? `${contributor.type[0]}:${contributor.courseKey}`
+          : `x:${contributor.label}:${code}`;
       if (seen.has(key)) continue;
       seen.add(key);
       result.push(contributor);
