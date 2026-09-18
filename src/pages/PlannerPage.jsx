@@ -53,30 +53,50 @@ import '../App.css';
 
 const EMPTY_SEMESTERS = () => Array.from({ length: 8 }, () => []);
 const LOCAL_STORAGE_KEY = 'terrierplan_session';
-// A student's "current semester" and completed courses are facts about
-// them, not about any one hypothetical plan — kept in their own storage key
-// (signed-in: the top-level `users/{uid}` doc; guest: this key) so they
-// carry over when switching plans or creating a new one, instead of being
-// reset per-plan like semesters/gridSummerTerms/etc. are.
+// A student's "current semester", completed courses, and AP/IB/transfer
+// credits are facts about them, not about any one hypothetical plan — kept
+// in their own storage key (signed-in: the top-level `users/{uid}` doc;
+// guest: this key) so they carry over when switching plans or creating a
+// new one, instead of being reset per-plan like semesters/gridSummerTerms/
+// etc. are.
 const PROFILE_STORAGE_KEY = 'terrierplan_profile';
+
+// Backward compat: a guest who used the app before externalCredits moved
+// into the shared profile still has it sitting only in the legacy per-plan
+// session blob — loadLocalProfile falls back to this when the profile key
+// itself has none.
+function readLegacyGuestExternalCredits() {
+  try {
+    const legacyRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!legacyRaw) return [];
+    const legacyPlan = JSON.parse(legacyRaw);
+    return Array.isArray(legacyPlan?.externalCredits) ? legacyPlan.externalCredits : [];
+  } catch {
+    return [];
+  }
+}
 
 function loadLocalProfile() {
   try {
     const stored = localStorage.getItem(PROFILE_STORAGE_KEY);
-    if (!stored) return { currentSemesterTarget: null, completedCourseKeys: [] };
-    const parsed = JSON.parse(stored);
+    const parsed = stored ? JSON.parse(stored) : null;
+    const externalCredits = Array.isArray(parsed?.externalCredits)
+      ? parsed.externalCredits
+      : readLegacyGuestExternalCredits();
     return {
       currentSemesterTarget: parsed?.currentSemesterTarget ?? null,
       completedCourseKeys: Array.isArray(parsed?.completedCourseKeys) ? parsed.completedCourseKeys : [],
+      externalCredits,
     };
   } catch (err) {
     console.error('Error loading local profile:', err);
-    return { currentSemesterTarget: null, completedCourseKeys: [] };
+    return { currentSemesterTarget: null, completedCourseKeys: [], externalCredits: [] };
   }
 }
 
-function saveLocalProfile(currentSemesterTarget, completedCourseKeys) {
-  localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({ currentSemesterTarget, completedCourseKeys }));
+// `profile` is { currentSemesterTarget, completedCourseKeys, externalCredits }.
+function saveLocalProfile(profile) {
+  localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
 }
 
 // Firestore rejects arrays nested directly inside arrays, so `semesters`
@@ -292,6 +312,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       const localProfile = loadLocalProfile();
       setCurrentSemesterTarget(localProfile.currentSemesterTarget);
       setCompletedCourseKeys(localProfile.completedCourseKeys);
+      setExternalCredits(normalizeExternalCredits(localProfile.externalCredits));
       isInitialLoad.current = false;
     }
 
@@ -441,7 +462,6 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         persistPlan(user.uid, activePlanId, planName, semesters, isTransfer, {
           extraTerms,
           gridSummerTerms,
-          externalCredits,
           cumulativeGpa,
           earnedCredits,
           gradePoints,
@@ -458,8 +478,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       clearTimeout(saveTimeoutRef.current);
       console.log('🧹 [autosave] Cleaning up timeout');
     };
+    // externalCredits deliberately not a dep here — it's student-level now
+    // (see the profile autosave effect below), not plan data, so changing
+    // it shouldn't reschedule/cancel this plan-save debounce.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [semesters, gridSummerTerms, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, requirementOverrides, stash]);
+  }, [semesters, gridSummerTerms, planName, isTransfer, isDirty, extraTerms, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, requirementOverrides, stash]);
 
   // ── Guest: persist to localStorage after React commits the new state ──────
   // Handlers used to call saveLocalPlan() immediately after setSemesters(),
@@ -468,10 +491,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   useEffect(() => {
     if (user || authLoading || isInitialLoad.current || !isDirty) return;
     saveLocalPlan();
+    // externalCredits deliberately not a dep — see the plan autosave effect
+    // above; it's saved via saveLocalProfile in the profile effect instead.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [semesters, gridSummerTerms, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, requirementOverrides, stash, user, authLoading]);
+  }, [semesters, gridSummerTerms, planName, isTransfer, isDirty, extraTerms, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, requirementOverrides, stash, user, authLoading]);
 
-  // ── Profile autosave (current semester + locked courses) ──────────────────
+  // ── Profile autosave (current semester + locked courses + external credits) ─
   // Deliberately its own effect/timer, not folded into the plan autosave
   // above. It used to share that effect's timeout, keyed off `semesters`
   // among other plan fields — so switching plans (which changes `semesters`)
@@ -487,15 +512,17 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // redirect, /scheduler, etc.) within the debounce window would clear the
   // pending setTimeout via this effect's own per-dependency cleanup before
   // it ever fires. pendingProfileWriteRef tracks the latest not-yet-sent
-  // write so the unmount-only effect and pagehide listener below can flush
-  // it even though the timer itself got cleared.
+  // write — as one { uid, profile } object, profile being the full
+  // { currentSemesterTarget, completedCourseKeys, externalCredits } shape —
+  // so the unmount-only effect and pagehide listener below can flush it
+  // even though the timer itself got cleared.
   const profileSaveTimeoutRef = useRef(null);
   const pendingProfileWriteRef = useRef(null);
   useEffect(() => {
     if (isInitialLoad.current) return;
 
     if (!user) {
-      if (!authLoading) saveLocalProfile(currentSemesterTarget, completedCourseKeys);
+      if (!authLoading) saveLocalProfile({ currentSemesterTarget, completedCourseKeys, externalCredits });
       return;
     }
 
@@ -505,17 +532,16 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     if (profileLoadedForUid.current !== user.uid) return;
 
     const uid = user.uid;
-    const target = currentSemesterTarget;
-    const keys = completedCourseKeys;
-    pendingProfileWriteRef.current = { uid, target, keys };
+    const profile = { currentSemesterTarget, completedCourseKeys, externalCredits };
+    pendingProfileWriteRef.current = { uid, profile };
 
     clearTimeout(profileSaveTimeoutRef.current);
     profileSaveTimeoutRef.current = setTimeout(() => {
-      persistProfile(uid, target, keys).then(() => {
+      persistProfile(uid, profile).then(() => {
         // Only clear if nothing newer has queued up behind this write.
         if (pendingProfileWriteRef.current === null) return;
         const pending = pendingProfileWriteRef.current;
-        if (pending.uid === uid && pending.target === target && pending.keys === keys) {
+        if (pending.uid === uid && pending.profile === profile) {
           pendingProfileWriteRef.current = null;
         }
       });
@@ -526,7 +552,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     // and flush this write. Clearing it here would defeat the debounce.
     return () => clearTimeout(profileSaveTimeoutRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSemesterTarget, completedCourseKeys, user, authLoading]);
+  }, [currentSemesterTarget, completedCourseKeys, externalCredits, user, authLoading]);
 
   // Flushes a still-pending signed-in profile write (see
   // pendingProfileWriteRef above) when the component unmounts within the
@@ -538,7 +564,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   useEffect(() => {
     return () => {
       const pending = pendingProfileWriteRef.current;
-      if (pending) persistProfile(pending.uid, pending.target, pending.keys);
+      if (pending) persistProfile(pending.uid, pending.profile);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -549,15 +575,17 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   useEffect(() => {
     function handlePageHide() {
       const pending = pendingProfileWriteRef.current;
-      if (pending) persistProfile(pending.uid, pending.target, pending.keys);
+      if (pending) persistProfile(pending.uid, pending.profile);
     }
     window.addEventListener('pagehide', handlePageHide);
     return () => window.removeEventListener('pagehide', handlePageHide);
   }, []);
 
   // ── Local plan management (for auth-optional browsing) ─────────────────────
+  // externalCredits is deliberately absent here — it's student-level now,
+  // not plan-level, and lives in PROFILE_STORAGE_KEY (see saveLocalProfile)
+  // instead of this per-plan blob.
   function saveLocalPlan(overrides = {}) {
-    const normalizedExternalCredits = normalizeExternalCredits(overrides.externalCredits ?? externalCredits);
     const plan = {
       name: overrides.name ?? planName,
       major: overrides.major ?? '',
@@ -566,7 +594,6 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       gridSummerTerms: overrides.gridSummerTerms ?? gridSummerTerms,
       isTransfer: overrides.isTransfer ?? isTransfer,
       extraTerms: overrides.extraTerms ?? extraTerms,
-      externalCredits: normalizedExternalCredits,
       cumulativeGpa: overrides.cumulativeGpa ?? cumulativeGpa,
       earnedCredits: overrides.earnedCredits ?? earnedCredits,
       gradePoints: overrides.gradePoints ?? gradePoints,
@@ -575,19 +602,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(plan));
-    debugPlanner('saveLocalPlan-written', {
-      transferCredits: normalizedExternalCredits.filter((c) => c?.type === 'transfer'),
-      externalCredits: normalizedExternalCredits,
-    });
-    try {
-      const stored = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '{}');
-      debugPlanner('saveLocalPlan-readback', {
-        transferCredits: (stored.externalCredits || []).filter((c) => c?.type === 'transfer'),
-        externalCredits: stored.externalCredits || [],
-      });
-    } catch (err) {
-      console.error('[DEBUG PlannerPage] saveLocalPlan-readback-parse-failed', err);
-    }
+    debugPlanner('saveLocalPlan-written', plan);
   }
 
   function loadLocalPlan() {
@@ -602,12 +617,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         setIsTransfer(plan.isTransfer || false);
         setMajorBulletinUrl(plan.majorBulletinUrl ?? null);
         setExtraTerms(plan.extraTerms || []);
-        const normalizedExternalCredits = normalizeExternalCredits(plan.externalCredits);
-        setExternalCredits(normalizedExternalCredits);
-        debugPlanner('loadLocalPlan-read', {
-          transferCredits: normalizedExternalCredits.filter((c) => c?.type === 'transfer'),
-          externalCredits: normalizedExternalCredits,
-        });
+        // externalCredits deliberately not read here — it's student-level
+        // now, loaded from PROFILE_STORAGE_KEY instead (see the caller).
+        debugPlanner('loadLocalPlan-read', plan);
         setCumulativeGpa(plan.cumulativeGpa ?? null);
         setEarnedCredits(plan.earnedCredits ?? null);
         setGradePoints(plan.gradePoints ?? null);
@@ -643,6 +655,14 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       gridSummerTerms: normalizeGridSummerTerms(guestPlan.gridSummerTerms),
       isTransfer: guestPlan.isTransfer || false,
       extraTerms: guestPlan.extraTerms || [],
+      // Deliberately still written here even though plan docs otherwise stop
+      // owning externalCredits (see persistPlan/createDefaultPlan): by the
+      // time loadUserProfile runs, migrateGuestPlanIfNeeded has already
+      // cleared LOCAL_STORAGE_KEY, so this migrated doc is the only place
+      // the guest's AP/IB/transfer credits still exist for
+      // loadUserProfile's plan-docs migration to pick up into the account
+      // profile. It then becomes exactly the same kind of read-only legacy
+      // backup as externalCredits on any other pre-existing plan doc.
       externalCredits: normalizeExternalCredits(guestPlan.externalCredits),
       cumulativeGpa: guestPlan.cumulativeGpa ?? null,
       earnedCredits: guestPlan.earnedCredits ?? null,
@@ -656,66 +676,191 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     return ref.id;
   }
 
-  // Loads the student-level profile (current semester + completed courses)
-  // from the top-level `users/{uid}` doc — separate from any plan doc, and
-  // loaded once per sign-in rather than per plan (see initForUser above).
-  // If the account has never saved a profile yet, adopts whatever this
-  // browser had saved while browsing as a guest (if anything) so that
-  // doesn't get silently dropped on sign-in, matching how a guest plan
-  // itself is migrated. If BOTH an account profile and a local guest
-  // profile exist (e.g. this browser was used as a guest again after
-  // already having an account), they're merged rather than letting one
-  // silently clobber the other — completedCourseKeys is the union, and
-  // currentSemesterTarget prefers the account's value, falling back to the
-  // local one only if the account never set one.
+  // One-time backfill for accounts that predate account-level
+  // externalCredits: the old per-plan field is never cleared (see
+  // persistPlan/createDefaultPlan/migrateGuestPlan), so this pulls whatever
+  // still sits on each of the account's plan docs into one deduped list.
+  // Called from loadUserProfile only when the account doc has no
+  // externalCredits field of its own yet.
+  // Content-equality key for cross-plan dedup, matching applyImport's own
+  // dedup rules in transcriptMapping.js exactly (AP by type+courseKey,
+  // transfer by sourceTitle+institution+courseKey) — extended to also
+  // cover an AP/IB row with no courseKey (never produced by applyImport
+  // itself, which skips those, but perfectly possible here since these
+  // credits can come from years of independent per-plan manual entry).
+  function keyPart(value) {
+    return String(value ?? '').trim().toLowerCase();
+  }
+
+  function externalCreditContentKey(credit) {
+    if (credit.type === 'ap' || credit.type === 'ib') {
+      // testSubject included even alongside courseKey — two different exams
+      // can resolve to the same BU course (e.g. two related AP sciences),
+      // and those shouldn't merge into one credit.
+      return credit.courseKey
+        ? `${credit.type}:key:${credit.courseKey}:${keyPart(credit.testSubject)}`
+        : `${credit.type}:fallback:${keyPart(credit.testSubject)}:${keyPart(credit.score)}:${keyPart(credit.sourceTitle)}`;
+    }
+    // transfer (normalizeType's own fallback for anything unrecognized, so
+    // this covers every remaining case)
+    return `transfer:${credit.sourceTitle ?? ''}:${credit.institution ?? ''}:${credit.courseKey ?? ''}`;
+  }
+
+  // A student-entered override on an AP/IB row (see normalizeExternalCredit
+  // in externalCredits.js) — worth protecting from being silently dropped
+  // by the content-dedupe pass below even when the copy that has it isn't
+  // the most recently updated one.
+  function hasManualOverride(credit) {
+    return Boolean(
+      (Array.isArray(credit.manualHubUnits) && credit.manualHubUnits.length > 0)
+      || credit.manualCourseKey
+      || (Array.isArray(credit.manualCourses) && credit.manualCourses.length > 0)
+      || credit.advisorNote,
+    );
+  }
+
+  // Intentionally does not catch — a failed plan query must not resolve to
+  // "no external credits" (see loadUserProfile, which never calls
+  // setExternalCredits/persistProfile/sets profileLoadedForUid if this
+  // throws; initForUser's own catch logs it and the next load retries).
+  async function migratePlanExternalCredits(uid) {
+    const plansSnap = await getDocs(collection(db, 'users', uid, 'plans'));
+    // Oldest-updated first, so iterating in order and overwriting on a
+    // match — by id, then again by content — naturally leaves the copy
+    // from the most recently updated plan for both passes.
+    const planDocs = plansSnap.docs
+      .map((d) => d.data())
+      .sort((a, b) => (a.updatedAt?.toMillis?.() ?? 0) - (b.updatedAt?.toMillis?.() ?? 0));
+    const byId = new Map();
+    for (const planData of planDocs) {
+      for (const credit of normalizeExternalCredits(planData.externalCredits)) {
+        byId.set(credit.id, credit);
+      }
+    }
+    // Different plans can independently hold the same real-world credit
+    // under different generated ids (e.g. the same AP score entered by
+    // hand in two plans before externalCredits became shared) — the id
+    // union above can't catch that, so dedupe again by content, same rule
+    // applyImport uses. Whichever copy wins keeps all of its own fields
+    // (score, manualHubUnits, manualCourseKey, manualCourses, advisorNote)
+    // as-is; nothing is cherry-picked from the losing copy. A copy with a
+    // manual override beats a same-key copy without one regardless of plan
+    // recency — a student's own correction shouldn't get silently
+    // overwritten by an older, unedited duplicate just because it happens
+    // to live in a more recently touched plan; recency only breaks the tie
+    // when both or neither copy has one.
+    const byContent = new Map();
+    for (const credit of byId.values()) {
+      const key = externalCreditContentKey(credit);
+      const existing = byContent.get(key);
+      const keepExisting = existing && hasManualOverride(existing) && !hasManualOverride(credit);
+      if (!keepExisting) {
+        byContent.set(key, credit);
+      }
+    }
+    return Array.from(byContent.values());
+  }
+
+  // Loads the student-level profile (current semester, completed courses,
+  // and AP/IB/transfer credits) from the top-level `users/{uid}` doc —
+  // separate from any plan doc, and loaded once per sign-in rather than per
+  // plan (see initForUser above). If the account has never saved a profile
+  // yet, adopts whatever this browser had saved while browsing as a guest
+  // (if anything) so that doesn't get silently dropped on sign-in, matching
+  // how a guest plan itself is migrated. If BOTH an account profile and a
+  // local guest profile exist (e.g. this browser was used as a guest again
+  // after already having an account), they're merged rather than letting
+  // one silently clobber the other — completedCourseKeys/externalCredits
+  // are the union, and currentSemesterTarget prefers the account's value,
+  // falling back to the local one only if the account never set one.
+  //
+  // externalCredits is migrated independently of currentSemesterTarget/
+  // completedCourseKeys (see migratePlanExternalCredits above) — an account
+  // can easily have already migrated the latter in an earlier session while
+  // still missing externalCredits, since that field is newer.
   async function loadUserProfile(uid) {
     const snap = await getDoc(doc(db, 'users', uid));
     const data = snap.exists() ? snap.data() : null;
     const hasAccountProfile = data != null && Object.prototype.hasOwnProperty.call(data, 'completedCourseKeys');
+    const hasAccountExternalCredits = data != null && Object.prototype.hasOwnProperty.call(data, 'externalCredits');
     const hasLocalProfile = localStorage.getItem(PROFILE_STORAGE_KEY) != null;
+    const local = hasLocalProfile ? loadLocalProfile() : null;
 
+    // --- currentSemesterTarget / completedCourseKeys ---
+    let target;
+    let keys;
+    let needsPersist = false;
     if (hasAccountProfile && !hasLocalProfile) {
-      setCurrentSemesterTarget(data.currentSemesterTarget ?? null);
-      setCompletedCourseKeys(data.completedCourseKeys ?? []);
-      profileLoadedForUid.current = uid;
-      return;
+      target = data.currentSemesterTarget ?? null;
+      keys = data.completedCourseKeys ?? [];
+    } else if (!hasAccountProfile && !hasLocalProfile) {
+      target = null;
+      keys = [];
+    } else {
+      // A local guest profile exists — either merge it into the account's
+      // existing profile, or adopt it outright for an account that's never
+      // saved one.
+      target = hasAccountProfile
+        ? (data.currentSemesterTarget ?? local.currentSemesterTarget ?? null)
+        : local.currentSemesterTarget;
+      keys = hasAccountProfile
+        ? Array.from(new Set([...(data.completedCourseKeys ?? []), ...local.completedCourseKeys]))
+        : local.completedCourseKeys;
+      needsPersist = true;
     }
 
-    if (!hasAccountProfile && !hasLocalProfile) {
-      setCurrentSemesterTarget(null);
-      setCompletedCourseKeys([]);
-      profileLoadedForUid.current = uid;
-      return;
+    // --- externalCredits: independent one-time migration off old per-plan
+    // data, plus the same local-guest-merge as above ---
+    let externalCredits;
+    if (hasAccountExternalCredits) {
+      externalCredits = normalizeExternalCredits(data.externalCredits);
+    } else {
+      externalCredits = await migratePlanExternalCredits(uid);
+      needsPersist = true;
     }
-
-    // A local guest profile exists — either merge it into the account's
-    // existing profile, or adopt it outright for an account that's never
-    // saved one.
-    const local = loadLocalProfile();
-    const target = hasAccountProfile
-      ? (data.currentSemesterTarget ?? local.currentSemesterTarget ?? null)
-      : local.currentSemesterTarget;
-    const keys = hasAccountProfile
-      ? Array.from(new Set([...(data.completedCourseKeys ?? []), ...local.completedCourseKeys]))
-      : local.completedCourseKeys;
+    if (hasLocalProfile) {
+      const localExternalCredits = normalizeExternalCredits(local.externalCredits);
+      if (localExternalCredits.length > 0) {
+        const byId = new Map(externalCredits.map((c) => [c.id, c]));
+        let addedAny = false;
+        for (const credit of localExternalCredits) {
+          if (!byId.has(credit.id)) {
+            byId.set(credit.id, credit);
+            addedAny = true;
+          }
+        }
+        if (addedAny) {
+          externalCredits = Array.from(byId.values());
+          needsPersist = true;
+        }
+      }
+    }
 
     setCurrentSemesterTarget(target);
     setCompletedCourseKeys(keys);
+    setExternalCredits(externalCredits);
 
-    // Persist the merged/adopted result before dropping the local copy —
-    // if the write fails, leave the guest data in place rather than lose it.
-    const persisted = await persistProfile(uid, target, keys);
-    if (persisted) {
-      localStorage.removeItem(PROFILE_STORAGE_KEY);
+    if (needsPersist) {
+      // Persist the merged/migrated result before dropping the local copy —
+      // if the write fails, leave the guest data in place rather than lose it.
+      const persisted = await persistProfile(uid, { currentSemesterTarget: target, completedCourseKeys: keys, externalCredits });
+      if (persisted && hasLocalProfile) {
+        localStorage.removeItem(PROFILE_STORAGE_KEY);
+      }
     }
     profileLoadedForUid.current = uid;
   }
 
-  async function persistProfile(uid, target, completedKeys) {
+  // `profile` is { currentSemesterTarget, completedCourseKeys, externalCredits }.
+  async function persistProfile(uid, profile) {
     try {
       await setDoc(
         doc(db, 'users', uid),
-        { currentSemesterTarget: target, completedCourseKeys: completedKeys },
+        {
+          currentSemesterTarget: profile.currentSemesterTarget,
+          completedCourseKeys: profile.completedCourseKeys,
+          externalCredits: profile.externalCredits,
+        },
         { merge: true },
       );
       return true;
@@ -736,7 +881,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const pending = pendingProfileWriteRef.current;
     if (pending) {
       clearTimeout(profileSaveTimeoutRef.current);
-      await persistProfile(pending.uid, pending.target, pending.keys);
+      await persistProfile(pending.uid, pending.profile);
     }
     pendingProfileWriteRef.current = null;
     profileLoadedForUid.current = null;
@@ -775,12 +920,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const semData = semestersFromFirestore(data.semesters);
     const summerData = normalizeGridSummerTerms(data.gridSummerTerms);
     const extra = data.extraTerms ?? [];
-    const normalizedExternalCredits = normalizeExternalCredits(data.externalCredits);
-    debugPlanner('loadPlan-from-firestore', {
-      planId,
-      transferCredits: normalizedExternalCredits.filter((c) => c?.type === 'transfer'),
-      externalCredits: normalizedExternalCredits,
-    });
+    debugPlanner('loadPlan-from-firestore', { planId, ...data });
     setActivePlanId(planId);
     setPlanName(data.name ?? 'My Plan');
     setSemesters(semData);
@@ -788,7 +928,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setIsTransfer(data.isTransfer ?? false);
     setMajorBulletinUrl(data.majorBulletinUrl ?? null);
     setExtraTerms(extra);
-    setExternalCredits(normalizedExternalCredits);
+    // externalCredits deliberately not read from the plan doc here — it's
+    // student-level now (see loadUserProfile), and setting it per plan-load
+    // would overwrite that global value every time a plan switches. Any
+    // externalCredits still sitting on this doc (see persistPlan/
+    // createDefaultPlan) is legacy, read-only data, not the live source.
     setCumulativeGpa(data.cumulativeGpa ?? null);
     setEarnedCredits(data.earnedCredits ?? null);
     setGradePoints(data.gradePoints ?? null);
@@ -809,18 +953,24 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     isInitialLoad.current = false;
   }
 
-  async function createDefaultPlan(uid) {
+  // `seed`, when given, is { semesters, gridSummerTerms } to start the new
+  // plan's grid from instead of a blank one — see handleNewPlan, which
+  // builds it from the currently-open plan's already-locked courses. Every
+  // other call site (first plan on a brand-new account, guest-plan
+  // migration) omits it and gets the original blank-grid behavior.
+  async function createDefaultPlan(uid, seed = null) {
     isInitialLoad.current = true;
     const name = await uniquePlanName(uid, 'My Plan');
+    const seedSemesters = seed?.semesters ?? EMPTY_SEMESTERS();
+    const seedGridSummerTerms = seed?.gridSummerTerms ?? {};
     const ref = await addDoc(collection(db, 'users', uid, 'plans'), {
       name,
       major: '',
       majorBulletinUrl: null,
-      semesters: semestersToFirestore(EMPTY_SEMESTERS()),
-      gridSummerTerms: {},
+      semesters: semestersToFirestore(seedSemesters),
+      gridSummerTerms: seedGridSummerTerms,
       isTransfer: false,
       extraTerms: [],
-      externalCredits: [],
       cumulativeGpa: null,
       earnedCredits: null,
       gradePoints: null,
@@ -831,20 +981,21 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     });
     setActivePlanId(ref.id);
     setPlanName(name);
-    setSemesters(EMPTY_SEMESTERS());
-    setGridSummerTerms({});
+    setSemesters(seedSemesters);
+    setGridSummerTerms(seedGridSummerTerms);
     setIsTransfer(false);
     setMajorBulletinUrl(null);
     setExtraTerms([]);
-    setExternalCredits([]);
     setCumulativeGpa(null);
     setEarnedCredits(null);
     setGradePoints(null);
     setRequirementOverrides({});
     setStash([]);
-    // currentSemesterTarget/completedCourseKeys deliberately untouched — see
-    // their declaration above; a new plan starts empty but still carries the
-    // student's own current-semester marker and completed-course list.
+    // currentSemesterTarget/completedCourseKeys/externalCredits deliberately
+    // untouched — see their declaration above; a new plan starts empty
+    // (aside from any seeded locked courses) but still carries the
+    // student's own current-semester marker, completed-course list, and
+    // AP/IB/transfer credits.
     setPlans([{ id: ref.id, name }]);
     setIsDirty(false);
     isInitialLoad.current = false;
@@ -878,7 +1029,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         isTransfer: transfer,
         majorBulletinUrl: extras.majorBulletinUrl ?? majorBulletinUrl,
         extraTerms: extras.extraTerms ?? extraTerms,
-        externalCredits: normalizeExternalCredits(extras.externalCredits ?? externalCredits),
+        // externalCredits deliberately omitted — it's student-level now
+        // (see loadUserProfile/persistProfile), not written per plan.
+        // `updateDoc` only touches the fields listed here, so this leaves
+        // whatever legacy externalCredits already sits on the doc alone
+        // rather than clearing it — see the "read-only backup" note on
+        // migrateGuestPlan.
         cumulativeGpa: extras.cumulativeGpa ?? cumulativeGpa,
         earnedCredits: extras.earnedCredits ?? earnedCredits,
         gradePoints: extras.gradePoints ?? gradePoints,
@@ -891,21 +1047,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         ...payload,
         updatedAt: '(server-timestamp)',
       });
-      debugPlanner('persistPlan-payload', {
-        planId,
-        transferCredits: (payload.externalCredits || []).filter((c) => c?.type === 'transfer'),
-        externalCredits: payload.externalCredits || [],
-      });
+      debugPlanner('persistPlan-payload', { planId, ...payload });
 
       await updateDoc(planRef, payload);
 
       const writtenSnap = await getDoc(planRef);
       const written = writtenSnap.exists() ? writtenSnap.data() : null;
-      debugPlanner('persistPlan-firestore-readback', {
-        planId,
-        transferCredits: (written?.externalCredits || []).filter((c) => c?.type === 'transfer'),
-        externalCredits: written?.externalCredits || [],
-      });
+      debugPlanner('persistPlan-firestore-readback', { planId, ...written });
 
       console.log('✅ [persistPlan] Write succeeded');
       setSaveStatus('saved');
@@ -988,7 +1136,44 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   async function handleNewPlan() {
-    await createDefaultPlan(user.uid);
+    // Carry the student's already-completed (locked) courses into the new
+    // plan, at the same slot they occupy in the plan currently open —
+    // locking is global (completedCourseKeySet), but a brand-new plan
+    // otherwise starts with a blank grid, so without this the new plan
+    // would show courses the student has already taken as if they still
+    // needed to be planned. Non-locked entries are dropped; everything else
+    // (stash, externalCredits, extraTerms, requirementOverrides, GPA
+    // fields, major) still starts blank, same as before.
+    const seedSemesters = semesters.map((entries) =>
+      entries.filter((entry) => completedCourseKeySet.has(entryCourseKey(entry))),
+    );
+    const seedGridSummerTerms = Object.fromEntries(
+      Object.entries(gridSummerTerms)
+        .map(([year, entries]) => [
+          year,
+          entries.filter((entry) => completedCourseKeySet.has(entryCourseKey(entry))),
+        ])
+        // Drop years with nothing left to seed rather than toggle on an
+        // empty Summer column in an otherwise-blank plan.
+        .filter(([, entries]) => entries.length > 0),
+    );
+    const hasLockedCourses = seedSemesters.some((entries) => entries.length > 0)
+      || Object.keys(seedGridSummerTerms).length > 0;
+    // No locked courses to carry over — same blank-grid plan as before.
+    const seed = hasLockedCourses ? { semesters: seedSemesters, gridSummerTerms: seedGridSummerTerms } : null;
+
+    if (seed) {
+      const seedKeys = [
+        ...seedSemesters.flatMap((entries) => entries.map(entryCourseKey)),
+        ...Object.values(seedGridSummerTerms).flatMap((entries) => entries.map(entryCourseKey)),
+      ];
+      // These courses came from the plan already open, so courseMap should
+      // already have their data — this is a safety net, not expected to do
+      // real work (fetchCourseData no-ops on keys it already has).
+      fetchCourseData(seedKeys);
+    }
+
+    await createDefaultPlan(user.uid, seed);
     // reload the full plan list
     loadPlans(user.uid);
   }
@@ -1278,10 +1463,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       });
     }
 
+    // externalCredits is deliberately not part of either payload below — it's
+    // student-level now (see setExternalCredits above / loadUserProfile),
+    // persisted through the profile autosave effect, not the plan doc.
     if (user && activePlanId) {
       const saved = await persistPlan(user.uid, activePlanId, planName, result.semesters, isTransfer, {
         extraTerms: result.extraTerms,
-        externalCredits: normalizedExternalCredits,
         cumulativeGpa: result.cumulativeGpa,
         earnedCredits: result.earnedCredits,
         gradePoints: result.gradePoints,
@@ -1292,7 +1479,6 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       saveLocalPlan({
         semesters: result.semesters,
         extraTerms: result.extraTerms,
-        externalCredits: normalizedExternalCredits,
         cumulativeGpa: result.cumulativeGpa,
         earnedCredits: result.earnedCredits,
         gradePoints: result.gradePoints,

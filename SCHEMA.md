@@ -97,6 +97,7 @@ requirement-checking, no rules engine yet).
 | createdAt | timestamp | |
 | currentSemesterTarget | number \| string \| null | Student-reported "I am currently in this semester" marker. A number is a `semesters` index (see the plan doc below); a `summer:{year}` string is a Summer slot in `gridSummerTerms`. A fact about the *student*, not any one plan — shared by every plan of theirs (see `completedCourseKeys`), loaded once at sign-in and left untouched by switching or creating plans. `null` means none set. See `getSemesterStatus` in `courseEntry.js`. |
 | completedCourseKeys | courseKey[] | Courses the student has locked/marked complete — also shared across every plan (locking a course in one plan locks it everywhere that courseKey appears). Setting `currentSemesterTarget` auto-adds every course in the active plan's now-past slots here, once; the student can freely remove any of them again (per-course or per-semester, see SemesterColumn's lock toggle). Drives the Requirements/HUB/Credits "Completed" chip as a fallback for courses that aren't chronologically past — see `describeLockStatus` in `treeHelpers.js`. |
+| externalCredits | object[] | AP / IB / transfer credit (see `externalCredits[]` entry below) — also student-level, shared across every plan: adding, editing, or removing a credit in any plan applies everywhere. Backfilled once, the first time an account loads this field, by unioning `externalCredits` off all of that account's plan docs — first deduped by `id`, then deduped again by content (AP/IB: type+courseKey+testSubject, or type+testSubject+score+sourceTitle when there's no courseKey; transfer: sourceTitle+institution+courseKey), since independent plans can hold the same real-world credit under different generated ids. On a conflict, a copy with a student-entered manual override (manualHubUnits/manualCourseKey/manualCourses/advisorNote) wins regardless of recency; otherwise the most recently updated plan's copy wins — see `migratePlanExternalCredits` in `PlannerPage.jsx`. |
 
 ### `users/{uid}/plans/{planId}`
 | Field | Type | Notes |
@@ -107,7 +108,7 @@ requirement-checking, no rules engine yet).
 | semesters | courseKey[][] | Fixed length 8, one array per semester (Fall/Spring × 4 years) |
 | isTransfer | boolean | HUB tracker uses transfer vs first-year requirement table |
 | extraTerms | object[] | Summer / Winter / overflow post-degree Fall–Spring terms (see below). These courses **do** count toward HUB and credit totals. |
-| externalCredits | object[] | AP / transfer credit from transcript import (see below). **Never** counted in HUB Tracker. |
+| ~~externalCredits~~ | object[] | **Removed** — moved to the parent `users/{uid}` doc (see above); it's student-level, not plan-level. Not read or written here anymore. A pre-existing plan doc may still have this field from before the move; it's left in place, untouched, as a read-only backup (see `migratePlanExternalCredits`) and never re-synced back down to plan docs. |
 | cumulativeGpa | number? | Scraped from transcript footer on import (GPA UI not built yet) |
 | earnedCredits | number? | Scraped from transcript footer on import |
 | gradePoints | number? | Scraped from transcript footer on import |
@@ -115,7 +116,7 @@ requirement-checking, no rules engine yet).
 | stash | courseKey[] | Saved-for-later courses (the planner's "Paw-tential Courses" tab), kept separate from `semesters`/`extraTerms`. Not counted toward HUB, credits, or requirements — purely a bookmark list. |
 | createdAt, updatedAt | timestamp | |
 
-Note: `currentSemesterTarget` and `completedCourseKeys` (locking) live on the parent `users/{uid}` doc, not here — see above. They're facts about the student, not about any individual plan.
+Note: `currentSemesterTarget`, `completedCourseKeys` (locking), and `externalCredits` live on the parent `users/{uid}` doc, not here — see above. They're facts about the student, not about any individual plan.
 
 #### `extraTerms[]` entry
 | Field | Type | Notes |
@@ -126,6 +127,7 @@ Note: `currentSemesterTarget` and `completedCourseKeys` (locking) live on the pa
 | isPostDegree | boolean? | True for terms after a listed graduation date / overflow Fall–Spring |
 
 #### `externalCredits[]` entry
+Shape of each entry in the `users/{uid}.externalCredits` array (see above) — listed here alongside `extraTerms[]` since both were originally plan-doc entry shapes; `id` is what the migration/merge logic dedupes on.
 | Field | Type | Notes |
 |---|---|---|
 | id | string | Persistent per-entry identifier used for stable UI keying and updates |
