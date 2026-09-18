@@ -14,6 +14,7 @@ import {
   getDocs,
   getDoc,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   query,
@@ -38,23 +39,44 @@ import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
 import HeaderNav from '../components/HeaderNav';
 import HelpSupportModal from '../components/HelpSupportModal';
 import { normalizeExternalCredits, normalizeExternalCredit } from '../utils/externalCredits';
-import { normalizeSemesters, normalizeGridSummerTerms, entryCourseKey } from '../utils/courseEntry';
+import {
+  normalizeSemesters,
+  normalizeGridSummerTerms,
+  entryCourseKey,
+  isSummerTarget,
+  summerYearFromTarget,
+  getSemesterStatus,
+} from '../utils/courseEntry';
 import { semesterLabel } from '../utils/hubConstants';
 import './planner.css';
 import '../App.css';
 
 const EMPTY_SEMESTERS = () => Array.from({ length: 8 }, () => []);
 const LOCAL_STORAGE_KEY = 'terrierplan_session';
+// A student's "current semester" and completed courses are facts about
+// them, not about any one hypothetical plan — kept in their own storage key
+// (signed-in: the top-level `users/{uid}` doc; guest: this key) so they
+// carry over when switching plans or creating a new one, instead of being
+// reset per-plan like semesters/gridSummerTerms/etc. are.
+const PROFILE_STORAGE_KEY = 'terrierplan_profile';
 
-// A "target" identifies where a course lives/goes: a plain number is a grid
-// slot index (Fall/Spring), the string `summer:{year}` is that year's
-// optional Summer slot (see SemesterBoard). Shared by every add/move/
-// remove/lock handler below so both slot kinds go through one code path.
-function isSummerTarget(target) {
-  return typeof target === 'string' && target.startsWith('summer:');
+function loadLocalProfile() {
+  try {
+    const stored = localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!stored) return { currentSemesterTarget: null, completedCourseKeys: [] };
+    const parsed = JSON.parse(stored);
+    return {
+      currentSemesterTarget: parsed?.currentSemesterTarget ?? null,
+      completedCourseKeys: Array.isArray(parsed?.completedCourseKeys) ? parsed.completedCourseKeys : [],
+    };
+  } catch (err) {
+    console.error('Error loading local profile:', err);
+    return { currentSemesterTarget: null, completedCourseKeys: [] };
+  }
 }
-function summerYearFromTarget(target) {
-  return target.slice('summer:'.length);
+
+function saveLocalProfile(currentSemesterTarget, completedCourseKeys) {
+  localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({ currentSemesterTarget, completedCourseKeys }));
 }
 
 // Firestore rejects arrays nested directly inside arrays, so `semesters`
@@ -118,6 +140,21 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // grid (see SearchPanelTabs' "Paw-tential Courses" tab). Generic name so
   // the display label can change without a refactor.
   const [stash, setStash] = useState([]);
+  // number | `summer:{year}` string | null — the semester slot the student
+  // says they're currently in (same target encoding as add/move/lock
+  // handlers); null means none set. courseKey[] — courses the student has
+  // locked/marked complete. Both are facts about the *student*, not any one
+  // plan, so they're loaded/saved independently of activePlanId (see
+  // loadUserProfile/persistProfile/loadLocalProfile/saveLocalProfile) and
+  // stay put across handleSelectPlan/handleNewPlan — locking a course or
+  // picking a current semester in one plan carries straight over to every
+  // other plan of this student's. See getSemesterStatus in courseEntry.js.
+  const [currentSemesterTarget, setCurrentSemesterTarget] = useState(null);
+  const [completedCourseKeys, setCompletedCourseKeys] = useState([]);
+  const completedCourseKeySet = useMemo(
+    () => new Set(completedCourseKeys),
+    [completedCourseKeys],
+  );
 
   // ── Course data caches ────────────────────────────────────────────────────
   const [courseMap, setCourseMap] = useState({}); // courseKey → course doc
@@ -159,6 +196,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   const saveTimeoutRef = useRef(null);
   const isInitialLoad = useRef(true);
+  // uid the profile (currentSemesterTarget/completedCourseKeys) has actually
+  // finished loading for — set at the end of loadUserProfile, reset to null
+  // on sign-out. Guards the profile autosave effect so it can't fire with
+  // stale/empty state and setDoc(merge) over the account's real data before
+  // loadUserProfile has resolved (see issue 2 in the fix-up that added this).
+  const profileLoadedForUid = useRef(null);
   const hasUnsavedChanges = useRef(false);
   const pendingLeaveAction = useRef(null);
 
@@ -194,8 +237,30 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     }
 
     async function initForUser(uid) {
+      // New uid (or first sign-in this session) — the profile hasn't loaded
+      // for it yet, so block the autosave effect until loadUserProfile below
+      // actually finishes.
+      profileLoadedForUid.current = null;
+
       // 1. Migrate guest plan BEFORE loadPlans/createDefaultPlan
       const migratedId = await migrateGuestPlanIfNeeded(uid);
+      if (cancelled) return;
+
+      // 1b. Load the student-level profile (current semester + completed
+      // courses) once per sign-in — not per plan, and not re-run by
+      // handleSelectPlan/handleNewPlan, which is what makes it carry across
+      // every plan instead of resetting with each one.
+      try {
+        await loadUserProfile(uid);
+      } catch (err) {
+        console.error('Error loading profile:', err);
+        // profileLoadedForUid.current is already null (reset above) and
+        // loadUserProfile never got far enough to set it — the profile
+        // autosave effect's guard keeps blocking writes for this uid, so
+        // nothing gets clobbered, but locks/current-semester picks this
+        // session won't reach Firestore until a reload retries the load.
+        console.warn('⚠️  Profile writes disabled this session — profile failed to load');
+      }
       if (cancelled) return;
 
       // 2. Load existing plans (migrated doc is additive — never overwrites)
@@ -222,7 +287,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     } else {
       // Signed out — allow a future sign-in to migrate a new guest plan
       guestMigrationPromise = null;
+      profileLoadedForUid.current = null;
       loadLocalPlan();
+      const localProfile = loadLocalProfile();
+      setCurrentSemesterTarget(localProfile.currentSemesterTarget);
+      setCompletedCourseKeys(localProfile.completedCourseKeys);
       isInitialLoad.current = false;
     }
 
@@ -291,19 +360,22 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   // ── Warn before losing unsaved changes (tab close / refresh) ───────────────
+  // Guests are excluded — their changes are already autosaved to
+  // localStorage and migrated on sign-in, so the browser warning would be
+  // misleading for them.
   useEffect(() => {
     function handleBeforeUnload(e) {
-      if (!hasUnsavedChanges.current) return;
+      if (!user || !hasUnsavedChanges.current) return;
       e.preventDefault();
       e.returnValue = '';
     }
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
+  }, [user]);
 
   // ── In-app leave confirmation ─────────────────────────────────────────────
   function requestLeave(action) {
-    if (!hasUnsavedChanges.current) {
+    if (!hasUnsavedChanges.current || !user) {
       action();
       return;
     }
@@ -398,6 +470,90 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     saveLocalPlan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [semesters, gridSummerTerms, planName, isTransfer, isDirty, extraTerms, externalCredits, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, requirementOverrides, stash, user, authLoading]);
+
+  // ── Profile autosave (current semester + locked courses) ──────────────────
+  // Deliberately its own effect/timer, not folded into the plan autosave
+  // above. It used to share that effect's timeout, keyed off `semesters`
+  // among other plan fields — so switching plans (which changes `semesters`)
+  // ran that effect's cleanup and cancelled the *profile* save too, before
+  // it ever reached Firestore/localStorage. A lock toggled right before
+  // switching plans could silently vanish. This timer only depends on the
+  // profile fields themselves, so a plan switch can never cancel it.
+  //
+  // Guests write straight to localStorage on every change — it's cheap, so
+  // there's no debounce and nothing to lose on unmount. Signed-in writes
+  // still debounce (Firestore isn't free), but that reopens the same
+  // "cancelled on unmount" problem one level up: navigating away (sign-in
+  // redirect, /scheduler, etc.) within the debounce window would clear the
+  // pending setTimeout via this effect's own per-dependency cleanup before
+  // it ever fires. pendingProfileWriteRef tracks the latest not-yet-sent
+  // write so the unmount-only effect and pagehide listener below can flush
+  // it even though the timer itself got cleared.
+  const profileSaveTimeoutRef = useRef(null);
+  const pendingProfileWriteRef = useRef(null);
+  useEffect(() => {
+    if (isInitialLoad.current) return;
+
+    if (!user) {
+      if (!authLoading) saveLocalProfile(currentSemesterTarget, completedCourseKeys);
+      return;
+    }
+
+    // Profile hasn't finished loading for this uid yet — writing now would
+    // setDoc(merge) this render's (possibly still-default) state over the
+    // account's real data. See loadUserProfile / profileLoadedForUid.
+    if (profileLoadedForUid.current !== user.uid) return;
+
+    const uid = user.uid;
+    const target = currentSemesterTarget;
+    const keys = completedCourseKeys;
+    pendingProfileWriteRef.current = { uid, target, keys };
+
+    clearTimeout(profileSaveTimeoutRef.current);
+    profileSaveTimeoutRef.current = setTimeout(() => {
+      persistProfile(uid, target, keys).then(() => {
+        // Only clear if nothing newer has queued up behind this write.
+        if (pendingProfileWriteRef.current === null) return;
+        const pending = pendingProfileWriteRef.current;
+        if (pending.uid === uid && pending.target === target && pending.keys === keys) {
+          pendingProfileWriteRef.current = null;
+        }
+      });
+    }, 800);
+
+    // Only clears the pending *timer* — pendingProfileWriteRef is
+    // deliberately left alone so a later unmount/pagehide can still catch
+    // and flush this write. Clearing it here would defeat the debounce.
+    return () => clearTimeout(profileSaveTimeoutRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSemesterTarget, completedCourseKeys, user, authLoading]);
+
+  // Flushes a still-pending signed-in profile write (see
+  // pendingProfileWriteRef above) when the component unmounts within the
+  // debounce window — e.g. a guest clicks "Sign in" or a signed-in user
+  // navigates to /scheduler less than 800ms after locking a course.
+  // Deliberately its own effect with an empty dep array: folding this into
+  // the debounced effect's own cleanup would fire on every dependency
+  // change too, defeating the debounce rather than just catching unmount.
+  useEffect(() => {
+    return () => {
+      const pending = pendingProfileWriteRef.current;
+      if (pending) persistProfile(pending.uid, pending.target, pending.keys);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Best-effort backstop: pagehide fires on tab close / backgrounding in
+  // cases (mobile Safari, etc.) where React's unmount cleanup above may not
+  // run in time. Same flush, triggered by the browser instead of React.
+  useEffect(() => {
+    function handlePageHide() {
+      const pending = pendingProfileWriteRef.current;
+      if (pending) persistProfile(pending.uid, pending.target, pending.keys);
+    }
+    window.addEventListener('pagehide', handlePageHide);
+    return () => window.removeEventListener('pagehide', handlePageHide);
+  }, []);
 
   // ── Local plan management (for auth-optional browsing) ─────────────────────
   function saveLocalPlan(overrides = {}) {
@@ -500,6 +656,93 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     return ref.id;
   }
 
+  // Loads the student-level profile (current semester + completed courses)
+  // from the top-level `users/{uid}` doc — separate from any plan doc, and
+  // loaded once per sign-in rather than per plan (see initForUser above).
+  // If the account has never saved a profile yet, adopts whatever this
+  // browser had saved while browsing as a guest (if anything) so that
+  // doesn't get silently dropped on sign-in, matching how a guest plan
+  // itself is migrated. If BOTH an account profile and a local guest
+  // profile exist (e.g. this browser was used as a guest again after
+  // already having an account), they're merged rather than letting one
+  // silently clobber the other — completedCourseKeys is the union, and
+  // currentSemesterTarget prefers the account's value, falling back to the
+  // local one only if the account never set one.
+  async function loadUserProfile(uid) {
+    const snap = await getDoc(doc(db, 'users', uid));
+    const data = snap.exists() ? snap.data() : null;
+    const hasAccountProfile = data != null && Object.prototype.hasOwnProperty.call(data, 'completedCourseKeys');
+    const hasLocalProfile = localStorage.getItem(PROFILE_STORAGE_KEY) != null;
+
+    if (hasAccountProfile && !hasLocalProfile) {
+      setCurrentSemesterTarget(data.currentSemesterTarget ?? null);
+      setCompletedCourseKeys(data.completedCourseKeys ?? []);
+      profileLoadedForUid.current = uid;
+      return;
+    }
+
+    if (!hasAccountProfile && !hasLocalProfile) {
+      setCurrentSemesterTarget(null);
+      setCompletedCourseKeys([]);
+      profileLoadedForUid.current = uid;
+      return;
+    }
+
+    // A local guest profile exists — either merge it into the account's
+    // existing profile, or adopt it outright for an account that's never
+    // saved one.
+    const local = loadLocalProfile();
+    const target = hasAccountProfile
+      ? (data.currentSemesterTarget ?? local.currentSemesterTarget ?? null)
+      : local.currentSemesterTarget;
+    const keys = hasAccountProfile
+      ? Array.from(new Set([...(data.completedCourseKeys ?? []), ...local.completedCourseKeys]))
+      : local.completedCourseKeys;
+
+    setCurrentSemesterTarget(target);
+    setCompletedCourseKeys(keys);
+
+    // Persist the merged/adopted result before dropping the local copy —
+    // if the write fails, leave the guest data in place rather than lose it.
+    const persisted = await persistProfile(uid, target, keys);
+    if (persisted) {
+      localStorage.removeItem(PROFILE_STORAGE_KEY);
+    }
+    profileLoadedForUid.current = uid;
+  }
+
+  async function persistProfile(uid, target, completedKeys) {
+    try {
+      await setDoc(
+        doc(db, 'users', uid),
+        { currentSemesterTarget: target, completedCourseKeys: completedKeys },
+        { merge: true },
+      );
+      return true;
+    } catch (err) {
+      console.error('Error saving profile:', err);
+      return false;
+    }
+  }
+
+  // Signing out doesn't unmount PlannerPage, so neither the unmount-flush
+  // effect nor the pagehide listener (see pendingProfileWriteRef) would ever
+  // catch a still-debounced profile write — it'd be stuck for a uid the app
+  // no longer has permission to write as. Flush it here instead, while
+  // still authenticated, before actually calling signOut(). persistProfile
+  // already swallows its own errors (returns false rather than throwing),
+  // so a failed flush still falls through to signOut() below.
+  async function handleSignOut() {
+    const pending = pendingProfileWriteRef.current;
+    if (pending) {
+      clearTimeout(profileSaveTimeoutRef.current);
+      await persistProfile(pending.uid, pending.target, pending.keys);
+    }
+    pendingProfileWriteRef.current = null;
+    profileLoadedForUid.current = null;
+    await signOut(auth);
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   // Appends the lowest unused " N" suffix (starting at 2) if baseName already
@@ -599,6 +842,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setGradePoints(null);
     setRequirementOverrides({});
     setStash([]);
+    // currentSemesterTarget/completedCourseKeys deliberately untouched — see
+    // their declaration above; a new plan starts empty but still carries the
+    // student's own current-semester marker and completed-course list.
     setPlans([{ id: ref.id, name }]);
     setIsDirty(false);
     isInitialLoad.current = false;
@@ -852,9 +1098,14 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // Student discretion, not enforcement — any course can be locked/unlocked
   // regardless of source. Locked cards disable their own drag/remove in
   // CourseCard, so this handler doesn't need to guard against those.
-  function handleToggleLock(courseKey, target) {
-    setEntriesAtTarget(target, (entries) => entries.map((e) =>
-      entryCourseKey(e) === courseKey ? { ...e, locked: !e.locked } : e
+  //
+  // "Locked" is a fact about the courseKey itself (completedCourseKeys),
+  // not about where the card happens to sit in *this* plan — so toggling it
+  // here carries straight over to every other plan of this student's that
+  // also has this course, instead of being reset per-plan.
+  function handleToggleLock(courseKey) {
+    setCompletedCourseKeys((prev) => (
+      prev.includes(courseKey) ? prev.filter((k) => k !== courseKey) : [...prev, courseKey]
     ));
     setIsDirty(true);
   }
@@ -874,6 +1125,64 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       return next;
     });
     setIsDirty(true);
+  }
+
+  // Bulk lock/unlock every course in one semester slot at once — the
+  // student-facing "lock/unlock this whole semester" control, built on the
+  // same global completedCourseKeys set CourseCard's own lock button uses
+  // (see handleToggleLock), so a semester is never more than a set of
+  // individually-lockable cards. Locks all when any course is unlocked,
+  // unlocks all when every course is already locked, so one click always
+  // does the obvious thing.
+  function handleToggleSemesterLock(target) {
+    const keys = entriesAtTarget(target).map(entryCourseKey);
+    if (keys.length === 0) return;
+    const allLocked = keys.every((key) => completedCourseKeySet.has(key));
+    setCompletedCourseKeys((prev) => {
+      const set = new Set(prev);
+      keys.forEach((key) => (allLocked ? set.delete(key) : set.add(key)));
+      return Array.from(set);
+    });
+    setIsDirty(true);
+  }
+
+  // Marks `target` (a grid index or `summer:{year}` string — see
+  // isSummerTarget) as the semester the student is currently in, and
+  // auto-locks every course in this plan's slots that just became
+  // chronologically past (see getSemesterStatus) — into the same global
+  // completedCourseKeys set the manual lock button above uses, never a
+  // separate "semester is locked" state, so the student can freely unlock
+  // any one of them again (or re-lock/unlock the whole semester via
+  // handleToggleSemesterLock). Only the slots that just became past are
+  // touched, so advancing further never re-locks something the student
+  // already chose to unlock. Picking the already-current slot again clears
+  // the marker without touching any locks.
+  function handleSetCurrentSemester(target) {
+    const prevTarget = currentSemesterTarget;
+    const nextTarget = prevTarget === target ? null : target;
+    setCurrentSemesterTarget(nextTarget);
+    setIsDirty(true);
+    if (nextTarget == null) return;
+
+    const becameNewlyPast = (slotTarget) =>
+      getSemesterStatus(slotTarget, nextTarget) === 'past'
+      && (prevTarget == null || getSemesterStatus(slotTarget, prevTarget) !== 'past');
+
+    const newlyPastKeys = [
+      ...semesters.flatMap((entries, i) => (becameNewlyPast(i) ? entries.map(entryCourseKey) : [])),
+      ...Object.entries(gridSummerTerms).flatMap(([year, entries]) => (
+        becameNewlyPast(`summer:${year}`) ? entries.map(entryCourseKey) : []
+      )),
+    ];
+    if (newlyPastKeys.length === 0) return;
+    setCompletedCourseKeys((prev) => {
+      const set = new Set(prev);
+      let changed = false;
+      for (const key of newlyPastKeys) {
+        if (!set.has(key)) { set.add(key); changed = true; }
+      }
+      return changed ? Array.from(set) : prev;
+    });
   }
 
   // Adds one more Fall/Spring pair below the grid — see "VARIABLE YEAR COUNT".
@@ -944,6 +1253,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       ...result.semesters.flatMap((sem) => sem.map(entryCourseKey)),
       ...result.extraTerms.flatMap((term) => term.courseKeys || []),
     ];
+    // Courses the transcript matched into an actual grid slot come back
+    // pre-locked (see transcriptMapping.js) — that no longer lives on the
+    // entry itself (see completedCourseKeys), so fold it into the global
+    // completed list here or the import would silently show them as planned.
+    const importedLockedKeys = result.semesters.flatMap(
+      (sem) => sem.filter((e) => e?.locked).map(entryCourseKey),
+    );
 
     setSemesters(result.semesters);
     setExtraTerms(result.extraTerms);
@@ -951,6 +1267,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setCumulativeGpa(result.cumulativeGpa);
     setEarnedCredits(result.earnedCredits);
     setGradePoints(result.gradePoints);
+    if (importedLockedKeys.length > 0) {
+      setCompletedCourseKeys((prev) => Array.from(new Set([...prev, ...importedLockedKeys])));
+    }
     setIsDirty(true);
 
     if (importedCourseKeys.length > 0) {
@@ -1070,37 +1389,48 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   ];
   const coursesInPlan = new Set([...gridCourseKeys, ...extraCourseKeys]);
 
-  // courseKey -> { locked, source } — display-only lookup for the full
-  // Requirements view's planned/completed chip distinction (never fed into
-  // evaluateRequirementTree, which only ever sees flat courseKeys). extraTerms
-  // entries carry no locked/source of their own (they're plain courseKey
-  // strings — see courseEntry.js), but they only ever come from a parsed
-  // transcript, so every course in there is functionally already-completed.
+  // courseKey -> { locked, semesterStatus } — display-only lookup for the
+  // Requirements/HUB tracker's completed/current/planned chip distinction
+  // (never fed into evaluateRequirementTree, which only ever sees flat
+  // courseKeys). `locked` comes from completedCourseKeySet — the student's
+  // own global "I've completed this" list, shared across every plan — and
+  // `semesterStatus` ('past'|'current'|'upcoming'|null, see
+  // getSemesterStatus) is what actually decides completed vs. current vs.
+  // planned: a course in a past semester counts as completed whether or not
+  // it's in that list, since currentSemesterTarget is the source of truth
+  // for "already happened"; `locked` is only a fallback for a course that
+  // isn't chronologically past (e.g. a manually self-marked AP-style
+  // course). extraTerms entries carry no semester of their own (they're
+  // plain courseKey strings — see courseEntry.js), but they only ever come
+  // from a parsed transcript, so every course in there is functionally
+  // already-completed.
   const lockStatusMap = useMemo(() => {
     const map = {};
-    semesters.forEach((sem) => {
+    semesters.forEach((sem, i) => {
       sem.forEach((entry) => {
-        map[entryCourseKey(entry)] = {
-          locked: Boolean(entry?.locked),
-          source: entry?.source ?? 'manual',
+        const key = entryCourseKey(entry);
+        map[key] = {
+          locked: completedCourseKeySet.has(key),
+          semesterStatus: getSemesterStatus(i, currentSemesterTarget),
         };
       });
     });
-    Object.values(gridSummerTerms).forEach((entries) => {
+    Object.entries(gridSummerTerms).forEach(([year, entries]) => {
       entries.forEach((entry) => {
-        map[entryCourseKey(entry)] = {
-          locked: Boolean(entry?.locked),
-          source: entry?.source ?? 'manual',
+        const key = entryCourseKey(entry);
+        map[key] = {
+          locked: completedCourseKeySet.has(key),
+          semesterStatus: getSemesterStatus(`summer:${year}`, currentSemesterTarget),
         };
       });
     });
     extraTerms.forEach((term) => {
       (term.courseKeys || []).forEach((key) => {
-        map[key] = { locked: true, source: 'transcript' };
+        map[key] = { locked: true, semesterStatus: 'past' };
       });
     });
     return map;
-  }, [semesters, gridSummerTerms, extraTerms]);
+  }, [semesters, gridSummerTerms, extraTerms, currentSemesterTarget, completedCourseKeySet]);
 
   // Unlike HUB (which excludes externalCredits entirely), the requirements
   // engine should see transfer/AP-equivalent courses too — they can satisfy
@@ -1125,8 +1455,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0);
 
   // Options for "add to" targets — grid semesters plus any toggled-on Summer
-  // slots — shared by CourseSearch's dropdown and the SemesterPickerModal
-  // fallback picker.
+  // slots — shared by CourseSearch's dropdown, the SemesterPickerModal
+  // fallback picker, and the "I am currently in" selector.
   const semesterOptions = [
     ...semesters.map((_, i) => ({ value: i, label: semesterLabel(i) })),
     ...Object.keys(gridSummerTerms)
@@ -1256,7 +1586,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               </span>
               <button
                 className="btn-signout"
-                onClick={() => requestLeave(() => signOut(auth))}
+                onClick={() => requestLeave(handleSignOut)}
                 title="Sign out"
               >
                 <span className="btn-signout-icon" aria-hidden="true">Out</span>
@@ -1317,9 +1647,14 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               onSemesterClick={setActiveSemIndex}
               onRemoveCourse={handleRemoveCourse}
               onToggleLock={handleToggleLock}
+              onToggleSemesterLock={handleToggleSemesterLock}
               onToggleSummerYear={handleToggleSummerYear}
               onAddYear={handleAddYear}
               draggingId={draggingId}
+              semesterOptions={semesterOptions}
+              currentSemesterTarget={currentSemesterTarget}
+              onSetCurrentSemester={handleSetCurrentSemester}
+              completedCourseKeys={completedCourseKeySet}
             />
             <ExtraTermsPanel
               extraTerms={extraTerms}
@@ -1343,6 +1678,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               externalCredits={externalCredits}
               courseMap={courseMap}
               creditsMap={creditsMap}
+              lockStatusMap={lockStatusMap}
               isTransfer={isTransfer}
               onToggleTransfer={handleToggleTransfer}
               majorBulletinUrl={majorBulletinUrl}

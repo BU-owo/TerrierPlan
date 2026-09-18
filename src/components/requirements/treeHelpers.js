@@ -27,10 +27,22 @@ export function formatCourseLabel(courseKey, courseMap = {}, density = 'compact'
 // extraTerms. Display-only — never fed into the requirements engine, which
 // only ever sees flat courseKeys. Courses the lookup doesn't know about
 // (e.g. AP/transfer external credits) are treated as already-earned credit.
+//
+// A course in a semester chronologically before the student's chosen
+// "current semester" always counts as completed, whether or not it's still
+// locked (see semesterStatus in PlannerPage's lockStatusMap) — the current-
+// semester marker is the source of truth for "already happened". `locked`
+// is only consulted as a fallback (e.g. a manually self-marked AP-style
+// course with no current semester set), and no longer gets its own label.
 export function describeLockStatus(lockStatus) {
-  if (!lockStatus || !lockStatus.locked) return { variant: 'planned', label: 'Planned' };
-  if (lockStatus.source === 'manual') return { variant: 'completed-manual', label: 'Completed (self-marked)' };
-  return { variant: 'completed', label: 'Completed' };
+  if (!lockStatus) return { variant: 'planned', label: 'Planned' };
+  if (lockStatus.locked || lockStatus.semesterStatus === 'past') {
+    return { variant: 'completed', label: 'Completed' };
+  }
+  if (lockStatus.semesterStatus === 'current') {
+    return { variant: 'current', label: 'Current' };
+  }
+  return { variant: 'planned', label: 'Planned' };
 }
 
 // Most requirement trees are flat enough (a handful of leaf-type groups

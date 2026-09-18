@@ -1,18 +1,33 @@
 import { useEffect, useMemo } from 'react';
 import { entryCourseKey } from '../../utils/courseEntry';
+import { describeLockStatus } from '../requirements/treeHelpers';
 
 export default function CreditsPanel({
   semesters,
   extraCourseKeys = [],
   creditsMap,
   externalCredits = [],
+  lockStatusMap = {},
   onSummaryChange,
 }) {
-  const planCourseCredits = useMemo(
-    () => [...semesters.flatMap((sem) => sem.map(entryCourseKey)), ...extraCourseKeys]
-      .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0),
-    [semesters, extraCourseKeys, creditsMap]
-  );
+  // Same completed/current/planned split as the Requirements and HUB
+  // trackers (see describeLockStatus) — a course in a past semester counts
+  // as completed whether or not it's still locked; "current semester"
+  // courses count toward planned here (Credits has no separate "in
+  // progress" bucket, just completed vs. everything still ahead).
+  const { completedCredits, plannedCredits } = useMemo(() => {
+    const allKeys = [...semesters.flatMap((sem) => sem.map(entryCourseKey)), ...extraCourseKeys];
+    let completed = 0;
+    let planned = 0;
+    for (const key of allKeys) {
+      const credit = creditsMap[key] ?? 0;
+      if (describeLockStatus(lockStatusMap[key]).variant === 'completed') completed += credit;
+      else planned += credit;
+    }
+    return { completedCredits: completed, plannedCredits: planned };
+  }, [semesters, extraCourseKeys, creditsMap, lockStatusMap]);
+
+  const planCourseCredits = completedCredits + plannedCredits;
 
   const { apIbCredits, transferCredits, unmappedTransferCount } = useMemo(() => {
     let apIb = 0;
@@ -44,8 +59,12 @@ export default function CreditsPanel({
 
       <div className="credits-breakdown">
         <div className="credits-row">
+          <span className="credits-row-label">Completed courses</span>
+          <span className="credits-row-value">{completedCredits}</span>
+        </div>
+        <div className="credits-row">
           <span className="credits-row-label">Planned courses</span>
-          <span className="credits-row-value">{planCourseCredits}</span>
+          <span className="credits-row-value">{plannedCredits}</span>
         </div>
         <div className="credits-row">
           <span className="credits-row-label">AP / IB credit</span>

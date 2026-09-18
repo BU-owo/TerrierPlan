@@ -19,6 +19,7 @@ export default function SidePanelTabs({
   externalCredits,
   courseMap,
   creditsMap,
+  lockStatusMap,
   isTransfer,
   onToggleTransfer,
   majorBulletinUrl,
@@ -122,6 +123,7 @@ export default function SidePanelTabs({
             extraCourseKeys={extraCourseKeys}
             creditsMap={creditsMap}
             externalCredits={externalCredits}
+            lockStatusMap={lockStatusMap}
             onSummaryChange={makeSummaryHandler('credits')}
           />
         </div>

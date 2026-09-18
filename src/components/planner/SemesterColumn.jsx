@@ -17,8 +17,20 @@ export default function SemesterColumn({
   onColumnClick,
   onRemoveCourse,
   onToggleLock,
+  onToggleSemesterLock,
   onRemoveColumn,
   draggingId,
+  // 'past' | 'current' | 'upcoming' | null — this slot's relation to the
+  // student-designated current semester (see getSemesterStatus). Purely
+  // informational (the "Current"/"Completed" badge below) — locking itself
+  // always runs through completedCourseKeys, same as the per-card lock
+  // button, so a semester is never more than a set of individually-lockable
+  // cards.
+  status = null,
+  // Set<courseKey> — the student's global "completed" list (see
+  // PlannerPage/SemesterBoard); this is what actually drives each card's
+  // locked state, not anything stored on the entry itself.
+  completedCourseKeys,
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: dropId });
 
@@ -26,6 +38,8 @@ export default function SemesterColumn({
     (sum, entry) => sum + (creditsMap[entryCourseKey(entry)] ?? 0),
     0,
   );
+  const allLocked = courses.length > 0
+    && courses.every((entry) => completedCourseKeys.has(entryCourseKey(entry)));
 
   return (
     <div
@@ -33,6 +47,7 @@ export default function SemesterColumn({
         'semester-column',
         isActive ? 'is-active' : '',
         isOver ? 'is-drag-over' : '',
+        status === 'current' ? 'is-current' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -41,8 +56,36 @@ export default function SemesterColumn({
       <div className="semester-header">
         <span className="semester-name">{label}</span>
         <div className="semester-header-right">
+          {status === 'current' && (
+            <span
+              className="semester-status-badge is-current"
+              title="Your current semester"
+            >
+              Current
+            </span>
+          )}
+          {status === 'past' && (
+            <span
+              className="semester-status-badge is-past"
+              title="Marked as completed"
+            >
+              Completed
+            </span>
+          )}
           {courses.length > 0 && (
             <span className="semester-credits">{totalCredits || '—'} cr</span>
+          )}
+          {courses.length > 0 && onToggleSemesterLock && (
+            <button
+              type="button"
+              className={`semester-lock-toggle${allLocked ? ' is-locked' : ''}`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); onToggleSemesterLock(); }}
+              aria-label={allLocked ? `Unlock all courses in ${label}` : `Lock all courses in ${label}`}
+              title={allLocked ? 'Unlock all courses in this semester' : 'Lock all courses in this semester'}
+            >
+              {allLocked ? '🔒' : '🔓'}
+            </button>
           )}
           {onRemoveColumn && (
             <button
@@ -62,16 +105,17 @@ export default function SemesterColumn({
       <div ref={setNodeRef} className="semester-courses">
         {courses.map((entry) => {
           const key = entryCourseKey(entry);
+          const locked = completedCourseKeys.has(key);
           return (
             <CourseCard
               key={key}
               courseKey={key}
               data={courseMap[key]}
               credits={creditsMap[key]}
-              locked={entry.locked}
+              locked={locked}
               season={season}
               isDragging={draggingId === key}
-              onRemove={entry.locked ? undefined : () => onRemoveCourse(key)}
+              onRemove={locked ? undefined : () => onRemoveCourse(key)}
               onToggleLock={() => onToggleLock(key)}
             />
           );

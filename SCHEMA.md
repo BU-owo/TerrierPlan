@@ -90,11 +90,13 @@ requirement-checking, no rules engine yet).
 | lastFetched | timestamp | |
 
 ### `users/{uid}`
-| Field | Type |
-|---|---|
-| displayName | string |
-| email | string |
-| createdAt | timestamp |
+| Field | Type | Notes |
+|---|---|---|
+| displayName | string | |
+| email | string | |
+| createdAt | timestamp | |
+| currentSemesterTarget | number \| string \| null | Student-reported "I am currently in this semester" marker. A number is a `semesters` index (see the plan doc below); a `summer:{year}` string is a Summer slot in `gridSummerTerms`. A fact about the *student*, not any one plan — shared by every plan of theirs (see `completedCourseKeys`), loaded once at sign-in and left untouched by switching or creating plans. `null` means none set. See `getSemesterStatus` in `courseEntry.js`. |
+| completedCourseKeys | courseKey[] | Courses the student has locked/marked complete — also shared across every plan (locking a course in one plan locks it everywhere that courseKey appears). Setting `currentSemesterTarget` auto-adds every course in the active plan's now-past slots here, once; the student can freely remove any of them again (per-course or per-semester, see SemesterColumn's lock toggle). Drives the Requirements/HUB/Credits "Completed" chip as a fallback for courses that aren't chronologically past — see `describeLockStatus` in `treeHelpers.js`. |
 
 ### `users/{uid}/plans/{planId}`
 | Field | Type | Notes |
@@ -112,6 +114,8 @@ requirement-checking, no rules engine yet).
 | requirementOverrides | map | Student-reported waive/substitute exceptions to the major requirements tree (see below). **Never** treated as verified — informational only, no approval workflow. |
 | stash | courseKey[] | Saved-for-later courses (the planner's "Paw-tential Courses" tab), kept separate from `semesters`/`extraTerms`. Not counted toward HUB, credits, or requirements — purely a bookmark list. |
 | createdAt, updatedAt | timestamp | |
+
+Note: `currentSemesterTarget` and `completedCourseKeys` (locking) live on the parent `users/{uid}` doc, not here — see above. They're facts about the student, not about any individual plan.
 
 #### `extraTerms[]` entry
 | Field | Type | Notes |
