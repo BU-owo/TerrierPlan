@@ -60,6 +60,16 @@
 }
 .app-header-nav-link:hover { color: #fff; }
 .app-header-nav-link.active { background: rgba(255,255,255,.22); color: #fff; }
+.app-header-nav-home { display: inline-flex; align-items: center; }
+.app-header-nav-home-icon { display: none; }
+/* Phones: Home collapses to a house icon and all three items tighten up,
+   so the added Home item doesn't push "Sign in" off a 375px screen. */
+@media (max-width: 600px) {
+  /* Nested selector so this outranks the 860px rule further down. */
+  .app-header-nav .app-header-nav-link { padding: 5px 5px; }
+  .app-header-nav-home-icon { display: block; }
+  .app-header-nav-home-label { display: none; }
+}
 
 .planner-header-center {
   flex: 1;

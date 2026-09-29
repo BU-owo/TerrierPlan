@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
+import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import PlannerPage from './pages/PlannerPage';
 import SchedulerPage from './pages/SchedulerPage';
@@ -22,6 +23,7 @@ function AppRoutes({ theme, onToggleTheme }) {
     <div className="app-shell">
       <div className="app-shell-routes">
         <Routes>
+          <Route path="/" element={<HomePage theme={theme} onToggleTheme={onToggleTheme} />} />
           <Route path="/login" element={<LoginPage theme={theme} onToggleTheme={onToggleTheme} />} />
           <Route path="/planner" element={<PlannerPage theme={theme} onToggleTheme={onToggleTheme} />} />
           <Route path="/scheduler" element={<SchedulerPage theme={theme} onToggleTheme={onToggleTheme} />} />

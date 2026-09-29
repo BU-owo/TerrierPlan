@@ -1,0 +1,421 @@
+/* ===== HOMEPAGE (/) =====
+   Lives inside .app-shell-routes (the shell's scrolling middle region — see
+   App.css), so the page just flows at its natural height and scrolls there;
+   no height/overflow of its own, which would add a second scrollbar. */
+
+.home-page {
+  /* Plate behind the Rhett illustrations. The drawings are heavy black
+     outlines with a near-black dog, so in dark mode they need a light
+     surface to stay legible — a warm cream plate rather than the dark
+     --cream-dark token. */
+  --home-plate: var(--cream-dark);
+  --home-plate-ring: var(--border);
+  min-height: 100%;
+  background: var(--cream);
+  color: var(--text);
+}
+html[data-theme='dark'] .home-page {
+  --home-plate: #E9E3D6;
+  --home-plate-ring: #3a4a60;
+}
+
+/* ── Top bar: same permanent scarlet bar as the planner header ── */
+.home-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 52px;
+  padding: 0 16px;
+  background: var(--scarlet);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,.2);
+}
+.home-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.3px;
+  white-space: nowrap;
+}
+.home-topbar-brand img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+}
+.home-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.home-topbar-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255,255,255,.7);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 13px;
+  transition: background .15s;
+}
+.home-topbar-link:hover { background: rgba(255,255,255,.16); }
+/* Same look as the planner header's .header-help-btn (planner.css): an
+   opaque near-white badge so it reads as a findable landmark next to the
+   ghost-style theme toggle. Sized to match this bar's 36px controls. */
+.home-help-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255,255,255,.55);
+  border-radius: 50%;
+  background: rgba(255,255,255,.85);
+  color: var(--scarlet);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.home-help-btn:hover { background: #fff; }
+.home-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255,255,255,.55);
+  border-radius: 50%;
+  background: rgba(255,255,255,.1);
+  color: #fff;
+  flex-shrink: 0;
+}
+.home-theme-toggle:hover { background: rgba(255,255,255,.22); }
+.home-topbar a:focus-visible,
+.home-help-btn:focus-visible,
+.home-theme-toggle:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* ── Hero ── */
+.home-hero {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 56px 20px 48px;
+  text-align: center;
+}
+.home-hero-logo {
+  width: 88px;
+  height: 88px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto 14px;
+}
+.home-hero-title {
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -1px;
+  color: var(--scarlet);
+  margin-bottom: 14px;
+}
+.home-hero-tagline {
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  max-width: 560px;
+  margin: 0 auto 28px;
+}
+.home-app-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+.home-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 220px;
+  min-height: 56px;
+  padding: 0 28px;
+  border-radius: var(--radius-md);
+  font-size: 17px;
+  font-weight: 700;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+}
+.home-btn:focus-visible {
+  outline: 2px solid var(--scarlet);
+  outline-offset: 3px;
+}
+.home-btn-primary {
+  background: var(--scarlet);
+  color: #fff;
+  border: 1.5px solid var(--scarlet);
+  box-shadow: var(--shadow-sm);
+}
+.home-btn-primary:hover {
+  background: var(--scarlet-dark);
+  border-color: var(--scarlet-dark);
+}
+.home-btn-secondary {
+  background: var(--white);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+}
+.home-btn-secondary:hover {
+  border-color: var(--text-muted);
+  box-shadow: var(--shadow-sm);
+}
+
+
+/* Guests only: a quieter sign-in path under the two big buttons. */
+.home-signin-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 10px;
+  padding: 0 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.home-signin-link:hover { color: var(--scarlet); }
+.home-signin-link:focus-visible {
+  outline: 2px solid var(--scarlet);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* ── Feature sections: alternating cream / white bands ── */
+.home-feature {
+  border-top: 1px solid var(--border-light);
+  background: var(--white);
+}
+.home-feature.is-flipped { background: var(--cream); }
+.home-feature-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 56px 24px;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+}
+.home-feature.is-flipped .home-feature-inner {
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+.home-feature.is-flipped .home-feature-art { order: 2; }
+
+.home-feature-art {
+  position: sticky;
+  top: 76px; /* clears the 52px sticky top bar */
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--home-plate);
+  box-shadow: 0 0 0 6px var(--home-plate-ring) inset, var(--shadow-xs);
+  padding: 22px;
+}
+.home-feature-art img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.home-feature-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -.5px;
+  line-height: 1.2;
+  color: var(--text);
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 3px solid var(--scarlet);
+  display: inline-block;
+}
+
+.home-feature-list {
+  list-style: none;
+  column-count: 2;
+  column-gap: 32px;
+}
+.home-feature-item {
+  break-inside: avoid;
+  padding: 7px 0;
+}
+.home-feature-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.home-feature-line p {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.home-mark {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  padding: 1px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--scarlet);
+}
+.home-feature-item.is-soon .home-mark {
+  color: var(--text-muted);
+  background: transparent;
+  box-shadow: 0 0 0 1.5px var(--border) inset;
+}
+.home-feature-item.is-soon .home-feature-line p { color: var(--text-secondary); }
+
+.home-soon-badge {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border-radius: 20px;
+  background: var(--badge-warm-bg);
+  color: var(--badge-warm-text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  text-transform: uppercase;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+
+.home-feature-sublist {
+  list-style: none;
+  margin: 6px 0 0 28px;
+  padding-left: 12px;
+  border-left: 2px solid var(--scarlet-light);
+}
+.home-feature-sublist li {
+  position: relative;
+  padding: 3px 0 3px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.home-feature-sublist li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: .72em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--scarlet);
+}
+
+/* ── Closing section: help wording + the same two big buttons ── */
+.home-closing {
+  border-top: 1px solid var(--border-light);
+  background: var(--scarlet-pale);
+  padding: 56px 20px 64px;
+  text-align: center;
+}
+.home-closing-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -.5px;
+  color: var(--scarlet);
+  margin-bottom: 12px;
+}
+.home-closing-intro {
+  max-width: 560px;
+  margin: 0 auto 22px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.home-closing-contact {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 36px;
+}
+/* Mirrors HelpSupportModal.css's .help-secondary-btn / .help-discord-btn,
+   with a taller hit area for touch. */
+.home-contact-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+.home-contact-email { background: var(--scarlet); }
+.home-contact-email:hover { background: var(--scarlet-dark); }
+.home-contact-discord { background: #5865F2; }
+.home-contact-discord:hover { background: #4752C4; }
+.home-contact-btn:focus-visible {
+  outline: 2px solid var(--scarlet);
+  outline-offset: 2px;
+}
+
+/* ── Narrower screens ── */
+@media (max-width: 960px) {
+  .home-feature-list { column-count: 1; }
+  .home-feature-inner,
+  .home-feature.is-flipped .home-feature-inner {
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 36px;
+  }
+  .home-feature.is-flipped .home-feature-inner {
+    grid-template-columns: minmax(0, 1fr) 220px;
+  }
+}
+
+@media (max-width: 680px) {
+  .home-hero { padding: 40px 16px 36px; }
+  .home-hero-logo { width: 72px; height: 72px; }
+  .home-hero-title { font-size: 36px; }
+  .home-hero-tagline { font-size: 16px; }
+  .home-app-buttons { flex-direction: column; align-items: stretch; }
+  .home-btn { min-width: 0; }
+  .home-closing { padding: 40px 16px 48px; }
+  .home-closing-title { font-size: 24px; }
+  .home-closing-contact { flex-direction: column; align-items: stretch; }
+  .home-contact-btn { justify-content: center; }
+
+  .home-feature-inner,
+  .home-feature.is-flipped .home-feature-inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    padding: 40px 16px;
+  }
+  .home-feature.is-flipped .home-feature-art { order: 0; }
+  .home-feature-art {
+    position: static;
+    width: 180px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  .home-feature-title { font-size: 24px; }
+}
+
+@media (max-width: 400px) {
+  .home-topbar { padding: 0 12px; }
+  .home-topbar-link { padding: 0 10px; }
+}
+
+/* Signed in, the bar carries Planner + Scheduler + ? + theme; on the
+   narrowest phones there isn't room for the wordmark too, so the logo
+   mark alone stands in for it. */
+@media (max-width: 440px) {
+  .home-topbar.is-signed-in .home-topbar-brand-text { display: none; }
+}

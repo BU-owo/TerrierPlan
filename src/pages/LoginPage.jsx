@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '../firebase';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import HelpSupportModal from '../components/HelpSupportModal';
 
 export default function LoginPage({ theme = 'light', onToggleTheme }) {
@@ -27,6 +27,7 @@ export default function LoginPage({ theme = 'light', onToggleTheme }) {
 
   return (
     <div className="login-page">
+      <Link to="/" className="login-back-link">← Back to home</Link>
       <div className="login-header-actions">
         <button
           type="button"
@@ -97,6 +98,30 @@ export default function LoginPage({ theme = 'light', onToggleTheme }) {
           display: flex;
           gap: 8px;
           z-index: 10;
+        }
+        /* Top-left counterpart to the top-right actions. Plain white text on
+           the scarlet gradient: ~5.9:1 on #CC0000, higher on the darker end. */
+        .login-back-link {
+          position: fixed;
+          top: 16px;
+          left: 16px;
+          z-index: 10;
+          display: inline-flex;
+          align-items: center;
+          min-height: 37px;
+          padding: 0 10px;
+          border-radius: 6px;
+          color: #fff;
+          font-weight: 600;
+        }
+        .login-back-link:hover {
+          background: rgba(0,0,0,.15);
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+        .login-back-link:focus-visible {
+          outline: 2px solid #fff;
+          outline-offset: 2px;
         }
         .login-help-btn,
         .login-theme-toggle {
