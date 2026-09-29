@@ -898,6 +898,38 @@ html[data-theme='dark'] {
   font-weight: 600;
   color: var(--text-secondary);
 }
+/* Key for the grid-block action buttons. Icon circles mirror
+   .sched-grid-block-action-btn's size/shape, but with a border instead of
+   its translucent fill, which only reads on top of a colored block. */
+.sched-block-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: -4px 0 10px;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.sched-block-key-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.sched-block-key-icon {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--white);
+  line-height: 1;
+}
+.sched-block-key-icon-x { font-size: 12px; }
+.sched-block-key-mobile { display: none; }
 .sched-color-popover {
   position: absolute;
   top: calc(100% + 6px);
@@ -1498,4 +1530,6 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   .sched-swap-sheet-overlay {
     display: flex;
   }
+  .sched-block-key-desktop { display: none; }
+  .sched-block-key-mobile { display: inline; }
 }

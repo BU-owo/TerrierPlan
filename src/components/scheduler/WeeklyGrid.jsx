@@ -290,6 +290,28 @@ export default function WeeklyGrid({
           </div>
         ))}
       </div>
+      {/* Always-visible key for the block action buttons below — the title
+          tooltips are hover-only, so they never reach touch users. Reuses
+          the same glyphs so the key can't drift from the buttons. */}
+      {legendCourses.length > 0 && (
+        <ul className="sched-block-key">
+          <li className="sched-block-key-item">
+            <span className="sched-block-key-icon" aria-hidden="true"><PinIcon /></span>
+            Lock this section into every schedule
+          </li>
+          <li className="sched-block-key-item">
+            <span className="sched-block-key-icon" aria-hidden="true"><SwapIcon /></span>
+            {/* Mobile gets SectionSwapSheet's list instead of ghosts (see
+                scheduler.css's 860px breakpoint), so the wording follows. */}
+            <span className="sched-block-key-desktop">Overlay other sections on your schedule</span>
+            <span className="sched-block-key-mobile">See other sections for this class</span>
+          </li>
+          <li className="sched-block-key-item">
+            <span className="sched-block-key-icon sched-block-key-icon-x" aria-hidden="true">×</span>
+            Remove from consideration
+          </li>
+        </ul>
+      )}
       <div className="sched-grid-header">
         <div className="sched-grid-time-gutter" />
         {days.map((d) => (
@@ -355,8 +377,8 @@ export default function WeeklyGrid({
                             e.stopPropagation();
                             onOpenSwap(section.courseKey, classifyComponent(section), section.id);
                           }}
-                          aria-label={`Browse other sections for ${courseCode}'s ${section.componentLabel || 'section'}`}
-                          title="Browse every other available section for this slot"
+                          aria-label={`Overlay other sections for ${courseCode}'s ${section.componentLabel || 'section'} as ghosts on your schedule`}
+                          title="Overlay other sections as ghosts on your schedule. Click one to swap it in"
                         >
                           <SwapIcon />
                         </button>
