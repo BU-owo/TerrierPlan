@@ -258,33 +258,53 @@ export default function ImportTranscriptModal({
           {error && <p className="import-error">{error}</p>}
 
           {step === 0 && (
-            <div
-              className={`import-dropzone ${dragOver ? 'drag-over' : ''}`}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={onDrop}
-              onClick={() => inputRef.current?.click()}
-            >
-              <input
-                ref={inputRef}
-                type="file"
-                accept="application/pdf,.pdf"
-                hidden
-                onChange={(e) => handleFile(e.target.files?.[0])}
-              />
-              {parsing ? (
-                <p>Parsing transcript…</p>
-              ) : (
-                <>
-                  <p className="import-dropzone-title">Drop your unofficial transcript PDF here</p>
-                  <p className="import-dropzone-hint">or click to choose a file</p>
-                  <p className="import-dropzone-hint">
-                    Get it from MyBU → Academics → View Unofficial Transcript → View PDF, then download it.
-                  </p>
-                  {fileName && <p className="import-filename">{fileName}</p>}
-                </>
-              )}
-            </div>
+            <>
+              <div
+                className={`import-dropzone ${dragOver ? 'drag-over' : ''}`}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                onClick={() => inputRef.current?.click()}
+              >
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  hidden
+                  onChange={(e) => handleFile(e.target.files?.[0])}
+                />
+                {parsing ? (
+                  <p>Parsing transcript…</p>
+                ) : (
+                  <>
+                    <svg className="import-dropzone-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                      <path d="M14 3v5h5" />
+                      <path d="M12 17v-6" />
+                      <path d="M9.5 13.5 12 11l2.5 2.5" />
+                    </svg>
+                    <p className="import-dropzone-title">Drop your unofficial transcript PDF here</p>
+                    {/* No handler of its own: the click bubbles to the dropzone, which opens the picker. */}
+                    <button type="button" className="import-secondary-btn import-dropzone-btn">
+                      Choose file
+                    </button>
+                    <p className="import-dropzone-hint">
+                      Get it from MyBU → Academics → View Unofficial Transcript → View PDF, then download it.
+                    </p>
+                    {fileName && <p className="import-filename">{fileName}</p>}
+                  </>
+                )}
+              </div>
+              <p className="import-dropzone-privacy">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="4" y="11" width="16" height="10" rx="2" />
+                  <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                </svg>
+                <span>
+                  Your transcript is read in your browser and never uploaded. Only the courses, test/transfer credits, and GPA totals you confirm are saved.
+                </span>
+              </p>
+            </>
           )}
 
           {step === 1 && preview && (

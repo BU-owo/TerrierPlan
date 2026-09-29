@@ -2869,7 +2869,18 @@
 .import-modal-header, .import-modal-footer { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
 .import-modal-header h2 { margin: 0; font-size: 20px; }.import-modal-footer { border-top: 1px solid var(--border); border-bottom: 0; }.import-close-btn { border: 0; background: transparent; color: var(--text-secondary); font-size: 24px; cursor: pointer; }.import-close-btn:hover { color: var(--text); }.import-modal-body { overflow: auto; padding: 20px; }
 .import-steps { display: flex; gap: 18px; padding: 10px 20px; border-bottom: 1px solid var(--border); }.import-step { color: var(--text-secondary); font-size: 12px; }.import-step.active { color: var(--scarlet); font-weight: 700; }.import-step-num { margin-right: 5px; }
-.import-dropzone { padding: 56px 20px; border: 2px dashed var(--border); border-radius: 10px; text-align: center; cursor: pointer; }.import-dropzone.drag-over { border-color: var(--scarlet); background: var(--scarlet-pale); }.import-dropzone-title, .import-success-title { margin: 0; font-weight: 700; }.import-dropzone-hint, .import-muted, .import-section-note { color: var(--text-secondary); font-size: 13px; }
+.import-dropzone { display: flex; flex-direction: column; align-items: center; padding: 24px 20px; border: 2px dashed var(--border); border-radius: 10px; text-align: center; cursor: pointer; transition: border-color .15s, background-color .15s; }.import-dropzone:hover { border-color: var(--text-muted); }.import-dropzone.drag-over { border-color: var(--scarlet); background: var(--scarlet-pale); }
+/* Children stop catching pointer events mid-drag so dragleave doesn't fire when the cursor crosses them. */
+.import-dropzone.drag-over > * { pointer-events: none; }
+.import-dropzone-icon { margin-bottom: 10px; color: var(--text-muted); }
+.import-dropzone.drag-over .import-dropzone-icon { color: var(--scarlet); }
+.import-dropzone .import-dropzone-title { font-size: 15px; }
+.import-dropzone-btn { margin-top: 12px; }
+.import-dropzone .import-dropzone-hint { max-width: 42ch; margin: 12px 0 0; font-size: 12px; line-height: 1.45; }
+.import-dropzone .import-filename { margin: 8px 0 0; }
+.import-dropzone-privacy { display: flex; align-items: flex-start; gap: 6px; margin: 10px 2px 0; color: var(--text-secondary); font-size: 12.5px; line-height: 1.45; }
+.import-dropzone-privacy svg { flex-shrink: 0; margin-top: 2px; }
+.import-dropzone-title, .import-success-title { margin: 0; font-weight: 700; }.import-dropzone-hint, .import-muted, .import-section-note { color: var(--text-secondary); font-size: 13px; }
 .import-error { color: var(--warning-text); }.import-review-toolbar, .import-transfer-fields { display: flex; gap: 10px; align-items: center; }.import-row-main { display: flex; gap: 10px; align-items: baseline; }.import-review-toolbar { justify-content: space-between; flex-wrap: wrap; }.import-section { margin-top: 22px; }.import-section h3 { margin: 0; font-size: 15px; }
 .import-term-heading {
   display: flex;
