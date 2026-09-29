@@ -250,7 +250,7 @@ export default function WeeklyGrid({
       {swapSlot && (
         <div className="sched-swap-banner">
           <span className="sched-swap-banner-title">
-            Browsing {swapComponentLabel} sections for <strong>{swapCourseCode}</strong> — click one to swap it in
+            Showing other {swapComponentLabel} sections for <strong>{swapCourseCode}</strong> as ghosts. Click one to swap it in
           </span>
           <label className="sched-swap-banner-toggle">
             <input type="checkbox" checked={swapIgnoreFilters} onChange={onToggleSwapIgnoreFilters} />
