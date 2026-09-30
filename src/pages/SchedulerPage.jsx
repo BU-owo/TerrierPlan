@@ -1,6 +1,4 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Fragment } from 'react';
-import { Link } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
 import {
   collection,
   doc,
@@ -14,9 +12,9 @@ import {
   documentId,
   serverTimestamp,
 } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
-import HeaderNav from '../components/HeaderNav';
+import AppHeader from '../components/AppHeader';
 import HelpSupportModal from '../components/HelpSupportModal';
 import SchedulerSearch from '../components/scheduler/SchedulerSearch';
 import DraftCourseCard from '../components/scheduler/DraftCourseCard';
@@ -986,61 +984,12 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   return (
     <div className="planner-layout">
-      <header className="planner-header">
-        <div className="planner-header-logo">
-          <img src="/faviconred.png" alt="" width={18} height={18} />
-          TerrierPlan
-        </div>
-
-        <HeaderNav active="scheduler" />
-
-        <div className="planner-header-center">
-          {user ? (
-            <span className="sched-term-badge">{CURRENT_TERM_LABEL}</span>
-          ) : (
-            <div className="planner-guest-label">
-              Browsing as guest — sign in to save your schedules
-            </div>
-          )}
-        </div>
-
-        <div className="planner-header-user">
-          <button
-            type="button"
-            className="header-help-btn"
-            onClick={() => setShowHelpModal(true)}
-            aria-label="Help & feedback"
-            title="Help & feedback"
-          >
-            ?
-          </button>
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={onToggleTheme}
-            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-          >
-            {theme === 'dark' ? '☀' : '☾'}
-          </button>
-          {user?.photoURL && (
-            <img className="planner-header-avatar" src={user.photoURL} alt="" referrerPolicy="no-referrer" />
-          )}
-          {user ? (
-            <>
-              <span className="planner-header-name">{user?.displayName?.split(' ')[0]}</span>
-              <button className="btn-signout" onClick={() => signOut(auth)} title="Sign out">
-                <span className="btn-signout-icon" aria-hidden="true">Out</span>
-                <span className="btn-signout-label">Sign out</span>
-              </button>
-            </>
-          ) : (
-            <Link className="btn-signin" to="/login">
-              Sign in
-            </Link>
-          )}
-        </div>
-      </header>
+      <AppHeader
+        active="scheduler"
+        theme={theme}
+        onToggleTheme={onToggleTheme}
+        onOpenHelp={() => setShowHelpModal(true)}
+      />
 
       <div className="scheduler-body" data-mobile-view={mobileView}>
         <aside className="scheduler-left">

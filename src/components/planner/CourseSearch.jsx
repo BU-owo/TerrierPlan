@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { parseCourseKey, normalizeCourseKey } from '../../utils/courseKey';
-import { loadAllCourses } from '../../utils/courseQuery';
+import { loadAllCoursesWhenRequested, requestCatalogLoad } from '../../utils/courseQuery';
 import { getOfferingBadge } from '../../utils/offeringPattern';
 import SemesterPickerModal from './SemesterPickerModal';
 
@@ -319,12 +319,14 @@ export default function CourseSearch({
     }
   }, [rangeFilter]);
 
-  // Load all courses once on first mount — shared cache (see courseQuery.js)
-  // so this and the HUB Tracker's department browse panel don't each open
-  // their own Firestore read of the same collection.
+  // Load all courses once — shared cache (see courseQuery.js) so this and
+  // the HUB Tracker's department browse panel don't each open their own
+  // Firestore read of the same collection. Subscribed on mount, but the
+  // download itself waits for the catalog gate (see requestCatalogLoad) so
+  // it doesn't hold up the signed-in plan load.
   useEffect(() => {
     let cancelled = false;
-    loadAllCourses()
+    loadAllCoursesWhenRequested()
       .then((courses) => {
         if (cancelled) return;
         setAllCourses(courses);
@@ -460,6 +462,12 @@ export default function CourseSearch({
   const hasActiveQuery = Boolean(searchQuery.trim()) || hubFilters.length > 0 || Boolean(rangeFilter);
   const stashSet = useMemo(() => new Set(stash), [stash]);
 
+  // A search started some other way than the search box (HUB filter, or
+  // "Browse eligible courses" setting rangeFilter) needs the catalog now too.
+  useEffect(() => {
+    if (hasActiveQuery) requestCatalogLoad();
+  }, [hasActiveQuery]);
+
   return (
     <div className="search-panel">
       <div className="search-panel-header">
@@ -471,6 +479,7 @@ export default function CourseSearch({
             placeholder="e.g. CAS CS 111 or Calculus"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={requestCatalogLoad}
             autoComplete="off"
             spellCheck={false}
           />
@@ -517,7 +526,13 @@ export default function CourseSearch({
       <div className="search-results">
         {loading && <div className="search-loading">Searching…</div>}
 
-        {!loading && hasActiveQuery && results.length === 0 && (
+        {/* The filter effect bails out until the catalog arrives, so without
+            this an early search would read as "no results". */}
+        {hasActiveQuery && !coursesLoaded && (
+          <div className="search-loading" role="status">Loading courses…</div>
+        )}
+
+        {!loading && hasActiveQuery && coursesLoaded && results.length === 0 && (
           <div className="search-empty">
             <img
               className="search-empty-paw"

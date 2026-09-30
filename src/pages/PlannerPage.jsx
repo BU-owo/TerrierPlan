@@ -36,8 +36,9 @@ import BulletinPanel from '../components/planner/BulletinPanel';
 import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
 import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
 import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
-import HeaderNav from '../components/HeaderNav';
+import AppHeader from '../components/AppHeader';
 import HelpSupportModal from '../components/HelpSupportModal';
+import { requestCatalogLoad } from '../utils/courseQuery';
 import { normalizeExternalCredits, normalizeExternalCredit } from '../utils/externalCredits';
 import {
   normalizeSemesters,
@@ -121,6 +122,16 @@ function semestersFromFirestore(stored) {
 // migrate (and clear localStorage) once per guest session → sign-in.
 let guestMigrationPromise = null;
 const DEBUG_IMPORT = import.meta.env.DEV;
+const DEBUG_LOAD_TIMING = import.meta.env.DEV; // TEMP-TIMING
+
+// Timestamped [load] log for sub-steps that can run concurrently under // TEMP-TIMING
+// StrictMode (console.time labels would collide). `since` is a // TEMP-TIMING
+// performance.now() start value; omit it for a point-in-time mark. // TEMP-TIMING
+function loadLog(label, since) { // TEMP-TIMING
+  if (!DEBUG_LOAD_TIMING) return; // TEMP-TIMING
+  const now = performance.now(); // TEMP-TIMING
+  console.log(`[load] ${label} @${Math.round(now)}ms${since != null ? ` (took ${Math.round(now - since)}ms)` : ''}`); // TEMP-TIMING
+} // TEMP-TIMING
 
 function debugPlanner(stage, payload) {
   if (!DEBUG_IMPORT) return;
@@ -139,6 +150,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // ── Plan list ─────────────────────────────────────────────────────────────
   const [plans, setPlans] = useState([]);
   const [activePlanId, setActivePlanId] = useState(null);
+  // Set when the signed-in initial load (loadPlans/loadPlan) fails, so the
+  // board shows an error instead of "Loading your plans…" forever. Only
+  // shown while no plan has loaded yet (see plansPending below).
+  const [planLoadError, setPlanLoadError] = useState(false);
   const [planName, setPlanName] = useState('My Plan');
   const [semesters, setSemesters] = useState(EMPTY_SEMESTERS);
   // { [year]: courseEntry[] } — a year's optional Summer slot, keyed by
@@ -261,15 +276,26 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       // for it yet, so block the autosave effect until loadUserProfile below
       // actually finishes.
       profileLoadedForUid.current = null;
+      setPlanLoadError(false);
+
+      // Per-run labels so StrictMode's double-invoked effect doesn't collide. // TEMP-TIMING
+      const run = Math.random().toString(36).slice(2, 6); // TEMP-TIMING
+      const timeStart = (step) => { if (DEBUG_LOAD_TIMING) console.time(`[load ${run}] ${step}`); }; // TEMP-TIMING
+      const timeEnd = (step) => { if (DEBUG_LOAD_TIMING) console.timeEnd(`[load ${run}] ${step}`); }; // TEMP-TIMING
+      if (DEBUG_LOAD_TIMING) console.log(`[load ${run}] initForUser start @${Math.round(performance.now())}ms`); // TEMP-TIMING
+      timeStart('total'); // TEMP-TIMING
 
       // 1. Migrate guest plan BEFORE loadPlans/createDefaultPlan
+      timeStart('1 migrate'); // TEMP-TIMING
       const migratedId = await migrateGuestPlanIfNeeded(uid);
+      timeEnd('1 migrate'); // TEMP-TIMING
       if (cancelled) return;
 
       // 1b. Load the student-level profile (current semester + completed
       // courses) once per sign-in — not per plan, and not re-run by
       // handleSelectPlan/handleNewPlan, which is what makes it carry across
       // every plan instead of resetting with each one.
+      timeStart('2 profile'); // TEMP-TIMING
       try {
         await loadUserProfile(uid);
       } catch (err) {
@@ -281,18 +307,25 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         // session won't reach Firestore until a reload retries the load.
         console.warn('⚠️  Profile writes disabled this session — profile failed to load');
       }
+      timeEnd('2 profile'); // TEMP-TIMING
       if (cancelled) return;
 
       // 2. Load existing plans (migrated doc is additive — never overwrites)
       let list = [];
+      timeStart('3 plans'); // TEMP-TIMING
       try {
         list = await loadPlans(uid);
       } catch (err) {
         console.error('Error loading plans:', err);
+        timeEnd('3 plans'); // TEMP-TIMING
+        if (!cancelled) setPlanLoadError(true);
         return;
       }
+      timeEnd('3 plans'); // TEMP-TIMING
+      if (DEBUG_LOAD_TIMING) console.log(`[load ${run}] ${list.length} plans listed`); // TEMP-TIMING
       if (cancelled) return;
 
+      timeStart('4 plan'); // TEMP-TIMING
       if (migratedId) {
         await loadPlan(uid, migratedId, list);
       } else if (list.length === 0) {
@@ -300,10 +333,17 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       } else {
         await loadPlan(uid, list[0].id, list);
       }
+      timeEnd('4 plan'); // TEMP-TIMING
+      timeEnd('total'); // TEMP-TIMING
     }
 
     if (user) {
-      initForUser(user.uid);
+      // loadPlan/createDefaultPlan don't catch their own errors — without
+      // this the board would sit on "Loading your plans…" forever.
+      initForUser(user.uid).catch((err) => {
+        console.error('Error loading plan:', err);
+        if (!cancelled) setPlanLoadError(true);
+      });
     } else {
       // Signed out — allow a future sign-in to migrate a new guest plan
       guestMigrationPromise = null;
@@ -326,6 +366,16 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   useEffect(() => {
     hasUnsavedChanges.current = isDirty;
   }, [isDirty]);
+
+  // ── Start the course catalog download once a plan is showing ─────────────
+  // Same "plan ready" signal as plansPending/the `?view=` effect below.
+  // Guests have no plans to wait for, so for them this fires as soon as auth
+  // resolves (i.e. at mount, as before). CourseSearch can also open the gate
+  // earlier if the student starts searching — see requestCatalogLoad.
+  useEffect(() => {
+    if (authLoading || (user && !activePlanId)) return;
+    requestCatalogLoad();
+  }, [authLoading, user, activePlanId]);
 
   // ── Apply `?view=requirements` once plan data is actually ready ───────────
   // Waits for the signed-in plan load (activePlanId set) or the guest local
@@ -779,11 +829,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // can easily have already migrated the latter in an earlier session while
   // still missing externalCredits, since that field is newer.
   async function loadUserProfile(uid) {
+    const profileReadStart = performance.now(); // TEMP-TIMING
     const snap = await getDoc(doc(db, 'users', uid));
     const data = snap.exists() ? snap.data() : null;
     const hasAccountProfile = data != null && Object.prototype.hasOwnProperty.call(data, 'completedCourseKeys');
     const hasAccountExternalCredits = data != null && Object.prototype.hasOwnProperty.call(data, 'externalCredits');
     const hasLocalProfile = localStorage.getItem(PROFILE_STORAGE_KEY) != null;
+    loadLog(`2a profile doc read — hasExternalCredits=${hasAccountExternalCredits} hasLocalProfile=${hasLocalProfile}`, profileReadStart); // TEMP-TIMING
     const local = hasLocalProfile ? loadLocalProfile() : null;
 
     // --- currentSemesterTarget / completedCourseKeys ---
@@ -815,7 +867,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     if (hasAccountExternalCredits) {
       externalCredits = normalizeExternalCredits(data.externalCredits);
     } else {
+      const migrateStart = performance.now(); // TEMP-TIMING
       externalCredits = await migratePlanExternalCredits(uid);
+      loadLog('2b migratePlanExternalCredits', migrateStart); // TEMP-TIMING
       needsPersist = true;
     }
     if (hasLocalProfile) {
@@ -843,7 +897,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     if (needsPersist) {
       // Persist the merged/migrated result before dropping the local copy —
       // if the write fails, leave the guest data in place rather than lose it.
+      const persistStart = performance.now(); // TEMP-TIMING
       const persisted = await persistProfile(uid, { currentSemesterTarget: target, completedCourseKeys: keys, externalCredits });
+      loadLog(`2c persistProfile write — ok=${persisted}`, persistStart); // TEMP-TIMING
       if (persisted && hasLocalProfile) {
         localStorage.removeItem(PROFILE_STORAGE_KEY);
       }
@@ -914,8 +970,16 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   async function loadPlan(uid, planId, list) {
     isInitialLoad.current = true;
+    const planReadStart = performance.now(); // TEMP-TIMING
     const snap = await getDoc(doc(db, 'users', uid, 'plans', planId));
-    if (!snap.exists()) return;
+    loadLog(`4a plan doc read — exists=${snap.exists()}`, planReadStart); // TEMP-TIMING
+    // A missing doc on the initial load would otherwise leave the board on
+    // "Loading your plans…" forever; once a plan is showing, the flag has no
+    // visible effect (the error only renders while activePlanId is null).
+    if (!snap.exists()) {
+      setPlanLoadError(true);
+      return;
+    }
     const data = snap.data();
     const semData = semestersFromFirestore(data.semesters);
     const summerData = normalizeGridSummerTerms(data.gridSummerTerms);
@@ -948,7 +1012,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       ...loadedStash,
     ];
     if (allKeys.length > 0) {
+      const courseDataStart = performance.now(); // TEMP-TIMING
       await fetchCourseData(allKeys);
+      loadLog(`4b fetchCourseData — ${allKeys.length} course keys`, courseDataStart); // TEMP-TIMING
     }
     isInitialLoad.current = false;
   }
@@ -1112,12 +1178,15 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   async function fetchCredits(courseKeys) {
     const missing = courseKeys.filter((k) => !(k in creditsMap));
     if (missing.length === 0) return;
+    const creditsStart = performance.now(); // TEMP-TIMING
     const newCredits = {};
     for (let i = 0; i < missing.length; i += 30) {
       const batch = missing.slice(i, i + 30);
+      const batchStart = performance.now(); // TEMP-TIMING
       const snap = await getDocs(
         query(collection(db, 'sections'), where('courseKey', 'in', batch)),
       );
+      loadLog(`fetchCredits batch — ${snap.size} section docs for ${batch.length} courses`, batchStart); // TEMP-TIMING
       snap.docs.forEach((d) => {
         const { courseKey, credits } = d.data();
         if (!(courseKey in newCredits) && credits != null) {
@@ -1125,6 +1194,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         }
       });
     }
+    loadLog(`fetchCredits total — ${missing.length} courses`, creditsStart); // TEMP-TIMING
     setCreditsMap((prev) => ({ ...prev, ...newCredits }));
   }
 
@@ -1670,6 +1740,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   const totalCredits = planCourseCredits + externalCreditTotal;
 
+  // Signed in but no plan loaded yet (same signal as the `?view=` effect
+  // above) — either still loading or planLoadError. Guests never hit this.
+  const plansPending = Boolean(user) && !activePlanId;
+
   if (authLoading) {
     return (
       <div className="auth-loading">
@@ -1688,112 +1762,56 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   return (
     <div className="planner-layout" onClickCapture={handleInternalLinkClick}>
       {/* ── Header ── */}
-      <header className="planner-header">
-        <div className="planner-header-logo">
-          <img
-            src="/faviconred.png"
-            alt=""
-            width={18}
-            height={18}
-          />
-          TerrierPlan
-        </div>
-
-        <HeaderNav active="planner" />
-
-        <div className="planner-header-center">
-          {user ? (
-            <>
-              <PlanSelector
-                plans={plans}
-                activePlanId={activePlanId}
-                planName={planName}
-                saving={saving}
-                saveStatus={saveStatus}
-                onSelectPlan={handleSelectPlan}
-                onRenamePlan={handleRenamePlan}
-                onNewPlan={handleNewPlan}
-                onDeletePlan={requestDeletePlan}
-              />
-
-              {totalCredits > 0 && (
-                <span className="planner-credits-badge">
-                  {totalCredits} cr total
-                </span>
-              )}
-            </>
-          ) : (
-            <div className="planner-guest-label">
-              Browsing as guest — sign in to save your plans
-            </div>
-          )}
-          <button
-            type="button"
-            className="btn-import-transcript"
-            onClick={() => setShowImportModal(true)}
-            title="Import Transcript"
-          >
-            <span className="btn-import-transcript-icon" aria-hidden="true">Import</span>
-            <span className="btn-import-transcript-label">Import Transcript</span>
-          </button>
-        </div>
-
-        <div className="planner-header-user">
-          <button
-            type="button"
-            className="header-help-btn"
-            onClick={() => setShowHelpModal(true)}
-            aria-label="Help & feedback"
-            title="Help & feedback"
-          >
-            ?
-          </button>
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={onToggleTheme}
-            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-          >
-            {theme === 'dark' ? '☀' : '☾'}
-          </button>
-          {user?.photoURL && (
-            <img
-              className="planner-header-avatar"
-              src={user.photoURL}
-              alt=""
-              referrerPolicy="no-referrer"
+      <AppHeader
+        active="planner"
+        theme={theme}
+        onToggleTheme={onToggleTheme}
+        onOpenHelp={() => setShowHelpModal(true)}
+        onSignOut={() => requestLeave(handleSignOut)}
+        onSignIn={() =>
+          requestLeave(() => {
+            saveLocalPlan();
+            window.location.href = '/login';
+          })
+        }
+      >
+        {/* Plan switcher / new / delete hidden until a plan has loaded, so
+            nothing runs against the half-loaded default state. */}
+        {plansPending ? null : user ? (
+          <>
+            <PlanSelector
+              plans={plans}
+              activePlanId={activePlanId}
+              planName={planName}
+              saving={saving}
+              saveStatus={saveStatus}
+              onSelectPlan={handleSelectPlan}
+              onRenamePlan={handleRenamePlan}
+              onNewPlan={handleNewPlan}
+              onDeletePlan={requestDeletePlan}
             />
-          )}
-          {user ? (
-            <>
-              <span className="planner-header-name">
-                {user?.displayName?.split(' ')[0]}
+
+            {totalCredits > 0 && (
+              <span className="planner-credits-badge">
+                {totalCredits} cr total
               </span>
-              <button
-                className="btn-signout"
-                onClick={() => requestLeave(handleSignOut)}
-                title="Sign out"
-              >
-                <span className="btn-signout-icon" aria-hidden="true">Out</span>
-                <span className="btn-signout-label">Sign out</span>
-              </button>
-            </>
-          ) : (
-            <button
-              className="btn-signin"
-              onClick={() =>
-                requestLeave(() => {
-                  saveLocalPlan();
-                  window.location.href = '/login';
-                })
-              }
-            >
-              Sign in
-            </button>
-          )}
-        </div>
-      </header>
+            )}
+          </>
+        ) : (
+          <div className="planner-guest-label">
+            Browsing as guest — sign in to save your plans
+          </div>
+        )}
+        <button
+          type="button"
+          className="btn-import-transcript"
+          onClick={() => setShowImportModal(true)}
+          title="Import Transcript"
+        >
+          <span className="btn-import-transcript-icon" aria-hidden="true">Import</span>
+          <span className="btn-import-transcript-label">Import Transcript</span>
+        </button>
+      </AppHeader>
 
       {/* ── Body ── */}
       {/* data-mobile-view lets CSS show only one panel at a time on narrow screens */}
@@ -1824,36 +1842,57 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
           {/* Center: semester board */}
           <main className="planner-center">
-            <SemesterBoard
-              semesters={semesters}
-              gridSummerTerms={gridSummerTerms}
-              courseMap={courseMap}
-              creditsMap={creditsMap}
-              activeTarget={activeSemIndex}
-              onSemesterClick={setActiveSemIndex}
-              onRemoveCourse={handleRemoveCourse}
-              onToggleLock={handleToggleLock}
-              onToggleSemesterLock={handleToggleSemesterLock}
-              onToggleSummerYear={handleToggleSummerYear}
-              onAddYear={handleAddYear}
-              draggingId={draggingId}
-              semesterOptions={semesterOptions}
-              currentSemesterTarget={currentSemesterTarget}
-              onSetCurrentSemester={handleSetCurrentSemester}
-              completedCourseKeys={completedCourseKeySet}
-            />
-            <ExtraTermsPanel
-              extraTerms={extraTerms}
-              courseMap={courseMap}
-              creditsMap={creditsMap}
-              onRemoveCourse={handleRemoveExtraTermCourse}
-            />
-            <ExternalCreditsPanel
-              externalCredits={externalCredits}
-              onRemove={handleRemoveExternalCredit}
-              onUpdate={handleUpdateExternalCredit}
-              onAdd={handleAddExternalCredit}
-            />
+            {plansPending ? (
+              planLoadError ? (
+                <div className="planner-plans-status" role="alert">
+                  <p>Couldn&apos;t load your plans. Reload to try again.</p>
+                </div>
+              ) : (
+                <div className="planner-plans-status" role="status" aria-live="polite">
+                  <img
+                    className="auth-loading-paw"
+                    src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
+                    alt=""
+                    width={32}
+                    height={32}
+                  />
+                  <p>Loading your plans…</p>
+                </div>
+              )
+            ) : (
+              <>
+                <SemesterBoard
+                  semesters={semesters}
+                  gridSummerTerms={gridSummerTerms}
+                  courseMap={courseMap}
+                  creditsMap={creditsMap}
+                  activeTarget={activeSemIndex}
+                  onSemesterClick={setActiveSemIndex}
+                  onRemoveCourse={handleRemoveCourse}
+                  onToggleLock={handleToggleLock}
+                  onToggleSemesterLock={handleToggleSemesterLock}
+                  onToggleSummerYear={handleToggleSummerYear}
+                  onAddYear={handleAddYear}
+                  draggingId={draggingId}
+                  semesterOptions={semesterOptions}
+                  currentSemesterTarget={currentSemesterTarget}
+                  onSetCurrentSemester={handleSetCurrentSemester}
+                  completedCourseKeys={completedCourseKeySet}
+                />
+                <ExtraTermsPanel
+                  extraTerms={extraTerms}
+                  courseMap={courseMap}
+                  creditsMap={creditsMap}
+                  onRemoveCourse={handleRemoveExtraTermCourse}
+                />
+                <ExternalCreditsPanel
+                  externalCredits={externalCredits}
+                  onRemove={handleRemoveExternalCredit}
+                  onUpdate={handleUpdateExternalCredit}
+                  onAdd={handleAddExternalCredit}
+                />
+              </>
+            )}
           </main>
 
           {/* Right: HUB / Requirements / Credits status tabs */}

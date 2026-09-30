@@ -2,7 +2,11 @@
 /* Fills .app-shell-routes (see App.jsx/App.css), not the raw viewport —
    App.css's .app-shell is the one that owns 100dvh now, so GlobalFooter
    has room to sit below this without a second outer scrollbar. */
+/* --app-header-h: single source for the header's height, read by
+   .semester-board's viewport-based sizing below (desktop and mobile).
+   Change it here, not in those calc()s, if the header changes size. */
 .planner-layout {
+  --app-header-h: 52px;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -15,7 +19,7 @@
   align-items: center;
   gap: 12px;
   padding: 0 16px;
-  height: 52px;
+  height: var(--app-header-h);
   background: var(--scarlet);
   color: #fff;
   flex-shrink: 0;
@@ -626,8 +630,28 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: calc(100dvh - 52px - 40px);  /* header + bulletin toggle */
+  min-height: calc(100dvh - var(--app-header-h) - 40px);  /* header + bulletin toggle */
   padding-bottom: 14px;
+}
+
+/* Stands in for the board while a signed-in user's plans are loading (or
+   failed to) — see plansPending in PlannerPage.jsx. The paw reuses
+   App.css's .auth-loading-paw bounce. */
+.planner-plans-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 240px;
+  padding: 48px 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+.planner-plans-status[role='alert'] { color: var(--text); }
+@media (max-width: 860px) {
+  .planner-plans-status { flex: 1; }
 }
 
 .year-row {
@@ -3093,7 +3117,7 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   /* Semester board becomes a horizontally swipeable, near-one-card view
      instead of a wide multi-column strip. */
   .semester-board {
-    height: calc(100dvh - 52px - 40px - 54px); /* header + bulletin bar + tab bar */
+    height: calc(100dvh - var(--app-header-h) - 40px - 54px); /* header + bulletin bar + tab bar */
     padding: 0 5vw 14px;
     gap: 12px;
     scroll-snap-type: x proximity;

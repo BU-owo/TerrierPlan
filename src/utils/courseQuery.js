@@ -9,17 +9,43 @@ import { normalizeCourseKey, parseCourseKey } from './courseKey';
 // concurrent callers await the same in-flight request rather than each
 // firing their own.
 let coursesPromise = null;
+const DEBUG_LOAD_TIMING = import.meta.env.DEV; // TEMP-TIMING
 
 export function loadAllCourses() {
   if (!coursesPromise) {
+    const catalogStart = performance.now(); // TEMP-TIMING
+    if (DEBUG_LOAD_TIMING) console.log(`[load] catalog start @${Math.round(catalogStart)}ms`); // TEMP-TIMING
     coursesPromise = getDocs(collection(db, 'courses'))
-      .then((snapshot) => snapshot.docs.map((d) => ({ id: d.id, ...d.data() })))
+      .then((snapshot) => {
+        if (DEBUG_LOAD_TIMING) console.log(`[load] catalog done @${Math.round(performance.now())}ms (took ${Math.round(performance.now() - catalogStart)}ms) — ${snapshot.size} docs`); // TEMP-TIMING
+        return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      })
       .catch((err) => {
         coursesPromise = null; // let the next caller retry instead of caching a failure
         throw err;
       });
   }
   return coursesPromise;
+}
+
+// The catalog is ~8k docs on the same Firestore connection as the signed-in
+// plan load, and downloading it first delays the plans by seconds. So
+// CourseSearch (always mounted on the planner) doesn't start it on mount —
+// it waits for this one-way, session-wide gate, opened by whichever comes
+// first: PlannerPage once a plan is showing (immediately for guests), or
+// the student starting a search. Callers that need the catalog right away
+// (HubFullView) keep calling loadAllCourses() directly.
+let releaseCatalogGate;
+const catalogGate = new Promise((resolve) => {
+  releaseCatalogGate = resolve;
+});
+
+export function requestCatalogLoad() {
+  releaseCatalogGate();
+}
+
+export function loadAllCoursesWhenRequested() {
+  return catalogGate.then(loadAllCourses);
 }
 
 // Valid `mode` values for the `hubUnitCodes` match below.

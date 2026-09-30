@@ -463,6 +463,10 @@ export default function HubFullView({
   // them this session this resolves immediately from that same cached
   // promise instead of firing a second Firestore read.
   const [allCourses, setAllCourses] = useState([]);
+  // Distinguishes "catalog still downloading" from "no matches" in the
+  // results list. Set on failure too, so an error doesn't read as loading
+  // forever (it falls back to the empty-results message, as before).
+  const [coursesLoaded, setCoursesLoaded] = useState(false);
   const [searchPrefix, setSearchPrefix] = useState('');
   const [hubSearchInclude, setHubSearchInclude] = useState([]);
   const [hubSearchExclude, setHubSearchExclude] = useState([]);
@@ -474,6 +478,8 @@ export default function HubFullView({
       if (!cancelled) setAllCourses(courses);
     }).catch((err) => {
       console.error('Failed to load courses for search:', err);
+    }).finally(() => {
+      if (!cancelled) setCoursesLoaded(true);
     });
     return () => {
       cancelled = true;
@@ -833,7 +839,9 @@ export default function HubFullView({
 
             {searchActive && (
               <div className="hub-browse-results">
-                {searchResults.length === 0 ? (
+                {!coursesLoaded ? (
+                  <div className="search-loading" role="status">Loading courses…</div>
+                ) : searchResults.length === 0 ? (
                   <div className="search-empty">
                     No courses match those filters (already-planned courses are left out)
                   </div>
