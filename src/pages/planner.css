@@ -3152,6 +3152,44 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   border-color: var(--scarlet);
   color: var(--scarlet);
 }
+/* "+ Add placeholder" — full-width last row of a semester's list, with the
+   same dashed border as .note-card so it reads as "a placeholder goes
+   here". Kept short and muted so it doesn't crowd a full column. */
+.add-placeholder-row {
+  flex-shrink: 0;
+  width: 100%;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.add-placeholder-row:hover,
+.add-placeholder-row:focus-visible {
+  border-color: var(--scarlet);
+  color: var(--scarlet);
+}
+/* Phones: a real tap target. Columns are ~95px wide here, too narrow for
+   the label on one line, so it wraps to two lines inside the 40px row
+   rather than truncating to "+ Add pla…". */
+@media (max-width: 860px) {
+  .add-placeholder-row {
+    min-height: 40px;
+    padding: 3px 4px;
+    white-space: normal;
+    text-overflow: clip;
+  }
+}
 .add-year-btn:disabled,
 .add-year-btn:disabled:hover {
   opacity: .5;

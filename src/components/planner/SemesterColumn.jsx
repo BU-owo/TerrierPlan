@@ -148,16 +148,18 @@ export default function SemesterColumn({
             {isActive ? 'Search and add a course ↗' : 'Drop courses here'}
           </div>
         )}
+        {/* Last row of the list (inside the droppable, so dropping onto it
+            still lands in this column). */}
         {onAddNote && (
           <button
             type="button"
-            className="add-note-btn"
+            className="add-placeholder-row"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); setNewNoteId(onAddNote()); }}
-            title="Add a placeholder (e.g. an elective you haven't picked yet)"
-            aria-label="Add placeholder"
+            title="Add a placeholder to this semester"
+            aria-label="Add a placeholder to this semester"
           >
-            + Slot
+            + Add placeholder
           </button>
         )}
       </div>
