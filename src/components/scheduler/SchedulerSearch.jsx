@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../firebase';
-import { normalizeCourseKey, parseCourseKey } from '../../utils/courseKey';
+import { normalizeCourseKey, parseCourseKey, compareByCatalogNumber } from '../../utils/courseKey';
+import { loadAllCourses, UNDERGRAD, matchesCareer } from '../../utils/courseQuery';
+import { LevelFilterSelect } from '../planner/CourseSearch';
 
 // Left panel: add a course to the schedule draft. Same normalization/
 // subject-prefix approach as the Planner's CourseSearch (courseKey.js is
@@ -11,17 +11,28 @@ import { normalizeCourseKey, parseCourseKey } from '../../utils/courseKey';
 // just "which sections can I take this term."
 export default function SchedulerSearch({ draftCourseKeys, onAddCourse }) {
   const [query, setQuery] = useState('');
+  const [levelFilter, setLevelFilter] = useState(UNDERGRAD);
   const [allCourses, setAllCourses] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const debounceRef = useRef(null);
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
 
+  // Shared catalog cache (courseQuery.js) — resolves from the same promise
+  // as the planner's search instead of downloading the catalog again.
   useEffect(() => {
-    getDocs(collection(db, 'courses'))
-      .then((snap) => setAllCourses(snap.docs.map((d) => ({ id: d.id, ...d.data() }))))
+    let cancelled = false;
+    loadAllCourses()
+      .then((courses) => {
+        if (!cancelled) setAllCourses(courses);
+      })
       .catch((err) => console.error('Failed to load courses:', err))
-      .finally(() => setLoaded(true));
+      .finally(() => {
+        if (!cancelled) setLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const subjectPrefixes = useMemo(() => {
@@ -51,10 +62,11 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse }) {
       let matches;
       if (isSubjectMode) {
         matches = allCourses
-          .filter((c) => c.id.startsWith(normalizedQuery))
-          .sort((a, b) => (parseCourseKey(a.id)?.number ?? 0) - (parseCourseKey(b.id)?.number ?? 0));
+          .filter((c) => c.id.startsWith(normalizedQuery) && matchesCareer(c, levelFilter))
+          .sort(compareByCatalogNumber);
       } else {
         matches = allCourses.filter((c) => {
+          if (!matchesCareer(c, levelFilter)) return false;
           const normalizedCourseNum = normalizeCourseKey(c.courseNumber || '');
           const normalizedCourseName = (c.name || '').toUpperCase();
           return normalizedCourseNum.includes(normalizedQuery) || normalizedCourseName.includes(normalizedQuery);
@@ -65,7 +77,7 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse }) {
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [query, loaded, allCourses, subjectPrefixes]);
+  }, [query, levelFilter, loaded, allCourses, subjectPrefixes]);
 
   return (
     <div className="search-panel">
@@ -82,6 +94,7 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse }) {
             spellCheck={false}
           />
         </div>
+        <LevelFilterSelect id="sched-level-filter" value={levelFilter} onChange={setLevelFilter} />
       </div>
 
       <div className="search-results">
@@ -114,6 +127,9 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse }) {
                 <div className="search-result-code">{course.courseNumber ?? course.id}</div>
                 <div className="search-result-name-row">
                   <span className="search-result-name">{course.name ?? '—'}</span>
+                  {course.studyAbroad && (
+                    <span className="offering-badge offering-badge-abroad">Study abroad</span>
+                  )}
                 </div>
               </div>
               <span className="sched-search-add-icon" aria-hidden="true">{added ? '✓' : '+'}</span>

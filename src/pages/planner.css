@@ -1075,6 +1075,10 @@
 .offering-badge-neutral { color: var(--text-muted); background: var(--cream-dark); }
 .offering-badge-warn { color: var(--badge-warm-text); background: var(--badge-warm-bg); }
 .offering-badge-rare { color: var(--warning-text); background: var(--warning-surface); }
+/* Study-abroad flag — neutral with an outline so it doesn't read as a HUB
+   chip or an offering warning. */
+.offering-badge-abroad { color: var(--text); background: var(--cream-dark); box-shadow: inset 0 0 0 1px var(--border); }
+.course-card-abroad { display: inline-block; margin-top: 3px; }
 
 /* ===== SIDE PANEL TABS (HUB / Requirements / Credits) ===== */
 /* One panel visible at a time; collapse/expand applies to the whole tabbed

@@ -3,6 +3,7 @@ import { parseTranscriptPdf } from '../../utils/transcriptParser';
 import { buildImportPreview, applyImport } from '../../utils/transcriptMapping';
 import { resolveApHubFromScore } from '../../utils/apScoreResolution';
 import { getApHub, isApScoreDependent } from '../../data/apIbHubCredit';
+import { resolveCourseKeys } from '../../utils/courseQuery';
 
 const STEPS = ['Upload', 'Review', 'Confirm'];
 const DEBUG_IMPORT = import.meta.env.DEV;
@@ -10,6 +11,29 @@ const DEBUG_IMPORT = import.meta.env.DEV;
 function debugImportModal(stage, payload) {
   if (!DEBUG_IMPORT) return;
   console.log(`[DEBUG ImportTranscriptModal] ${stage}`, payload);
+}
+
+// Rewrites parsed transcript keys to their catalog form (CASWR151S →
+// CASWR151 when only the latter exists) before buildImportPreview, so its
+// duplicate check sees them as the same course as one already on the plan.
+// Mutates `parsed` in place. A failed lookup leaves the keys as parsed
+// rather than blocking the import.
+async function resolveParsedCourseKeys(parsed) {
+  const termCourses = (parsed?.terms || []).flatMap((t) => t.courses || []);
+  const apCredits = parsed?.apCredits || [];
+  const entries = [...termCourses, ...apCredits];
+  let resolved;
+  try {
+    resolved = await resolveCourseKeys(entries.map((e) => e.courseKey));
+  } catch (err) {
+    console.error('Could not resolve transcript course keys; using them as parsed:', err);
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.courseKey && resolved.has(entry.courseKey)) {
+      entry.courseKey = resolved.get(entry.courseKey);
+    }
+  }
 }
 
 const TransferCreditReviewRow = memo(function TransferCreditReviewRow({ transferCredit, onUpdate }) {
@@ -119,6 +143,7 @@ export default function ImportTranscriptModal({
         apCredits: parsed?.apCredits || [],
         transferCredits: parsed?.transferCredits || [],
       });
+      await resolveParsedCourseKeys(parsed);
       const built = buildImportPreview(parsed, semesters, extraTerms);
       debugImportModal('handleFile-preview-built', {
         transferCredits: built?.transferCredits || [],

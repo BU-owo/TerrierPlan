@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { describeRequirementLabels, HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { useHubProgress, contributorsForRequirement, satisfiedCountForRequirement } from '../../hooks/useHubProgress';
-import { loadAllCourses, queryCourses, collectDepartmentPrefixes, HUB_MATCH_MODES } from '../../utils/courseQuery';
+import { loadAllCourses, queryCourses, collectDepartmentPrefixes, HUB_MATCH_MODES, UNDERGRAD, matchesCareer } from '../../utils/courseQuery';
 import { normalizeCourseKey } from '../../utils/courseKey';
 import { entryCourseKey } from '../../utils/courseEntry';
 import { formatCourseLabel } from '../requirements/treeHelpers';
@@ -311,6 +311,9 @@ function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash
         <div className="search-result-code">{label}</div>
         <div className="search-result-name-row">
           <span className="search-result-name">{course.name ?? '—'}</span>
+          {course.studyAbroad && (
+            <span className="offering-badge offering-badge-abroad">Study abroad</span>
+          )}
         </div>
         {course.hubUnits?.length > 0 && (
           <div className="search-result-hub">
@@ -486,11 +489,18 @@ export default function HubFullView({
     };
   }, []);
 
+  // HUB is undergraduate-only, so this search (and its prefix datalist)
+  // only ever sees Undergrad courses — no Level control here.
+  const undergradCourses = useMemo(
+    () => allCourses.filter((course) => matchesCareer(course, UNDERGRAD)),
+    [allCourses],
+  );
+
   // Every real department/school prefix in the loaded catalog (e.g. "CAS",
   // "CAS CH", "COM CO") — auto-populates the prefix input's datalist
   // instead of requiring the student to already know exact department
   // codes to type.
-  const departmentPrefixes = useMemo(() => collectDepartmentPrefixes(allCourses), [allCourses]);
+  const departmentPrefixes = useMemo(() => collectDepartmentPrefixes(undergradCourses), [undergradCourses]);
 
   // Same Set-membership exclusion collectPoolCourses uses in treeHelpers.js
   // (planCourseKeySet) — courses already on the plan have nothing left to
@@ -554,11 +564,11 @@ export default function HubFullView({
   const searchResults = useMemo(() => {
     if (!searchActive) return [];
     return queryCourses(
-      allCourses,
+      undergradCourses,
       { prefix: trimmedPrefix, hubUnitCodes: hubSearchInclude, mode: hubSearchMode, excludeUnitCodes: hubSearchExclude },
       excludeKeys,
     );
-  }, [allCourses, trimmedPrefix, hubSearchInclude, hubSearchMode, hubSearchExclude, excludeKeys]);
+  }, [undergradCourses, trimmedPrefix, hubSearchInclude, hubSearchMode, hubSearchExclude, excludeKeys]);
 
   // Per-category collapse state — the ONE source of truth for both the
   // overview ring row and each category's own card; same "override

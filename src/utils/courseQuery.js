@@ -1,6 +1,6 @@
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
-import { normalizeCourseKey, parseCourseKey } from './courseKey';
+import { normalizeCourseKey, compareByCatalogNumber } from './courseKey';
 
 // The whole `courses` collection, loaded once and shared by every caller
 // (CourseSearch's live search, the HUB Tracker's department browse panel,
@@ -46,6 +46,22 @@ export function requestCatalogLoad() {
 
 export function loadAllCoursesWhenRequested() {
   return catalogGate.then(loadAllCourses);
+}
+
+// Course `career` values. Docs without a career (the bulletin-only ones)
+// count as Undergrad — always read it through courseCareer(), never
+// course.career directly.
+export const CAREERS = ['Undergrad', 'Graduate', 'Law', 'Dental', 'Medical'];
+export const UNDERGRAD = 'Undergrad';
+export const ALL_CAREERS = 'all';
+
+export function courseCareer(course) {
+  return course.career || UNDERGRAD;
+}
+
+// `career` is one of CAREERS, or ALL_CAREERS for no filtering.
+export function matchesCareer(course, career) {
+  return career === ALL_CAREERS || courseCareer(course) === career;
 }
 
 // Valid `mode` values for the `hubUnitCodes` match below.
@@ -102,9 +118,7 @@ export function queryCourses(
     return true;
   });
 
-  return matches.sort(
-    (a, b) => (parseCourseKey(a.id)?.number ?? 0) - (parseCourseKey(b.id)?.number ?? 0),
-  );
+  return matches.sort(compareByCatalogNumber);
 }
 
 // Every real school-level ("CAS") and department-level ("CAS AA") prefix
@@ -123,4 +137,51 @@ export function collectDepartmentPrefixes(courses) {
     prefixes.add(`${parts[0]} ${parts[1]}`); // department-level, e.g. "CAS AA"
   }
   return Array.from(prefixes).sort();
+}
+
+// Transcripts list session-specific sections with a trailing S
+// ("CASWR151S") where the catalog key has none. Returns the key without that
+// S, or null when the key doesn't end in digit+S. Never strips E — E keys
+// are real study-abroad courses, not a session marker.
+export function stripSessionSuffix(courseKey) {
+  const match = /^(.*\d)S$/.exec(courseKey || '');
+  return match ? match[1] : null;
+}
+
+// Firestore's `in` operator takes at most 30 values per query.
+const IN_QUERY_LIMIT = 30;
+
+async function findExistingCourseKeys(keys) {
+  const found = new Set();
+  for (let i = 0; i < keys.length; i += IN_QUERY_LIMIT) {
+    const batch = keys.slice(i, i + IN_QUERY_LIMIT);
+    const snap = await getDocs(query(collection(db, 'courses'), where(documentId(), 'in', batch)));
+    snap.forEach((d) => found.add(d.id));
+  }
+  return found;
+}
+
+// Maps each transcript courseKey to the catalog key it should import as:
+// the exact key if a course doc exists for it, else the session-stripped
+// key (CASWR151S → CASWR151) if THAT exists, else the exact key unchanged.
+// Point lookups rather than loadAllCourses() so importing a transcript
+// doesn't pull the whole catalog.
+export async function resolveCourseKeys(keys) {
+  const unique = [...new Set(keys.filter(Boolean))];
+  const exactHits = await findExistingCourseKeys(unique);
+
+  const strippedFor = new Map(); // original key → stripped candidate
+  for (const key of unique) {
+    if (exactHits.has(key)) continue;
+    const stripped = stripSessionSuffix(key);
+    if (stripped) strippedFor.set(key, stripped);
+  }
+  const strippedHits = await findExistingCourseKeys([...new Set(strippedFor.values())]);
+
+  const resolved = new Map();
+  for (const key of unique) {
+    const stripped = strippedFor.get(key);
+    resolved.set(key, stripped && strippedHits.has(stripped) ? stripped : key);
+  }
+  return resolved;
 }

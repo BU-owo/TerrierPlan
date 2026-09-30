@@ -64,6 +64,9 @@ export default function CourseCard({
       )}
       <div className="course-card-code">{courseNumber}</div>
       <div className="course-card-name">{courseName}</div>
+      {data?.studyAbroad && (
+        <span className="offering-badge offering-badge-abroad course-card-abroad">Study abroad</span>
+      )}
       {showOfferingWarning && (
         <div
           className={`course-card-offering-warning is-${offeringWarning.severity}`}
