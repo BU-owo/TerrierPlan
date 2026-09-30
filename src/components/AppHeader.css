@@ -1,7 +1,7 @@
 /* ===== APP HEADER (AppHeader.jsx) =====
-   Own tp-* class names on purpose: planner.css is loaded globally and its
-   old .planner-header / .theme-toggle / .app-header-nav rules carry media
-   queries that would otherwise leak in. Permanent scarlet in both themes,
+   Own tp-* class names on purpose: planner.css is loaded globally, so
+   generic header class names could pick up its rules (and their media
+   queries) by accident. Permanent scarlet in both themes,
    so it uses raw white-based rgba, not the --white token (which flips dark).
 
    Row 2's children keep their own classes (.plan-selector,

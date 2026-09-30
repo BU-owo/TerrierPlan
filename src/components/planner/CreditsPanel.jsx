@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { entryCourseKey } from '../../utils/courseEntry';
+import { entriesCourseKeys } from '../../utils/courseEntry';
 import { describeLockStatus } from '../requirements/treeHelpers';
 
 export default function CreditsPanel({
@@ -8,6 +8,9 @@ export default function CreditsPanel({
   creditsMap,
   externalCredits = [],
   lockStatusMap = {},
+  // Plan-wide note-placeholder credits (Fall/Spring + Summer slots), summed
+  // by PlannerPage — the same figure its header credit badge adds in.
+  noteCredits = 0,
   onSummaryChange,
 }) {
   // Same completed/current/planned split as the Requirements and HUB
@@ -16,16 +19,18 @@ export default function CreditsPanel({
   // courses count toward planned here (Credits has no separate "in
   // progress" bucket, just completed vs. everything still ahead).
   const { completedCredits, plannedCredits } = useMemo(() => {
-    const allKeys = [...semesters.flatMap((sem) => sem.map(entryCourseKey)), ...extraCourseKeys];
+    const allKeys = [...semesters.flatMap((sem) => entriesCourseKeys(sem)), ...extraCourseKeys];
     let completed = 0;
-    let planned = 0;
+    // Note placeholders (no courseKey) aren't real courses, so they're never
+    // "completed" — their own credits always count as planned.
+    let planned = noteCredits;
     for (const key of allKeys) {
       const credit = creditsMap[key] ?? 0;
       if (describeLockStatus(lockStatusMap[key]).variant === 'completed') completed += credit;
       else planned += credit;
     }
     return { completedCredits: completed, plannedCredits: planned };
-  }, [semesters, extraCourseKeys, creditsMap, lockStatusMap]);
+  }, [semesters, extraCourseKeys, creditsMap, lockStatusMap, noteCredits]);
 
   const planCourseCredits = completedCredits + plannedCredits;
 

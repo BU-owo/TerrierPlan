@@ -41,15 +41,6 @@ html[data-theme='dark'] {
 .sched-color-8 { background: var(--sched-c8-bg); border-color: var(--sched-c8); }
 .sched-color-9 { background: var(--sched-c9-bg); border-color: var(--sched-c9); }
 
-.sched-term-badge {
-  font-size: 12px;
-  opacity: .85;
-  background: rgba(255,255,255,.18);
-  padding: 3px 10px;
-  border-radius: 20px;
-  white-space: nowrap;
-}
-
 /* ===== LAYOUT ===== */
 .scheduler-body {
   display: flex;

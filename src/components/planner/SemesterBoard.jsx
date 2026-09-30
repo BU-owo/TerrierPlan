@@ -22,6 +22,12 @@ export default function SemesterBoard({
   onToggleSemesterLock,
   onToggleSummerYear,
   onAddYear,
+  // "+ Add Year" is disabled once the plan has this many years; a plan
+  // already past it (from before the cap existed) is shown as-is.
+  maxYears = Infinity,
+  onAddNote,
+  onUpdateNote,
+  onRemoveNote,
   draggingId,
   semesterOptions = [],
   currentSemesterTarget = null,
@@ -32,6 +38,17 @@ export default function SemesterBoard({
 }) {
   const yearCount = Math.max(4, Math.ceil(semesters.length / 2));
   const years = Array.from({ length: yearCount }, (_, i) => i);
+  const atYearCap = yearCount >= maxYears;
+
+  // Note handlers bound to one slot target (see handleAddNote & co. in
+  // PlannerPage) — notes are matched by their own id, never courseKey.
+  function noteProps(target) {
+    return {
+      onAddNote: () => onAddNote(target),
+      onUpdateNote: (noteId, patch) => onUpdateNote(noteId, target, patch),
+      onRemoveNote: (noteId) => onRemoveNote(noteId, target),
+    };
+  }
 
   // currentSemesterTarget is global (shared across every plan — see
   // PlannerPage) while semesterOptions is built from *this* plan's own
@@ -117,6 +134,7 @@ export default function SemesterBoard({
                 onRemoveCourse={(key) => onRemoveCourse(key, fallIndex)}
                 onToggleLock={onToggleLock}
                 onToggleSemesterLock={() => onToggleSemesterLock(fallIndex)}
+                {...noteProps(fallIndex)}
                 draggingId={draggingId}
                 status={fallStatus}
                 completedCourseKeys={completedCourseKeys}
@@ -133,6 +151,7 @@ export default function SemesterBoard({
                 onRemoveCourse={(key) => onRemoveCourse(key, springIndex)}
                 onToggleLock={onToggleLock}
                 onToggleSemesterLock={() => onToggleSemesterLock(springIndex)}
+                {...noteProps(springIndex)}
                 draggingId={draggingId}
                 status={springStatus}
                 completedCourseKeys={completedCourseKeys}
@@ -150,6 +169,7 @@ export default function SemesterBoard({
                   onRemoveCourse={(key) => onRemoveCourse(key, summerTarget(year))}
                   onToggleLock={onToggleLock}
                   onToggleSemesterLock={() => onToggleSemesterLock(summerTarget(year))}
+                  {...noteProps(summerTarget(year))}
                   onRemoveColumn={
                     summerCourses.length === 0
                       ? () => onToggleSummerYear(year, false)
@@ -174,7 +194,13 @@ export default function SemesterBoard({
         );
       })}
 
-      <button type="button" className="add-year-btn" onClick={onAddYear}>
+      <button
+        type="button"
+        className="add-year-btn"
+        onClick={onAddYear}
+        disabled={atYearCap}
+        title={atYearCap ? `Plans are capped at ${maxYears} years` : 'Add another year to this plan'}
+      >
         + Add Year
       </button>
     </div>

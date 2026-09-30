@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { normalizeCourseKey, parseCourseKey, compareByCatalogNumber } from '../../utils/courseKey';
-import { loadAllCourses, UNDERGRAD, matchesCareer } from '../../utils/courseQuery';
-import { LevelFilterSelect } from '../planner/CourseSearch';
+import { loadAllCourses, isProfessionalCareer } from '../../utils/courseQuery';
 
 // Left panel: add a course to the schedule draft. Same normalization/
 // subject-prefix approach as the Planner's CourseSearch (courseKey.js is
@@ -11,7 +10,6 @@ import { LevelFilterSelect } from '../planner/CourseSearch';
 // just "which sections can I take this term."
 export default function SchedulerSearch({ draftCourseKeys, onAddCourse }) {
   const [query, setQuery] = useState('');
-  const [levelFilter, setLevelFilter] = useState(UNDERGRAD);
   const [allCourses, setAllCourses] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const debounceRef = useRef(null);
@@ -62,22 +60,24 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse }) {
       let matches;
       if (isSubjectMode) {
         matches = allCourses
-          .filter((c) => c.id.startsWith(normalizedQuery) && matchesCareer(c, levelFilter))
+          .filter((c) => c.id.startsWith(normalizedQuery))
           .sort(compareByCatalogNumber);
       } else {
         matches = allCourses.filter((c) => {
-          if (!matchesCareer(c, levelFilter)) return false;
           const normalizedCourseNum = normalizeCourseKey(c.courseNumber || '');
           const normalizedCourseName = (c.name || '').toUpperCase();
           return normalizedCourseNum.includes(normalizedQuery) || normalizedCourseName.includes(normalizedQuery);
         });
       }
+      // Law/Dental/Medical last, before the cut to 20 — same rule as the
+      // planner's CourseSearch. Stable sort keeps each group's order.
+      matches.sort((a, b) => isProfessionalCareer(a.career) - isProfessionalCareer(b.career));
       setResults(matches.slice(0, 20));
       setSearching(false);
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [query, levelFilter, loaded, allCourses, subjectPrefixes]);
+  }, [query, loaded, allCourses, subjectPrefixes]);
 
   return (
     <div className="search-panel">
@@ -94,7 +94,6 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse }) {
             spellCheck={false}
           />
         </div>
-        <LevelFilterSelect id="sched-level-filter" value={levelFilter} onChange={setLevelFilter} />
       </div>
 
       <div className="search-results">
@@ -129,6 +128,9 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse }) {
                   <span className="search-result-name">{course.name ?? '—'}</span>
                   {course.studyAbroad && (
                     <span className="offering-badge offering-badge-abroad">Study abroad</span>
+                  )}
+                  {isProfessionalCareer(course.career) && (
+                    <span className="offering-badge offering-badge-career">{course.career}</span>
                   )}
                 </div>
               </div>

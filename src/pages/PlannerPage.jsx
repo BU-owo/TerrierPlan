@@ -44,6 +44,10 @@ import {
   normalizeSemesters,
   normalizeGridSummerTerms,
   entryCourseKey,
+  entriesCourseKeys,
+  entriesNoteCredits,
+  createNoteEntry,
+  isNoteEntry,
   isSummerTarget,
   summerYearFromTarget,
   getSemesterStatus,
@@ -53,6 +57,8 @@ import './planner.css';
 import '../App.css';
 
 const EMPTY_SEMESTERS = () => Array.from({ length: 8 }, () => []);
+// "+ Add Year" stops here (see handleAddYear/SemesterBoard).
+const MAX_PLAN_YEARS = 8;
 const LOCAL_STORAGE_KEY = 'terrierplan_session';
 // A student's "current semester", completed courses, and AP/IB/transfer
 // credits are facts about them, not about any one hypothetical plan — kept
@@ -122,16 +128,6 @@ function semestersFromFirestore(stored) {
 // migrate (and clear localStorage) once per guest session → sign-in.
 let guestMigrationPromise = null;
 const DEBUG_IMPORT = import.meta.env.DEV;
-const DEBUG_LOAD_TIMING = import.meta.env.DEV; // TEMP-TIMING
-
-// Timestamped [load] log for sub-steps that can run concurrently under // TEMP-TIMING
-// StrictMode (console.time labels would collide). `since` is a // TEMP-TIMING
-// performance.now() start value; omit it for a point-in-time mark. // TEMP-TIMING
-function loadLog(label, since) { // TEMP-TIMING
-  if (!DEBUG_LOAD_TIMING) return; // TEMP-TIMING
-  const now = performance.now(); // TEMP-TIMING
-  console.log(`[load] ${label} @${Math.round(now)}ms${since != null ? ` (took ${Math.round(now - since)}ms)` : ''}`); // TEMP-TIMING
-} // TEMP-TIMING
 
 function debugPlanner(stage, payload) {
   if (!DEBUG_IMPORT) return;
@@ -278,24 +274,14 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       profileLoadedForUid.current = null;
       setPlanLoadError(false);
 
-      // Per-run labels so StrictMode's double-invoked effect doesn't collide. // TEMP-TIMING
-      const run = Math.random().toString(36).slice(2, 6); // TEMP-TIMING
-      const timeStart = (step) => { if (DEBUG_LOAD_TIMING) console.time(`[load ${run}] ${step}`); }; // TEMP-TIMING
-      const timeEnd = (step) => { if (DEBUG_LOAD_TIMING) console.timeEnd(`[load ${run}] ${step}`); }; // TEMP-TIMING
-      if (DEBUG_LOAD_TIMING) console.log(`[load ${run}] initForUser start @${Math.round(performance.now())}ms`); // TEMP-TIMING
-      timeStart('total'); // TEMP-TIMING
-
       // 1. Migrate guest plan BEFORE loadPlans/createDefaultPlan
-      timeStart('1 migrate'); // TEMP-TIMING
       const migratedId = await migrateGuestPlanIfNeeded(uid);
-      timeEnd('1 migrate'); // TEMP-TIMING
       if (cancelled) return;
 
       // 1b. Load the student-level profile (current semester + completed
       // courses) once per sign-in — not per plan, and not re-run by
       // handleSelectPlan/handleNewPlan, which is what makes it carry across
       // every plan instead of resetting with each one.
-      timeStart('2 profile'); // TEMP-TIMING
       try {
         await loadUserProfile(uid);
       } catch (err) {
@@ -307,25 +293,19 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         // session won't reach Firestore until a reload retries the load.
         console.warn('⚠️  Profile writes disabled this session — profile failed to load');
       }
-      timeEnd('2 profile'); // TEMP-TIMING
       if (cancelled) return;
 
       // 2. Load existing plans (migrated doc is additive — never overwrites)
       let list = [];
-      timeStart('3 plans'); // TEMP-TIMING
       try {
         list = await loadPlans(uid);
       } catch (err) {
         console.error('Error loading plans:', err);
-        timeEnd('3 plans'); // TEMP-TIMING
         if (!cancelled) setPlanLoadError(true);
         return;
       }
-      timeEnd('3 plans'); // TEMP-TIMING
-      if (DEBUG_LOAD_TIMING) console.log(`[load ${run}] ${list.length} plans listed`); // TEMP-TIMING
       if (cancelled) return;
 
-      timeStart('4 plan'); // TEMP-TIMING
       if (migratedId) {
         await loadPlan(uid, migratedId, list);
       } else if (list.length === 0) {
@@ -333,8 +313,6 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       } else {
         await loadPlan(uid, list[0].id, list);
       }
-      timeEnd('4 plan'); // TEMP-TIMING
-      timeEnd('total'); // TEMP-TIMING
     }
 
     if (user) {
@@ -679,10 +657,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         setIsDirty(false);
         const extraKeys = (plan.extraTerms || []).flatMap((t) => t.courseKeys || []);
         const summerKeys = Object.values(plan.gridSummerTerms || {}).flatMap(
-          (entries) => (entries || []).map(entryCourseKey),
+          (entries) => entriesCourseKeys(entries),
         );
         const allKeys = [
-          ...localSemesters.flatMap((sem) => sem.map(entryCourseKey)),
+          ...localSemesters.flatMap((sem) => entriesCourseKeys(sem)),
           ...extraKeys,
           ...summerKeys,
           ...localStash,
@@ -829,13 +807,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // can easily have already migrated the latter in an earlier session while
   // still missing externalCredits, since that field is newer.
   async function loadUserProfile(uid) {
-    const profileReadStart = performance.now(); // TEMP-TIMING
     const snap = await getDoc(doc(db, 'users', uid));
     const data = snap.exists() ? snap.data() : null;
     const hasAccountProfile = data != null && Object.prototype.hasOwnProperty.call(data, 'completedCourseKeys');
     const hasAccountExternalCredits = data != null && Object.prototype.hasOwnProperty.call(data, 'externalCredits');
     const hasLocalProfile = localStorage.getItem(PROFILE_STORAGE_KEY) != null;
-    loadLog(`2a profile doc read — hasExternalCredits=${hasAccountExternalCredits} hasLocalProfile=${hasLocalProfile}`, profileReadStart); // TEMP-TIMING
     const local = hasLocalProfile ? loadLocalProfile() : null;
 
     // --- currentSemesterTarget / completedCourseKeys ---
@@ -867,9 +843,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     if (hasAccountExternalCredits) {
       externalCredits = normalizeExternalCredits(data.externalCredits);
     } else {
-      const migrateStart = performance.now(); // TEMP-TIMING
       externalCredits = await migratePlanExternalCredits(uid);
-      loadLog('2b migratePlanExternalCredits', migrateStart); // TEMP-TIMING
       needsPersist = true;
     }
     if (hasLocalProfile) {
@@ -897,9 +871,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     if (needsPersist) {
       // Persist the merged/migrated result before dropping the local copy —
       // if the write fails, leave the guest data in place rather than lose it.
-      const persistStart = performance.now(); // TEMP-TIMING
       const persisted = await persistProfile(uid, { currentSemesterTarget: target, completedCourseKeys: keys, externalCredits });
-      loadLog(`2c persistProfile write — ok=${persisted}`, persistStart); // TEMP-TIMING
       if (persisted && hasLocalProfile) {
         localStorage.removeItem(PROFILE_STORAGE_KEY);
       }
@@ -970,9 +942,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   async function loadPlan(uid, planId, list) {
     isInitialLoad.current = true;
-    const planReadStart = performance.now(); // TEMP-TIMING
     const snap = await getDoc(doc(db, 'users', uid, 'plans', planId));
-    loadLog(`4a plan doc read — exists=${snap.exists()}`, planReadStart); // TEMP-TIMING
     // A missing doc on the initial load would otherwise leave the board on
     // "Loading your plans…" forever; once a plan is showing, the flag has no
     // visible effect (the error only renders while activePlanId is null).
@@ -1006,15 +976,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setIsDirty(false);
     if (list) setPlans(list);
     const allKeys = [
-      ...semData.flatMap((sem) => sem.map(entryCourseKey)),
+      ...semData.flatMap((sem) => entriesCourseKeys(sem)),
       ...extra.flatMap((t) => t.courseKeys || []),
-      ...Object.values(summerData).flatMap((entries) => entries.map(entryCourseKey)),
+      ...Object.values(summerData).flatMap((entries) => entriesCourseKeys(entries)),
       ...loadedStash,
     ];
     if (allKeys.length > 0) {
-      const courseDataStart = performance.now(); // TEMP-TIMING
       await fetchCourseData(allKeys);
-      loadLog(`4b fetchCourseData — ${allKeys.length} course keys`, courseDataStart); // TEMP-TIMING
     }
     isInitialLoad.current = false;
   }
@@ -1178,15 +1146,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   async function fetchCredits(courseKeys) {
     const missing = courseKeys.filter((k) => !(k in creditsMap));
     if (missing.length === 0) return;
-    const creditsStart = performance.now(); // TEMP-TIMING
     const newCredits = {};
     for (let i = 0; i < missing.length; i += 30) {
       const batch = missing.slice(i, i + 30);
-      const batchStart = performance.now(); // TEMP-TIMING
       const snap = await getDocs(
         query(collection(db, 'sections'), where('courseKey', 'in', batch)),
       );
-      loadLog(`fetchCredits batch — ${snap.size} section docs for ${batch.length} courses`, batchStart); // TEMP-TIMING
       snap.docs.forEach((d) => {
         const { courseKey, credits } = d.data();
         if (!(courseKey in newCredits) && credits != null) {
@@ -1194,7 +1159,6 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         }
       });
     }
-    loadLog(`fetchCredits total — ${missing.length} courses`, creditsStart); // TEMP-TIMING
     setCreditsMap((prev) => ({ ...prev, ...newCredits }));
   }
 
@@ -1234,8 +1198,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
     if (seed) {
       const seedKeys = [
-        ...seedSemesters.flatMap((entries) => entries.map(entryCourseKey)),
-        ...Object.values(seedGridSummerTerms).flatMap((entries) => entries.map(entryCourseKey)),
+        ...seedSemesters.flatMap((entries) => entriesCourseKeys(entries)),
+        ...Object.values(seedGridSummerTerms).flatMap((entries) => entriesCourseKeys(entries)),
       ];
       // These courses came from the plan already open, so courseMap should
       // already have their data — this is a safety net, not expected to do
@@ -1350,6 +1314,29 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setIsDirty(true);
   }
 
+  // Free-text planning placeholders (see isNoteEntry in courseEntry.js) —
+  // matched by their own id, never courseKey, so they can't collide with
+  // the course handlers above (entryCourseKey is null for a note).
+  // Returns the new note's id so the column can open it in edit mode.
+  function handleAddNote(target) {
+    const note = createNoteEntry();
+    setEntriesAtTarget(target, (entries) => [...entries, note]);
+    setIsDirty(true);
+    return note.id;
+  }
+
+  function handleUpdateNote(noteId, target, patch) {
+    setEntriesAtTarget(target, (entries) => entries.map((e) => (
+      isNoteEntry(e) && e.id === noteId ? { ...e, ...patch } : e
+    )));
+    setIsDirty(true);
+  }
+
+  function handleRemoveNote(noteId, target) {
+    setEntriesAtTarget(target, (entries) => entries.filter((e) => !(isNoteEntry(e) && e.id === noteId)));
+    setIsDirty(true);
+  }
+
   // Student discretion, not enforcement — any course can be locked/unlocked
   // regardless of source. Locked cards disable their own drag/remove in
   // CourseCard, so this handler doesn't need to guard against those.
@@ -1390,7 +1377,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // unlocks all when every course is already locked, so one click always
   // does the obvious thing.
   function handleToggleSemesterLock(target) {
-    const keys = entriesAtTarget(target).map(entryCourseKey);
+    const keys = entriesCourseKeys(entriesAtTarget(target));
     if (keys.length === 0) return;
     const allLocked = keys.every((key) => completedCourseKeySet.has(key));
     setCompletedCourseKeys((prev) => {
@@ -1424,9 +1411,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       && (prevTarget == null || getSemesterStatus(slotTarget, prevTarget) !== 'past');
 
     const newlyPastKeys = [
-      ...semesters.flatMap((entries, i) => (becameNewlyPast(i) ? entries.map(entryCourseKey) : [])),
+      ...semesters.flatMap((entries, i) => (becameNewlyPast(i) ? entriesCourseKeys(entries) : [])),
       ...Object.entries(gridSummerTerms).flatMap(([year, entries]) => (
-        becameNewlyPast(`summer:${year}`) ? entries.map(entryCourseKey) : []
+        becameNewlyPast(`summer:${year}`) ? entriesCourseKeys(entries) : []
       )),
     ];
     if (newlyPastKeys.length === 0) return;
@@ -1441,8 +1428,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   // Adds one more Fall/Spring pair below the grid — see "VARIABLE YEAR COUNT".
+  // Capped at MAX_PLAN_YEARS; plans already past the cap are left as-is.
   function handleAddYear() {
-    setSemesters((prev) => [...prev, [], []]);
+    if (semesters.length / 2 >= MAX_PLAN_YEARS) return;
+    setSemesters((prev) => (prev.length / 2 >= MAX_PLAN_YEARS ? prev : [...prev, [], []]));
     setIsDirty(true);
   }
 
@@ -1505,7 +1494,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       summary: result.summary,
     });
     const importedCourseKeys = [
-      ...result.semesters.flatMap((sem) => sem.map(entryCourseKey)),
+      ...result.semesters.flatMap((sem) => entriesCourseKeys(sem)),
       ...result.extraTerms.flatMap((term) => term.courseKeys || []),
     ];
     // Courses the transcript matched into an actual grid slot come back
@@ -1513,7 +1502,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     // entry itself (see completedCourseKeys), so fold it into the global
     // completed list here or the import would silently show them as planned.
     const importedLockedKeys = result.semesters.flatMap(
-      (sem) => sem.filter((e) => e?.locked).map(entryCourseKey),
+      (sem) => entriesCourseKeys(sem.filter((e) => e?.locked)),
     );
 
     setSemesters(result.semesters);
@@ -1631,9 +1620,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const gridCourseKeys = semesters.flatMap((sem) => sem.map(entryCourseKey));
+  const gridCourseKeys = semesters.flatMap((sem) => entriesCourseKeys(sem));
   const gridSummerCourseKeys = Object.values(gridSummerTerms).flatMap(
-    (entries) => entries.map(entryCourseKey),
+    (entries) => entriesCourseKeys(entries),
   );
   // extraTerms (transcript overflow) and gridSummerTerms (planned per-year
   // Summer slots) are both "outside the 8-slot grid but still counts" —
@@ -1663,8 +1652,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const lockStatusMap = useMemo(() => {
     const map = {};
     semesters.forEach((sem, i) => {
-      sem.forEach((entry) => {
-        const key = entryCourseKey(entry);
+      entriesCourseKeys(sem).forEach((key) => {
         map[key] = {
           locked: completedCourseKeySet.has(key),
           semesterStatus: getSemesterStatus(i, currentSemesterTarget),
@@ -1672,8 +1660,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       });
     });
     Object.entries(gridSummerTerms).forEach(([year, entries]) => {
-      entries.forEach((entry) => {
-        const key = entryCourseKey(entry);
+      entriesCourseKeys(entries).forEach((key) => {
         map[key] = {
           locked: completedCourseKeySet.has(key),
           semesterStatus: getSemesterStatus(`summer:${year}`, currentSemesterTarget),
@@ -1707,8 +1694,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     ),
   ];
 
+  // Note placeholders have no courseKey, so they're absent from the key
+  // lists above (and so from HUB/requirements) — only their own credits
+  // are added here, to the plan credit total.
+  const planNoteCredits = semesters.reduce((sum, sem) => sum + entriesNoteCredits(sem), 0)
+    + Object.values(gridSummerTerms).reduce((sum, entries) => sum + entriesNoteCredits(entries), 0);
   const planCourseCredits = [...gridCourseKeys, ...extraCourseKeys]
-    .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0);
+    .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0) + planNoteCredits;
 
   // Options for "add to" targets — grid semesters plus any toggled-on Summer
   // slots — shared by CourseSearch's dropdown, the SemesterPickerModal
@@ -1873,6 +1865,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                   onToggleSemesterLock={handleToggleSemesterLock}
                   onToggleSummerYear={handleToggleSummerYear}
                   onAddYear={handleAddYear}
+                  maxYears={MAX_PLAN_YEARS}
+                  onAddNote={handleAddNote}
+                  onUpdateNote={handleUpdateNote}
+                  onRemoveNote={handleRemoveNote}
                   draggingId={draggingId}
                   semesterOptions={semesterOptions}
                   currentSemesterTarget={currentSemesterTarget}
@@ -1904,6 +1900,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               courseMap={courseMap}
               creditsMap={creditsMap}
               lockStatusMap={lockStatusMap}
+              noteCredits={planNoteCredits}
               isTransfer={isTransfer}
               onToggleTransfer={handleToggleTransfer}
               majorBulletinUrl={majorBulletinUrl}

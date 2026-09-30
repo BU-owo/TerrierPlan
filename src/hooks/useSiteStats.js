@@ -83,7 +83,10 @@ export default function useSiteStats() {
     const unsub = onSnapshot(
       statsRef,
       (snap) => setTotalUsersEver(snap.exists() ? snap.data().totalUsersEver ?? 0 : 0),
-      () => setTotalUsersEver(null),
+      (err) => {
+        console.warn('[useSiteStats] siteStats listener failed', err.code, err);
+        setTotalUsersEver(null);
+      },
     );
     return unsub;
   }, []);
@@ -99,7 +102,9 @@ export default function useSiteStats() {
       setDoc(presenceRef, {
         lastSeen: serverTimestamp(),
         expiresAt: Timestamp.fromMillis(Date.now() + PRESENCE_TTL_MS),
-      }).catch(() => {});
+      }).catch((err) => {
+        console.warn('[useSiteStats] presence write failed', err.code, err);
+      });
     }
 
     heartbeat();
@@ -119,7 +124,8 @@ export default function useSiteStats() {
         const onlineQuery = query(collection(db, 'presence'), where('lastSeen', '>', cutoff));
         const snap = await getCountFromServer(onlineQuery);
         if (!cancelled) setOnlineNow(snap.data().count);
-      } catch {
+      } catch (err) {
+        console.warn('[useSiteStats] online count failed', err.code, err);
         if (!cancelled) setOnlineNow(null);
       }
     }

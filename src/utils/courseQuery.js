@@ -9,15 +9,11 @@ import { normalizeCourseKey, compareByCatalogNumber } from './courseKey';
 // concurrent callers await the same in-flight request rather than each
 // firing their own.
 let coursesPromise = null;
-const DEBUG_LOAD_TIMING = import.meta.env.DEV; // TEMP-TIMING
 
 export function loadAllCourses() {
   if (!coursesPromise) {
-    const catalogStart = performance.now(); // TEMP-TIMING
-    if (DEBUG_LOAD_TIMING) console.log(`[load] catalog start @${Math.round(catalogStart)}ms`); // TEMP-TIMING
     coursesPromise = getDocs(collection(db, 'courses'))
       .then((snapshot) => {
-        if (DEBUG_LOAD_TIMING) console.log(`[load] catalog done @${Math.round(performance.now())}ms (took ${Math.round(performance.now() - catalogStart)}ms) — ${snapshot.size} docs`); // TEMP-TIMING
         return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
       })
       .catch((err) => {
@@ -48,20 +44,14 @@ export function loadAllCoursesWhenRequested() {
   return catalogGate.then(loadAllCourses);
 }
 
-// Course `career` values. Docs without a career (the bulletin-only ones)
-// count as Undergrad — always read it through courseCareer(), never
-// course.career directly.
-export const CAREERS = ['Undergrad', 'Graduate', 'Law', 'Dental', 'Medical'];
-export const UNDERGRAD = 'Undergrad';
-export const ALL_CAREERS = 'all';
+// Undergrads may take most Graduate courses, so Undergrad and Graduate are
+// treated the same; only Law, Dental and Medical courses aren't open to
+// them. Searches list these last (with a chip naming the school) and the
+// HUB search drops them. A missing or unknown `career` is not professional.
+const PROFESSIONAL_CAREERS = new Set(['Law', 'Dental', 'Medical']);
 
-export function courseCareer(course) {
-  return course.career || UNDERGRAD;
-}
-
-// `career` is one of CAREERS, or ALL_CAREERS for no filtering.
-export function matchesCareer(course, career) {
-  return career === ALL_CAREERS || courseCareer(course) === career;
+export function isProfessionalCareer(career) {
+  return PROFESSIONAL_CAREERS.has(career);
 }
 
 // Valid `mode` values for the `hubUnitCodes` match below.

@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import CourseCard from './CourseCard';
-import { entryCourseKey } from '../../utils/courseEntry';
+import NoteCard from './NoteCard';
+import { entryCourseKey, entriesNoteCredits, isNoteEntry } from '../../utils/courseEntry';
 
 // Generic semester-shaped column — used both for the fixed Fall/Spring grid
 // slots and for a year's optional Summer slot (see SemesterBoard). `dropId`
@@ -19,6 +21,11 @@ export default function SemesterColumn({
   onToggleLock,
   onToggleSemesterLock,
   onRemoveColumn,
+  // Free-text note placeholders (see isNoteEntry) — bound to this slot by
+  // SemesterBoard; onAddNote returns the new note's id.
+  onAddNote,
+  onUpdateNote,
+  onRemoveNote,
   draggingId,
   // 'past' | 'current' | 'upcoming' | null — this slot's relation to the
   // student-designated current semester (see getSemesterStatus). Purely
@@ -33,13 +40,18 @@ export default function SemesterColumn({
   completedCourseKeys,
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: dropId });
+  // Id of a note this column just added, so it mounts in edit mode.
+  const [newNoteId, setNewNoteId] = useState(null);
 
-  const totalCredits = courses.reduce(
+  // Notes have no lock, so the lock toggle and "all locked" check only look
+  // at real course entries — a column holding only notes is never "locked".
+  const courseEntries = courses.filter((entry) => !isNoteEntry(entry));
+  const totalCredits = courseEntries.reduce(
     (sum, entry) => sum + (creditsMap[entryCourseKey(entry)] ?? 0),
     0,
-  );
-  const allLocked = courses.length > 0
-    && courses.every((entry) => completedCourseKeys.has(entryCourseKey(entry)));
+  ) + entriesNoteCredits(courses);
+  const allLocked = courseEntries.length > 0
+    && courseEntries.every((entry) => completedCourseKeys.has(entryCourseKey(entry)));
 
   return (
     <div
@@ -75,7 +87,7 @@ export default function SemesterColumn({
           {courses.length > 0 && (
             <span className="semester-credits">{totalCredits || '—'} cr</span>
           )}
-          {courses.length > 0 && onToggleSemesterLock && (
+          {courseEntries.length > 0 && onToggleSemesterLock && (
             <button
               type="button"
               className={`semester-lock-toggle${allLocked ? ' is-locked' : ''}`}
@@ -104,6 +116,17 @@ export default function SemesterColumn({
 
       <div ref={setNodeRef} className="semester-courses">
         {courses.map((entry) => {
+          if (isNoteEntry(entry)) {
+            return (
+              <NoteCard
+                key={entry.id}
+                note={entry}
+                initiallyEditing={entry.id === newNoteId}
+                onUpdate={(patch) => onUpdateNote(entry.id, patch)}
+                onRemove={() => onRemoveNote(entry.id)}
+              />
+            );
+          }
           const key = entryCourseKey(entry);
           const locked = completedCourseKeys.has(key);
           return (
@@ -124,6 +147,18 @@ export default function SemesterColumn({
           <div className="semester-empty">
             {isActive ? 'Search and add a course ↗' : 'Drop courses here'}
           </div>
+        )}
+        {onAddNote && (
+          <button
+            type="button"
+            className="add-note-btn"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); setNewNoteId(onAddNote()); }}
+            title="Add a placeholder (e.g. an elective you haven't picked yet)"
+            aria-label="Add placeholder"
+          >
+            + Slot
+          </button>
         )}
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { describeRequirementLabels, HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { useHubProgress, contributorsForRequirement, satisfiedCountForRequirement } from '../../hooks/useHubProgress';
-import { loadAllCourses, queryCourses, collectDepartmentPrefixes, HUB_MATCH_MODES, UNDERGRAD, matchesCareer } from '../../utils/courseQuery';
+import { loadAllCourses, queryCourses, collectDepartmentPrefixes, HUB_MATCH_MODES, isProfessionalCareer } from '../../utils/courseQuery';
 import { normalizeCourseKey } from '../../utils/courseKey';
 import { entryCourseKey } from '../../utils/courseEntry';
 import { formatCourseLabel } from '../requirements/treeHelpers';
@@ -489,10 +489,11 @@ export default function HubFullView({
     };
   }, []);
 
-  // HUB is undergraduate-only, so this search (and its prefix datalist)
-  // only ever sees Undergrad courses — no Level control here.
-  const undergradCourses = useMemo(
-    () => allCourses.filter((course) => matchesCareer(course, UNDERGRAD)),
+  // HUB is for undergrads, who can take Undergrad and most Graduate courses
+  // but not Law/Dental/Medical ones — so this search (and its prefix
+  // datalist) drops only those.
+  const nonProfessionalCourses = useMemo(
+    () => allCourses.filter((course) => !isProfessionalCareer(course.career)),
     [allCourses],
   );
 
@@ -500,7 +501,7 @@ export default function HubFullView({
   // "CAS CH", "COM CO") — auto-populates the prefix input's datalist
   // instead of requiring the student to already know exact department
   // codes to type.
-  const departmentPrefixes = useMemo(() => collectDepartmentPrefixes(undergradCourses), [undergradCourses]);
+  const departmentPrefixes = useMemo(() => collectDepartmentPrefixes(nonProfessionalCourses), [nonProfessionalCourses]);
 
   // Same Set-membership exclusion collectPoolCourses uses in treeHelpers.js
   // (planCourseKeySet) — courses already on the plan have nothing left to
@@ -564,11 +565,11 @@ export default function HubFullView({
   const searchResults = useMemo(() => {
     if (!searchActive) return [];
     return queryCourses(
-      undergradCourses,
+      nonProfessionalCourses,
       { prefix: trimmedPrefix, hubUnitCodes: hubSearchInclude, mode: hubSearchMode, excludeUnitCodes: hubSearchExclude },
       excludeKeys,
     );
-  }, [undergradCourses, trimmedPrefix, hubSearchInclude, hubSearchMode, hubSearchExclude, excludeKeys]);
+  }, [nonProfessionalCourses, trimmedPrefix, hubSearchInclude, hubSearchMode, hubSearchExclude, excludeKeys]);
 
   // Per-category collapse state — the ONE source of truth for both the
   // overview ring row and each category's own card; same "override

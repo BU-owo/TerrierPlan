@@ -4,7 +4,10 @@
    has room to sit below this without a second outer scrollbar. */
 /* --app-header-h: single source for the header's height, read by
    .semester-board's viewport-based sizing below (desktop and mobile).
-   Change it here, not in those calc()s, if the header changes size. */
+   Change it here, not in those calc()s, if the header changes size.
+   52px = AppHeader's row 1 alone (the scheduler); with the toolbar row
+   (the planner) it's 52 + 44 min + 1px border = 97px (measured 97 at
+   375px, 99 at 1440px where a toolbar control runs 2px taller). */
 .planner-layout {
   --app-header-h: 52px;
   display: flex;
@@ -12,76 +15,11 @@
   height: 100%;
   overflow: hidden;
 }
+.planner-layout:has(.tp-header-row2) {
+  --app-header-h: 97px;
+}
 
 /* ----- Header ----- */
-.planner-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 16px;
-  height: var(--app-header-h);
-  background: var(--scarlet);
-  color: #fff;
-  flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(0,0,0,.2);
-  z-index: 20;
-}
-.planner-header-logo {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -.3px;
-  white-space: nowrap;
-  margin-right: 4px;
-  flex-shrink: 0;
-}
-.planner-header-logo img {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-  display: block;
-  flex-shrink: 0;
-}
-/* ===== HEADER NAV (Planner <-> Scheduler) ===== */
-.app-header-nav {
-  display: flex;
-  gap: 2px;
-  background: rgba(255,255,255,.12);
-  border-radius: var(--radius-sm);
-  padding: 2px;
-  flex-shrink: 0;
-}
-.app-header-nav-link {
-  padding: 5px 12px;
-  border-radius: var(--radius-xs);
-  font-size: 12.5px;
-  font-weight: 600;
-  color: rgba(255,255,255,.8);
-  white-space: nowrap;
-  transition: background .15s, color .15s;
-}
-.app-header-nav-link:hover { color: #fff; }
-.app-header-nav-link.active { background: rgba(255,255,255,.22); color: #fff; }
-.app-header-nav-home { display: inline-flex; align-items: center; }
-.app-header-nav-home-icon { display: none; }
-/* Phones: Home collapses to a house icon and all three items tighten up,
-   so the added Home item doesn't push "Sign in" off a 375px screen. */
-@media (max-width: 600px) {
-  /* Nested selector so this outranks the 860px rule further down. */
-  .app-header-nav .app-header-nav-link { padding: 5px 5px; }
-  .app-header-nav-home-icon { display: block; }
-  .app-header-nav-home-label { display: none; }
-}
-
-.planner-header-center {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
 .planner-credits-badge {
   font-size: 12px;
   opacity: .8;
@@ -100,62 +38,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.planner-header-user {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  flex-shrink: 0;
-}
-.planner-header-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid rgba(255,255,255,.5);
-  object-fit: cover;
-  flex-shrink: 0;
-}
-.planner-header-name {
-  font-size: 13px;
-  opacity: .85;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.btn-signout {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  border: 1.5px solid rgba(255,255,255,.5);
-  background: transparent;
-  color: #fff;
-  opacity: .85;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: opacity .15s, background .15s;
-}
-.btn-signout:hover { opacity: 1; background: rgba(255,255,255,.12); }
-.btn-signout-icon { display: none; }
-
-.btn-signin {
-  font-size: 12px;
-  padding: 6px 14px;
-  border-radius: var(--radius-sm);
-  border: 1.5px solid rgba(255,255,255,.7);
-  background: rgba(255,255,255,.15);
-  color: #fff;
-  font-weight: 500;
-  opacity: .95;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: opacity .15s, background .15s, border-color .15s;
-  cursor: pointer;
-}
-.btn-signin:hover { opacity: 1; background: rgba(255,255,255,.25); border-color: #fff; }
 
 /* save status badge */
 .save-badge {
@@ -1079,6 +961,11 @@
    chip or an offering warning. */
 .offering-badge-abroad { color: var(--text); background: var(--cream-dark); box-shadow: inset 0 0 0 1px var(--border); }
 .course-card-abroad { display: inline-block; margin-top: 3px; }
+/* Law/Dental/Medical flag (not open to undergrads) — same outlined look as
+   the study-abroad chip, and sits beside it when a course has both. */
+.offering-badge-career { color: var(--text); background: var(--cream-dark); box-shadow: inset 0 0 0 1px var(--border); }
+.course-card-career { display: inline-block; margin-top: 3px; }
+.course-card-abroad + .course-card-career { margin-left: 4px; }
 
 /* ===== SIDE PANEL TABS (HUB / Requirements / Credits) ===== */
 /* One panel visible at a time; collapse/expand applies to the whole tabbed
@@ -2833,27 +2720,13 @@
 .unsaved-modal-leave {
   margin-top: 4px;
 }
-.theme-toggle {
-  width: 30px;
-  height: 30px;
-  border: 1px solid rgba(255,255,255,.55);
-  border-radius: 50%;
-  background: rgba(255,255,255,.1);
-  color: #fff;
-  font-size: 16px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-.theme-toggle:hover { background: rgba(255,255,255,.22); }
 
-/* "?" in a circle — opens HelpSupportModal. Deliberately an opaque near-
-   white badge (not the ghost/outline treatment theme-toggle uses) so it
-   reads as a distinct, findable landmark rather than blending into the
-   header alongside preference toggles. Sits on the header's permanent
-   scarlet bar (unaffected by the light/dark toggle — see .planner-header),
-   so like its neighbors it uses raw white-based rgba rather than the
-   --white token, which itself flips dark in dark mode and would go muddy
-   here; var(--scarlet) for the glyph is still a token, not a hex literal. */
+/* Legacy "?" help badge from the old planner header. No component uses
+   this class any more — AppHeader's help button is .tp-help-btn
+   (AppHeader.css) — but home.css's .home-help-btn comment still points
+   here as its reference look. Opaque near-white badge on the permanent
+   scarlet bar, so raw white-based rgba rather than the --white token
+   (which flips dark in dark mode). */
 .header-help-btn {
   width: 30px;
   height: 30px;
@@ -3058,28 +2931,12 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
     display: none;
   }
 }
-/* Extreme-narrow phones: drop the purely decorative avatar and the theme
-   toggle (a rarely-changed preference) to make room for the controls that
-   actually do something — plan switching, CRUD, transcript import, sign out. */
-@media (max-width: 440px) {
-  .planner-header-avatar,
-  .theme-toggle {
-    display: none;
-  }
-}
-/* Smallest phones: collapse "Sign out" to icon-only, same as Import Transcript. */
-@media (max-width: 340px) {
-  .btn-signout-icon { display: inline; }
-  .btn-signout-label { display: none; }
-  .btn-signout { padding: 4px 8px; }
-}
 /* Below this, collapse "Import Transcript" to an icon-only button so its
    fixed-width label stops competing with the plan controls for space. */
 @media (max-width: 860px) {
   .btn-import-transcript-icon { display: inline; }
   .btn-import-transcript-label { display: none; }
   .btn-import-transcript { padding: 7px; }
-  .app-header-nav-link { padding: 5px 8px; font-size: 11.5px; }
 
   .mobile-tab-bar { display: flex; }
 
@@ -3121,7 +2978,8 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   /* Semester board becomes a horizontally swipeable, near-one-card view
      instead of a wide multi-column strip. */
   .semester-board {
-    height: calc(100dvh - var(--app-header-h) - 40px - 54px); /* header + bulletin bar + tab bar */
+    min-height: calc(100dvh - var(--app-header-h) - 40px - 54px); /* header + bulletin bar + tab bar; grows with added years like desktop */
+    flex-shrink: 0; /* .planner-center is a flex column here — don't squeeze the board back down to min-height */
     padding: 0 5vw 14px;
     gap: 12px;
     scroll-snap-type: x proximity;
@@ -3183,13 +3041,122 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
 }
 
 @media (max-width: 600px) {
-  .planner-header { padding: 0 10px; gap: 6px; }
-  .planner-header-logo { font-size: 14px; }
   .planner-credits-badge,
-  .planner-guest-label,
-  .planner-header-name {
+  .planner-guest-label {
     display: none;
   }
   .plan-name-input { width: 34vw; }
   .plan-select { max-width: 30vw; }
+}
+
+/* ── Semester notes (free-text placeholders — see NoteCard.jsx) ──────────
+   Dashed border so a note reads as "not a real course". No drag, no lock. */
+.note-card {
+  position: relative;
+  background: transparent;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 8px;
+  cursor: default;
+}
+.note-card:hover { border-color: #c9c3bb; }
+.note-card-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity .12s, background .12s, color .12s;
+  cursor: pointer;
+}
+.note-card:hover .note-card-remove,
+.note-card-remove:focus-visible { opacity: 1; }
+.note-card-remove:hover { background: var(--warning-surface); color: var(--warning-text); }
+.note-card-text {
+  display: block;
+  width: 100%;
+  padding: 0 18px 0 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-style: italic;
+  text-align: left;
+  line-height: 1.35;
+  cursor: text;
+  overflow-wrap: anywhere;
+}
+.note-card-text.is-empty { color: var(--text-muted); }
+.note-card-text-input,
+.note-card-credits-input {
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+.note-card-text-input { width: calc(100% - 18px); }
+.note-card-credits-input { width: 48px; }
+.note-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+.note-card-credits {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: text;
+}
+.note-card-credits:hover,
+.note-card-text:hover { color: var(--scarlet); }
+.note-card-tag {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--text-muted);
+}
+.add-note-btn {
+  align-self: flex-start;
+  margin: 2px 4px 0;
+  padding: 2px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.add-note-btn:hover {
+  border-color: var(--scarlet);
+  color: var(--scarlet);
+}
+.add-year-btn:disabled,
+.add-year-btn:disabled:hover {
+  opacity: .5;
+  cursor: not-allowed;
+  border-color: var(--border);
+  color: var(--text-secondary);
+  background: transparent;
 }

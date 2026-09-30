@@ -5,10 +5,7 @@ import { parseCourseKey, normalizeCourseKey, compareByCatalogNumber } from '../.
 import {
   loadAllCoursesWhenRequested,
   requestCatalogLoad,
-  CAREERS,
-  UNDERGRAD,
-  ALL_CAREERS,
-  matchesCareer,
+  isProfessionalCareer,
 } from '../../utils/courseQuery';
 import { getOfferingBadge } from '../../utils/offeringPattern';
 import SemesterPickerModal from './SemesterPickerModal';
@@ -160,30 +157,6 @@ function HubFilterSelect({ selected, onChange }) {
   );
 }
 
-// Course level (career) filter — defaults to Undergrad so grad/law/dental/
-// medical courses don't crowd undergrad results. Exported so
-// SchedulerSearch renders the identical control.
-export function LevelFilterSelect({ id, value, onChange }) {
-  return (
-    <div className="search-sem-target">
-      <label htmlFor={id}>Level</label>
-      <select
-        id={id}
-        className="search-sem-select"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {CAREERS.map((career) => (
-          <option key={career} value={career}>
-            {career}
-          </option>
-        ))}
-        <option value={ALL_CAREERS}>All levels</option>
-      </select>
-    </div>
-  );
-}
-
 // Stash toggle glyph — filled paw = stashed, outline paw = not. `currentColor`
 // so it inherits the button's own color (scarlet / stashed-amber / hover
 // white — see .search-result-stash-btn in planner.css), same as the star
@@ -267,6 +240,9 @@ function SearchResultCard({
           {course.studyAbroad && (
             <span className="offering-badge offering-badge-abroad">Study abroad</span>
           )}
+          {isProfessionalCareer(course.career) && (
+            <span className="offering-badge offering-badge-career">{course.career}</span>
+          )}
         </div>
         {course.hubUnits?.length > 0 && (
           <div className="search-result-hub">
@@ -319,7 +295,6 @@ export default function CourseSearch({
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hubFilters, setHubFilters] = useState([]);
-  const [levelFilter, setLevelFilter] = useState(UNDERGRAD);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCourseForPicker, setSelectedCourseForPicker] = useState(null);
@@ -418,7 +393,6 @@ export default function CourseSearch({
         matches = allCourses
           .filter((course) => {
             if (!course.id.startsWith(normalizedQuery)) return false;
-            if (!matchesCareer(course, levelFilter)) return false;
 
             let hubMatch = true;
             if (hasHubFilter) {
@@ -442,8 +416,6 @@ export default function CourseSearch({
           .sort(compareByCatalogNumber);
       } else {
         matches = allCourses.filter((course) => {
-          if (!matchesCareer(course, levelFilter)) return false;
-
           let textMatch = true;
           if (normalizedQuery) {
             const normalizedCourseNum = normalizeCourseKey(course.courseNumber || '');
@@ -474,6 +446,10 @@ export default function CourseSearch({
           return textMatch && hubMatch && rangeMatch;
         });
       }
+      // Law/Dental/Medical courses (not open to undergrads) go after
+      // everything else, before the keyword list is cut to 20. Stable sort,
+      // so each group keeps the ordering above.
+      matches.sort((a, b) => isProfessionalCareer(a.career) - isProfessionalCareer(b.career));
 
       if (isSubjectMode && matches.length > 0) {
         // Prefer the real, spaced display form ("CAS CS") over the bare
@@ -491,7 +467,7 @@ export default function CourseSearch({
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [searchQuery, hubFilters, levelFilter, rangeFilter, coursesLoaded, allCourses, subjectPrefixes]);
+  }, [searchQuery, hubFilters, rangeFilter, coursesLoaded, allCourses, subjectPrefixes]);
 
   const hasActiveQuery = Boolean(searchQuery.trim()) || hubFilters.length > 0 || Boolean(rangeFilter);
   const stashSet = useMemo(() => new Set(stash), [stash]);
@@ -535,7 +511,6 @@ export default function CourseSearch({
           </div>
         )}
         <HubFilterSelect selected={hubFilters} onChange={setHubFilters} />
-        <LevelFilterSelect id="level-filter" value={levelFilter} onChange={setLevelFilter} />
         <div className="search-sem-target">
           <label htmlFor="sem-target">Add to</label>
           <select

@@ -6,7 +6,7 @@ const SUPPORT_EMAIL = 'terrierplan@gmail.com';
 const DISCORD_URL = 'https://discord.gg/bostonuniversity';
 
 function pluralizeStudents(n) {
-  return `${n.toLocaleString()} student${n === 1 ? '' : 's'}`;
+  return `${n.toLocaleString()} Terrier${n === 1 ? '' : 's'}`;
 }
 
 export default function GlobalFooter() {

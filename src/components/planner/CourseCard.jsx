@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { getOfferingWarning } from '../../utils/offeringPattern';
+import { isProfessionalCareer } from '../../utils/courseQuery';
 
 export default function CourseCard({
   courseKey,
@@ -66,6 +67,9 @@ export default function CourseCard({
       <div className="course-card-name">{courseName}</div>
       {data?.studyAbroad && (
         <span className="offering-badge offering-badge-abroad course-card-abroad">Study abroad</span>
+      )}
+      {isProfessionalCareer(data?.career) && (
+        <span className="offering-badge offering-badge-career course-card-career">{data.career}</span>
       )}
       {showOfferingWarning && (
         <div
