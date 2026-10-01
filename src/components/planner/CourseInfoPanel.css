@@ -1,0 +1,250 @@
+/* Course info panel (CourseInfoPanel.jsx). One DOM, two presentations:
+   - above 860px: a right-anchored drawer with NO scrim, so the board behind
+     it stays draggable/clickable (the overlay wrapper is display: contents
+     and takes no part in hit-testing);
+   - 860px and below: a bottom sheet over a scrim, modelled on
+     scheduler.css's .sched-swap-sheet. */
+
+.course-info-overlay {
+  display: contents;
+}
+
+.course-info-panel {
+  position: fixed;
+  top: var(--app-header-h, 52px);
+  right: 0;
+  bottom: 0;
+  /* Below the full-screen views (z-index 60) and the modals (100). */
+  z-index: 45;
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  background: var(--white);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+
+.course-info-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border-light);
+}
+.course-info-heading { min-width: 0; }
+.course-info-code {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--scarlet);
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+.course-info-title {
+  margin: 2px 0 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.course-info-name-note {
+  margin: 3px 0 0;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-muted);
+}
+.course-info-credits {
+  margin: 3px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.course-info-close {
+  flex-shrink: 0;
+  min-width: 26px;
+  min-height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.course-info-close:hover { color: var(--text); }
+
+.course-info-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.course-info-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+/* Cards use 9px for these; the panel has room to be legible. */
+.course-info-chips .hub-chip,
+.course-info-chips .offering-badge { font-size: 11px; padding: 2px 6px; }
+
+.course-info-section-title {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: var(--text-muted);
+}
+.course-info-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.course-info-empty,
+.course-info-status {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.course-info-status { padding: 12px 0; text-align: center; }
+.course-info-status p { margin: 0 0 8px; }
+.course-info-retry {
+  padding: 6px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.course-info-retry:hover { border-color: var(--scarlet); }
+
+/* Past offerings: year rows x Fall/Spring/Summer columns. Fixed layout with
+   equal season columns so it fits 375px without scrolling. */
+.course-info-offerings {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.course-info-offerings th,
+.course-info-offerings td {
+  padding: 4px 2px;
+  border-bottom: 1px solid var(--border-light);
+}
+.course-info-offerings thead th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.course-info-offerings tbody th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: left;
+  padding-left: 4px;
+}
+.course-info-offerings col:first-child,
+.course-info-offerings thead th:first-child { width: 22%; }
+.course-info-offerings-last {
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.course-info-offerings-summary {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+/* A term that hasn't happened yet: empty and faintly shaded, never a dash. */
+.course-info-offerings td.is-future { background: var(--border-light); opacity: .6; }
+/* Dot = offered (the accent colour), dash = not offered (muted and faint).
+   Section counts live in each cell's title tooltip, not in the cell. */
+.course-info-offerings-dot { color: var(--scarlet); font-size: 11px; line-height: 1; }
+.course-info-offerings-dash { color: var(--text-muted); opacity: .55; }
+/* --scarlet doesn't lift in dark mode (about 2.6:1 on the panel background,
+   under the 3:1 a graphic needs), so use the dark-aware red already defined
+   for warnings. */
+html[data-theme='dark'] .course-info-offerings-dot { color: var(--warning-border); }
+.course-info-offerings-legend {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.course-info-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Fall 2026 sections, grouped by component (Lecture / Laboratory / ...). */
+.course-info-group + .course-info-group { margin-top: 10px; }
+.course-info-group-title {
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+.course-info-group-count { font-weight: 500; color: var(--text-muted); }
+.course-info-sections {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.course-info-section-row {
+  padding: 8px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.course-info-section-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 10px;
+}
+.course-info-section-label { font-weight: 700; color: var(--text); }
+.course-info-section-seats { font-weight: 600; }
+.course-info-section-seats.is-open { color: var(--success-text); }
+.course-info-section-seats.is-closed { color: var(--warning-text); }
+.course-info-status-inline { padding: 4px 0; text-align: left; }
+
+@media (max-width: 860px) {
+  .course-info-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 55; /* same layer as SectionSwapSheet's overlay */
+    display: flex;
+    align-items: flex-end;
+    background: rgba(0, 0, 0, 0.48); /* same scrim as .sched-swap-sheet-overlay */
+  }
+  .course-info-panel {
+    position: static;
+    width: 100%;
+    max-height: 82vh;
+    border-left: none;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}

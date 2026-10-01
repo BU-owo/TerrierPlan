@@ -16,6 +16,7 @@ function StashResultCard({
   onAddCourse,
   onPickSemester,
   onRemoveFromStash,
+  onShowInfo,
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `stash-${course.id}`,
@@ -74,16 +75,29 @@ function StashResultCard({
           </div>
         )}
       </div>
-      <button
-        type="button"
-        className="search-result-unstash-btn"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => { e.stopPropagation(); onRemoveFromStash(course.id); }}
-        aria-label={`Remove ${courseLabel} from Paw-tential Courses`}
-        title="Remove from Paw-tential Courses"
-      >
-        ×
-      </button>
+      {/* Stacked like CourseSearch's result card — see the note there. */}
+      <div className="search-result-actions">
+        <button
+          type="button"
+          className="search-result-unstash-btn"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onRemoveFromStash(course.id); }}
+          aria-label={`Remove ${courseLabel} from Paw-tential Courses`}
+          title="Remove from Paw-tential Courses"
+        >
+          ×
+        </button>
+        <button
+          type="button"
+          className="search-result-info-btn"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onShowInfo(course.id); }}
+          aria-label={`View details for ${courseLabel}`}
+          title="Course details"
+        >
+          i
+        </button>
+      </div>
     </div>
   );
 }
@@ -102,6 +116,7 @@ export default function StashPanel({
   coursesInPlan,
   onAddCourse,
   onRemoveFromStash,
+  onShowCourseInfo,
 }) {
   const [selectedCourseForPicker, setSelectedCourseForPicker] = useState(null);
 
@@ -138,6 +153,7 @@ export default function StashPanel({
             onAddCourse={onAddCourse}
             onPickSemester={setSelectedCourseForPicker}
             onRemoveFromStash={onRemoveFromStash}
+            onShowInfo={onShowCourseInfo}
           />
         ))}
 

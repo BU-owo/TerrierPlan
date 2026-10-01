@@ -191,6 +191,7 @@ function SearchResultCard({
   onPickSemester,
   onAddToStash,
   onRemoveFromStash,
+  onShowInfo,
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `search-${course.id}`,
@@ -259,23 +260,39 @@ function SearchResultCard({
           </div>
         )}
       </div>
-      {/* Secondary action, independent of the card's own add-to-planner
-          click/drag — saves the course to the stash instead. Stops
+      {/* Secondary actions, independent of the card's own add-to-planner
+          click/drag. Stacked in a column (not side by side) so the narrow
+          252px panel keeps its width for the course name. Each stops
           propagation so it never triggers the card's click or arms a drag. */}
-      <button
-        type="button"
-        className={`search-result-stash-btn${isStashed ? ' is-stashed' : ''}`}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (isStashed) onRemoveFromStash(course.id);
-          else onAddToStash(course.id);
-        }}
-        aria-label={isStashed ? `Remove ${courseLabel} from Paw-tential Courses` : `Add ${courseLabel} to Paw-tential Courses`}
-        title={isStashed ? 'Remove from Paw-tential Courses' : 'Add to Paw-tential Courses'}
-      >
-        <PawIcon filled={isStashed} />
-      </button>
+      <div className="search-result-actions">
+        <button
+          type="button"
+          className={`search-result-stash-btn${isStashed ? ' is-stashed' : ''}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isStashed) onRemoveFromStash(course.id);
+            else onAddToStash(course.id);
+          }}
+          aria-label={isStashed ? `Remove ${courseLabel} from Paw-tential Courses` : `Add ${courseLabel} to Paw-tential Courses`}
+          title={isStashed ? 'Remove from Paw-tential Courses' : 'Add to Paw-tential Courses'}
+        >
+          <PawIcon filled={isStashed} />
+        </button>
+        <button
+          type="button"
+          className="search-result-info-btn"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onShowInfo(course.id);
+          }}
+          aria-label={`View details for ${courseLabel}`}
+          title="Course details"
+        >
+          i
+        </button>
+      </div>
     </div>
   );
 }
@@ -292,6 +309,7 @@ export default function CourseSearch({
   stash = [],
   onAddToStash,
   onRemoveFromStash,
+  onShowCourseInfo,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hubFilters, setHubFilters] = useState([]);
@@ -593,6 +611,7 @@ export default function CourseSearch({
             onPickSemester={setSelectedCourseForPicker}
             onAddToStash={onAddToStash}
             onRemoveFromStash={onRemoveFromStash}
+            onShowInfo={onShowCourseInfo}
           />
         ))}
 

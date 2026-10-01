@@ -373,6 +373,44 @@
   color: var(--warning-text);
   border-color: var(--warning-border);
 }
+/* Right-hand button column on a search/stash result: the stash (or unstash)
+   button above the "i" details button. A column rather than a row so the
+   252px panel keeps its width for the course name. */
+.search-result-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.search-result-actions .search-result-stash-btn,
+.search-result-actions .search-result-unstash-btn { margin-top: 1px; }
+/* Opens CourseInfoPanel. Neutral rather than scarlet so it doesn't compete
+   with the stash button. pointer-events: auto for the same reason as the
+   stash button — already-added cards go pointer-events: none as a whole. */
+.search-result-info-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 13px;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+  pointer-events: auto;
+}
+.search-result-info-btn:hover {
+  border-color: var(--scarlet);
+  color: var(--scarlet);
+}
 .search-loading { padding: 20px; text-align: center; color: var(--text-muted); font-size: 12px; }
 
 /* ===== SEARCH / STASH TOGGLE (planner-left) ===== */
@@ -3006,7 +3044,8 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   /* Larger tap targets throughout */
   .plan-btn-icon { width: 32px; height: 32px; }
   .search-result-stash-btn,
-  .search-result-unstash-btn { width: 26px; height: 26px; }
+  .search-result-unstash-btn,
+  .search-result-info-btn { width: 26px; height: 26px; }
 
   /* 16px avoids iOS Safari auto-zooming the page on input focus */
   .search-input, .plan-name-input { font-size: 16px; }
