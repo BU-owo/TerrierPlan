@@ -8,13 +8,35 @@ import { normalizeCourseKey, compareByCatalogNumber } from './courseKey';
 // promise (not component state) so it survives across mounts/unmounts and
 // concurrent callers await the same in-flight request rather than each
 // firing their own.
+//
+// Served from the static /courses.json (written by scripts/export-catalog.cjs)
+// rather than read from Firestore on every visit. That file omits fields that
+// are null/false/empty, so consumers must treat a missing field as absent.
+// If the file is missing or unusable, falls back to reading the collection.
 let coursesPromise = null;
+
+async function loadCoursesFromStaticFile() {
+  const res = await fetch('/courses.json');
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const courses = await res.json();
+  if (!Array.isArray(courses) || courses.length === 0) {
+    throw new Error('expected a non-empty array');
+  }
+  return courses;
+}
+
+function loadCoursesFromFirestore() {
+  return getDocs(collection(db, 'courses')).then((snapshot) => {
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  });
+}
 
 export function loadAllCourses() {
   if (!coursesPromise) {
-    coursesPromise = getDocs(collection(db, 'courses'))
-      .then((snapshot) => {
-        return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    coursesPromise = loadCoursesFromStaticFile()
+      .catch((err) => {
+        console.warn('Static course catalog unavailable, falling back to Firestore:', err);
+        return loadCoursesFromFirestore();
       })
       .catch((err) => {
         coursesPromise = null; // let the next caller retry instead of caching a failure
