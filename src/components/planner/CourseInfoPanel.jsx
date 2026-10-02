@@ -161,6 +161,13 @@ function isFutureTerm(year, season) {
   return CURRENT_TERM_SEASON != null && SEASON_ORDER[season] > SEASON_ORDER[CURRENT_TERM_SEASON];
 }
 
+// True for a term strictly before the current one. Mirror of isFutureTerm:
+// if the current season can't be read, no term in the current year is past.
+function isPastTerm(year, season) {
+  if (year !== CURRENT_TERM_YEAR) return year < CURRENT_TERM_YEAR;
+  return CURRENT_TERM_SEASON != null && SEASON_ORDER[season] < SEASON_ORDER[CURRENT_TERM_SEASON];
+}
+
 // offeringHistory `history` → one row per year from OFFERING_HISTORY_MIN_YEAR
 // through the current term's year, newest first, whether or not the course
 // has an entry for that year. Uses each entry's `year` and `season` as-is
@@ -196,12 +203,29 @@ function buildOfferingRows(history) {
   return { rows, lastOffered };
 }
 
+// The current term is usually not in offeringHistory yet (it is a published
+// schedule, not completed history), so when the course has sections this term
+// (cancelled ones don't count) add one history entry for it. History wins: if
+// it already has an entry for the current term, nothing is added.
+function withCurrentTermEntry(history, currentSections) {
+  if (!currentSections || CURRENT_TERM_SEASON == null) return history;
+  const hasEntry = history.some(
+    (entry) => Number(entry?.year) === CURRENT_TERM_YEAR && entry.season === CURRENT_TERM_SEASON,
+  );
+  if (hasEntry) return history;
+  const sectionCount = currentSections.filter((s) => s.classStat !== 'Cancelled').length;
+  if (sectionCount === 0) return history;
+  return [...history, { year: CURRENT_TERM_YEAR, season: CURRENT_TERM_SEASON, sectionCount }];
+}
+
 // "Fall 5 of 7 · Spring 7 of 7 · Summer 0 of 7". Per season, M is the number
-// of terms of that season in the row range that have already happened (future
-// terms are left out) and N is how many of those have a dot.
+// of terms of that season in the row range strictly before the current term
+// and N is how many of those have a dot. Takes rows built from offeringHistory
+// alone, so the current term (counted from sections, not history) is in
+// neither N nor M.
 function summarizeSeasons(rows) {
   return SEASONS.map((season) => {
-    const happened = rows.filter((row) => !isFutureTerm(row.year, season));
+    const happened = rows.filter((row) => isPastTerm(row.year, season));
     const offered = happened.filter((row) => row[season] != null).length;
     return `${season} ${offered} of ${happened.length}`;
   }).join(' · ');
@@ -233,11 +257,14 @@ function SectionStatus({ status, onRetry, children }) {
   return children;
 }
 
-function PastOfferings({ status, data, onRetry }) {
+function PastOfferings({ status, data, currentSections, onRetry }) {
   const history = Array.isArray(data?.history)
     ? data.history.filter((entry) => Number(entry?.year) >= OFFERING_HISTORY_MIN_YEAR)
     : [];
-  const { rows, lastOffered } = status === 'ready' ? buildOfferingRows(history) : { rows: [], lastOffered: null };
+  const { rows, lastOffered } = status === 'ready'
+    ? buildOfferingRows(withCurrentTermEntry(history, currentSections))
+    : { rows: [], lastOffered: null };
+  const historyRows = status === 'ready' ? buildOfferingRows(history).rows : [];
   return (
     <section className="course-info-section">
       <h4 className="course-info-section-title">Past offerings</h4>
@@ -251,7 +278,9 @@ function PastOfferings({ status, data, onRetry }) {
             <p className="course-info-offerings-last">
               Last offered: {lastOffered.season} {lastOffered.year}
             </p>
-            <p className="course-info-offerings-summary">{summarizeSeasons(rows)}</p>
+            {historyRows.length > 0 && (
+              <p className="course-info-offerings-summary">{summarizeSeasons(historyRows)}</p>
+            )}
             <table className="course-info-offerings">
               <caption className="course-info-sr-only">Which seasons the course was offered, by year</caption>
               <thead>
@@ -454,7 +483,12 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
                 <DetailText value={course.prerequisites} emptyLabel="None listed" />
               </section>
 
-              <PastOfferings status={historyFetch.status} data={historyFetch.data} onRetry={historyFetch.retry} />
+              <PastOfferings
+                status={historyFetch.status}
+                data={historyFetch.data}
+                currentSections={termFetch.status === 'ready' ? termFetch.data.sections : null}
+                onRetry={historyFetch.retry}
+              />
 
               <CurrentTermSections status={termFetch.status} data={termFetch.data} onRetry={termFetch.retry} />
             </>
