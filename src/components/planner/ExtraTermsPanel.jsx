@@ -6,6 +6,7 @@ export default function ExtraTermsPanel({
   courseMap,
   creditsMap,
   onRemoveCourse,
+  onShowCourseInfo,
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -62,6 +63,7 @@ export default function ExtraTermsPanel({
                   credits={creditsMap[key]}
                   season={et.season}
                   onRemove={onRemoveCourse ? () => onRemoveCourse(et.term, key) : undefined}
+                  onShowInfo={onShowCourseInfo ? () => onShowCourseInfo(key) : undefined}
                 />
               ))}
             </div>

@@ -19,6 +19,7 @@ export default function SemesterColumn({
   onColumnClick,
   onRemoveCourse,
   onToggleLock,
+  onShowCourseInfo,
   onToggleSemesterLock,
   onRemoveColumn,
   // Free-text note placeholders (see isNoteEntry) — bound to this slot by
@@ -140,6 +141,7 @@ export default function SemesterColumn({
               isDragging={draggingId === key}
               onRemove={locked ? undefined : () => onRemoveCourse(key)}
               onToggleLock={() => onToggleLock(key)}
+              onShowInfo={onShowCourseInfo ? () => onShowCourseInfo(key) : undefined}
             />
           );
         })}

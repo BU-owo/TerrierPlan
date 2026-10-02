@@ -36,6 +36,7 @@ import BulletinPanel from '../components/planner/BulletinPanel';
 import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
 import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
 import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
+import CourseInfoPanel from '../components/planner/CourseInfoPanel';
 import AppHeader from '../components/AppHeader';
 import HelpSupportModal from '../components/HelpSupportModal';
 import { requestCatalogLoad } from '../utils/courseQuery';
@@ -171,6 +172,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // grid (see SearchPanelTabs' "Paw-tential Courses" tab). Generic name so
   // the display label can change without a refactor.
   const [stash, setStash] = useState([]);
+  // courseKey shown in the course info panel (null = closed). Owned here so
+  // search, stash and placed-course cards all drive the one panel instance,
+  // which is mounted outside every mobile-tab panel (see the render below).
+  const [infoCourseKey, setInfoCourseKey] = useState(null);
+  const closeCourseInfo = useCallback(() => setInfoCourseKey(null), []);
   // number | `summer:{year}` string | null — the semester slot the student
   // says they're currently in (same target encoding as add/move/lock
   // handlers); null means none set. courseKey[] — courses the student has
@@ -1832,6 +1838,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               courseMap={courseMap}
               onAddToStash={handleAddToStash}
               onRemoveFromStash={handleRemoveFromStash}
+              onShowCourseInfo={setInfoCourseKey}
             />
           </aside>
 
@@ -1877,12 +1884,14 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                   currentSemesterTarget={currentSemesterTarget}
                   onSetCurrentSemester={handleSetCurrentSemester}
                   completedCourseKeys={completedCourseKeySet}
+                  onShowCourseInfo={setInfoCourseKey}
                 />
                 <ExtraTermsPanel
                   extraTerms={extraTerms}
                   courseMap={courseMap}
                   creditsMap={creditsMap}
                   onRemoveCourse={handleRemoveExtraTermCourse}
+                  onShowCourseInfo={setInfoCourseKey}
                 />
                 <ExternalCreditsPanel
                   externalCredits={externalCredits}
@@ -1991,6 +2000,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       />
 
       <HelpSupportModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
+
+      {/* ── Course info panel — the one instance for search, stash and placed
+           cards. Deliberately a direct child of .planner-layout (not inside
+           .planner-left/-center/-right, which are display:none on the
+           inactive mobile tabs) so it shows on every tab; still inside the
+           layout because its drawer position reads --app-header-h from it. ── */}
+      <CourseInfoPanel courseKey={infoCourseKey} onClose={closeCourseInfo} />
 
       {/* ── Mobile tab bar (hidden on wide screens via CSS; stays bottom-most
            so the bulletin panel expands upward above it) ── */}

@@ -1,7 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import CourseSearch from './CourseSearch';
 import StashPanel from './StashPanel';
-import CourseInfoPanel from './CourseInfoPanel';
 
 // How long the "Paw-tential Courses" tab flashes for after a course gets
 // starred — needs to roughly match the flash CSS animation's duration.
@@ -27,6 +26,9 @@ export default function SearchPanelTabs({
   courseMap,
   onAddToStash,
   onRemoveFromStash,
+  // Opens the single course info panel owned by PlannerPage (null = closed
+  // there); shared by the search and stash cards.
+  onShowCourseInfo,
 }) {
   const [activeTab, setActiveTab] = useState('search');
   // Starring a course from Search doesn't switch tabs (so the student can
@@ -34,11 +36,6 @@ export default function SearchPanelTabs({
   // stash — a quick flash on the tab itself instead of a toast/notification.
   const [stashFlash, setStashFlash] = useState(false);
   const flashTimeoutRef = useRef(null);
-  // One shared info panel for both tabs: whichever card's "i" was tapped
-  // last decides which course it shows (null = closed).
-  const [infoCourseKey, setInfoCourseKey] = useState(null);
-  const closeInfo = useCallback(() => setInfoCourseKey(null), []);
-
   useEffect(() => () => clearTimeout(flashTimeoutRef.current), []);
 
   function handleAddToStash(courseKey) {
@@ -84,7 +81,7 @@ export default function SearchPanelTabs({
           stash={stash}
           onAddToStash={handleAddToStash}
           onRemoveFromStash={onRemoveFromStash}
-          onShowCourseInfo={setInfoCourseKey}
+          onShowCourseInfo={onShowCourseInfo}
         />
       </div>
       <div className={`search-panel-tab-body${activeTab === 'stash' ? '' : ' side-panel-hidden'}`}>
@@ -97,11 +94,9 @@ export default function SearchPanelTabs({
           coursesInPlan={coursesInPlan}
           onAddCourse={onAddCourse}
           onRemoveFromStash={onRemoveFromStash}
-          onShowCourseInfo={setInfoCourseKey}
+          onShowCourseInfo={onShowCourseInfo}
         />
       </div>
-
-      <CourseInfoPanel courseKey={infoCourseKey} onClose={closeInfo} />
     </div>
   );
 }

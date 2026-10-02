@@ -12,6 +12,7 @@ export default function CourseCard({
   season,
   onRemove,
   onToggleLock,
+  onShowInfo,
   isDragOverlay = false,
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -94,7 +95,28 @@ export default function CourseCard({
         </div>
       )}
       <div className="course-card-footer">
-        <span className="course-card-credits">{creditStr}</span>
+        {/* "i" sits next to the credits rather than in the corner: the corner
+            already holds lock + remove, and the footer has the room for a
+            tap-sized button. Same stopPropagation pattern as those buttons
+            (and the search card's "i") so dragging and them are unaffected. */}
+        <div className="course-card-footer-start">
+          <span className="course-card-credits">{creditStr}</span>
+          {!isDragOverlay && onShowInfo && (
+            <button
+              type="button"
+              className="course-card-info-btn"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowInfo();
+              }}
+              aria-label={`View details for ${courseNumber}`}
+              title="Course details"
+            >
+              i
+            </button>
+          )}
+        </div>
         <div className="course-card-hubs">
           {hubUnits.slice(0, 3).map((unit) => {
             const colorInfo = HUB_COLOR_FOR[unit];

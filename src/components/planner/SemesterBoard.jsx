@@ -19,6 +19,7 @@ export default function SemesterBoard({
   onSemesterClick,
   onRemoveCourse,
   onToggleLock,
+  onShowCourseInfo,
   onToggleSemesterLock,
   onToggleSummerYear,
   onAddYear,
@@ -133,6 +134,7 @@ export default function SemesterBoard({
                 onColumnClick={() => onSemesterClick(fallIndex)}
                 onRemoveCourse={(key) => onRemoveCourse(key, fallIndex)}
                 onToggleLock={onToggleLock}
+                onShowCourseInfo={onShowCourseInfo}
                 onToggleSemesterLock={() => onToggleSemesterLock(fallIndex)}
                 {...noteProps(fallIndex)}
                 draggingId={draggingId}
@@ -150,6 +152,7 @@ export default function SemesterBoard({
                 onColumnClick={() => onSemesterClick(springIndex)}
                 onRemoveCourse={(key) => onRemoveCourse(key, springIndex)}
                 onToggleLock={onToggleLock}
+                onShowCourseInfo={onShowCourseInfo}
                 onToggleSemesterLock={() => onToggleSemesterLock(springIndex)}
                 {...noteProps(springIndex)}
                 draggingId={draggingId}
@@ -168,6 +171,7 @@ export default function SemesterBoard({
                   onColumnClick={() => onSemesterClick(summerTarget(year))}
                   onRemoveCourse={(key) => onRemoveCourse(key, summerTarget(year))}
                   onToggleLock={onToggleLock}
+                  onShowCourseInfo={onShowCourseInfo}
                   onToggleSemesterLock={() => onToggleSemesterLock(summerTarget(year))}
                   {...noteProps(summerTarget(year))}
                   onRemoveColumn={
