@@ -8,7 +8,7 @@ import {
   formatClock,
 } from '../../utils/sectionTime';
 import { classifyComponent } from '../../utils/sectionComponents';
-import { matchesFilters } from '../../utils/sectionFilters';
+import { swapGhostReasons } from '../../utils/swapReasons';
 import { SCHED_COLOR_COUNT, resolvedCourseColorIndex } from '../../utils/scheduleColors';
 import PinIcon from './PinIcon';
 import SwapIcon from './SwapIcon';
@@ -83,7 +83,10 @@ function layoutGhostsForDay(items) {
 // One swatch-pick popover, anchored under whichever legend chip opened it —
 // lives in the legend row (normal document flow) rather than inside a grid
 // block, so it never gets clipped by sched-grid-body's own scroll area.
-function ColorPickerPopover({ current, onPick, onClose }) {
+// `usedBy` maps a palette slot to the labels of the OTHER courses already
+// using it; those swatches get a dot but stay selectable (a manual pick may
+// duplicate on purpose).
+function ColorPickerPopover({ current, usedBy = {}, onPick, onClose }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -103,22 +106,40 @@ function ColorPickerPopover({ current, onPick, onClose }) {
 
   return (
     <div className="sched-color-popover" ref={ref} role="menu">
-      {Array.from({ length: SCHED_COLOR_COUNT }, (_, i) => (
-        <button
-          key={i}
-          type="button"
-          role="menuitemradio"
-          aria-checked={current === i}
-          className={`sched-color-swatch sched-color-${i}${current === i ? ' is-selected' : ''}`}
-          onClick={() => onPick(i)}
-          aria-label={`Color ${i + 1}`}
-        />
-      ))}
+      {Array.from({ length: SCHED_COLOR_COUNT }, (_, i) => {
+        const others = usedBy[i] || [];
+        const note = others.length > 0 ? ` — also used by ${others.join(', ')}` : '';
+        return (
+          <button
+            key={i}
+            type="button"
+            role="menuitemradio"
+            aria-checked={current === i}
+            className={`sched-color-swatch sched-color-${i}${current === i ? ' is-selected' : ''}`}
+            onClick={() => onPick(i)}
+            aria-label={`Color ${i + 1}${note}`}
+            title={note ? `Color ${i + 1}${note}` : undefined}
+          >
+            {others.length > 0 && <span className="sched-color-swatch-used" aria-hidden="true" />}
+          </button>
+        );
+      })}
       <button type="button" className="sched-color-popover-auto" onClick={() => onPick(null)}>
         Reset to auto
       </button>
     </div>
   );
+}
+
+// { [slot]: [course label, ...] } for every draft course other than
+// `courseKey`, so the picker can mark slots someone else already has.
+function slotsUsedByOthers(courseKey, courseColors, courseMap) {
+  const used = {};
+  for (const [key, slot] of Object.entries(courseColors)) {
+    if (key === courseKey) continue;
+    (used[slot] ??= []).push(courseMap[key]?.courseNumber ?? key);
+  }
+  return used;
 }
 
 // Renders one schedule (a set of committed sectionIds) as a Mon–Fri (+
@@ -143,16 +164,15 @@ export default function WeeklyGrid({
   lockedSectionIds = new Set(),
   onToggleLock = () => {},
   onEliminate = () => {},
-  colorOverrides = {},
+  courseColors = {},
   onSetColor = () => {},
   swapSlot = null,
   swapCandidates = [],
-  swapIgnoreFilters = false,
+  swapPoolIds = new Set(),
   globalTimeFilter,
   onOpenSwap = () => {},
   onSelectSwapSection = () => {},
   onCloseSwap = () => {},
-  onToggleSwapIgnoreFilters = () => {},
   onClearSwapSlot = () => {},
 }) {
   const [openColorFor, setOpenColorFor] = useState(null); // courseKey, or null
@@ -177,18 +197,28 @@ export default function WeeklyGrid({
     ? sections.filter((s) => !(s.courseKey === swapSlot.courseKey && classifyComponent(s) === swapSlot.component))
     : [];
   // Every alternative for the slot except whatever's currently occupying
-  // it (that one already renders solid via the normal block loop) — and,
-  // by default, only the ones that pass the active global time filter;
-  // the "Show all sections" toggle bypasses that.
+  // it (that one already renders solid via the normal block loop). Nothing
+  // is filtered out by the picks or the time filter — those only add a
+  // `reasons` label/style. (Sections with no meeting time can't be drawn on
+  // a grid at all, so they're dropped here; the mobile sheet lists them.)
   const ghostCandidates = swapSlot
     ? swapCandidates
         .filter((s) => s.id !== swapSlot.currentSectionId)
-        .filter((s) => swapIgnoreFilters || matchesFilters(s, globalTimeFilter))
-        .map((section) => ({
-          section,
-          meeting: sectionMeeting(section),
-          conflict: othersCommitted.some((o) => sectionsConflict(o, section)),
-        }))
+        .map((section) => {
+          // Course names of every placed section this one would clash with.
+          const clashes = [...new Set(
+            othersCommitted
+              .filter((o) => sectionsConflict(o, section))
+              .map((o) => courseMap[o.courseKey]?.courseNumber ?? o.courseKey),
+          )];
+          return {
+            section,
+            meeting: sectionMeeting(section),
+            conflict: clashes.length > 0,
+            clashes,
+              reasons: swapGhostReasons(section, swapPoolIds, globalTimeFilter),
+          };
+        })
         .filter((g) => g.meeting)
     : [];
   const swapCourseCode = swapSlot ? (courseMap[swapSlot.courseKey]?.courseNumber ?? swapSlot.courseKey) : '';
@@ -250,12 +280,8 @@ export default function WeeklyGrid({
       {swapSlot && (
         <div className="sched-swap-banner">
           <span className="sched-swap-banner-title">
-            Showing other {swapComponentLabel} sections for <strong>{swapCourseCode}</strong> as ghosts. Click one to swap it in
+            Showing every other {swapComponentLabel} section for <strong>{swapCourseCode}</strong> as ghosts. Click one to place it, or click your current one to keep it
           </span>
-          <label className="sched-swap-banner-toggle">
-            <input type="checkbox" checked={swapIgnoreFilters} onChange={onToggleSwapIgnoreFilters} />
-            Show all sections (ignore filters)
-          </label>
           <button type="button" className="sched-swap-banner-btn" onClick={onClearSwapSlot}>
             Clear this slot
           </button>
@@ -269,7 +295,7 @@ export default function WeeklyGrid({
           <div className="sched-color-legend-item" key={courseKey}>
             <button
               type="button"
-              className={`sched-color-legend-swatch sched-color-${resolvedCourseColorIndex(courseKey, colorOverrides)}`}
+              className={`sched-color-legend-swatch sched-color-${resolvedCourseColorIndex(courseKey, courseColors)}`}
               onClick={() => setOpenColorFor((cur) => (cur === courseKey ? null : courseKey))}
               aria-haspopup="true"
               aria-expanded={openColorFor === courseKey}
@@ -279,7 +305,8 @@ export default function WeeklyGrid({
             <span className="sched-color-legend-label">{label}</span>
             {openColorFor === courseKey && (
               <ColorPickerPopover
-                current={resolvedCourseColorIndex(courseKey, colorOverrides)}
+                current={resolvedCourseColorIndex(courseKey, courseColors)}
+                usedBy={slotsUsedByOthers(courseKey, courseColors, courseMap)}
                 onPick={(idx) => {
                   onSetColor(courseKey, idx);
                   setOpenColorFor(null);
@@ -349,16 +376,28 @@ export default function WeeklyGrid({
                   const blockHeight = Math.max(MIN_BLOCK_HEIGHT, (meeting.endMin - meeting.startMin) * PX_PER_MIN);
                   const showProf = Boolean(profLastName) && blockHeight >= PROF_LINE_THRESHOLD;
                   const showRoom = Boolean(roomAndNbr) && blockHeight >= ROOM_LINE_THRESHOLD;
+                  // While swapping, whatever currently fills the slot is
+                  // itself clickable: "keep this one" just exits swap mode
+                  // (onCloseSwap — no selection change, no regeneration).
+                  // Not a role="button": the block already contains real
+                  // buttons (below), which can't nest inside one — those
+                  // all stopPropagation, so only a click on the block body
+                  // reaches this. Esc and Cancel remain the keyboard paths.
+                  const isSwapKeep = Boolean(swapSlot)
+                    && section.courseKey === swapSlot.courseKey
+                    && classifyComponent(section) === swapSlot.component;
+                  const blockTitle = `${courseCode} — Section ${section.classSection} — ${describeSectionTime(section)}${section.facilId ? ` — ${section.facilId}` : ''}`;
 
                   return (
                     <div
                       key={`${section.id}-${day}`}
-                      className={`sched-grid-block sched-color-${resolvedCourseColorIndex(section.courseKey, colorOverrides)}${isLocked ? ' is-locked' : ''}`}
+                      className={`sched-grid-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isLocked ? ' is-locked' : ''}${isSwapKeep ? ' is-swap-keep' : ''}`}
                       style={{
                         top: (meeting.startMin - gridStart) * PX_PER_MIN,
                         height: blockHeight,
                       }}
-                      title={`${courseCode} — Section ${section.classSection} — ${describeSectionTime(section)}${section.facilId ? ` — ${section.facilId}` : ''}`}
+                      title={isSwapKeep ? `Keep this section — ${blockTitle}` : blockTitle}
+                      onClick={isSwapKeep ? onCloseSwap : undefined}
                     >
                       <div className="sched-grid-block-actions">
                         <button
@@ -407,7 +446,9 @@ export default function WeeklyGrid({
                   ? section.instructors.map((i) => `${i.first ? i.first[0] + '. ' : ''}${i.last}`.trim()).join(', ')
                   : 'Staff';
                 const tooltip = [
-                  `${courseCode} — Section ${section.classSection}${conflict ? ' — CONFLICTS with your current schedule' : ''}`,
+                  `${courseCode} — Section ${section.classSection}`,
+                  ...(conflict ? [`Can't place — conflicts with ${ghost.clashes.join(', ')}`] : []),
+                  ...(ghost.reasons.length > 0 ? [ghost.reasons.map((r) => r.text).join(' · ')] : []),
                   describeSectionTime(section),
                   instructorLabel,
                   describeSeatStatus(section),
@@ -418,7 +459,8 @@ export default function WeeklyGrid({
                     key={`ghost-${section.id}-${day}`}
                     role="button"
                     tabIndex={0}
-                    className={`sched-grid-ghost-block sched-color-${resolvedCourseColorIndex(section.courseKey, colorOverrides)}${conflict ? ' has-conflict' : ''}`}
+                    aria-disabled={conflict || undefined}
+                    className={`sched-grid-ghost-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${conflict ? ' has-conflict' : ''}${ghost.reasons.some((r) => r.key === 'unpicked') ? ' is-unpicked' : ''}${ghost.reasons.some((r) => r.key === 'filtered') ? ' is-filtered' : ''}`}
                     style={{
                       top: (meeting.startMin - gridStart) * PX_PER_MIN,
                       height: blockHeight,
@@ -426,11 +468,11 @@ export default function WeeklyGrid({
                       width: `${100 / laneCount}%`,
                     }}
                     title={tooltip}
-                    onClick={() => onSelectSwapSection(section.id)}
+                    onClick={conflict ? undefined : () => onSelectSwapSection(section.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        onSelectSwapSection(section.id);
+                        if (!conflict) onSelectSwapSection(section.id);
                       }
                     }}
                   >

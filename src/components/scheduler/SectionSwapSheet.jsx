@@ -1,6 +1,6 @@
 import { sectionsConflict, describeSectionTime, describeSeatStatus } from '../../utils/sectionTime';
 import { classifyComponent } from '../../utils/sectionComponents';
-import { matchesFilters } from '../../utils/sectionFilters';
+import { swapGhostReasons } from '../../utils/swapReasons';
 import { resolvedCourseColorIndex } from '../../utils/scheduleColors';
 import PinIcon from './PinIcon';
 
@@ -20,10 +20,9 @@ export default function SectionSwapSheet({
   courseMap,
   committedSectionIds,
   lockedSectionIds = new Set(),
-  colorOverrides = {},
-  ignoreFilters,
+  courseColors = {},
+  poolSectionIds = new Set(),
   globalTimeFilter,
-  onToggleIgnoreFilters,
   onSelect,
   onToggleLock,
   onClearSlot,
@@ -31,14 +30,15 @@ export default function SectionSwapSheet({
 }) {
   const courseCode = courseMap[slot.courseKey]?.courseNumber ?? slot.courseKey;
   const componentLabel = candidates[0]?.componentLabel || slot.component;
-  const colorIndex = resolvedCourseColorIndex(slot.courseKey, colorOverrides);
+  const colorIndex = resolvedCourseColorIndex(slot.courseKey, courseColors);
 
   const committedOthers = committedSectionIds
     .map((id) => sectionsById[id])
     .filter((s) => s && !(s.courseKey === slot.courseKey && classifyComponent(s) === slot.component));
 
-  const visible = candidates.filter((s) => s.id === slot.currentSectionId || ignoreFilters || matchesFilters(s, globalTimeFilter));
-  const hiddenByFilterCount = candidates.length - visible.length;
+  // Every candidate is listed — checked or not, eliminated or not, inside
+  // the time filter or not. Those only get a small label (swapGhostReasons).
+  const visible = candidates;
 
   return (
     <div className="sched-swap-sheet-overlay" role="dialog" aria-modal="true" aria-labelledby="swap-sheet-title">
@@ -49,7 +49,7 @@ export default function SectionSwapSheet({
               {courseCode} — {componentLabel}
             </h3>
             <p className="sched-swap-sheet-subtitle">
-              {visible.length} section{visible.length === 1 ? '' : 's'} available — tap one to swap it in
+              {visible.length} section{visible.length === 1 ? '' : 's'} available — tap one to place it, or tap your current one to keep it
             </p>
           </div>
           <button type="button" className="sched-swap-sheet-close" onClick={onClose} aria-label="Cancel — keep current selection">
@@ -57,19 +57,15 @@ export default function SectionSwapSheet({
           </button>
         </div>
 
-        <label className="sched-swap-sheet-filter-toggle">
-          <input type="checkbox" checked={ignoreFilters} onChange={onToggleIgnoreFilters} />
-          Show all sections (ignore filters)
-          {!ignoreFilters && hiddenByFilterCount > 0 && (
-            <span className="sched-swap-sheet-filter-hint"> — {hiddenByFilterCount} hidden by your time filter</span>
-          )}
-        </label>
-
         <div className="sched-swap-sheet-list">
           {visible.map((section) => {
             const isCurrent = section.id === slot.currentSectionId;
             const isLocked = lockedSectionIds.has(section.id);
             const conflicts = committedOthers.filter((o) => sectionsConflict(o, section));
+            const reasons = isCurrent ? [] : swapGhostReasons(section, poolSectionIds, globalTimeFilter);
+            // A conflicting row can't be placed (the current row is always
+            // tappable — that's "keep").
+            const blocked = !isCurrent && conflicts.length > 0;
             const instructorLabel = section.instructors?.length
               ? section.instructors.map((i) => `${i.first ? i.first[0] + '. ' : ''}${i.last}`.trim()).join(', ')
               : 'Staff';
@@ -79,26 +75,37 @@ export default function SectionSwapSheet({
             // a real nested <button> for the pin toggle) — never both, so
             // the pin button is never nested inside another interactive
             // element (invalid HTML, and a disabled parent <button> would
-            // likely have blocked the pin from ever firing).
+            // likely have blocked the pin from ever firing). Tapping the
+            // current row just closes the sheet (keep it, change nothing);
+            // the pin button stops propagation so it doesn't also close,
+            // and Cancel is the keyboard path.
             return (
               <div
                 key={section.id}
-                className={`sched-swap-sheet-row${isCurrent ? ' is-current' : ''}${conflicts.length > 0 ? ' has-conflict' : ''}`}
+                className={`sched-swap-sheet-row${isCurrent ? ' is-current' : ''}${conflicts.length > 0 ? ' has-conflict' : ''}${reasons.length > 0 ? ' is-offpool' : ''}${blocked ? ' is-blocked' : ''}`}
+                aria-current={isCurrent ? 'true' : undefined}
                 role={isCurrent ? undefined : 'button'}
                 tabIndex={isCurrent ? undefined : 0}
-                onClick={isCurrent ? undefined : () => onSelect(section.id)}
+                aria-disabled={blocked || undefined}
+                onClick={isCurrent ? onClose : blocked ? undefined : () => onSelect(section.id)}
                 onKeyDown={isCurrent ? undefined : (e) => {
-                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(section.id); }
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    if (!blocked) onSelect(section.id);
+                  }
                 }}
               >
                 <div className="sched-swap-sheet-row-top">
                   <span className="sched-swap-sheet-row-section">Section {section.classSection}</span>
                   {isCurrent && <span className="sched-swap-sheet-row-current-badge">Current</span>}
+                  {reasons.map((r) => (
+                    <span key={r.key} className="sched-swap-sheet-row-tag" title={r.text}>{r.label}</span>
+                  ))}
                   {isCurrent && (
                     <button
                       type="button"
                       className={`sched-swap-sheet-pin-btn${isLocked ? ' is-locked' : ''}`}
-                      onClick={() => onToggleLock(section.id)}
+                      onClick={(e) => { e.stopPropagation(); onToggleLock(section.id); }}
                       aria-label={isLocked ? 'Unlock this section' : 'Lock this section into every generated schedule'}
                       title={isLocked ? 'Locked — click to unlock' : 'Lock this section into every generated schedule'}
                     >
@@ -113,7 +120,8 @@ export default function SectionSwapSheet({
                 </div>
                 {conflicts.length > 0 && (
                   <div className="sched-swap-sheet-row-conflict">
-                    Conflicts with {conflicts.map((c) => courseMap[c.courseKey]?.courseNumber ?? c.courseKey).join(', ')}
+                    {blocked ? "Can't place — conflicts with " : 'Conflicts with '}
+                    {[...new Set(conflicts.map((c) => courseMap[c.courseKey]?.courseNumber ?? c.courseKey))].join(', ')}
                   </div>
                 )}
               </div>
@@ -121,7 +129,7 @@ export default function SectionSwapSheet({
           })}
           {visible.length === 0 && (
             <div className="sched-swap-sheet-empty">
-              No sections match your time filter. Try "Show all sections" above.
+              No other sections available.
             </div>
           )}
         </div>

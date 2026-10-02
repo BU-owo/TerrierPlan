@@ -22,6 +22,7 @@ import GlobalTimeFilter from '../components/scheduler/GlobalTimeFilter';
 import ScheduleStepper from '../components/scheduler/ScheduleStepper';
 import WeeklyGrid from '../components/scheduler/WeeklyGrid';
 import SectionSwapSheet from '../components/scheduler/SectionSwapSheet';
+import { nextAutoColors } from '../utils/scheduleColors';
 import BookmarkedSchedulesPanel from '../components/scheduler/BookmarkedSchedulesPanel';
 import SavedSchedulesPanel from '../components/scheduler/SavedSchedulesPanel';
 import { CURRENT_TERM, CURRENT_TERM_LABEL } from '../utils/term';
@@ -47,7 +48,8 @@ const PREVIEW_WIDTH_LOCAL_KEY = 'terrierplan_scheduler_preview_width';
 // cosmetic viewing preference, so (like preview width) it's local-only and
 // not tied to sign-in state or any one saved schedule: recoloring CS 111
 // once means it's that color everywhere you see it in this browser, draft
-// or saved. See scheduleColors.js's resolvedCourseColorIndex.
+// or saved. Courses without one get an automatic slot (scheduleColors.js's
+// nextAutoColors).
 const COURSE_COLORS_LOCAL_KEY = 'terrierplan_scheduler_course_colors';
 // Mirrors scheduler.css's .scheduler-right min-width — the drag can widen
 // the preview past its CSS default, never shrink it past this floor.
@@ -146,23 +148,26 @@ function eliminateFromCourses(courses, courseKey, groupKey, sectionId) {
   });
 }
 
-// Section-swap's "click a ghost to swap it in" — replaces WHATEVER was
-// considered/locked for one (course, component) slot with a single
-// specific section. Deliberately doesn't lock the new pick (the student
-// can still pin it separately via the grid's pin button) — it just makes
-// it the sole consideration for that group, same as checking exactly one
-// box and unchecking everything else. `sectionsById` is needed (unlike
-// the two functions above) because `c.locked` is a flat array that can mix
-// locks from more than one of this course's component groups at once
-// (e.g. a locked Lecture AND a locked Discussion) — only the lock actually
-// belonging to THIS group should be cleared.
-function selectSoleSectionInCourses(courses, courseKey, groupKey, sectionId, sectionsById) {
+// Pin for a section that was swapped into the preview (it's in neither the
+// group's considered nor locked lists — swap placement never touches the
+// draft). Replaces the group's old lock instead of adding a second: a lock
+// that's no longer on screen can only be one the swap displaced (every
+// locked section is forced into every generated schedule, so it would
+// otherwise still be showing), so those are dropped; locks still displayed
+// — e.g. the other pieces of a multi-lock "Other" group — are kept. Used
+// only for swapped-in sections; ordinary pins still go through
+// toggleLockInCourses, which adds to the group's locks.
+function lockSwappedInSection(courses, courseKey, groupKey, sectionId, displayedIds, sectionsById) {
   return courses.map((c) => {
     if (c.courseKey !== courseKey) return c;
+    const keptLocks = c.locked.filter((id) => {
+      const s = sectionsById[id];
+      return !s || classifyComponent(s) !== groupKey || displayedIds.includes(id);
+    });
     return {
       ...c,
-      locked: c.locked.filter((id) => classifyComponent(sectionsById[id]) !== groupKey),
-      considering: { ...c.considering, [groupKey]: [sectionId] },
+      locked: [...keptLocks, sectionId],
+      considering: { ...c.considering, [groupKey]: [] },
     };
   });
 }
@@ -256,7 +261,6 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const [sectionSwapSlot, setSectionSwapSlot] = useState(null);
   // Reset to false every time a NEW slot is opened (see
   // handleOpenSectionSwap) — "respect filters by default" per slot.
-  const [sectionSwapIgnoreFilters, setSectionSwapIgnoreFilters] = useState(false);
 
   // ── Preview panel width (desktop drag-resize) ───────────────────────────────
   // null = use scheduler.css's default (46%, floor 460px); once the student
@@ -310,8 +314,22 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     localStorage.setItem(COURSE_COLORS_LOCAL_KEY, JSON.stringify(courseColorOverrides));
   }, [courseColorOverrides]);
 
-  // index === null clears back to the automatic hash color (see
-  // WeeklyGrid's "Reset to auto").
+  // Automatic slots for the draft's courses (see nextAutoColors): derived
+  // during render, so a newly added course never paints one frame in a
+  // fallback color. Kept in state — not recomputed from scratch — so a
+  // course keeps its slot while it stays in the draft.
+  const [autoColors, setAutoColors] = useState({});
+  const nextAuto = nextAutoColors(autoColors, draftCourses.map((c) => c.courseKey), courseColorOverrides);
+  if (nextAuto !== autoColors) setAutoColors(nextAuto);
+  // The resolved slot for each draft course: a manual override wins.
+  const courseColors = useMemo(() => {
+    const colors = {};
+    for (const { courseKey } of draftCourses) colors[courseKey] = courseColorOverrides[courseKey] ?? nextAuto[courseKey];
+    return colors;
+  }, [draftCourses, courseColorOverrides, nextAuto]);
+
+  // index === null clears the override, returning the course to automatic
+  // assignment (see WeeklyGrid's "Reset to auto").
   function handleSetCourseColor(courseKey, index) {
     setCourseColorOverrides((prev) => {
       if (index == null) {
@@ -465,8 +483,31 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const sectionSwapCandidates = useMemo(() => {
     if (!sectionSwapSlot) return [];
     const sections = sectionsByCourse[sectionSwapSlot.courseKey] || [];
-    return sections.filter((s) => classifyComponent(s) === sectionSwapSlot.component);
+    // Everything except cancelled sections — checked or not, eliminated or
+    // not, inside the time filter or not (those are only labeled, never
+    // hidden; see WeeklyGrid/SectionSwapSheet). The placed section is kept
+    // even if cancelled so the sheet can still show it.
+    return sections.filter(
+      (s) => classifyComponent(s) === sectionSwapSlot.component
+        && (s.id === sectionSwapSlot.currentSectionId || s.classStat !== 'Cancelled'),
+    );
   }, [sectionSwapSlot, sectionsByCourse]);
+
+  // Which of those candidates are in the draft's pool for this slot (checked
+  // or locked). Eliminate just removes a section from the pool — there is no
+  // separate "eliminated" state — so "not in this set" covers both unchecked
+  // and eliminated.
+  const sectionSwapPoolIds = useMemo(() => {
+    const ids = new Set();
+    if (!sectionSwapSlot) return ids;
+    const course = draftCourses.find((c) => c.courseKey === sectionSwapSlot.courseKey);
+    if (!course) return ids;
+    (course.considering[sectionSwapSlot.component] || []).forEach((id) => ids.add(id));
+    course.locked.forEach((id) => {
+      if (sectionsById[id] && classifyComponent(sectionsById[id]) === sectionSwapSlot.component) ids.add(id);
+    });
+    return ids;
+  }, [sectionSwapSlot, draftCourses, sectionsById]);
 
   // Esc exits section-swap without changing the current selection — same
   // "cancel" as the banner/sheet's own Cancel button, just keyboard-
@@ -788,7 +829,13 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     const section = sectionsById[sectionId];
     if (!section) return;
     const groupKey = classifyComponent(section);
-    const next = toggleLockInCourses(draftCourses, section.courseKey, groupKey, sectionId);
+    const course = draftCourses.find((c) => c.courseKey === section.courseKey);
+    const isSwappedIn = Boolean(course)
+      && !course.locked.includes(sectionId)
+      && !(course.considering[groupKey] || []).includes(sectionId);
+    const next = isSwappedIn
+      ? lockSwappedInSection(draftCourses, section.courseKey, groupKey, sectionId, previewSectionIds, sectionsById)
+      : toggleLockInCourses(draftCourses, section.courseKey, groupKey, sectionId);
     setDraftCourses(next);
     regenerateFrom(next);
   }
@@ -805,25 +852,37 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // ── Section-swap handlers ───────────────────────────────────────────────────
   function handleOpenSectionSwap(courseKey, component, currentSectionId) {
     setSectionSwapSlot({ courseKey, component, currentSectionId });
-    setSectionSwapIgnoreFilters(false);
   }
 
   function handleCloseSectionSwap() {
     setSectionSwapSlot(null);
   }
 
+  // Places a ghost into the combination on screen — and ONLY there. The
+  // draft (checked/locked sections) is untouched and nothing is regenerated,
+  // so a section that's unchecked, eliminated or outside the time filter can
+  // be previewed without being added to the pool. The preview no longer
+  // matches any generated schedule or saved one, so the stepper position and
+  // the active-saved highlight are dropped; the next Generate / Prev / Next /
+  // lock / eliminate re-derives the preview from the draft and the placement
+  // is gone (Save keeps it, since it saves what's on screen).
   function handleSelectSwapSection(sectionId) {
     if (!sectionSwapSlot) return;
-    const next = selectSoleSectionInCourses(
-      draftCourses,
-      sectionSwapSlot.courseKey,
-      sectionSwapSlot.component,
-      sectionId,
-      sectionsById,
-    );
-    setDraftCourses(next);
-    regenerateFrom(next);
     setSectionSwapSlot(null);
+    if (previewSectionIds.includes(sectionId)) return;
+    const inSlot = (id) => {
+      const s = sectionsById[id];
+      return s && s.courseKey === sectionSwapSlot.courseKey && classifyComponent(s) === sectionSwapSlot.component;
+    };
+    // The section the slot was opened on; if the preview has since changed
+    // under it, fall back to whichever section now fills the slot.
+    const replaceId = previewSectionIds.includes(sectionSwapSlot.currentSectionId)
+      ? sectionSwapSlot.currentSectionId
+      : previewSectionIds.find(inSlot);
+    if (!replaceId) return;
+    setPreviewSectionIds(previewSectionIds.map((id) => (id === replaceId ? sectionId : id)));
+    setPreviewIndex(null);
+    setActiveSavedId(null);
   }
 
   function handleClearSwapSlot() {
@@ -940,6 +999,10 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       }
       return next;
     });
+
+    // Colors aren't saved with a schedule: assign them afresh from the order
+    // the courses appear in it, so the same schedule always loads the same.
+    setAutoColors(nextAutoColors({}, Object.keys(byCourse), courseColorOverrides));
 
     setDraftCourses(
       Object.entries(byCourse).map(([courseKey, secs]) => {
@@ -1150,16 +1213,15 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                 lockedSectionIds={allLockedSectionIds}
                 onToggleLock={handlePreviewToggleLock}
                 onEliminate={handlePreviewEliminate}
-                colorOverrides={courseColorOverrides}
+                courseColors={courseColors}
                 onSetColor={handleSetCourseColor}
                 swapSlot={sectionSwapSlot}
                 swapCandidates={sectionSwapCandidates}
-                swapIgnoreFilters={sectionSwapIgnoreFilters}
+                swapPoolIds={sectionSwapPoolIds}
                 globalTimeFilter={globalTimeFilter}
                 onOpenSwap={handleOpenSectionSwap}
                 onSelectSwapSection={handleSelectSwapSection}
                 onCloseSwap={handleCloseSectionSwap}
-                onToggleSwapIgnoreFilters={() => setSectionSwapIgnoreFilters((v) => !v)}
                 onClearSwapSlot={handleClearSwapSlot}
               />
             </div>
@@ -1229,10 +1291,9 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           courseMap={courseMap}
           committedSectionIds={previewSectionIds}
           lockedSectionIds={allLockedSectionIds}
-          colorOverrides={courseColorOverrides}
-          ignoreFilters={sectionSwapIgnoreFilters}
+          courseColors={courseColors}
+          poolSectionIds={sectionSwapPoolIds}
           globalTimeFilter={globalTimeFilter}
-          onToggleIgnoreFilters={() => setSectionSwapIgnoreFilters((v) => !v)}
           onSelect={handleSelectSwapSection}
           onToggleLock={handlePreviewToggleLock}
           onClearSlot={handleClearSwapSlot}
