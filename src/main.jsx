@@ -1,10 +1,18 @@
+// Must stay the first import: registers the startup error listeners before any
+// other module evaluates.
+import { setReactRoot } from './startupErrors'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 
-createRoot(document.getElementById('root')).render(
+const root = createRoot(document.getElementById('root'))
+setReactRoot(root)
+root.render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 )

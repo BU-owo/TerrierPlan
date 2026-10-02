@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import PlannerPage from './pages/PlannerPage';
 import SchedulerPage from './pages/SchedulerPage';
 import GlobalFooter from './components/GlobalFooter';
+import { markAppReady } from './startupErrors';
 import { useState, useEffect } from 'react';
 import './App.css';
 
@@ -52,6 +53,12 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  // Past the auth loading screen: from here on, uncaught window errors just
+  // log instead of replacing the page with the crash screen.
+  useEffect(() => {
+    if (!loading) markAppReady();
+  }, [loading]);
 
   function toggleTheme() {
     setTheme((current) => current === 'dark' ? 'light' : 'dark');
