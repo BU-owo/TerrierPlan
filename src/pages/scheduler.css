@@ -1455,6 +1455,41 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
 
 .sched-saved-list { display: flex; flex-direction: column; gap: 4px; }
 .sched-saved-empty { padding: 12px 4px; }
+/* Guest sign-in prompts (banner above the draft; note under the saved list):
+   solid scarlet strips with white text — the same scarlet as the header — so
+   they can't be mistaken for the pale settings rows around them. The button
+   is the shared cream primary (App.css .guest-signin-btn). Wraps on narrow
+   widths. */
+.sched-guest-banner,
+.sched-guest-save-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-sm);
+  background: var(--scarlet);
+  color: #fff;
+}
+.sched-guest-banner { margin: 0 0 8px; }
+.sched-guest-save-note { margin: 8px 0 0; padding: 4px 8px; }
+.sched-guest-save-note .guest-notice-text { font-size: 12px; }
+.sched-guest-banner-text { flex: 1 1 240px; min-width: 0; }
+.sched-guest-banner-dismiss {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #fff;
+  opacity: 0.85;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sched-guest-banner-dismiss:hover { opacity: 1; }
 .sched-saved-term-heading {
   margin: 10px 0 4px;
   font-size: 11px;

@@ -38,6 +38,7 @@ import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
 import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
 import CourseInfoPanel from '../components/planner/CourseInfoPanel';
 import AppHeader from '../components/AppHeader';
+import GuestSignInButton from '../components/GuestSignInButton';
 import HelpSupportModal from '../components/HelpSupportModal';
 import { requestCatalogLoad } from '../utils/courseQuery';
 import { normalizeExternalCredits, normalizeExternalCredit } from '../utils/externalCredits';
@@ -1809,9 +1810,18 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
             )}
           </>
         ) : (
-          <div className="planner-guest-label">
-            Browsing as guest — sign in to save your plans
-          </div>
+          <>
+            <div
+              className="planner-guest-label guest-notice-text"
+              title="Browsing as guest — your plan is saved only in this browser. Sign in to keep it."
+            >
+              <strong>Browsing as guest</strong> — your plan is saved only in this browser. Sign in to keep it.
+            </div>
+            <GuestSignInButton className="guest-signin-btn" onBeforeSignIn={() => saveLocalPlan()}>
+              <span className="btn-import-transcript-icon" aria-hidden="true">Sign in</span>
+              <span className="btn-import-transcript-label">Sign in with Google</span>
+            </GuestSignInButton>
+          </>
         )}
         <button
           type="button"

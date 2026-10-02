@@ -31,9 +31,7 @@
   flex-shrink: 0;
 }
 .planner-guest-label {
-  font-size: 13px;
   opacity: .9;
-  font-style: italic;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

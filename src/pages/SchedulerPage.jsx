@@ -15,6 +15,7 @@ import {
 import { db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
 import AppHeader from '../components/AppHeader';
+import GuestSignInButton from '../components/GuestSignInButton';
 import HelpSupportModal from '../components/HelpSupportModal';
 import SchedulerSearch from '../components/scheduler/SchedulerSearch';
 import DraftCourseCard from '../components/scheduler/DraftCourseCard';
@@ -52,6 +53,9 @@ const PREVIEW_WIDTH_LOCAL_KEY = 'terrierplan_scheduler_preview_width';
 // or saved. Courses without one get an automatic slot (scheduleColors.js's
 // nextAutoColors).
 const COURSE_COLORS_LOCAL_KEY = 'terrierplan_scheduler_course_colors';
+// The guest "you're not signed in" banner stays dismissed for the rest of the
+// browser session (sessionStorage), and comes back on the next visit.
+const GUEST_BANNER_DISMISSED_KEY = 'terrierplan_scheduler_guest_banner_dismissed';
 // Mirrors scheduler.css's .scheduler-right min-width — the drag can widen
 // the preview past its CSS default, never shrink it past this floor.
 const PREVIEW_MIN_WIDTH = 460;
@@ -303,6 +307,23 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   useEffect(() => {
     if (previewWidth != null) localStorage.setItem(PREVIEW_WIDTH_LOCAL_KEY, String(Math.round(previewWidth)));
   }, [previewWidth]);
+
+  const [guestBannerDismissed, setGuestBannerDismissed] = useState(() => {
+    try {
+      return sessionStorage.getItem(GUEST_BANNER_DISMISSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  function dismissGuestBanner() {
+    setGuestBannerDismissed(true);
+    try {
+      sessionStorage.setItem(GUEST_BANNER_DISMISSED_KEY, '1');
+    } catch {
+      // storage unavailable — it just stays dismissed until the page reloads
+    }
+  }
 
   // ── Per-course color overrides ──────────────────────────────────────────────
   const [courseColorOverrides, setCourseColorOverrides] = useState(() => {
@@ -1282,6 +1303,24 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
         </aside>
 
         <main className="scheduler-center">
+          {!user && !guestBannerDismissed && (
+            <div className="sched-guest-banner" role="note">
+              <span className="sched-guest-banner-text guest-notice-text">
+                <strong>Browsing as guest.</strong> Your saved schedules live only in this browser and are lost if
+                its data is cleared. Sign in to keep them.
+              </span>
+              <GuestSignInButton className="guest-signin-btn" />
+              <button
+                type="button"
+                className="sched-guest-banner-dismiss"
+                onClick={dismissGuestBanner}
+                aria-label="Dismiss for this session"
+                title="Dismiss for this session"
+              >
+                ×
+              </button>
+            </div>
+          )}
           <div className="sched-draft-toolbar">
             <h2>Your Schedule Draft — {CURRENT_TERM_LABEL}</h2>
             <div className="sched-draft-toolbar-actions">
@@ -1473,6 +1512,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             onToggleFavorite={handleToggleFavorite}
             onDelete={handleDeleteSchedule}
             onLoad={handleLoadSchedule}
+            isGuest={!user}
           />
         </aside>
       </div>

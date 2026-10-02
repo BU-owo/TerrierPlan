@@ -111,3 +111,34 @@
   .app-footer { padding: 8px 12px; }
   .app-footer-row { flex-direction: column; gap: 6px; }
 }
+
+/* ── Guest sign-in prompts (Planner sub-bar, Scheduler banner + post-save note) ──
+   One component's worth of styling shared by all three. The button is the
+   primary action: a solid cream fill with scarlet text, sitting on a scarlet
+   surface (the Planner's header bar, the Scheduler's banner/note) so it
+   stands out from outlined secondary buttons like Import Transcript. */
+.guest-signin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--cream);
+  color: var(--scarlet);
+}
+/* --cream is the page background in dark mode (#111827), not a cream, so the
+   button takes the off-white text token there. */
+html[data-theme='dark'] .guest-signin-btn { background: var(--text); }
+.guest-signin-btn:hover { filter: brightness(0.94); }
+.guest-signin-btn:disabled { opacity: 0.6; cursor: default; }
+.guest-notice-text { font-size: 13px; font-weight: 400; line-height: 1.35; }
+.guest-notice-text strong { font-weight: 700; }

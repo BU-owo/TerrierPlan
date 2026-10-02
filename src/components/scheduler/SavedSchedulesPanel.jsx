@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CURRENT_TERM, CURRENT_TERM_LABEL, scheduleTerm, termLabel } from '../../utils/term';
 import { describeSectionSet, scheduleKey } from '../../utils/scheduleCombos';
+import GuestSignInButton from '../GuestSignInButton';
 
 // Small inline pencil glyph for the rename affordance — a real icon asset
 // rather than a text/emoji dingbat, matching CourseSearch's PawIcon and
@@ -35,6 +36,7 @@ export default function SavedSchedulesPanel({
   onToggleFavorite,
   onDelete,
   onLoad,
+  isGuest = false,
 }) {
   const [name, setName] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -227,6 +229,16 @@ export default function SavedSchedulesPanel({
           </div>
         ))}
       </div>
+      {/* Guests only, while the combination they just saved is still on
+          screen: saved schedules sit in this browser until they sign in. */}
+      {isGuest && justSaved && (
+        <div className="sched-guest-save-note" role="status">
+          <span className="guest-notice-text">
+            <strong>Saved in this browser only.</strong> Sign in to keep it.
+          </span>
+          <GuestSignInButton className="guest-signin-btn" />
+        </div>
+      )}
     </div>
   );
 }
