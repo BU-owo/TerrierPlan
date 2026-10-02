@@ -1,5 +1,7 @@
 import { Component } from 'react';
 import {
+  CRASH_DISCORD_URL,
+  CRASH_REDDIT_URL,
   CRASH_RELOAD_LABEL,
   CRASH_RESET_LABEL,
   CRASH_TITLE,
@@ -39,6 +41,13 @@ export default class ErrorBoundary extends Component {
         <div className="tp-crash-inner">
           <h1 className="tp-crash-title">{CRASH_TITLE}</h1>
           <pre className="tp-crash-details">{formatErrorDetails(error, componentStack)}</pre>
+          <p className="tp-crash-report">
+            Please let BUowo know about this error on{' '}
+            <a href={CRASH_DISCORD_URL} target="_blank" rel="noopener noreferrer">Discord</a>
+            {' or '}
+            <a href={CRASH_REDDIT_URL} target="_blank" rel="noopener noreferrer">Reddit</a>
+            . A screenshot of this screen helps.
+          </p>
           <div className="tp-crash-actions">
             <button type="button" className="tp-crash-btn tp-crash-btn-primary" onClick={reloadPage}>
               {CRASH_RELOAD_LABEL}

@@ -25,6 +25,10 @@ const STACK_LINES = 6;
 export const CRASH_TITLE = 'Something went wrong loading TerrierPlan.';
 export const CRASH_RELOAD_LABEL = 'Reload';
 export const CRASH_RESET_LABEL = 'Reset saved scheduler data and reload';
+// Same invite as DISCORD_URL in components/GlobalFooter.jsx (hard-coded here
+// because this module has no imports).
+export const CRASH_DISCORD_URL = 'https://discord.gg/bostonuniversity';
+export const CRASH_REDDIT_URL = 'https://www.reddit.com/user/BUowo/';
 
 let appReady = false;
 let crashShown = false;
@@ -114,6 +118,8 @@ const CRASH_STYLES = `
   border: 1px solid var(--border, #E5E0D5);
   border-radius: 6px;
 }
+.tp-crash-report { margin: 0 0 20px; }
+.tp-crash-report a { color: inherit; font-weight: 600; text-decoration: underline; }
 .tp-crash-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .tp-crash-btn {
   padding: 10px 16px;
@@ -137,6 +143,15 @@ export function ensureCrashStyles() {
   } catch {
     // Unstyled is still readable.
   }
+}
+
+function crashLink(href, text) {
+  const link = document.createElement('a');
+  link.href = href;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.textContent = text;
+  return link;
 }
 
 export function renderCrashScreen(error) {
@@ -177,6 +192,14 @@ export function renderCrashScreen(error) {
     details.className = 'tp-crash-details';
     details.textContent = formatErrorDetails(error);
 
+    const report = document.createElement('p');
+    report.className = 'tp-crash-report';
+    report.appendChild(document.createTextNode('Please let BUowo know about this error on '));
+    report.appendChild(crashLink(CRASH_DISCORD_URL, 'Discord'));
+    report.appendChild(document.createTextNode(' or '));
+    report.appendChild(crashLink(CRASH_REDDIT_URL, 'Reddit'));
+    report.appendChild(document.createTextNode('. A screenshot of this screen helps.'));
+
     const actions = document.createElement('div');
     actions.className = 'tp-crash-actions';
 
@@ -198,6 +221,7 @@ export function renderCrashScreen(error) {
     actions.appendChild(reset);
     inner.appendChild(title);
     inner.appendChild(details);
+    inner.appendChild(report);
     inner.appendChild(actions);
     screen.appendChild(inner);
     container.innerHTML = '';
