@@ -4,10 +4,11 @@ import FlagIcon from './FlagIcon';
 // The lightweight shortlist from the stepper's bookmark toggle — separate
 // from SavedSchedulesPanel below it. Bookmarking is meant to be quick and
 // disposable ("maybe this one") while browsing combinations; saving is the
-// deliberate "keep this one" action. Bookmarks live only in SchedulerPage
-// state (not Firestore/localStorage) and persist across draft/search
-// changes within the session — only "Clear all" here wipes them, not
-// touching a course or regenerating.
+// deliberate "keep this one" action. Bookmarks live in SchedulerPage state,
+// mirrored to this browser's localStorage with the draft (see
+// utils/draftStorage.js) — not to Firestore, so they never follow the
+// student to another device — and persist across draft/search changes; only
+// "Clear all" here wipes them, not touching a course or regenerating.
 export default function BookmarkedSchedulesPanel({
   bookmarks, // [{ key, sectionIds }]
   sectionsById,
@@ -30,6 +31,9 @@ export default function BookmarkedSchedulesPanel({
           Clear all
         </button>
       </div>
+      <div className="sched-bookmarks-note">
+        A shortlist kept in this browser — it isn’t a saved schedule. Use Save to keep one.
+      </div>
       <div className="sched-bookmarks-list">
         {bookmarks.map(({ key, sectionIds }) => {
           const { compact, lines } = describeSectionSet(sectionIds, sectionsById, courseMap);
@@ -49,9 +53,9 @@ export default function BookmarkedSchedulesPanel({
                 type="button"
                 className="sched-bookmark-save-btn"
                 onClick={() => onPromote(key, sectionIds)}
-                title="Save this bookmark as a real saved schedule"
+                title="Save this as a schedule (listed under Saved schedules) and take it off the shortlist"
               >
-                Save
+                Save schedule
               </button>
               <button
                 type="button"

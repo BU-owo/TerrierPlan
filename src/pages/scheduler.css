@@ -1331,6 +1331,11 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   justify-content: space-between;
   gap: 8px;
 }
+.sched-bookmarks-note {
+  margin: 2px 0 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
 .sched-bookmarks-title {
   display: inline-flex;
   align-items: center;
@@ -1450,6 +1455,26 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
 
 .sched-saved-list { display: flex; flex-direction: column; gap: 4px; }
 .sched-saved-empty { padding: 12px 4px; }
+.sched-saved-term-heading {
+  margin: 10px 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.sched-saved-term-heading:first-child { margin-top: 0; }
+.sched-frozen-note {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--border-light);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.sched-grid-block-action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .sched-saved-row {
   display: flex;
   align-items: center;

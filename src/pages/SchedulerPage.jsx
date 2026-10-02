@@ -23,9 +23,10 @@ import ScheduleStepper from '../components/scheduler/ScheduleStepper';
 import WeeklyGrid from '../components/scheduler/WeeklyGrid';
 import SectionSwapSheet from '../components/scheduler/SectionSwapSheet';
 import { nextAutoColors } from '../utils/scheduleColors';
+import { readStoredDraft, writeStoredDraft } from '../utils/draftStorage';
 import BookmarkedSchedulesPanel from '../components/scheduler/BookmarkedSchedulesPanel';
 import SavedSchedulesPanel from '../components/scheduler/SavedSchedulesPanel';
-import { CURRENT_TERM, CURRENT_TERM_LABEL } from '../utils/term';
+import { CURRENT_TERM, CURRENT_TERM_LABEL, scheduleTerm, termLabel } from '../utils/term';
 import { sectionsConflict, describeSectionTime } from '../utils/sectionTime';
 import { classifyComponent, groupSectionsByComponent } from '../utils/sectionComponents';
 import {
@@ -198,9 +199,10 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // sectionId[] }] — componentKey is BU's raw `component` code (LEC/DIS/
   // LAB/..., see sectionComponents.js), so however many distinct
   // components a course has, it gets that many considering pools.
-  // Deliberately not persisted anywhere (guest or signed-in): SCHEMA.md
-  // only has a slot for *saved* schedules, so a work-in-progress draft
-  // resets on reload, the same way an unsubmitted search query would.
+  // Persisted to one localStorage key (utils/draftStorage.js), guest or
+  // signed-in alike — a per-browser convenience, separate from *saved*
+  // schedules (the only thing SCHEMA.md has a slot for), and restored after
+  // a reload by the restore effect below.
   // Order = the order courses were added. `locked` has no size cap — see
   // scheduleCombos.js's buildGenerationSlots.
   const [draftCourses, setDraftCourses] = useState([]);
@@ -241,7 +243,8 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // moved on and that combination no longer appears in `generated` at all.
   // Deliberately NOT cleared by "Clear all" / any draft edit — only the
   // panel's own "Clear all" wipes it, so a shortlist survives exploring a
-  // completely different set of courses.
+  // completely different set of courses. Persisted with the draft (see
+  // draftStorage.js), so it also survives a reload on this browser.
   const [bookmarks, setBookmarks] = useState(() => new Map());
 
   // ── Saved/favorited schedules ───────────────────────────────────────────────
@@ -443,8 +446,10 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           return changed ? { ...c, considering } : c;
         }));
       }
+      return sections;
     } catch (err) {
       console.error('Failed to load sections for', courseKey, err);
+      return null;
     } finally {
       setLoadingSectionsFor((prev) => {
         const next = new Set(prev);
@@ -454,15 +459,40 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     }
   }
 
+  // Sections that aren't part of any draft course's list — another term's
+  // saved schedule, or a restored bookmark of a course no longer in the
+  // draft — kept out of sectionsByCourse on purpose: that map feeds the draft
+  // picker and swap, which must only ever see the current term's draft.
+  // Added to sectionsById so the preview, credits and the saved/bookmark
+  // lists can still describe them.
+  const [standaloneSections, setStandaloneSections] = useState({});
   const sectionsById = useMemo(() => {
-    const map = {};
+    const map = { ...standaloneSections };
     Object.values(sectionsByCourse).forEach((list) => {
       list.forEach((section) => {
         map[section.id] = section;
       });
     });
     return map;
-  }, [sectionsByCourse]);
+  }, [sectionsByCourse, standaloneSections]);
+
+  // Label of the other term the grid is showing, or null for a current-term
+  // preview. Derived from the sections themselves (not from which saved row
+  // was clicked) so it holds if that schedule is deleted while on screen.
+  const previewForeignTermLabel = useMemo(() => {
+    const term = previewSectionIds.map((id) => sectionsById[id]?.term).find((t) => t && t !== CURRENT_TERM);
+    return term ? termLabel(term) : null;
+  }, [previewSectionIds, sectionsById]);
+
+  // Colors for what the grid is showing. Normally the draft's; a schedule
+  // from another term isn't in the draft, so its courses get slots assigned
+  // from the order they appear in it (same rule as loading a saved schedule).
+  const previewCourseColors = useMemo(() => {
+    if (!previewForeignTermLabel) return courseColors;
+    const keys = [...new Set(previewSectionIds.map((id) => sectionsById[id]?.courseKey).filter(Boolean))];
+    const auto = nextAutoColors({}, keys, courseColorOverrides);
+    return Object.fromEntries(keys.map((key) => [key, courseColorOverrides[key] ?? auto[key]]));
+  }, [previewForeignTermLabel, courseColors, previewSectionIds, sectionsById, courseColorOverrides]);
 
   const draftCourseKeys = useMemo(() => new Set(draftCourses.map((c) => c.courseKey)), [draftCourses]);
 
@@ -677,7 +707,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // bookmark on success: once it's a real saved schedule, the bookmark's
   // job — "don't lose this candidate" — is done.
   async function handlePromoteBookmark(key, sectionIds) {
-    await handleSaveSchedule(`Schedule ${savedSchedules.length + 1}`, sectionIds);
+    await handleSaveSchedule(`Schedule ${savedSchedules.filter((s) => scheduleTerm(s) === CURRENT_TERM).length + 1}`, sectionIds);
     handleRemoveBookmark(key);
   }
 
@@ -766,6 +796,172 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     invalidateGenerated();
   }
 
+  // ── Draft + bookmark persistence (utils/draftStorage.js) ───────────────────
+  // Restore: runs once on mount. Everything stored is re-checked against the
+  // catalog first — a course that's gone from `courses` is dropped, and so is
+  // any section id that's no longer a current-term, non-cancelled section — so
+  // a stale draft restores as much as is still valid instead of failing. A
+  // bookmark with ANY section gone is dropped whole (a combination missing a
+  // piece is no longer that schedule). The preview is then regenerated from
+  // the restored draft (see pendingRegen below).
+  //
+  // Writes are held back until restore finishes, so the empty initial state
+  // can never overwrite what's stored. If restore fails (e.g. offline) writes
+  // stay off for this page view and the stored draft is left as it was.
+  const draftRestoreStartedRef = useRef(false);
+  const draftRestoredRef = useRef(false);
+  const draftCoursesRef = useRef(draftCourses);
+  const [pendingRegen, setPendingRegen] = useState(false);
+  // The stored preview to put back once the batch is regenerated, if all its
+  // sections still exist: { ids, index } | null.
+  const restoredPreviewRef = useRef(null);
+
+  useEffect(() => {
+    draftCoursesRef.current = draftCourses;
+  }, [draftCourses]);
+
+  useEffect(() => {
+    if (draftRestoreStartedRef.current) return;
+    draftRestoreStartedRef.current = true;
+
+    async function restore() {
+      const stored = readStoredDraft();
+      if (!stored) {
+        draftRestoredRef.current = true;
+        return;
+      }
+      try {
+        const courseKeys = stored.courses.map((c) => c.courseKey);
+        const foundCourses = {};
+        for (let i = 0; i < courseKeys.length; i += 30) {
+          const snap = await getDocs(query(collection(db, 'courses'), where(documentId(), 'in', courseKeys.slice(i, i + 30))));
+          snap.docs.forEach((d) => {
+            foundCourses[d.id] = d.data();
+          });
+        }
+        const keptKeys = courseKeys.filter((k) => foundCourses[k]);
+        const lists = await Promise.all(keptKeys.map((k) => fetchSectionsForCourse(k)));
+        if (lists.some((l) => l == null)) throw new Error('could not load sections');
+        const validIds = Object.fromEntries(keptKeys.map((k, i) => [k, new Set(lists[i].map((sec) => sec.id))]));
+        const courses = stored.courses
+          .filter((c) => validIds[c.courseKey])
+          .map((c) => ({
+            courseKey: c.courseKey,
+            considering: Object.fromEntries(
+              Object.entries(c.considering).map(([group, ids]) => [group, ids.filter((id) => validIds[c.courseKey].has(id))]),
+            ),
+            locked: c.locked.filter((id) => validIds[c.courseKey].has(id)),
+          }));
+
+        const bookmarkIds = [...new Set([...stored.bookmarks.flat(), ...(stored.preview?.sectionIds || [])])];
+        const liveSections = {};
+        for (let i = 0; i < bookmarkIds.length; i += 30) {
+          const snap = await getDocs(query(collection(db, 'sections'), where(documentId(), 'in', bookmarkIds.slice(i, i + 30))));
+          snap.docs.forEach((d) => {
+            const sec = { id: d.id, ...d.data() };
+            if (sec.term === CURRENT_TERM && sec.classStat !== 'Cancelled') liveSections[d.id] = sec;
+          });
+        }
+        const bookmarkEntries = stored.bookmarks
+          .filter((ids) => ids.every((id) => liveSections[id]))
+          .map((ids) => [scheduleKey(ids), ids]);
+
+        // The stored preview is shown only if every section in it still exists;
+        // otherwise the preview is simply regenerated from the draft.
+        const storedPreview = stored.preview;
+        const previewIds = storedPreview ? storedPreview.sectionIds : [];
+        const previewIsLive = previewIds.length > 0 && previewIds.every((id) => liveSections[id]);
+
+        setCourseMap((prev) => ({ ...foundCourses, ...prev }));
+        setStandaloneSections((prev) => ({ ...liveSections, ...prev }));
+        fetchCourseDocs([...new Set(Object.values(liveSections).map((sec) => sec.courseKey))]);
+        // Whatever the student did while this was loading wins over the stored draft.
+        if (draftCoursesRef.current.length === 0 && courses.length > 0) {
+          setDraftCourses(courses);
+          setGlobalTimeFilter(stored.globalTimeFilter);
+          setSectionSortMode(stored.sortMode);
+          if (previewIsLive) restoredPreviewRef.current = { ids: previewIds, index: storedPreview.index };
+          setPendingRegen(true);
+        } else if (previewIsLive && draftCoursesRef.current.length === 0) {
+          // No draft to regenerate from (e.g. a previewed bookmark), but the
+          // combination itself is still good.
+          setPreviewSectionIds(previewIds);
+          setPreviewIndex(null);
+        }
+        setBookmarks((prev) => new Map([...bookmarkEntries, ...prev]));
+        draftRestoredRef.current = true;
+      } catch (err) {
+        console.warn('Could not restore the saved scheduler draft:', err);
+      }
+    }
+    restore();
+    // Mount-only: fetchSectionsForCourse etc. are re-created each render but
+    // only read state through setters here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Regenerate the preview from the restored draft. A separate effect so it
+  // runs after the restored state has rendered (regenerateFrom reads the
+  // section lists from the current render); skipped if a preview is already up.
+  useEffect(() => {
+    if (!pendingRegen) return;
+    setPendingRegen(false);
+    const target = restoredPreviewRef.current;
+    restoredPreviewRef.current = null;
+    if (previewSectionIds.length > 0) return;
+    const result = regenerateFrom(draftCourses);
+    if (!target) return;
+    // Put the stored combination back over the batch's first one. The stepper
+    // position is the stored index when that slot still holds this exact
+    // combination, else wherever it now sits in the batch, else none (e.g. a
+    // swapped-in section that's not in any generated schedule).
+    const key = scheduleKey(target.ids);
+    const batch = result?.schedules ?? [];
+    const idx = target.index != null && batch[target.index] && scheduleKey(batch[target.index]) === key
+      ? target.index
+      : batch.findIndex((ids) => scheduleKey(ids) === key);
+    setPreviewSectionIds(target.ids);
+    setPreviewIndex(idx >= 0 ? idx : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRegen]);
+
+  // Save: ~500ms after the last change, plus immediately when the page is
+  // hidden or unloaded (and on leaving the Scheduler), so a refresh right
+  // after an edit can't lose it. Not cleared by Save (saving a schedule
+  // doesn't touch the draft) or by anything but the student emptying the draft
+  // and bookmarks themselves — "Clear all" just saves an empty draft.
+  const latestDraftRef = useRef(null);
+  const draftDirtyRef = useRef(false);
+  const draftTimerRef = useRef(null);
+
+  const flushDraft = useCallback(() => {
+    clearTimeout(draftTimerRef.current);
+    if (!draftDirtyRef.current || !latestDraftRef.current) return;
+    draftDirtyRef.current = false;
+    writeStoredDraft(latestDraftRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!draftRestoredRef.current) return;
+    latestDraftRef.current = { draftCourses, globalTimeFilter, sectionSortMode, bookmarks, previewSectionIds, previewIndex };
+    draftDirtyRef.current = true;
+    clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(flushDraft, 500);
+  }, [draftCourses, globalTimeFilter, sectionSortMode, bookmarks, previewSectionIds, previewIndex, flushDraft]);
+
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState === 'hidden') flushDraft();
+    }
+    window.addEventListener('pagehide', flushDraft);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', flushDraft);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      flushDraft();
+    };
+  }, [flushDraft]);
+
   function handleGenerate() {
     const slots = buildGenerationSlots(draftCourses, sectionsByCourse, sectionsById);
     const result = generateSchedules(slots, sectionsById);
@@ -805,7 +1001,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       setPreviewIndex(null);
       setPreviewSectionIds([]);
       setActiveSavedId(null);
-      return;
+      return null;
     }
     const slots = buildGenerationSlots(nextDraftCourses, sectionsByCourse, sectionsById);
     const result = generateSchedules(slots, sectionsById);
@@ -818,6 +1014,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       setPreviewIndex(null);
       setPreviewSectionIds([]);
     }
+    return result;
   }
 
   // Lock/eliminate controls on the Preview grid's blocks themselves — same
@@ -971,6 +1168,31 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   async function handleLoadSchedule(schedule) {
     const ids = schedule.selectedSectionIds || [];
     if (ids.length === 0) return;
+
+    // A schedule from another term is shown, not edited: its sections are
+    // fetched by id and previewed on their own. The draft, the generated
+    // batch and every course's section list stay exactly as they were, so
+    // none of this term's alternatives can mix in.
+    if (scheduleTerm(schedule) !== CURRENT_TERM) {
+      const missingForeign = ids.filter((id) => !sectionsById[id]);
+      const fetched = {};
+      for (let i = 0; i < missingForeign.length; i += 30) {
+        const batch = missingForeign.slice(i, i + 30);
+        const snap = await getDocs(query(collection(db, 'sections'), where(documentId(), 'in', batch)));
+        snap.docs.forEach((d) => {
+          fetched[d.id] = { id: d.id, ...d.data() };
+        });
+      }
+      setStandaloneSections((prev) => ({ ...prev, ...fetched }));
+      const shown = ids.filter((id) => sectionsById[id] || fetched[id]);
+      fetchCourseDocs([...new Set(shown.map((id) => (sectionsById[id] || fetched[id]).courseKey))]);
+      setSectionSwapSlot(null);
+      setPreviewIndex(null);
+      setPreviewSectionIds(ids);
+      setActiveSavedId(schedule.id);
+      setMobileView('preview');
+      return;
+    }
 
     const missing = ids.filter((id) => !sectionsById[id]);
     const fetchedById = {};
@@ -1213,7 +1435,8 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                 lockedSectionIds={allLockedSectionIds}
                 onToggleLock={handlePreviewToggleLock}
                 onEliminate={handlePreviewEliminate}
-                courseColors={courseColors}
+                courseColors={previewCourseColors}
+                frozenTermLabel={previewForeignTermLabel}
                 onSetColor={handleSetCourseColor}
                 swapSlot={sectionSwapSlot}
                 swapCandidates={sectionSwapCandidates}

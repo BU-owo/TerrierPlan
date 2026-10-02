@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CURRENT_TERM, CURRENT_TERM_LABEL } from '../../utils/term';
+import { CURRENT_TERM, CURRENT_TERM_LABEL, scheduleTerm, termLabel } from '../../utils/term';
 import { describeSectionSet, scheduleKey } from '../../utils/scheduleCombos';
 
 // Small inline pencil glyph for the rename affordance — a real icon asset
@@ -45,11 +45,13 @@ export default function SavedSchedulesPanel({
   const [saving, setSaving] = useState(false);
   const canSave = previewSectionIds.length > 0;
   const previewKey = canSave ? scheduleKey(previewSectionIds) : null;
-  // Already saved = a saved schedule for this term with the same set of
-  // sections (order-independent). Also what keeps "Saved ✓" honest: if that
-  // schedule is later deleted, the button re-enables.
+  // Already saved = a saved schedule with the same set of sections
+  // (order-independent), whatever its term — section ids carry their term, so
+  // this also stops a previewed other-term schedule from being re-saved as a
+  // current-term one. Also what keeps "Saved ✓" honest: if that schedule is
+  // later deleted, the button re-enables.
   const alreadySaved = canSave && savedSchedules.some(
-    (s) => (s.term ?? CURRENT_TERM) === CURRENT_TERM && scheduleKey(s.selectedSectionIds || []) === previewKey,
+    (s) => scheduleKey(s.selectedSectionIds || []) === previewKey,
   );
   const justSaved = alreadySaved && justSavedKey === previewKey;
   const saveBlocked = !canSave || alreadySaved || saving;
@@ -59,7 +61,9 @@ export default function SavedSchedulesPanel({
     if (saveBlocked) return;
     setSaving(true);
     try {
-      await onSave(name.trim() || `Schedule ${savedSchedules.length + 1}`);
+      // "Schedule N" counts only this term's schedules.
+      const currentCount = savedSchedules.filter((s) => scheduleTerm(s) === CURRENT_TERM).length;
+      await onSave(name.trim() || `Schedule ${currentCount + 1}`);
       setJustSavedKey(previewKey);
       setName('');
     } finally {
@@ -78,14 +82,104 @@ export default function SavedSchedulesPanel({
     setEditingId(null);
   }
 
-  // Only this term's schedules are listed. Filtered here, not in the parent's
-  // state, because guest schedules are persisted from that state wholesale —
-  // dropping other terms there would erase them from localStorage.
-  // Favorited first, then most recently updated within each group.
-  const sorted = savedSchedules.filter((s) => (s.term ?? CURRENT_TERM) === CURRENT_TERM).sort((a, b) => {
-    if (Boolean(b.favorited) !== Boolean(a.favorited)) return b.favorited ? 1 : -1;
-    return 0;
-  });
+  // Every saved schedule is listed: the current term first, then each other
+  // term (newest first) under its own heading. Grouping is display-only —
+  // the parent's list, and guests' localStorage copy of it, is untouched.
+  // Within a group: favorited first, then the order they arrived in (most
+  // recently updated).
+  const byTerm = new Map();
+  for (const schedule of savedSchedules) {
+    const term = scheduleTerm(schedule);
+    if (!byTerm.has(term)) byTerm.set(term, []);
+    byTerm.get(term).push(schedule);
+  }
+  const byFavorite = (a, b) => (Boolean(b.favorited) === Boolean(a.favorited) ? 0 : b.favorited ? 1 : -1);
+  const termGroups = [
+    { term: CURRENT_TERM, schedules: [...(byTerm.get(CURRENT_TERM) || [])].sort(byFavorite) },
+    ...[...byTerm.keys()]
+      .filter((term) => term !== CURRENT_TERM)
+      .sort()
+      .reverse()
+      .map((term) => ({ term, schedules: [...byTerm.get(term)].sort(byFavorite) })),
+  ];
+  const showTermHeadings = termGroups.length > 1;
+
+  function renderRow(schedule) {
+    const { compact, lines } = describeSectionSet(schedule.selectedSectionIds || [], sectionsById, courseMap);
+    const isEditing = editingId === schedule.id;
+    return (
+      <div
+        key={schedule.id}
+        className={`sched-saved-row${activeSavedId === schedule.id ? ' is-active' : ''}`}
+      >
+        {isEditing ? (
+          <div className="sched-saved-row-main is-editing">
+            <input
+              type="text"
+              autoFocus
+              className="sched-saved-row-name-input"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={() => commitEdit(schedule)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  commitEdit(schedule);
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setEditingId(null);
+                }
+              }}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="sched-saved-row-main"
+            onClick={() => onLoad(schedule)}
+            title={lines.join('\n')}
+          >
+            <span className="sched-saved-row-text">
+              <span className="sched-saved-row-name">{schedule.name}</span>
+              {/* "sections", not "courses" — a course with a companion
+                  piece (discussion/lab) contributes more than one
+                  section id. */}
+              {compact && <span className="sched-saved-row-contents">{compact}</span>}
+            </span>
+            <span className="sched-saved-row-count">{(schedule.selectedSectionIds || []).length} sections</span>
+          </button>
+        )}
+        <button
+          type="button"
+          className="sched-rename-btn"
+          onClick={() => startEditing(schedule)}
+          aria-label={`Rename ${schedule.name}`}
+          title="Rename"
+        >
+          <PencilIcon />
+        </button>
+        <button
+          type="button"
+          className={`sched-favorite-btn${schedule.favorited ? ' is-favorited' : ''}`}
+          onClick={() => onToggleFavorite(schedule)}
+          aria-label={schedule.favorited ? 'Unfavorite' : 'Favorite'}
+          title={schedule.favorited ? 'Unfavorite' : 'Favorite'}
+        >
+          {schedule.favorited ? '★' : '☆'}
+        </button>
+        <button
+          type="button"
+          className="sched-delete-btn"
+          onClick={() => onDelete(schedule)}
+          aria-label={`Delete ${schedule.name}`}
+          title="Delete"
+        >
+          ×
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="sched-saved-panel">
@@ -117,87 +211,21 @@ export default function SavedSchedulesPanel({
       </div>
 
       <div className="sched-saved-list">
-        {sorted.length === 0 && (
-          <div className="search-empty sched-saved-empty">
-            No saved schedules yet for {CURRENT_TERM_LABEL}.
+        {termGroups.map(({ term, schedules }) => (
+          <div key={term} className="sched-saved-term-group">
+            {showTermHeadings && (
+              <div className="sched-saved-term-heading">
+                {termLabel(term)}{term === CURRENT_TERM ? ' · current' : ''}
+              </div>
+            )}
+            {schedules.length === 0 && (
+              <div className="search-empty sched-saved-empty">
+                No saved schedules yet for {CURRENT_TERM_LABEL}.
+              </div>
+            )}
+            {schedules.map(renderRow)}
           </div>
-        )}
-        {sorted.map((schedule) => {
-          const { compact, lines } = describeSectionSet(schedule.selectedSectionIds || [], sectionsById, courseMap);
-          const isEditing = editingId === schedule.id;
-          return (
-            <div
-              key={schedule.id}
-              className={`sched-saved-row${activeSavedId === schedule.id ? ' is-active' : ''}`}
-            >
-              {isEditing ? (
-                <div className="sched-saved-row-main is-editing">
-                  <input
-                    type="text"
-                    autoFocus
-                    className="sched-saved-row-name-input"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={() => commitEdit(schedule)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        commitEdit(schedule);
-                      }
-                      if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setEditingId(null);
-                      }
-                    }}
-                  />
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="sched-saved-row-main"
-                  onClick={() => onLoad(schedule)}
-                  title={lines.join('\n')}
-                >
-                  <span className="sched-saved-row-text">
-                    <span className="sched-saved-row-name">{schedule.name}</span>
-                    {/* "sections", not "courses" — a course with a companion
-                        piece (discussion/lab) contributes more than one
-                        section id. */}
-                    {compact && <span className="sched-saved-row-contents">{compact}</span>}
-                  </span>
-                  <span className="sched-saved-row-count">{(schedule.selectedSectionIds || []).length} sections</span>
-                </button>
-              )}
-              <button
-                type="button"
-                className="sched-rename-btn"
-                onClick={() => startEditing(schedule)}
-                aria-label={`Rename ${schedule.name}`}
-                title="Rename"
-              >
-                <PencilIcon />
-              </button>
-              <button
-                type="button"
-                className={`sched-favorite-btn${schedule.favorited ? ' is-favorited' : ''}`}
-                onClick={() => onToggleFavorite(schedule)}
-                aria-label={schedule.favorited ? 'Unfavorite' : 'Favorite'}
-                title={schedule.favorited ? 'Unfavorite' : 'Favorite'}
-              >
-                {schedule.favorited ? '★' : '☆'}
-              </button>
-              <button
-                type="button"
-                className="sched-delete-btn"
-                onClick={() => onDelete(schedule)}
-                aria-label={`Delete ${schedule.name}`}
-                title="Delete"
-              >
-                ×
-              </button>
-            </div>
-          );
-        })}
+        ))}
       </div>
     </div>
   );

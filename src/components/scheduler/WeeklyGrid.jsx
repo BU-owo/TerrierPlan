@@ -167,6 +167,7 @@ export default function WeeklyGrid({
   courseColors = {},
   onSetColor = () => {},
   swapSlot = null,
+  frozenTermLabel = null,
   swapCandidates = [],
   swapPoolIds = new Set(),
   globalTimeFilter,
@@ -290,6 +291,11 @@ export default function WeeklyGrid({
           </button>
         </div>
       )}
+      {frozenTermLabel && (
+        <div className="sched-frozen-note" role="note">
+          This schedule is from {frozenTermLabel}.
+        </div>
+      )}
       <div className="sched-color-legend">
         {legendCourses.map(({ courseKey, label }) => (
           <div className="sched-color-legend-item" key={courseKey}>
@@ -403,6 +409,7 @@ export default function WeeklyGrid({
                         <button
                           type="button"
                           className={`sched-grid-block-action-btn${isLocked ? ' is-locked' : ''}`}
+                          disabled={Boolean(frozenTermLabel)}
                           onClick={(e) => { e.stopPropagation(); onToggleLock(section.id); }}
                           aria-label={isLocked ? `Unlock ${courseCode} section ${section.classSection}` : `Lock ${courseCode} section ${section.classSection} into every generated schedule`}
                           title={isLocked ? 'Locked into every generated schedule — click to unlock' : 'Lock this section into every generated schedule'}
@@ -412,18 +419,20 @@ export default function WeeklyGrid({
                         <button
                           type="button"
                           className="sched-grid-block-action-btn"
+                          disabled={Boolean(frozenTermLabel)}
                           onClick={(e) => {
                             e.stopPropagation();
                             onOpenSwap(section.courseKey, classifyComponent(section), section.id);
                           }}
                           aria-label={`Overlay other sections for ${courseCode}'s ${section.componentLabel || 'section'} as ghosts on your schedule`}
-                          title="Overlay other sections as ghosts on your schedule. Click one to swap it in"
+                          title={frozenTermLabel ? `This schedule is from ${frozenTermLabel}` : 'Overlay other sections as ghosts on your schedule. Click one to swap it in'}
                         >
                           <SwapIcon />
                         </button>
                         <button
                           type="button"
                           className="sched-grid-block-action-btn sched-grid-block-eliminate-btn"
+                          disabled={Boolean(frozenTermLabel)}
                           onClick={(e) => { e.stopPropagation(); onEliminate(section.id); }}
                           aria-label={`Remove ${courseCode} section ${section.classSection} from consideration`}
                           title="Remove from consideration — won't appear in any future generated schedule"
