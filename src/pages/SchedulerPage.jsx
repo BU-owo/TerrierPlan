@@ -396,7 +396,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       const snap = await getDocs(query(collection(db, 'sections'), where('courseKey', '==', courseKey)));
       const sections = snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((s) => s.term === CURRENT_TERM)
+        .filter((s) => s.term === CURRENT_TERM && s.classStat !== 'Cancelled')
         .sort((a, b) => (a.classSection || '').localeCompare(b.classSection || ''));
       setSectionsByCourse((prev) => ({ ...prev, [courseKey]: sections }));
 

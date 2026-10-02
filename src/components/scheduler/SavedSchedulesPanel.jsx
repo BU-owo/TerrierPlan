@@ -78,8 +78,11 @@ export default function SavedSchedulesPanel({
     setEditingId(null);
   }
 
+  // Only this term's schedules are listed. Filtered here, not in the parent's
+  // state, because guest schedules are persisted from that state wholesale —
+  // dropping other terms there would erase them from localStorage.
   // Favorited first, then most recently updated within each group.
-  const sorted = [...savedSchedules].sort((a, b) => {
+  const sorted = savedSchedules.filter((s) => (s.term ?? CURRENT_TERM) === CURRENT_TERM).sort((a, b) => {
     if (Boolean(b.favorited) !== Boolean(a.favorited)) return b.favorited ? 1 : -1;
     return 0;
   });

@@ -54,6 +54,7 @@ import {
   getSemesterStatus,
 } from '../utils/courseEntry';
 import { semesterLabel } from '../utils/hubConstants';
+import { CURRENT_TERM } from '../utils/term';
 import './planner.css';
 import '../App.css';
 
@@ -1158,12 +1159,21 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       const snap = await getDocs(
         query(collection(db, 'sections'), where('courseKey', 'in', batch)),
       );
+      // Prefer a CURRENT_TERM section's credits; any other term only fills
+      // in keys that have none.
+      const fallbackCredits = {};
       snap.docs.forEach((d) => {
-        const { courseKey, credits } = d.data();
-        if (!(courseKey in newCredits) && credits != null) {
-          newCredits[courseKey] = credits;
+        const { courseKey, credits, term } = d.data();
+        if (credits == null) return;
+        if (term === CURRENT_TERM) {
+          if (!(courseKey in newCredits)) newCredits[courseKey] = credits;
+        } else if (!(courseKey in fallbackCredits)) {
+          fallbackCredits[courseKey] = credits;
         }
       });
+      for (const [k, v] of Object.entries(fallbackCredits)) {
+        if (!(k in newCredits)) newCredits[k] = v;
+      }
     }
     setCreditsMap((prev) => ({ ...prev, ...newCredits }));
   }
