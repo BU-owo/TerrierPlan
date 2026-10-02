@@ -1397,6 +1397,8 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
 }
 .sched-save-btn:hover:not(:disabled) { background: var(--scarlet-dark); }
 .sched-save-btn:disabled { opacity: .4; cursor: default; box-shadow: none; }
+/* "Saved ✓" / "Already saved" read as a status, not an unavailable control. */
+.sched-save-btn.is-saved:disabled { opacity: .75; }
 .sched-save-name-input {
   width: 100%;
   min-width: 0;

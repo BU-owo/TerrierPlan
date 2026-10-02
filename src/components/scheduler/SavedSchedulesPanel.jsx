@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { CURRENT_TERM_LABEL } from '../../utils/term';
-import { describeSectionSet } from '../../utils/scheduleCombos';
+import { CURRENT_TERM, CURRENT_TERM_LABEL } from '../../utils/term';
+import { describeSectionSet, scheduleKey } from '../../utils/scheduleCombos';
 
 // Small inline pencil glyph for the rename affordance — a real icon asset
 // rather than a text/emoji dingbat, matching CourseSearch's PawIcon and
@@ -39,13 +39,32 @@ export default function SavedSchedulesPanel({
   const [name, setName] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
+  // scheduleKey of the combination this panel last saved successfully, so the
+  // button can read "Saved ✓" until the displayed combination changes.
+  const [justSavedKey, setJustSavedKey] = useState(null);
+  const [saving, setSaving] = useState(false);
   const canSave = previewSectionIds.length > 0;
+  const previewKey = canSave ? scheduleKey(previewSectionIds) : null;
+  // Already saved = a saved schedule for this term with the same set of
+  // sections (order-independent). Also what keeps "Saved ✓" honest: if that
+  // schedule is later deleted, the button re-enables.
+  const alreadySaved = canSave && savedSchedules.some(
+    (s) => (s.term ?? CURRENT_TERM) === CURRENT_TERM && scheduleKey(s.selectedSectionIds || []) === previewKey,
+  );
+  const justSaved = alreadySaved && justSavedKey === previewKey;
+  const saveBlocked = !canSave || alreadySaved || saving;
 
-  function handleSave(e) {
+  async function handleSave(e) {
     e.preventDefault();
-    if (!canSave) return;
-    onSave(name.trim() || `Schedule ${savedSchedules.length + 1}`);
-    setName('');
+    if (saveBlocked) return;
+    setSaving(true);
+    try {
+      await onSave(name.trim() || `Schedule ${savedSchedules.length + 1}`);
+      setJustSavedKey(previewKey);
+      setName('');
+    } finally {
+      setSaving(false);
+    }
   }
 
   function startEditing(schedule) {
@@ -74,8 +93,14 @@ export default function SavedSchedulesPanel({
       <div className="sched-save-section">
         <div className="sched-save-heading">Save the schedule you’re previewing as a contender</div>
         <form className="sched-save-form" onSubmit={handleSave}>
-          <button type="submit" className="sched-save-btn" disabled={!canSave}>
-            {canSave ? `Save this schedule${creditsLabel ? ` · ${creditsLabel}` : ''}` : 'Preview a schedule to save it'}
+          <button type="submit" className={`sched-save-btn${alreadySaved ? ' is-saved' : ''}`} disabled={saveBlocked}>
+            {!canSave
+              ? 'Preview a schedule to save it'
+              : justSaved
+                ? 'Saved ✓'
+                : alreadySaved
+                  ? 'Already saved'
+                  : `Save this schedule${creditsLabel ? ` · ${creditsLabel}` : ''}`}
           </button>
           <input
             type="text"
@@ -83,7 +108,7 @@ export default function SavedSchedulesPanel({
             placeholder="Optional name…"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            disabled={!canSave}
+            disabled={saveBlocked}
           />
         </form>
       </div>

@@ -120,8 +120,8 @@ export default function ScheduleStepper({ generated, previewIndex, onJump, bookm
           className={`sched-flag-btn${isBookmarked ? ' is-flagged' : ''}`}
           onClick={() => onToggleBookmark(previewIndex)}
           aria-pressed={isBookmarked}
-          aria-label={isBookmarked ? 'Remove bookmark from this schedule' : 'Bookmark this schedule as a candidate'}
-          title={isBookmarked ? 'Bookmarked — click to remove' : 'Bookmark as a candidate (not saved yet)'}
+          aria-label={isBookmarked ? 'Remove bookmark from this schedule' : 'Bookmark (this session only; use Save to keep it)'}
+          title={isBookmarked ? 'Bookmarked — click to remove' : 'Bookmark (this session only; use Save to keep it)'}
         >
           <FlagIcon filled={isBookmarked} />
           {isBookmarked ? 'Bookmarked' : 'Bookmark'}
