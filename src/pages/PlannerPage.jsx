@@ -1722,9 +1722,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       return sum + creditValue;
     }
 
+    // Transfer counts once mapped to a BU course, or once the student has
+    // confirmed it has no BU equivalent (general credit); needs-mapping
+    // rows still count 0.
     if (credit.type === 'transfer') {
       const mapped = Boolean(String(credit.courseKey || '').trim());
-      return mapped ? sum + creditValue : sum;
+      return mapped || credit.status === 'no_equivalent' ? sum + creditValue : sum;
     }
 
     return sum;
@@ -1883,6 +1886,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                 />
                 <ExternalCreditsPanel
                   externalCredits={externalCredits}
+                  coursesInPlan={coursesInPlan}
                   onRemove={handleRemoveExternalCredit}
                   onUpdate={handleUpdateExternalCredit}
                   onAdd={handleAddExternalCredit}

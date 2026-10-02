@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   AP_EXAM_SUBJECTS,
   AP_HUB_CREDIT,
@@ -15,6 +15,8 @@ import {
 import { HUB_LABELS } from '../../utils/hubConstants';
 import { normalizeExternalCredit } from '../../utils/externalCredits';
 import { resolveApHubFromScore } from '../../utils/apScoreResolution';
+import { loadAllCourses } from '../../utils/courseQuery';
+import { COURSE_KEY_PATTERN, isValidCourseKeyFormat } from '../../utils/courseKey';
 
 const DEBUG_EXTERNAL_CREDITS = import.meta.env.DEV;
 
@@ -53,22 +55,9 @@ function formatSubjectLabel(key) {
     .join(' ');
 }
 
-// courseKey convention throughout the app is school+dept+number with no
-// spaces (e.g. "CASMA123") — shared by the display formatter below and by
-// the manual-override input's format validation.
-const COURSE_KEY_PATTERN = /^([A-Z]{3})([A-Z]{2})(\d+)$/;
-
 function formatCourseKeyDisplay(courseKey) {
   const m = String(courseKey).match(COURSE_KEY_PATTERN);
   return m ? `${m[1]} ${m[2]} ${m[3]}` : courseKey;
-}
-
-// Format-only check for a manually-entered courseKey override — this is an
-// exception path for a student typing in what their advisor told them, so
-// it deliberately doesn't check the key is a *real* BU course, only that it
-// looks like one (three-letter school + two-letter dept + course number).
-function isValidCourseKeyFormat(rawValue) {
-  return COURSE_KEY_PATTERN.test(String(rawValue).replace(/\s+/g, '').toUpperCase());
 }
 
 const MANUAL_COURSE_FORMAT_ERROR = 'Course key should look like "CAS MA 123" — won\'t be saved until fixed.';
@@ -742,60 +731,370 @@ const ExternalCreditChecklistForm = memo(function ExternalCreditChecklistForm({ 
   );
 });
 
+const TRANSFER_MIN_CREDITS = 0.5;
+const TRANSFER_MAX_CREDITS = 16;
+const TRANSFER_MAX_SUGGESTIONS = 8;
+const TRANSFER_NOTE_MAX_LENGTH = 200;
+
+// Same trim / collapse-whitespace / lowercase comparison for the duplicate
+// check, so "Boston  College" and "boston college" are the same school.
+function normalizeTransferText(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+// Standalone BU-equivalent autocomplete over the shared course catalog
+// (loadAllCourses is a module-level cached promise, so this doesn't add a
+// second fetch). Deliberately not CourseSearch — that one is wired to
+// planner state (semester targets, stash, info panel). A student must pick
+// a result or leave the field blank; free text is never saved as a key.
+export function BuEquivalentField({ picked, onPick, onClear, ariaLabel }) {
+  const listId = useId();
+  const [courses, setCourses] = useState([]);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadAllCourses()
+      .then((all) => { if (!cancelled) setCourses(Array.isArray(all) ? all : []); })
+      .catch(() => { if (!cancelled) setLoadFailed(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const suggestions = useMemo(() => {
+    const q = query.trim().toUpperCase();
+    if (q.length < 2) return [];
+    const qNoSpace = q.replace(/\s+/g, '');
+    const out = [];
+    for (const course of courses) {
+      const number = String(course.courseNumber || course.id || '');
+      if (
+        number.toUpperCase().replace(/\s+/g, '').includes(qNoSpace)
+        || String(course.name || '').toUpperCase().includes(q)
+      ) {
+        out.push(course);
+        if (out.length >= TRANSFER_MAX_SUGGESTIONS) break;
+      }
+    }
+    return out;
+  }, [courses, query]);
+
+  function choose(course) {
+    onPick(course);
+    setQuery('');
+    setOpen(false);
+  }
+
+  if (picked) {
+    // An edit prefills from a bare courseKey (no name) — fill the name in
+    // from the catalog once it has loaded.
+    const shown = picked.name ? picked : (courses.find((c) => c.id === picked.id) ?? picked);
+    return (
+      <div className="external-credit-bu-picked">
+        <span className="external-credit-course-code">{shown.courseNumber || shown.id}</span>
+        <span className="external-credit-bu-picked-name">{shown.name}</span>
+        <button
+          type="button"
+          className="external-credit-remove"
+          onClick={onClear}
+          aria-label="Clear BU equivalent"
+        >
+          ×
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="external-credit-bu-field">
+      <input
+        type="text"
+        role="combobox"
+        aria-label={ariaLabel}
+        aria-expanded={open && suggestions.length > 0}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        autoComplete="off"
+        placeholder={loadFailed ? 'Course list unavailable' : 'Search by course number or name'}
+        disabled={loadFailed}
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); setActiveIndex(0); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1));
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActiveIndex((i) => Math.max(i - 1, 0));
+          } else if (e.key === 'Enter' && open && suggestions[activeIndex]) {
+            e.preventDefault();
+            choose(suggestions[activeIndex]);
+          } else if (e.key === 'Escape') {
+            setOpen(false);
+          }
+        }}
+      />
+      {open && suggestions.length > 0 && (
+        <ul className="external-credit-bu-list" id={listId} role="listbox">
+          {suggestions.map((course, i) => (
+            <li
+              key={course.id}
+              role="option"
+              aria-selected={i === activeIndex}
+              className={`external-credit-bu-option${i === activeIndex ? ' active' : ''}`}
+              // mousedown (not click) so it fires before the input's blur closes the list
+              onMouseDown={(e) => { e.preventDefault(); choose(course); }}
+            >
+              <span className="external-credit-course-code">{course.courseNumber || course.id}</span>
+              <span className="external-credit-bu-option-name">{course.name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {query.trim() !== '' && (
+        <p className="external-credit-score-note">Pick a course from the list, or clear this field to leave it blank.</p>
+      )}
+    </div>
+  );
+}
+
+// Add mode (onAdd/onClose) builds a new entry; edit mode (initial/onSave/
+// onCancel) prefills from an existing transfer entry and hands back an
+// onUpdate patch instead — same fields and validation either way.
+const TransferCreditForm = memo(function TransferCreditForm({
+  existingCredits,
+  coursesInPlan,
+  onAdd,
+  onClose,
+  initial = null,
+  onSave,
+  onCancel,
+}) {
+  const isEdit = Boolean(initial);
+  const initialKey = initial?.courseKey ? String(initial.courseKey).replace(/\s+/g, '').toUpperCase() : '';
+  const [school, setSchool] = useState(initial?.institution ?? '');
+  const [title, setTitle] = useState(initial?.sourceTitle ?? '');
+  const [credits, setCredits] = useState(initial?.credits != null ? String(initial.credits) : '');
+  const [picked, setPicked] = useState(
+    initialKey ? { id: initialKey, courseNumber: formatCourseKeyDisplay(initialKey), name: '' } : null,
+  );
+  const [noEquivalent, setNoEquivalent] = useState(!initialKey && initial?.status === 'no_equivalent');
+  const [note, setNote] = useState(initial?.advisorNote ?? '');
+  // Bumped to remount BuEquivalentField, clearing a half-typed query when
+  // "No BU equivalent" is checked.
+  const [buFieldKey, setBuFieldKey] = useState(0);
+  const [errors, setErrors] = useState({});
+  const [addedLabel, setAddedLabel] = useState('');
+
+  const pickedKey = picked ? String(picked.id || picked.courseNumber || '').replace(/\s+/g, '').toUpperCase() : '';
+  const alreadyInPlan = Boolean(pickedKey) && coursesInPlan instanceof Set && coursesInPlan.has(pickedKey);
+
+  function edit(setter) {
+    return (e) => {
+      setter(e.target.value);
+      setErrors({});
+      setAddedLabel('');
+    };
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    const nextErrors = {};
+    const trimmedSchool = school.trim();
+    const trimmedTitle = title.trim();
+
+    if (!trimmedSchool) nextErrors.school = 'Enter the school name.';
+    if (!trimmedTitle) nextErrors.title = 'Enter the course title.';
+
+    const creditsNumber = Number(credits);
+    if (
+      credits.trim() === ''
+      || !Number.isFinite(creditsNumber)
+      || creditsNumber < TRANSFER_MIN_CREDITS
+      || creditsNumber > TRANSFER_MAX_CREDITS
+      || !Number.isInteger(creditsNumber * 2)
+    ) {
+      nextErrors.credits = `Credits must be between ${TRANSFER_MIN_CREDITS} and ${TRANSFER_MAX_CREDITS}, in steps of 0.5.`;
+    }
+
+    // An unchanged key on an edit is kept as-is (e.g. a suffixed key an
+    // import already stored) — the format check only gates a new pick.
+    if (picked && pickedKey !== initialKey && !isValidCourseKeyFormat(pickedKey)) {
+      nextErrors.course = `${picked.courseNumber || picked.id} can't be used as a BU equivalent — clear it, or leave it blank and map it later.`;
+    }
+
+    if (!nextErrors.school && !nextErrors.title) {
+      const wantSchool = normalizeTransferText(trimmedSchool);
+      const wantTitle = normalizeTransferText(trimmedTitle);
+      const isDuplicate = (existingCredits || []).some((raw) => {
+        if (isEdit && raw?.id === initial.id) return false;
+        const credit = normalizeExternalCredit(raw) || raw;
+        return credit?.type === 'transfer'
+          && normalizeTransferText(credit.institution) === wantSchool
+          && normalizeTransferText(credit.sourceTitle) === wantTitle;
+      });
+      if (isDuplicate) nextErrors.title = 'You already added this course from this school.';
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      setAddedLabel('');
+      return;
+    }
+
+    const courseKey = picked ? pickedKey : null;
+    const status = courseKey ? 'mapped' : noEquivalent ? 'no_equivalent' : 'needs_mapping';
+    const advisorNote = note.trim().slice(0, TRANSFER_NOTE_MAX_LENGTH) || null;
+    if (isEdit) {
+      onSave({
+        institution: trimmedSchool,
+        sourceTitle: trimmedTitle,
+        credits: creditsNumber,
+        courseKey,
+        status,
+        advisorNote,
+      });
+      return;
+    }
+    onAdd([normalizeExternalCredit({
+      type: 'transfer',
+      sourceTitle: trimmedTitle,
+      institution: trimmedSchool,
+      credits: creditsNumber,
+      courseKey,
+      status,
+      advisorNote,
+    })]);
+
+    setAddedLabel(`Added ${trimmedTitle}`);
+    setSchool('');
+    setTitle('');
+    setCredits('');
+    setPicked(null);
+    setNoEquivalent(false);
+    setNote('');
+    setBuFieldKey((k) => k + 1);
+    setErrors({});
+  }
+
+  return (
+    <form className="external-credit-add-form external-credit-transfer-form" onSubmit={handleSubmit} noValidate>
+      <label className="external-credit-transfer-field">
+        School
+        <input type="text" value={school} onChange={edit(setSchool)} placeholder="e.g. Northeastern University" aria-invalid={Boolean(errors.school)} />
+        {errors.school && <span className="external-credit-override-error">{errors.school}</span>}
+      </label>
+      <label className="external-credit-transfer-field">
+        Course title at that school
+        <input type="text" value={title} onChange={edit(setTitle)} placeholder="e.g. Introduction to Psychology" aria-invalid={Boolean(errors.title)} />
+        {errors.title && <span className="external-credit-override-error">{errors.title}</span>}
+      </label>
+      <label className="external-credit-transfer-field">
+        Credits
+        <input
+          type="number"
+          inputMode="decimal"
+          min={TRANSFER_MIN_CREDITS}
+          max={TRANSFER_MAX_CREDITS}
+          step="0.5"
+          value={credits}
+          onChange={edit(setCredits)}
+          aria-invalid={Boolean(errors.credits)}
+        />
+        {errors.credits && <span className="external-credit-override-error">{errors.credits}</span>}
+      </label>
+      <div className="external-credit-transfer-field">
+        <span>BU equivalent (optional)</span>
+        <BuEquivalentField
+          key={buFieldKey}
+          picked={picked}
+          onPick={(course) => { setPicked(course); setNoEquivalent(false); setErrors({}); setAddedLabel(''); }}
+          onClear={() => { setPicked(null); setErrors({}); }}
+        />
+        <label className="external-credit-no-equiv-toggle">
+          <input
+            type="checkbox"
+            checked={noEquivalent}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setNoEquivalent(checked);
+              if (checked) {
+                setPicked(null);
+                setBuFieldKey((k) => k + 1);
+              }
+              setErrors({});
+              setAddedLabel('');
+            }}
+          />
+          No BU equivalent
+        </label>
+        {errors.course && <span className="external-credit-override-error">{errors.course}</span>}
+        {alreadyInPlan && (
+          <span className="external-credit-score-note">
+            This course is already in your plan; its credits may be counted twice.
+          </span>
+        )}
+      </div>
+
+      <label className="external-credit-transfer-field">
+        Note (optional)
+        <input
+          type="text"
+          value={note}
+          maxLength={TRANSFER_NOTE_MAX_LENGTH}
+          onChange={edit(setNote)}
+          placeholder="e.g. Advisor said this may count as an elective"
+        />
+      </label>
+
+      <p className="external-credit-score-note">
+        Credits count toward your total once a BU course is chosen. Transfer credit never counts toward HUB.
+      </p>
+
+      {addedLabel && <div className="external-credit-transfer-added" role="status">✓ {addedLabel}</div>}
+
+      <div className="external-credit-add-actions">
+        <button type="submit" className="import-primary-btn">{isEdit ? 'Save' : 'Add transfer credit'}</button>
+        <button type="button" className="import-secondary-btn" onClick={isEdit ? onCancel : onClose}>{isEdit ? 'Cancel' : 'Close'}</button>
+      </div>
+    </form>
+  );
+});
+
 const TransferExternalCreditRow = memo(function TransferExternalCreditRow({
-  credit,
   creditId,
   onUpdate,
 }) {
-  const renderCountRef = useRef(0);
-  renderCountRef.current += 1;
+  const [error, setError] = useState('');
 
-  if (DEBUG_EXTERNAL_CREDITS) {
-    console.log('[DEBUG TransferExternalCreditRow] render', {
-      creditId,
-      sourceTitle: credit.sourceTitle,
-      renderCount: renderCountRef.current,
-      propCourseKey: credit.courseKey || '',
-    });
-  }
-
-  const [courseKeyDraft, setCourseKeyDraft] = useState(credit.courseKey || '');
-
-  useEffect(() => {
-    setCourseKeyDraft(credit.courseKey || '');
-  }, [credit.courseKey, credit.sourceTitle]);
-
-  function commitCourseKey(nextValue) {
-    onUpdate?.(creditId, {
-      courseKey: nextValue.replace(/\s+/g, '').toUpperCase() || null,
-      status: nextValue.trim() ? 'mapped' : 'needs_mapping',
-    });
+  // Commits on pick (not blur) with the same format check as the add form.
+  function handlePick(course) {
+    const key = String(course.id || course.courseNumber || '').replace(/\s+/g, '').toUpperCase();
+    if (!isValidCourseKeyFormat(key)) {
+      setError(`${course.courseNumber || course.id} can't be used as a BU equivalent — pick another course.`);
+      return;
+    }
+    setError('');
+    onUpdate?.(creditId, { courseKey: key, status: 'mapped' });
   }
 
   return (
     <div className="external-credit-warning">
       Needs BU equivalent — check MyBU
-      <input
-        type="text"
-        aria-label={`BU equivalent for ${credit.sourceTitle}`}
-        placeholder="e.g. CASMA 225"
-        value={courseKeyDraft}
-        onChange={(e) => {
-          const nextValue = e.target.value;
-          if (DEBUG_EXTERNAL_CREDITS) {
-            console.log('[DEBUG TransferExternalCreditRow] onChange', {
-              creditId,
-              sourceTitle: credit.sourceTitle,
-              renderCount: renderCountRef.current,
-              eventValue: nextValue,
-              draftBeforeSet: courseKeyDraft,
-              propBeforeCommit: credit.courseKey || '',
-            });
-          }
-          setCourseKeyDraft(nextValue);
-        }}
-        onBlur={(e) => commitCourseKey(e.target.value)}
-      />
+      <BuEquivalentField picked={null} onPick={handlePick} onClear={() => {}} />
+      {error && <span className="external-credit-override-error">{error}</span>}
+      <label className="external-credit-no-equiv-toggle">
+        <input
+          type="checkbox"
+          checked={false}
+          onChange={() => onUpdate?.(creditId, { courseKey: null, status: 'no_equivalent' })}
+        />
+        No BU equivalent
+      </label>
     </div>
   );
 });
@@ -885,11 +1184,13 @@ const CourseMappingOverrideEditor = memo(function CourseMappingOverrideEditor({ 
   );
 });
 
-export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpdate, onAdd }) {
+export default function ExternalCreditsPanel({ externalCredits, coursesInPlan, onRemove, onUpdate, onAdd }) {
   const [collapsed, setCollapsed] = useState(false);
   const [editingScoreCreditId, setEditingScoreCreditId] = useState(null);
   const [editingOverrideCreditId, setEditingOverrideCreditId] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [addType, setAddType] = useState('apib');
+  const [editingTransferId, setEditingTransferId] = useState(null);
   const credits = Array.isArray(externalCredits) ? externalCredits : [];
   debugExternalCredits('render-props', {
     collapsed,
@@ -919,7 +1220,7 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
         <div>
           <h3>External Credit</h3>
           <p className="plan-side-panel-sub">
-            AP credit may count toward HUB; transfer credit never does
+            AP/IB credit may count toward HUB; transfer credit never does
           </p>
         </div>
         <button
@@ -934,14 +1235,43 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
 
       {onAdd && (
         showAddForm ? (
-          <ExternalCreditChecklistForm
-            existingCredits={credits}
-            onAdd={(entry) => {
-              onAdd(entry);
-              setShowAddForm(false);
-            }}
-            onCancel={() => setShowAddForm(false)}
-          />
+          <>
+            <div className="external-credit-add-row external-credit-type-toggle" role="group" aria-label="Credit type">
+              <button
+                type="button"
+                className={`external-credit-score-btn${addType === 'apib' ? ' active' : ''}`}
+                aria-pressed={addType === 'apib'}
+                onClick={() => setAddType('apib')}
+              >
+                AP / IB
+              </button>
+              <button
+                type="button"
+                className={`external-credit-score-btn${addType === 'transfer' ? ' active' : ''}`}
+                aria-pressed={addType === 'transfer'}
+                onClick={() => setAddType('transfer')}
+              >
+                Transfer
+              </button>
+            </div>
+            {addType === 'transfer' ? (
+              <TransferCreditForm
+                existingCredits={credits}
+                coursesInPlan={coursesInPlan}
+                onAdd={onAdd}
+                onClose={() => setShowAddForm(false)}
+              />
+            ) : (
+              <ExternalCreditChecklistForm
+                existingCredits={credits}
+                onAdd={(entry) => {
+                  onAdd(entry);
+                  setShowAddForm(false);
+                }}
+                onCancel={() => setShowAddForm(false)}
+              />
+            )}
+          </>
         ) : (
           <button
             type="button"
@@ -955,7 +1285,7 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
 
       {credits.length === 0 && !showAddForm && (
         <p className="plan-side-panel-sub external-credit-empty">
-          No AP or IB scores added yet — self-report one above, no transcript needed.
+          No AP, IB, or transfer credit added yet — self-report it above, no transcript needed.
         </p>
       )}
 
@@ -996,9 +1326,26 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
             : null;
           const canOverrideCourseMapping = isTestCredit && !normalized.courseKey && isCourseNoteOnlyInfo(courseMappingInfo);
           const showOverrideEditor = canOverrideCourseMapping && editingOverrideCreditId === creditId;
-          const needsMapping = type === 'transfer' && (normalized.status === 'needs_mapping' || !normalized.courseKey);
+          const isNoEquivalent = type === 'transfer' && !normalized.courseKey && normalized.status === 'no_equivalent';
+          const needsMapping = type === 'transfer' && !normalized.courseKey && !isNoEquivalent;
           const needsApReview = (type === 'ib' && testHub === null) || (type === 'ap' && testHub === null && !apScoreDependent);
           const needsReview = needsMapping || needsApReview;
+          if (type === 'transfer' && editingTransferId === creditId) {
+            return (
+              <li key={creditId} className="external-credit-row external-credit-row-editing">
+                <TransferCreditForm
+                  initial={normalized}
+                  existingCredits={credits}
+                  coursesInPlan={coursesInPlan}
+                  onSave={(patch) => {
+                    onUpdate?.(creditId, patch);
+                    setEditingTransferId(null);
+                  }}
+                  onCancel={() => setEditingTransferId(null)}
+                />
+              </li>
+            );
+          }
           return (
           <li
             key={creditId}
@@ -1030,6 +1377,15 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
                       <span className="external-credit-unmapped-tag">Not mapped</span>
                     </>
                   ) : null}
+                  {type === 'transfer' && onUpdate && (
+                    <button
+                      type="button"
+                      className="external-credit-override-link"
+                      onClick={() => setEditingTransferId(creditId)}
+                    >
+                      Edit
+                    </button>
+                  )}
                   {canOverrideCourseMapping && (
                     <button
                       type="button"
@@ -1062,9 +1418,19 @@ export default function ExternalCreditsPanel({ externalCredits, onRemove, onUpda
                     </button>
                   )}
                 </div>
+                {isNoEquivalent && (
+                  <label className="external-credit-no-equiv-label">
+                    <input
+                      type="checkbox"
+                      checked
+                      aria-label={`No BU equivalent for ${normalized.sourceTitle}`}
+                      onChange={() => onUpdate?.(creditId, { courseKey: null, status: 'needs_mapping' })}
+                    />
+                    No BU equivalent — counts as general credit; confirm with BU
+                  </label>
+                )}
                 {needsMapping && (
                   <TransferExternalCreditRow
-                    credit={normalized}
                     creditId={creditId}
                     onUpdate={onUpdate}
                   />

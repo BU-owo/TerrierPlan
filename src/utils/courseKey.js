@@ -36,3 +36,15 @@ export function compareByCatalogNumber(a, b) {
   const sb = pb?.suffix ?? '';
   return sa === sb ? 0 : sa < sb ? -1 : 1;
 }
+
+// courseKey convention throughout the app is school+dept+number with no
+// spaces (e.g. "CASMA123") — shared by ExternalCreditsPanel's display
+// formatter and the manual-override / BU-equivalent format validation.
+export const COURSE_KEY_PATTERN = /^([A-Z]{3})([A-Z]{2})(\d+)$/;
+
+// Format-only check for a manually-entered or picked courseKey — it
+// deliberately doesn't check the key is a *real* BU course, only that it
+// looks like one (three-letter school + two-letter dept + course number).
+export function isValidCourseKeyFormat(rawValue) {
+  return COURSE_KEY_PATTERN.test(String(rawValue).replace(/\s+/g, '').toUpperCase());
+}

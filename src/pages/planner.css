@@ -2907,7 +2907,30 @@
 .external-credit-checklist-item.already-added { opacity: .55; }
 .external-credit-checklist-list .external-credit-row.already-added:hover { background: none; }
 .external-credit-checklist-footer { position: sticky; bottom: 0; background: inherit; padding-top: 4px; }
-@media (max-width: 640px) { .import-steps { gap: 8px; }.import-step-label { display: none; }.import-transfer-fields { width: 100%; }.import-transfer-fields input { width: 100%; } }
+.import-transfer-equivalent { display: grid; gap: 3px; width: 240px; font-size: 11px; color: var(--text-secondary); }
+.import-transfer-fields .import-transfer-equivalent input { width: 100%; box-sizing: border-box; background: var(--white); color: var(--text); }
+.import-transfer-equivalent .external-credit-bu-list { min-width: 260px; }
+@media (max-width: 640px) { .import-steps { gap: 8px; }.import-step-label { display: none; }.import-transfer-fields { width: 100%; }.import-transfer-fields input { width: 100%; }.import-transfer-fields { flex-wrap: wrap; }.import-transfer-equivalent { width: 100%; }.import-transfer-equivalent .external-credit-bu-list { min-width: 0; } }
+
+.external-credit-transfer-form { margin-top: 8px; }
+.external-credit-transfer-field { display: grid; gap: 3px; font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+.external-credit-transfer-field input { width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--white); color: var(--text); font: inherit; font-size: 12.5px; }
+.external-credit-transfer-field input[aria-invalid='true'] { border-color: var(--warning-border); }
+.external-credit-row-editing { display: block; }
+.external-credit-row-editing .external-credit-transfer-form { margin-top: 0; }
+.external-credit-warning .external-credit-bu-field input { width: 100%; box-sizing: border-box; }
+.external-credit-no-equiv-toggle { display: inline-flex; align-items: center; gap: 6px; width: fit-content; color: var(--text-secondary); font-size: 12px; font-weight: 600; cursor: pointer; }
+.external-credit-warning .external-credit-no-equiv-toggle { margin-top: 6px; }
+.external-credit-no-equiv-label { display: inline-flex; align-items: flex-start; gap: 6px; margin-top: 6px; color: var(--text-secondary); font-size: 12px; cursor: pointer; }
+label.external-credit-no-equiv-label input[type='checkbox'], label.external-credit-no-equiv-toggle input[type='checkbox'] { display: inline-block; width: auto; margin: 1px 0 0; padding: 0; border: 0; accent-color: var(--scarlet); }
+.external-credit-transfer-added { padding: 6px 9px; border-radius: 4px; background: var(--badge-success-bg); color: var(--badge-success-text); font-size: 12px; font-weight: 600; }
+.external-credit-bu-field { position: relative; display: grid; gap: 3px; }
+.external-credit-bu-list { position: absolute; top: 100%; left: 0; right: 0; z-index: 5; max-height: 220px; overflow-y: auto; margin: 2px 0 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 6px; background: var(--white); box-shadow: 0 4px 12px rgba(0, 0, 0, .15); }
+.external-credit-bu-option { display: grid; gap: 1px; padding: 6px 9px; cursor: pointer; font-size: 12px; color: var(--text); }
+.external-credit-bu-option.active, .external-credit-bu-option:hover { background: var(--cream); }
+.external-credit-bu-option-name { color: var(--text-secondary); font-weight: 400; }
+.external-credit-bu-picked { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--white); font-size: 12.5px; font-weight: 400; color: var(--text); }
+.external-credit-bu-picked-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
 
 html[data-theme='dark'] .search-picker-modal,
 html[data-theme='dark'] .import-modal,

@@ -48,10 +48,15 @@ function normalizeManualCourses(value) {
   return cleaned.length ? cleaned : null;
 }
 
+// Transfer: a set courseKey always means 'mapped' (picking a course
+// overrides 'no_equivalent'). Without one, 'no_equivalent' — the student
+// confirmed there is no BU course — is kept only when explicitly set;
+// everything else is 'needs_mapping'.
 function normalizeStatus(type, status, courseKey) {
   if (type !== 'transfer') return status || undefined;
-  if (status === 'mapped' || status === 'needs_mapping') return status;
-  return courseKey ? 'mapped' : 'needs_mapping';
+  if (courseKey) return 'mapped';
+  if (status === 'no_equivalent' || status === 'needs_mapping') return status;
+  return 'needs_mapping';
 }
 
 // manualCourseKey / manualCourses / advisorNote are a student-entered

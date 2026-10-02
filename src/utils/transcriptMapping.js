@@ -11,6 +11,12 @@ import { entryCourseKey } from './courseEntry';
 // the actual credit is already captured separately as an externalCredits row.
 const PLACEHOLDER_CREDIT_KEYS = new Set(['TFRGENCRDT', 'TSTGENNOCRDT']);
 
+// Trim, collapse internal whitespace, lowercase — for matching transfer
+// school/title text typed by hand against the transcript's own casing.
+function normalizeMatchText(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 function isPlaceholderCreditRow(course) {
   const normalize = (s) => String(s || '').replace(/\s+/g, '').toUpperCase();
   return (
@@ -318,20 +324,39 @@ export function applyImport(preview, existingSemesters, existingExtraTerms = [],
     apAdded += 1;
   }
 
+  // Transfer rows are only deduped against entries that existed BEFORE this
+  // import — never against each other, since a transcript can legitimately
+  // list the same school/title/credits twice. Each pre-existing entry can
+  // absorb at most one imported row (`consumedTransfer`), so one manual entry
+  // can't swallow two identical transcript rows.
+  const preExistingTransfers = externalCredits.filter((e) => e.type === 'transfer');
+  const consumedTransfer = new Set();
+
   for (const tr of preview.transferCredits || []) {
     const key = (tr.courseKey || '').replace(/\s+/g, '').toUpperCase();
-    const dup = externalCredits.some(
-      (e) => e.type === 'transfer'
-        && e.sourceTitle === tr.title
-        && e.institution === tr.institution
-        && (e.courseKey || '') === key,
+    const credits = Number(tr.creditsEdit ?? tr.credits) || 0;
+    // Same school + title (case/whitespace-insensitive) + same credits is the
+    // same real-world credit — e.g. a manually added "Intro to Psychology" vs
+    // the transcript's "INTRO TO PSYCHOLOGY" — unless both carry a courseKey
+    // and they differ. A missing key on either side is compatible. The
+    // existing entry wins untouched (its id, mapping, status, advisorNote),
+    // so a student's own mapping or 'no_equivalent' + note survives import.
+    const matchIndex = preExistingTransfers.findIndex(
+      (e, i) => !consumedTransfer.has(i)
+        && normalizeMatchText(e.sourceTitle) === normalizeMatchText(tr.title)
+        && normalizeMatchText(e.institution) === normalizeMatchText(tr.institution)
+        && Number(e.credits) === credits
+        && !(key && e.courseKey && String(e.courseKey).replace(/\s+/g, '').toUpperCase() !== key),
     );
-    if (dup) continue;
+    if (matchIndex !== -1) {
+      consumedTransfer.add(matchIndex);
+      continue;
+    }
     externalCredits.push(normalizeExternalCredit({
       type: 'transfer',
       sourceTitle: tr.title,
       courseKey: key || null,
-      credits: Number(tr.creditsEdit ?? tr.credits) || 0,
+      credits,
       institution: tr.institution,
       status: key ? 'mapped' : 'needs_mapping',
     }));

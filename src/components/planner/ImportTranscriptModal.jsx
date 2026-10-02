@@ -4,6 +4,8 @@ import { buildImportPreview, applyImport } from '../../utils/transcriptMapping';
 import { resolveApHubFromScore } from '../../utils/apScoreResolution';
 import { getApHub, isApScoreDependent } from '../../data/apIbHubCredit';
 import { resolveCourseKeys } from '../../utils/courseQuery';
+import { BuEquivalentField } from './ExternalCreditsPanel';
+import { isValidCourseKeyFormat } from '../../utils/courseKey';
 
 const STEPS = ['Upload', 'Review', 'Confirm'];
 const DEBUG_IMPORT = import.meta.env.DEV;
@@ -37,20 +39,31 @@ async function resolveParsedCourseKeys(parsed) {
 }
 
 const TransferCreditReviewRow = memo(function TransferCreditReviewRow({ transferCredit, onUpdate }) {
-  const [courseKeyDraft, setCourseKeyDraft] = useState(transferCredit.courseKey || '');
   const [creditsDraft, setCreditsDraft] = useState(String(transferCredit.creditsEdit ?? transferCredit.credits ?? ''));
-
-  useEffect(() => {
-    setCourseKeyDraft(transferCredit.courseKey || '');
-  }, [transferCredit.id, transferCredit.courseKey]);
+  const [courseKeyError, setCourseKeyError] = useState('');
+  // The preview only ever holds a picked catalog key ('' = none, i.e. saved
+  // as incomplete); the field looks the course name up from the catalog.
+  const courseKey = (transferCredit.courseKey || '').trim();
+  const picked = courseKey ? { id: courseKey, name: '' } : null;
 
   useEffect(() => {
     setCreditsDraft(String(transferCredit.creditsEdit ?? transferCredit.credits ?? ''));
   }, [transferCredit.id, transferCredit.creditsEdit, transferCredit.credits]);
 
-  function handleCourseKeyChange(nextValue) {
-    setCourseKeyDraft(nextValue);
-    onUpdate(transferCredit.id, { courseKey: nextValue });
+  // Commits on pick, with the same format check as the planner's transfer form.
+  function handlePick(course) {
+    const key = String(course.id || course.courseNumber || '').replace(/\s+/g, '').toUpperCase();
+    if (!isValidCourseKeyFormat(key)) {
+      setCourseKeyError(`${course.courseNumber || course.id} can't be used as a BU equivalent — pick another course.`);
+      return;
+    }
+    setCourseKeyError('');
+    onUpdate(transferCredit.id, { courseKey: key });
+  }
+
+  function handleClear() {
+    setCourseKeyError('');
+    onUpdate(transferCredit.id, { courseKey: '' });
   }
 
   function handleCreditsChange(nextValue) {
@@ -65,15 +78,16 @@ const TransferCreditReviewRow = memo(function TransferCreditReviewRow({ transfer
         <span className="import-muted">{transferCredit.institution}</span>
       </div>
       <div className="import-transfer-fields">
-        <label>
-          Equivalent
-          <input
-            type="text"
-            placeholder="e.g. CASMA 225"
-            value={courseKeyDraft}
-            onChange={(e) => handleCourseKeyChange(e.target.value)}
+        <div className="import-transfer-equivalent">
+          <span>Equivalent</span>
+          <BuEquivalentField
+            picked={picked}
+            onPick={handlePick}
+            onClear={handleClear}
+            ariaLabel={`BU equivalent for ${transferCredit.title}`}
           />
-        </label>
+          {courseKeyError && <span className="external-credit-override-error">{courseKeyError}</span>}
+        </div>
         <label>
           Credits
           <input

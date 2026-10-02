@@ -34,9 +34,10 @@ export default function CreditsPanel({
 
   const planCourseCredits = completedCredits + plannedCredits;
 
-  const { apIbCredits, transferCredits, unmappedTransferCount } = useMemo(() => {
+  const { apIbCredits, transferCredits, noEquivalentCredits, unmappedTransferCount } = useMemo(() => {
     let apIb = 0;
     let transfer = 0;
+    let noEquivalent = 0;
     let unmapped = 0;
     for (const credit of externalCredits) {
       if (!credit) continue;
@@ -46,13 +47,14 @@ export default function CreditsPanel({
         apIb += value;
       } else if (credit.type === 'transfer') {
         if (String(credit.courseKey || '').trim()) transfer += value;
+        else if (credit.status === 'no_equivalent') noEquivalent += value;
         else unmapped += 1;
       }
     }
-    return { apIbCredits: apIb, transferCredits: transfer, unmappedTransferCount: unmapped };
+    return { apIbCredits: apIb, transferCredits: transfer, noEquivalentCredits: noEquivalent, unmappedTransferCount: unmapped };
   }, [externalCredits]);
 
-  const totalCredits = planCourseCredits + apIbCredits + transferCredits;
+  const totalCredits = planCourseCredits + apIbCredits + transferCredits + noEquivalentCredits;
 
   useEffect(() => {
     onSummaryChange?.({ badge: `${totalCredits} cr` });
@@ -79,6 +81,12 @@ export default function CreditsPanel({
           <span className="credits-row-label">Transfer credit</span>
           <span className="credits-row-value">{transferCredits}</span>
         </div>
+        {noEquivalentCredits > 0 && (
+          <div className="credits-row">
+            <span className="credits-row-label">Transfer, no BU equivalent</span>
+            <span className="credits-row-value">{noEquivalentCredits}</span>
+          </div>
+        )}
       </div>
 
       {unmappedTransferCount > 0 && (
