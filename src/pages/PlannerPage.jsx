@@ -234,6 +234,15 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   );
 
   const saveTimeoutRef = useRef(null);
+  // Signed-in plan autosave bookkeeping. editVersionRef counts edits as the
+  // autosave effect schedules them; pendingPlanWriteRef is the latest edit
+  // not yet sent — captured with its own uid/planId/data at edit time, so a
+  // flush (timer, plan switch, unmount, pagehide) can only ever write it to
+  // the plan it was made on. Same idea as pendingProfileWriteRef below.
+  const editVersionRef = useRef(0);
+  const pendingPlanWriteRef = useRef(null);
+  const planSavesInFlightRef = useRef(0);
+  const flushPlanRef = useRef(null);
   const isInitialLoad = useRef(true);
   // uid the profile (currentSemesterTarget/completedCourseKeys) has actually
   // finished loading for — set at the end of loadUserProfile, reset to null
@@ -451,6 +460,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setShowLeaveModal(false);
     // Flush guest plan so sign-in migration has the latest board state
     if (!user) saveLocalPlan();
+    // Signed in: the student chose to leave without saving (the modal says
+    // the changes will be lost), so the unmount/pagehide flush must not send them.
+    else discardPendingPlanWrite();
     // Clear dirty so beforeunload does not also fire on programmatic navigation
     hasUnsavedChanges.current = false;
     setIsDirty(false);
@@ -491,25 +503,39 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     }
 
     console.log('⏲️  [autosave] Debounce scheduled for 1500ms');
+    editVersionRef.current += 1;
+    pendingPlanWriteRef.current = activePlanId
+      ? {
+          uid: user.uid,
+          planId: activePlanId,
+          version: editVersionRef.current,
+          name: planName,
+          semesters,
+          isTransfer,
+          extras: {
+            extraTerms,
+            gridSummerTerms,
+            cumulativeGpa,
+            earnedCredits,
+            gradePoints,
+            majorBulletinUrl,
+            requirementOverrides,
+            stash,
+          },
+        }
+      : null;
     clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       console.log('⏱️  [autosave] Debounce fired, calling persistPlan');
       if (activePlanId) {
-        persistPlan(user.uid, activePlanId, planName, semesters, isTransfer, {
-          extraTerms,
-          gridSummerTerms,
-          cumulativeGpa,
-          earnedCredits,
-          gradePoints,
-          majorBulletinUrl,
-          requirementOverrides,
-          stash,
-        });
+        flushPendingPlanWrite();
       } else {
         console.warn('⚠️  [autosave] activePlanId is null, skipping save');
       }
     }, 1500);
 
+    // Clears only the timer — pendingPlanWriteRef stays so an unmount,
+    // pagehide or plan switch can still flush it.
     return () => {
       clearTimeout(saveTimeoutRef.current);
       console.log('🧹 [autosave] Cleaning up timeout');
@@ -519,6 +545,26 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     // it shouldn't reschedule/cancel this plan-save debounce.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [semesters, gridSummerTerms, planName, isTransfer, isDirty, extraTerms, cumulativeGpa, earnedCredits, gradePoints, majorBulletinUrl, requirementOverrides, stash]);
+
+  // Flush a still-debounced plan write when the planner unmounts (e.g. the
+  // browser Back button, which no leave prompt sees) or the page is hidden
+  // (tab close / refresh, including after "Leave" on the browser's own
+  // prompt). Through a ref so these mount-only effects always call the
+  // current render's flush.
+  useEffect(() => {
+    flushPlanRef.current = flushPendingPlanWrite;
+  });
+
+  useEffect(() => {
+    function handlePageHide() {
+      flushPlanRef.current?.();
+    }
+    window.addEventListener('pagehide', handlePageHide);
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide);
+      flushPlanRef.current?.();
+    };
+  }, []);
 
   // ── Guest: persist to localStorage after React commits the new state ──────
   // Handlers used to call saveLocalPlan() immediately after setSemesters(),
@@ -1043,7 +1089,35 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     isInitialLoad.current = false;
   }
 
-  async function persistPlan(uid, planId, name, semData, transfer, extras = {}) {
+  // Sends the latest unsent plan edit (see pendingPlanWriteRef), with the
+  // uid/planId/data captured when it was made. Resolves true when there was
+  // nothing to send or it saved; false when it failed (the edit is kept for
+  // the next flush) or the signed-in user changed (the edit is dropped —
+  // never written as someone else).
+  function flushPendingPlanWrite() {
+    clearTimeout(saveTimeoutRef.current);
+    const pending = pendingPlanWriteRef.current;
+    if (!pending) return Promise.resolve(true);
+    pendingPlanWriteRef.current = null;
+    if (auth.currentUser?.uid !== pending.uid) return Promise.resolve(false);
+    return persistPlan(
+      pending.uid, pending.planId, pending.name, pending.semesters, pending.isTransfer, pending.extras, pending.version,
+    ).then((saved) => {
+      if (!saved && !pendingPlanWriteRef.current) pendingPlanWriteRef.current = pending;
+      return saved;
+    });
+  }
+
+  function discardPendingPlanWrite() {
+    clearTimeout(saveTimeoutRef.current);
+    pendingPlanWriteRef.current = null;
+  }
+
+  // `version` is the edit this write is a snapshot of (defaults to the latest
+  // edit at call time). An edit made while it's in flight is newer: it stays
+  // dirty and its own debounce timer, already scheduled, sends it.
+  async function persistPlan(uid, planId, name, semData, transfer, extras = {}, version = editVersionRef.current) {
+    planSavesInFlightRef.current += 1;
     setSaving(true);
     const debugLog = {
       timestamp: new Date().toISOString(),
@@ -1098,9 +1172,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       debugPlanner('persistPlan-firestore-readback', { planId, ...written });
 
       console.log('✅ [persistPlan] Write succeeded');
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus(''), 2500);
-      setIsDirty(false);
+      // Only clear dirty (and show "Saved") if no edit happened after this
+      // snapshot — clearing it would cancel the newer edit's pending timer.
+      if (version >= editVersionRef.current) {
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus(''), 2500);
+        setIsDirty(false);
+      }
       return true;
     } catch (err) {
       const errorDetails = {
@@ -1123,7 +1201,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       setTimeout(() => setSaveStatus(''), 3000);
       return false;
     } finally {
-      setSaving(false);
+      // Writes can overlap (one in flight, a newer one sent) — stay
+      // "Saving…" until the last one settles.
+      planSavesInFlightRef.current -= 1;
+      setSaving(planSavesInFlightRef.current > 0);
     }
   }
 
@@ -1181,12 +1262,17 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   // ── Plan CRUD callbacks ───────────────────────────────────────────────────
 
-  function handleSelectPlan(planId) {
+  async function handleSelectPlan(planId) {
     if (planId === activePlanId) return;
+    // Save the open plan's last edits before its state is replaced; if that
+    // fails, stay on it (the error badge shows) rather than drop them.
+    if (!(await flushPendingPlanWrite())) return;
     loadPlan(user.uid, planId, null);
   }
 
   async function handleNewPlan() {
+    // Same as handleSelectPlan: save the open plan's last edits first.
+    if (!(await flushPendingPlanWrite())) return;
     // Carry the student's already-completed (locked) courses into the new
     // plan, at the same slot they occupy in the plan currently open —
     // locking is global (completedCourseKeySet), but a brand-new plan
@@ -1253,8 +1339,18 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   async function handleDeletePlan(planId) {
+    const deletingOpenPlan = planId === activePlanId;
+    // The open plan's pending edit has nowhere to go once it's deleted —
+    // stop its timer now; it's dropped below once the delete succeeds.
+    if (deletingOpenPlan) clearTimeout(saveTimeoutRef.current);
     await deleteDoc(doc(db, 'users', user.uid, 'plans', planId));
     const remaining = plans.filter((p) => p.id !== planId);
+    // Deleting some other plan leaves the open one (and its edits) alone.
+    if (!deletingOpenPlan) {
+      setPlans(remaining);
+      return;
+    }
+    discardPendingPlanWrite();
     if (remaining.length === 0) {
       await createDefaultPlan(user.uid);
     } else {
