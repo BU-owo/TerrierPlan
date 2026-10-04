@@ -25,6 +25,7 @@ import WeeklyGrid from '../components/scheduler/WeeklyGrid';
 import SectionSwapSheet from '../components/scheduler/SectionSwapSheet';
 import { nextAutoColors } from '../utils/scheduleColors';
 import { readStoredDraft, writeStoredDraft } from '../utils/draftStorage';
+import { loadAllCourses } from '../utils/courseQuery';
 import BookmarkedSchedulesPanel from '../components/scheduler/BookmarkedSchedulesPanel';
 import SavedSchedulesPanel from '../components/scheduler/SavedSchedulesPanel';
 import { CURRENT_TERM, CURRENT_TERM_LABEL, scheduleTerm, termLabel } from '../utils/term';
@@ -122,6 +123,40 @@ async function migrateGuestSchedulesIfNeeded(uid) {
     }
   }
   return guestScheduleMigrationPromise;
+}
+
+// Course docs ({ [courseKey]: course }) for the scheduler's labels, from the
+// static catalog (courseQuery.js's loadAllCourses — the same cached copy
+// SchedulerSearch loads) instead of the `courses` collection. The scheduler
+// only reads courseNumber and name, which every catalog entry has. A key the
+// catalog lacks (e.g. it lags a newly imported course) is read from Firestore
+// instead, so a stale catalog never drops a restored draft course.
+let catalogById = null;
+let catalogByIdSource = null;
+
+async function lookupCourses(courseKeys) {
+  const found = {};
+  if (courseKeys.length === 0) return found;
+  try {
+    const catalog = await loadAllCourses();
+    if (catalogByIdSource !== catalog) {
+      catalogById = new Map(catalog.map((c) => [c.id, c]));
+      catalogByIdSource = catalog;
+    }
+    courseKeys.forEach((key) => {
+      if (catalogById.has(key)) found[key] = catalogById.get(key);
+    });
+  } catch (err) {
+    console.warn('Course catalog unavailable, reading courses from Firestore:', err);
+  }
+  const missing = courseKeys.filter((key) => !found[key]);
+  for (let i = 0; i < missing.length; i += 30) {
+    const snap = await getDocs(query(collection(db, 'courses'), where(documentId(), 'in', missing.slice(i, i + 30))));
+    snap.docs.forEach((d) => {
+      found[d.id] = d.data();
+    });
+  }
+  return found;
 }
 
 // Pure draftCourses transforms, shared between the draft picker's own lock
@@ -438,25 +473,22 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     async (courseKeys) => {
       const missing = courseKeys.filter((k) => !courseMap[k]);
       if (missing.length === 0) return;
-      const newCourses = {};
-      for (let i = 0; i < missing.length; i += 30) {
-        const batch = missing.slice(i, i + 30);
-        // eslint-disable-next-line no-await-in-loop
-        const snap = await getDocs(query(collection(db, 'courses'), where(documentId(), 'in', batch)));
-        snap.docs.forEach((d) => {
-          newCourses[d.id] = d.data();
-        });
-      }
+      const newCourses = await lookupCourses(missing);
       setCourseMap((prev) => ({ ...prev, ...newCourses }));
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [courseMap],
   );
 
   async function fetchSectionsForCourse(courseKey) {
     setLoadingSectionsFor((prev) => new Set(prev).add(courseKey));
     try {
-      const snap = await getDocs(query(collection(db, 'sections'), where('courseKey', '==', courseKey)));
+      // Current term only — sectionsByCourse never holds another term's
+      // sections (those come in by id; see standaloneSections).
+      const snap = await getDocs(query(
+        collection(db, 'sections'),
+        where('courseKey', '==', courseKey),
+        where('term', '==', CURRENT_TERM),
+      ));
       const sections = snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
         .filter((s) => s.term === CURRENT_TERM && s.classStat !== 'Cancelled')
@@ -886,13 +918,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       }
       try {
         const courseKeys = stored.courses.map((c) => c.courseKey);
-        const foundCourses = {};
-        for (let i = 0; i < courseKeys.length; i += 30) {
-          const snap = await getDocs(query(collection(db, 'courses'), where(documentId(), 'in', courseKeys.slice(i, i + 30))));
-          snap.docs.forEach((d) => {
-            foundCourses[d.id] = d.data();
-          });
-        }
+        const foundCourses = await lookupCourses(courseKeys);
         const keptKeys = courseKeys.filter((k) => foundCourses[k]);
         const lists = await Promise.all(keptKeys.map((k) => fetchSectionsForCourse(k)));
         if (lists.some((l) => l == null)) throw new Error('could not load sections');
