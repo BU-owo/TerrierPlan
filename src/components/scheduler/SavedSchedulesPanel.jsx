@@ -36,6 +36,8 @@ export default function SavedSchedulesPanel({
   onToggleFavorite,
   onDelete,
   onLoad,
+  actionError = null,
+  onDismissError = () => {},
   isGuest = false,
 }) {
   const [name, setName] = useState('');
@@ -65,9 +67,12 @@ export default function SavedSchedulesPanel({
     try {
       // "Schedule N" counts only this term's schedules.
       const currentCount = savedSchedules.filter((s) => scheduleTerm(s) === CURRENT_TERM).length;
-      await onSave(name.trim() || `Schedule ${currentCount + 1}`);
-      setJustSavedKey(previewKey);
-      setName('');
+      // onSave reports its own failure (actionError) and resolves false.
+      const saved = await onSave(name.trim() || `Schedule ${currentCount + 1}`);
+      if (saved) {
+        setJustSavedKey(previewKey);
+        setName('');
+      }
     } finally {
       setSaving(false);
     }
@@ -210,6 +215,14 @@ export default function SavedSchedulesPanel({
             disabled={saveBlocked}
           />
         </form>
+        {actionError && (
+          <div className="sched-saved-error" role="alert">
+            <span>{actionError}</span>
+            <button type="button" className="sched-saved-error-dismiss" onClick={onDismissError} aria-label="Dismiss">
+              ×
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="sched-saved-list">

@@ -1422,6 +1422,25 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
 }
 .sched-save-section { display: flex; flex-direction: column; gap: 6px; }
 .sched-save-heading { font-size: 11.5px; font-weight: 600; color: var(--text-muted); }
+.sched-saved-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warning-text);
+}
+.sched-saved-error span { flex: 1; min-width: 0; }
+.sched-saved-error-dismiss {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
 /* Save is the one control here that actually preserves something, so it
    leads — full-width, solid scarlet, its own row — with the name field
    demoted underneath as a small optional/secondary input, instead of the

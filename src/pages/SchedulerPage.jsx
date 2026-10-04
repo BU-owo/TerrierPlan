@@ -70,6 +70,12 @@ const HANDLE_WIDTH = 7;
 // guestMigrationPromise — only migrate (and clear localStorage) once per
 // guest session -> sign-in.
 let guestScheduleMigrationPromise = null;
+// Sign-in reaches every open tab, and the guest list now stays in
+// localStorage until it's fully written, so a tab claims the migration here
+// first; another tab seeing a recent claim skips it. A claim left by a tab
+// that closed mid-migration expires, and the next sign-in retries.
+const SCHEDULES_MIGRATION_CLAIM_KEY = 'terrierplan_scheduler_schedules_migrating';
+const MIGRATION_CLAIM_TTL_MS = 60_000;
 
 async function migrateGuestSchedulesIfNeeded(uid) {
   if (!guestScheduleMigrationPromise) {
@@ -80,27 +86,37 @@ async function migrateGuestSchedulesIfNeeded(uid) {
     } catch {
       localSchedules = [];
     }
-    if (localSchedules.length === 0) {
+    const claimedAt = Number(localStorage.getItem(SCHEDULES_MIGRATION_CLAIM_KEY)) || 0;
+    if (localSchedules.length === 0 || Date.now() - claimedAt < MIGRATION_CLAIM_TTL_MS) {
       guestScheduleMigrationPromise = Promise.resolve();
     } else {
-      localStorage.removeItem(SCHEDULES_LOCAL_KEY);
+      localStorage.setItem(SCHEDULES_MIGRATION_CLAIM_KEY, String(Date.now()));
+      // The local copy is only shrunk as each schedule is written, so a
+      // failure or a closed tab mid-loop leaves exactly the unwritten ones
+      // for the next sign-in — never re-adding one that already made it.
       guestScheduleMigrationPromise = (async () => {
+        let written = 0;
         try {
           for (const schedule of localSchedules) {
             // eslint-disable-next-line no-await-in-loop
             await addDoc(collection(db, 'users', uid, 'schedules'), {
               name: schedule.name || 'My Schedule',
-              term: schedule.term || CURRENT_TERM,
+              term: scheduleTerm(schedule),
               selectedSectionIds: schedule.selectedSectionIds || [],
               favorited: Boolean(schedule.favorited),
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             });
+            written += 1;
+            localStorage.setItem(SCHEDULES_LOCAL_KEY, JSON.stringify(localSchedules.slice(written)));
           }
+          localStorage.removeItem(SCHEDULES_LOCAL_KEY);
         } catch (err) {
           console.error('Error migrating guest schedules:', err);
-          localStorage.setItem(SCHEDULES_LOCAL_KEY, JSON.stringify(localSchedules));
+          localStorage.setItem(SCHEDULES_LOCAL_KEY, JSON.stringify(localSchedules.slice(written)));
           guestScheduleMigrationPromise = null; // allow retry on next sign-in attempt
+        } finally {
+          localStorage.removeItem(SCHEDULES_MIGRATION_CLAIM_KEY);
         }
       })();
     }
@@ -254,6 +270,11 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // ── Saved/favorited schedules ───────────────────────────────────────────────
   const [savedSchedules, setSavedSchedules] = useState([]);
   const [activeSavedId, setActiveSavedId] = useState(null); // which saved schedule (if any) the grid mirrors exactly
+  // Last failed save/rename/star/delete, shown in the saved panel until the
+  // next such action or a dismiss.
+  const [scheduleActionError, setScheduleActionError] = useState(null);
+  // Blocks a second bookmark promote while one is still saving.
+  const promotingBookmarkRef = useRef(false);
 
   const [mobileView, setMobileView] = useState('search'); // 'search' | 'build' | 'preview'
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -726,10 +747,22 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // rename it afterward via the saved row's rename button) since asking
   // for a name here would defeat the "one click" point. Consumes the
   // bookmark on success: once it's a real saved schedule, the bookmark's
-  // job — "don't lose this candidate" — is done.
+  // job — "don't lose this candidate" — is done. A combination that's
+  // already saved isn't saved again; its bookmark is just consumed.
   async function handlePromoteBookmark(key, sectionIds) {
-    await handleSaveSchedule(`Schedule ${savedSchedules.filter((s) => scheduleTerm(s) === CURRENT_TERM).length + 1}`, sectionIds);
-    handleRemoveBookmark(key);
+    if (promotingBookmarkRef.current) return;
+    const comboKey = scheduleKey(sectionIds);
+    if (savedSchedules.some((s) => scheduleKey(s.selectedSectionIds || []) === comboKey)) {
+      handleRemoveBookmark(key);
+      return;
+    }
+    promotingBookmarkRef.current = true;
+    try {
+      const saved = await handleSaveSchedule(`Schedule ${savedSchedules.filter((s) => scheduleTerm(s) === CURRENT_TERM).length + 1}`, sectionIds);
+      if (saved) handleRemoveBookmark(key);
+    } finally {
+      promotingBookmarkRef.current = false;
+    }
   }
 
   function invalidateGenerated() {
@@ -1119,27 +1152,47 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // title) when it's the thing actually on screen right now — promoting a
   // DIFFERENT bookmark than whatever's currently previewed shouldn't hijack
   // the header to name something the grid isn't showing.
+  //
+  // Resolves to true once the schedule is saved, false if it wasn't (the
+  // error is shown in the saved panel). The term comes from the section ids
+  // themselves, so a previewed other-term schedule keeps its own term.
   async function handleSaveSchedule(name, sectionIds = previewSectionIds) {
-    if (sectionIds.length === 0) return;
+    if (sectionIds.length === 0) return false;
     const isPreviewed = scheduleKey(sectionIds) === scheduleKey(previewSectionIds);
+    const term = scheduleTerm({ selectedSectionIds: sectionIds });
+    setScheduleActionError(null);
     if (user) {
-      const ref = await addDoc(collection(db, 'users', user.uid, 'schedules'), {
-        name,
-        term: CURRENT_TERM,
-        selectedSectionIds: sectionIds,
-        favorited: false,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      const q = query(collection(db, 'users', user.uid, 'schedules'), orderBy('updatedAt', 'desc'));
-      const snap = await getDocs(q);
-      setSavedSchedules(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      let ref;
+      try {
+        ref = await addDoc(collection(db, 'users', user.uid, 'schedules'), {
+          name,
+          term,
+          selectedSectionIds: sectionIds,
+          favorited: false,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.error('Error saving schedule:', err);
+        setScheduleActionError("Couldn't save this schedule. Check your connection and try again.");
+        return false;
+      }
+      try {
+        const q = query(collection(db, 'users', user.uid, 'schedules'), orderBy('updatedAt', 'desc'));
+        const snap = await getDocs(q);
+        setSavedSchedules(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      } catch (err) {
+        // The doc was written — list it anyway so it isn't missing (and
+        // can't be saved a second time) until the next reload.
+        console.error('Saved schedule, but could not refresh the list:', err);
+        setSavedSchedules((prev) => [{ id: ref.id, name, term, selectedSectionIds: sectionIds, favorited: false }, ...prev]);
+      }
       if (isPreviewed) setActiveSavedId(ref.id);
     } else {
       const schedule = {
         id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         name,
-        term: CURRENT_TERM,
+        term,
         selectedSectionIds: sectionIds,
         favorited: false,
         createdAt: new Date().toISOString(),
@@ -1148,32 +1201,54 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       setSavedSchedules((prev) => [schedule, ...prev]);
       if (isPreviewed) setActiveSavedId(schedule.id);
     }
+    return true;
   }
 
   async function handleRenameSchedule(schedule, name) {
+    setScheduleActionError(null);
     if (user) {
-      await updateDoc(doc(db, 'users', user.uid, 'schedules', schedule.id), {
-        name,
-        updatedAt: serverTimestamp(),
-      });
+      try {
+        await updateDoc(doc(db, 'users', user.uid, 'schedules', schedule.id), {
+          name,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.error('Error renaming schedule:', err);
+        setScheduleActionError(`Couldn't rename "${schedule.name}". Check your connection and try again.`);
+        return;
+      }
     }
     setSavedSchedules((prev) => prev.map((s) => (s.id === schedule.id ? { ...s, name } : s)));
   }
 
   async function handleToggleFavorite(schedule) {
     const favorited = !schedule.favorited;
+    setScheduleActionError(null);
     if (user) {
-      await updateDoc(doc(db, 'users', user.uid, 'schedules', schedule.id), {
-        favorited,
-        updatedAt: serverTimestamp(),
-      });
+      try {
+        await updateDoc(doc(db, 'users', user.uid, 'schedules', schedule.id), {
+          favorited,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.error('Error updating favorite:', err);
+        setScheduleActionError(`Couldn't ${favorited ? 'favorite' : 'unfavorite'} "${schedule.name}". Check your connection and try again.`);
+        return;
+      }
     }
     setSavedSchedules((prev) => prev.map((s) => (s.id === schedule.id ? { ...s, favorited } : s)));
   }
 
   async function handleDeleteSchedule(schedule) {
+    setScheduleActionError(null);
     if (user) {
-      await deleteDoc(doc(db, 'users', user.uid, 'schedules', schedule.id));
+      try {
+        await deleteDoc(doc(db, 'users', user.uid, 'schedules', schedule.id));
+      } catch (err) {
+        console.error('Error deleting schedule:', err);
+        setScheduleActionError(`Couldn't delete "${schedule.name}". Check your connection and try again.`);
+        return;
+      }
     }
     setSavedSchedules((prev) => prev.filter((s) => s.id !== schedule.id));
     if (activeSavedId === schedule.id) setActiveSavedId(null);
@@ -1213,6 +1288,19 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       setActiveSavedId(schedule.id);
       setMobileView('preview');
       return;
+    }
+
+    // Loading replaces the whole draft (picks and pins), so ask first unless
+    // the draft is empty or is exactly a saved schedule with nothing pinned —
+    // then nothing would be lost.
+    if (draftCourses.length > 0) {
+      const hasLocks = draftCourses.some((c) => c.locked.length > 0);
+      const draftKey = scheduleKey(draftCourses.flatMap((c) => Object.values(c.considering).flat()));
+      const draftIsSaved = !hasLocks
+        && savedSchedules.some((s) => scheduleKey(s.selectedSectionIds || []) === draftKey);
+      if (!draftIsSaved && !window.confirm(`Load "${schedule.name}"? This replaces your current draft, including any pinned sections.`)) {
+        return;
+      }
     }
 
     const missing = ids.filter((id) => !sectionsById[id]);
@@ -1512,6 +1600,8 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             onToggleFavorite={handleToggleFavorite}
             onDelete={handleDeleteSchedule}
             onLoad={handleLoadSchedule}
+            actionError={scheduleActionError}
+            onDismissError={() => setScheduleActionError(null)}
             isGuest={!user}
           />
         </aside>
