@@ -39,6 +39,8 @@ export default function SemesterColumn({
   // PlannerPage/SemesterBoard); this is what actually drives each card's
   // locked state, not anything stored on the entry itself.
   completedCourseKeys,
+  // "All semesters" overview: compact header/cards.
+  compact = false,
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: dropId });
   // Id of a note this column just added, so it mounts in edit mode.
@@ -61,6 +63,7 @@ export default function SemesterColumn({
         isActive ? 'is-active' : '',
         isOver ? 'is-drag-over' : '',
         status === 'current' ? 'is-current' : '',
+        compact ? 'is-compact' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -85,8 +88,20 @@ export default function SemesterColumn({
               Completed
             </span>
           )}
-          {courses.length > 0 && (
-            <span className="semester-credits">{totalCredits || '—'} cr</span>
+          {(courses.length > 0 || compact) && (
+            <span className="semester-credits">{totalCredits || (compact ? 0 : '—')} cr</span>
+          )}
+          {compact && onAddNote && (
+            <button
+              type="button"
+              className="semester-add-note"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); setNewNoteId(onAddNote()); }}
+              title="Add a placeholder to this semester"
+              aria-label="Add a placeholder to this semester"
+            >
+              +
+            </button>
           )}
           {courseEntries.length > 0 && onToggleSemesterLock && (
             <button
@@ -138,6 +153,7 @@ export default function SemesterColumn({
               credits={creditsMap[key]}
               locked={locked}
               season={season}
+              compact={compact}
               isDragging={draggingId === key}
               onRemove={locked ? undefined : () => onRemoveCourse(key)}
               onToggleLock={() => onToggleLock(key)}
@@ -147,12 +163,12 @@ export default function SemesterColumn({
         })}
         {courses.length === 0 && (
           <div className="semester-empty">
-            {isActive ? 'Search and add a course ↗' : 'Drop courses here'}
+            {compact ? 'Drop here' : isActive ? 'Search and add a course ↗' : 'Drop courses here'}
           </div>
         )}
         {/* Last row of the list (inside the droppable, so dropping onto it
             still lands in this column). */}
-        {onAddNote && (
+        {onAddNote && !compact && (
           <button
             type="button"
             className="add-placeholder-row"

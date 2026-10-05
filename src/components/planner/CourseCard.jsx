@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { getOfferingWarning } from '../../utils/offeringPattern';
@@ -14,6 +14,8 @@ export default function CourseCard({
   onToggleLock,
   onShowInfo,
   isDragOverlay = false,
+  // "All semesters" overview: one-line card, no name (it's in the tooltip).
+  compact = false,
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: courseKey,
@@ -29,6 +31,19 @@ export default function CourseCard({
   // UI nicety, not a persisted preference.
   const [noticeDismissed, setNoticeDismissed] = useState(false);
 
+  // Compact cards open the info panel on click. The drag sensor only starts a
+  // drag after 8px of movement, so a plain click still reaches onClick; this
+  // flag just swallows the stray click some browsers fire after a drag ends.
+  const draggedRef = useRef(false);
+  useEffect(() => {
+    if (isDragging) {
+      draggedRef.current = true;
+      return undefined;
+    }
+    const t = setTimeout(() => { draggedRef.current = false; }, 80);
+    return () => clearTimeout(t);
+  }, [isDragging]);
+
   const hubUnits = data?.hubUnits ?? [];
   const courseNumber = data?.courseNumber ?? courseKey;
   const courseName = data?.name ?? '—';
@@ -37,6 +52,66 @@ export default function CourseCard({
   // blocks placement or feeds into HUB/requirement logic.
   const offeringWarning = !isDragOverlay ? getOfferingWarning(data?.offeringPattern, season) : null;
   const showOfferingWarning = offeringWarning && !(offeringWarning.severity === 'notice' && noticeDismissed);
+
+  if (compact && !isDragOverlay) {
+    const tip = [
+      `${courseNumber} — ${courseName}`,
+      creditStr,
+      hubUnits.length ? `HUB: ${hubUnits.join(', ')}` : null,
+      data?.studyAbroad ? 'Study abroad' : null,
+      offeringWarning?.text,
+    ].filter(Boolean).join('\n');
+    function openInfo() {
+      if (draggedRef.current || !onShowInfo) return;
+      onShowInfo();
+    }
+    return (
+      <div
+        ref={setNodeRef}
+        className={`course-card is-compact${isDragging ? ' is-source' : ''}${locked ? ' is-locked' : ''}${onShowInfo ? ' has-info' : ''}`}
+        title={tip}
+        onClick={openInfo}
+        onKeyDown={(e) => {
+          if (e.target === e.currentTarget && e.key === 'Enter') { e.preventDefault(); openInfo(); }
+        }}
+        {...(locked ? { role: 'button', tabIndex: 0 } : { ...attributes, ...listeners })}
+      >
+        {onToggleLock && (
+          <button
+            type="button"
+            className={`course-card-lock${locked ? ' is-locked' : ''}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onToggleLock(); }}
+            aria-label={locked ? `Unlock ${courseNumber}` : `Lock ${courseNumber}`}
+            title={locked ? 'Locked — click to unlock' : 'Lock this course'}
+          >
+            {locked ? '🔒' : '🔓'}
+          </button>
+        )}
+        {!locked && onRemove && (
+          <button
+            className="course-card-remove"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            aria-label={`Remove ${courseNumber}`}
+          >
+            ×
+          </button>
+        )}
+        <span className="course-card-code">{courseNumber}</span>
+        <span className="course-card-name">{courseName}</span>
+        {offeringWarning && (
+          <span
+            className={`course-card-offering-warning is-${offeringWarning.severity} is-icon`}
+            aria-label={offeringWarning.text}
+          >
+            <span aria-hidden="true">⚠</span>
+          </span>
+        )}
+        <span className="course-card-credits">{creditStr}</span>
+      </div>
+    );
+  }
 
   const cardContent = (
     <>

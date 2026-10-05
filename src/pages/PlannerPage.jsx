@@ -64,6 +64,10 @@ const EMPTY_SEMESTERS = () => Array.from({ length: 8 }, () => []);
 // "+ Add Year" stops here (see handleAddYear/SemesterBoard).
 const MAX_PLAN_YEARS = 8;
 const LOCAL_STORAGE_KEY = 'terrierplan_session';
+// Per-browser display preference ('detailed' | 'overview'); not part of any plan.
+const PLANNER_VIEW_KEY = 'terrierplan_planner_view';
+// Overview needs the desktop 3-column layout; below this the mobile layout stays.
+const OVERVIEW_MIN_WIDTH_QUERY = '(min-width: 861px)';
 // A student's "current semester", completed courses, and AP/IB/transfer
 // credits are facts about them, not about any one hypothetical plan — kept
 // in their own storage key (signed-in: the top-level `users/{uid}` doc;
@@ -270,6 +274,31 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [activeSemIndex, setActiveSemIndex] = useState(0);
   // Which single panel is shown on narrow/mobile screens: 'search' | 'board' | 'hub'
   const [mobileView, setMobileView] = useState('board');
+  // 'detailed' | 'overview' — "All semesters" compact board (desktop only).
+  const [boardView, setBoardView] = useState(() => {
+    try {
+      return localStorage.getItem(PLANNER_VIEW_KEY) === 'overview' ? 'overview' : 'detailed';
+    } catch {
+      return 'detailed';
+    }
+  });
+  const [isWideLayout, setIsWideLayout] = useState(() => window.matchMedia(OVERVIEW_MIN_WIDTH_QUERY).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(OVERVIEW_MIN_WIDTH_QUERY);
+    const onChange = (e) => setIsWideLayout(e.matches);
+    setIsWideLayout(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  function handleBoardViewChange(next) {
+    setBoardView(next);
+    try {
+      localStorage.setItem(PLANNER_VIEW_KEY, next);
+    } catch {
+      // Preference just won't stick.
+    }
+  }
+  const overviewActive = boardView === 'overview' && isWideLayout;
   // { subject, min, max, exclude } | null — set by "Browse eligible courses"
   // on a COURSE_RANGE requirement node, consumed by CourseSearch as an
   // additional filter alongside its own text/HUB filters.
@@ -2181,8 +2210,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                   onShowCourseInfo={setInfoCourseKey}
                   hubSummary={{ fulfilled: hubFulfilled, total: hubTotal }}
                   onOpenHubFullView={openHubFullView}
+                  overview={overviewActive}
+                  boardView={boardView}
+                  onBoardViewChange={isWideLayout ? handleBoardViewChange : undefined}
                 />
                 <ExtraTermsPanel
+                  compact={overviewActive}
                   extraTerms={extraTerms}
                   courseMap={courseMap}
                   creditsMap={creditsMap}

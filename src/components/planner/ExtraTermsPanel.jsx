@@ -7,6 +7,8 @@ export default function ExtraTermsPanel({
   creditsMap,
   onRemoveCourse,
   onShowCourseInfo,
+  // Overview mode: a flat strip under the grid instead of the collapsible panel.
+  compact = false,
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -17,6 +19,39 @@ export default function ExtraTermsPanel({
     (sum, t) => sum + (t.courseKeys || []).reduce((s, k) => s + (creditsMap[k] ?? 0), 0),
     0,
   );
+
+  if (compact) {
+    return (
+      <div className="extra-terms-strip">
+        <span className="extra-terms-strip-title">Summer &amp; Winter · {totalCredits || 0} cr</span>
+        {extraTerms.map((et) => {
+          const termCredits = (et.courseKeys || []).reduce((s, k) => s + (creditsMap[k] ?? 0), 0);
+          return (
+            <div key={et.term} className="extra-terms-strip-group">
+              <div className="extra-terms-strip-label">
+                {et.term} · {termCredits} cr
+                {et.isPostDegree && <span className="extra-term-badge">Post-degree</span>}
+              </div>
+              <div className="extra-terms-strip-courses">
+                {(et.courseKeys || []).map((key) => (
+                  <CourseCard
+                    key={key}
+                    courseKey={key}
+                    data={courseMap[key]}
+                    credits={creditsMap[key]}
+                    season={et.season}
+                    compact
+                    onRemove={onRemoveCourse ? () => onRemoveCourse(et.term, key) : undefined}
+                    onShowInfo={onShowCourseInfo ? () => onShowCourseInfo(key) : undefined}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   if (collapsed) {
     return (

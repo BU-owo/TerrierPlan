@@ -3359,3 +3359,202 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   color: var(--text-secondary);
   background: transparent;
 }
+
+/* ===== BOARD VIEW TOGGLE + "ALL SEMESTERS" OVERVIEW =====
+   Detailed is the original layout. Overview (desktop only — PlannerPage never
+   turns it on below 861px) puts years in columns with Fall/Spring/Summer
+   stacked inside, and swaps cards for one-line compact ones. */
+.board-years { display: contents; }
+
+.board-view-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  padding: 2px;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  background: var(--white);
+}
+.board-view-toggle + .hub-tracker-pill { margin-left: 0; }
+.board-view-toggle button {
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.board-view-toggle button:hover { color: var(--text); }
+.board-view-toggle button.is-on { background: var(--scarlet); color: #fff; }
+.board-view-toggle button:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
+
+.semester-board.is-overview { min-height: 0; gap: 8px; padding-bottom: 8px; }
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+.overview-year { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.overview-year .year-label {
+  width: auto;
+  justify-content: flex-start;
+  writing-mode: horizontal-tb;
+  transform: none;
+  font-size: 11px;
+}
+.overview-year .year-semesters { flex-direction: column; gap: 5px; }
+.overview-year .add-summer-term-btn {
+  flex: none;
+  min-height: 24px;
+  padding: 2px 6px;
+  font-size: 10px;
+}
+.semester-board.is-overview .add-year-btn { margin-top: 0; padding: 2px 10px; font-size: 11px; }
+.semester-add-note {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.semester-add-note:hover, .semester-add-note:focus-visible { border-color: var(--scarlet); color: var(--scarlet); }
+
+.semester-column.is-compact {
+  flex: none;
+  border-width: 1.5px;
+  border-radius: var(--radius-md);
+}
+.semester-column.is-compact.is-active,
+.semester-column.is-compact.is-current { box-shadow: 0 0 0 2px var(--scarlet-light); }
+.semester-column.is-compact.is-current { box-shadow: 0 0 0 2px var(--success-surface); }
+.semester-column.is-compact .semester-header { padding: 2px 6px; gap: 4px; }
+.semester-column.is-compact .semester-name { font-size: 10px; }
+.semester-column.is-compact .semester-header-right { gap: 4px; min-width: 0; }
+.semester-column.is-compact .semester-credits { font-size: 10px; padding: 0 5px; }
+.semester-column.is-compact .semester-status-badge { font-size: 9px; padding: 0 5px; }
+.semester-column.is-compact .semester-lock-toggle { font-size: 10px; padding: 0 1px; }
+.semester-column.is-compact .semester-courses { flex: none; overflow: visible; padding: 3px; gap: 2px; }
+.semester-column.is-compact .semester-empty {
+  flex: none;
+  min-height: 20px;
+  margin: 0;
+  padding: 1px;
+  font-size: 10px;
+}
+.semester-column.is-compact .add-placeholder-row {
+  min-height: 18px;
+  padding: 0 6px;
+  font-size: 9.5px;
+}
+
+.course-card.is-compact {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+  padding: 1px 6px;
+  border-width: 1px;
+  overflow: hidden;
+}
+.course-card.is-compact.has-info { cursor: pointer; }
+.course-card.is-compact.has-info:not(.is-locked) { cursor: grab; }
+.course-card.is-compact .course-card-code {
+  padding: 0;
+  font-size: 10px;
+  letter-spacing: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* Name takes the leftover width and ellipsizes; credits never truncate. */
+.course-card.is-compact .course-card-name {
+  display: block;
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-line-clamp: none;
+}
+.course-card.is-compact .course-card-credits {
+  flex: 0 0 auto;
+  min-width: 28px;
+  font-size: 9.5px;
+  text-align: right;
+  white-space: nowrap;
+}
+.course-card.is-compact .course-card-offering-warning.is-icon {
+  margin: 0;
+  padding: 0 3px;
+  font-size: 9px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+/* Unlocked: lock + remove sit over the credits slot on hover/focus (credits
+   hide meanwhile, so no text is underneath). Locked: the lock stays in the
+   row, always visible, in place of the controls. */
+.course-card.is-compact .course-card-lock,
+.course-card.is-compact .course-card-remove {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  background: var(--white);
+}
+.course-card.is-compact .course-card-lock { right: 3px; }
+.course-card.is-compact:has(.course-card-lock) .course-card-remove { right: 17px; }
+.course-card.is-compact:hover .course-card-lock,
+.course-card.is-compact:hover .course-card-remove,
+.course-card.is-compact:focus-within .course-card-lock,
+.course-card.is-compact:focus-within .course-card-remove { opacity: 1; }
+.course-card.is-compact:not(.is-locked):hover .course-card-credits,
+.course-card.is-compact:not(.is-locked):focus-within .course-card-credits { visibility: hidden; }
+.course-card.is-compact .course-card-lock.is-locked {
+  position: static;
+  transform: none;
+  order: 99;
+  flex-shrink: 0;
+  background: transparent;
+}
+.course-card.is-compact:focus-visible { outline: 2px solid var(--scarlet); outline-offset: 1px; }
+/* Touch: no hover, so the controls stay hidden (a locked card keeps its 🔒 as a status mark). */
+@media (hover: none) {
+  .course-card.is-compact .course-card-remove,
+  .course-card.is-compact .course-card-lock:not(.is-locked) { display: none; }
+}
+
+.extra-terms-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--white);
+}
+.extra-terms-strip-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  align-self: center;
+}
+.extra-terms-strip-group { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; min-width: 0; }
+.extra-terms-strip-label { font-size: 10px; font-weight: 700; color: var(--text-secondary); }
+.extra-terms-strip-courses { display: flex; flex-wrap: wrap; gap: 3px; }
+.extra-terms-strip-courses .course-card.is-compact { width: 190px; }
