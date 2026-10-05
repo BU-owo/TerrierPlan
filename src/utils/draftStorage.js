@@ -4,8 +4,9 @@ import { EMPTY_GLOBAL_FILTERS } from './sectionFilters';
 // The Scheduler's in-progress work — draft courses (checked/locked sections),
 // the time filter, the section sort mode, the bookmark shortlist, and the
 // combination being previewed (with its stepper position) — saved to one
-// localStorage key so a refresh doesn't lose it. Same key for guests and
-// signed-in users. Everything derived is left out and rebuilt on load: the
+// localStorage key so a refresh doesn't lose it. Guests use the plain key; a
+// signed-in user's draft lives under that key + their uid, so a shared
+// computer never shows the previous person's draft. Everything derived is left out and rebuilt on load: the
 // generated batch, fetched sections/course docs, and course colors
 // (re-assigned from course order; manual picks have their own key).
 //
@@ -13,6 +14,11 @@ import { EMPTY_GLOBAL_FILTERS } from './sectionFilters';
 // means nothing is saved/restored.
 export const DRAFT_STORAGE_KEY = 'terrierplan_scheduler_draft';
 export const DRAFT_STORAGE_VERSION = 1;
+
+// uid null/undefined = guest.
+function draftKey(uid) {
+  return uid ? `${DRAFT_STORAGE_KEY}_${uid}` : DRAFT_STORAGE_KEY;
+}
 
 function strings(value) {
   return Array.isArray(value) ? value.filter((v) => typeof v === 'string') : [];
@@ -43,9 +49,9 @@ function sanitizeFilter(raw) {
 // format; otherwise null (a different term's draft or an old format is
 // discarded, not migrated). Section ids are NOT checked against the catalog
 // here — that needs Firestore (see SchedulerPage's restore).
-export function readStoredDraft() {
+export function readStoredDraft(uid) {
   try {
-    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    const raw = localStorage.getItem(draftKey(uid));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || parsed.version !== DRAFT_STORAGE_VERSION || parsed.term !== CURRENT_TERM) return null;
@@ -75,18 +81,19 @@ export function readStoredDraft() {
 
 // Bookmarks are stored as plain id lists (their content key is recomputed on
 // load). With nothing to keep — no courses and no bookmarks — the key is
-// removed instead of storing an empty shell.
-export function writeStoredDraft({ draftCourses, globalTimeFilter, sectionSortMode, bookmarks, previewSectionIds, previewIndex }) {
+// removed instead of storing an empty shell. Returns true when the write (or
+// removal) went through, false when it didn't.
+export function writeStoredDraft({ draftCourses, globalTimeFilter, sectionSortMode, bookmarks, previewSectionIds, previewIndex }, uid) {
   try {
     // Only a current-term combination is worth keeping (section ids start
     // with their term, "2271_1234"); a previewed other-term schedule isn't.
     const keepPreview = previewSectionIds.length > 0 && previewSectionIds.every((id) => id.startsWith(`${CURRENT_TERM}_`));
     if (draftCourses.length === 0 && bookmarks.size === 0 && !keepPreview) {
-      localStorage.removeItem(DRAFT_STORAGE_KEY);
-      return;
+      localStorage.removeItem(draftKey(uid));
+      return true;
     }
     localStorage.setItem(
-      DRAFT_STORAGE_KEY,
+      draftKey(uid),
       JSON.stringify({
         version: DRAFT_STORAGE_VERSION,
         term: CURRENT_TERM,
@@ -96,7 +103,17 @@ export function writeStoredDraft({ draftCourses, globalTimeFilter, sectionSortMo
         preview: keepPreview ? { sectionIds: previewSectionIds, index: previewIndex } : null,
       }),
     );
+    return true;
   } catch (err) {
     console.warn('Could not save the scheduler draft:', err);
+    return false;
+  }
+}
+
+export function clearStoredDraft(uid) {
+  try {
+    localStorage.removeItem(draftKey(uid));
+  } catch (err) {
+    console.warn('Could not clear the scheduler draft:', err);
   }
 }

@@ -24,7 +24,7 @@ import ScheduleStepper from '../components/scheduler/ScheduleStepper';
 import WeeklyGrid from '../components/scheduler/WeeklyGrid';
 import SectionSwapSheet from '../components/scheduler/SectionSwapSheet';
 import { nextAutoColors } from '../utils/scheduleColors';
-import { readStoredDraft, writeStoredDraft } from '../utils/draftStorage';
+import { readStoredDraft, writeStoredDraft, clearStoredDraft } from '../utils/draftStorage';
 import { loadAllCourses } from '../utils/courseQuery';
 import BookmarkedSchedulesPanel from '../components/scheduler/BookmarkedSchedulesPanel';
 import SavedSchedulesPanel from '../components/scheduler/SavedSchedulesPanel';
@@ -183,6 +183,32 @@ function toggleLockInCourses(courses, courseKey, groupKey, sectionId) {
       locked: [...c.locked, sectionId],
       considering: { ...c.considering, [groupKey]: [] },
     };
+  });
+}
+
+// Auto-check any component group that has exactly one option — with nothing
+// to actually decide between, it shouldn't sit there blocking Generate. Only
+// touches a group that's still untouched (no picks, no lock), so it never
+// overrides a student's deliberate uncheck or a saved-schedule restore that
+// already seeded the group. Shared by a fresh section fetch and by re-adding
+// a course whose sections are already cached.
+function autoCheckSingleOptionGroups(courses, courseKey, sections) {
+  const singleOptionGroups = groupSectionsByComponent(sections).filter((g) => g.sections.length === 1);
+  if (singleOptionGroups.length === 0) return courses;
+  return courses.map((c) => {
+    if (c.courseKey !== courseKey) return c;
+    let considering = c.considering;
+    let changed = false;
+    for (const group of singleOptionGroups) {
+      const sectionId = group.sections[0].id;
+      const already = considering[group.key] || [];
+      if (already.length === 0 && !c.locked.includes(sectionId)) {
+        if (!changed) considering = { ...considering };
+        considering[group.key] = [sectionId];
+        changed = true;
+      }
+    }
+    return changed ? { ...c, considering } : c;
   });
 }
 
@@ -495,31 +521,11 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
         .sort((a, b) => (a.classSection || '').localeCompare(b.classSection || ''));
       setSectionsByCourse((prev) => ({ ...prev, [courseKey]: sections }));
 
-      // Auto-check any component group that has exactly one option — with
-      // nothing to actually decide between, it shouldn't sit there blocking
-      // Generate. Only touches a group that's still untouched (no picks, no
-      // lock) at the moment this resolves, so it never overrides a
-      // student's deliberate uncheck or a saved-schedule restore that
-      // already seeded this group (handleLoadSchedule sets `considering`
-      // before calling this).
-      const singleOptionGroups = groupSectionsByComponent(sections).filter((g) => g.sections.length === 1);
-      if (singleOptionGroups.length > 0) {
-        setDraftCourses((prev) => prev.map((c) => {
-          if (c.courseKey !== courseKey) return c;
-          let considering = c.considering;
-          let changed = false;
-          for (const group of singleOptionGroups) {
-            const sectionId = group.sections[0].id;
-            const already = considering[group.key] || [];
-            if (already.length === 0 && !c.locked.includes(sectionId)) {
-              if (!changed) considering = { ...considering };
-              considering[group.key] = [sectionId];
-              changed = true;
-            }
-          }
-          return changed ? { ...c, considering } : c;
-        }));
-      }
+      // Auto-check single-option groups (see autoCheckSingleOptionGroups).
+      // Applied at the moment this resolves, so a saved-schedule restore
+      // that already seeded a group (handleLoadSchedule sets `considering`
+      // before calling this) is left alone.
+      setDraftCourses((prev) => autoCheckSingleOptionGroups(prev, courseKey, sections));
       return sections;
     } catch (err) {
       console.error('Failed to load sections for', courseKey, err);
@@ -807,11 +813,17 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // ── Draft handlers ──────────────────────────────────────────────────────────
   function handleAddCourse(courseKey) {
     if (draftCourseKeys.has(courseKey)) return;
-    setDraftCourses((prev) => [...prev, { courseKey, considering: {}, locked: [] }]);
+    // Cached sections mean no fetch below, so the fetch's auto-check won't
+    // run — apply it here for a re-added course.
+    const cachedSections = sectionsByCourse[courseKey];
+    setDraftCourses((prev) => {
+      const next = [...prev, { courseKey, considering: {}, locked: [] }];
+      return cachedSections ? autoCheckSingleOptionGroups(next, courseKey, cachedSections) : next;
+    });
     setCollapseSignal((n) => n + 1);
     invalidateGenerated();
     if (!courseMap[courseKey]) fetchCourseDocs([courseKey]);
-    if (!sectionsByCourse[courseKey]) fetchSectionsForCourse(courseKey);
+    if (!cachedSections) fetchSectionsForCourse(courseKey);
   }
 
   function handleRemoveCourse(courseKey) {
@@ -883,7 +895,9 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   }
 
   // ── Draft + bookmark persistence (utils/draftStorage.js) ───────────────────
-  // Restore: runs once on mount. Everything stored is re-checked against the
+  // Restore: runs once auth settles, and again whenever the signed-in uid
+  // changes (sign-in, sign-out, account switch) — each identity has its own
+  // stored draft (see draftStorage.js). Everything stored is re-checked against the
   // catalog first — a course that's gone from `courses` is dropped, and so is
   // any section id that's no longer a current-term, non-cancelled section — so
   // a stale draft restores as much as is still valid instead of failing. A
@@ -894,7 +908,9 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // Writes are held back until restore finishes, so the empty initial state
   // can never overwrite what's stored. If restore fails (e.g. offline) writes
   // stay off for this page view and the stored draft is left as it was.
-  const draftRestoreStartedRef = useRef(false);
+  // draftOwnerRef is the uid (null = guest) the on-screen draft belongs to,
+  // i.e. whose key flushDraft writes to; undefined until the first restore.
+  const draftOwnerRef = useRef(undefined);
   const draftRestoredRef = useRef(false);
   const draftCoursesRef = useRef(draftCourses);
   const [pendingRegen, setPendingRegen] = useState(false);
@@ -907,12 +923,45 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   }, [draftCourses]);
 
   useEffect(() => {
-    if (draftRestoreStartedRef.current) return;
-    draftRestoreStartedRef.current = true;
+    if (authLoading) return;
+    const uid = user?.uid ?? null;
+    // A guest who just signed in on this page (not a sign-out or account switch).
+    const fromGuest = draftOwnerRef.current === null && uid !== null;
+    let cancelled = false;
+
+    // The on-screen draft belongs to someone else (sign-in, sign-out, account
+    // switch): save any pending edit under THEIR key first, then blank the
+    // board, so their draft is neither shown to nor saved under the new
+    // identity. Nothing is copied between guest and account storage.
+    draftRestoredRef.current = false;
+    if (draftOwnerRef.current !== undefined && draftOwnerRef.current !== uid) {
+      flushDraft();
+      draftCoursesRef.current = [];
+      restoredPreviewRef.current = null;
+      setPendingRegen(false);
+      setDraftCourses([]);
+      setBookmarks(new Map());
+      setGlobalTimeFilter(EMPTY_GLOBAL_FILTERS);
+      setSectionSortMode('time');
+      setSectionSwapSlot(null);
+      invalidateGenerated();
+    }
 
     async function restore() {
-      const stored = readStoredDraft();
+      let stored = readStoredDraft(uid);
+      // Guest just signed in and the account has no draft of its own: carry the
+      // guest's draft over (see the adoption write below). An account that
+      // already has one shows its own and leaves the guest key alone.
+      let adoptedGuest = false;
+      if (!stored && fromGuest) {
+        const guestStored = readStoredDraft(null);
+        if (guestStored && (guestStored.courses.length > 0 || guestStored.bookmarks.length > 0 || guestStored.preview)) {
+          stored = guestStored;
+          adoptedGuest = true;
+        }
+      }
       if (!stored) {
+        draftOwnerRef.current = uid;
         draftRestoredRef.current = true;
         return;
       }
@@ -942,6 +991,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             if (sec.term === CURRENT_TERM && sec.classStat !== 'Cancelled') liveSections[d.id] = sec;
           });
         }
+        if (cancelled) return;
         const bookmarkEntries = stored.bookmarks
           .filter((ids) => ids.every((id) => liveSections[id]))
           .map((ids) => [scheduleKey(ids), ids]);
@@ -969,16 +1019,37 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           setPreviewIndex(null);
         }
         setBookmarks((prev) => new Map([...bookmarkEntries, ...prev]));
+        draftOwnerRef.current = uid;
         draftRestoredRef.current = true;
+        // Adopting the guest draft: write what was just shown under the
+        // account's key, and only once that has succeeded drop the guest key.
+        // Nothing shown (everything stale) leaves the guest key as it was.
+        if (adoptedGuest) {
+          const appliedCourses = draftCoursesRef.current.length === 0 && courses.length > 0;
+          if ((appliedCourses || bookmarkEntries.length > 0 || previewIsLive)
+            && writeStoredDraft({
+              draftCourses: appliedCourses ? courses : [],
+              globalTimeFilter: appliedCourses ? stored.globalTimeFilter : EMPTY_GLOBAL_FILTERS,
+              sectionSortMode: appliedCourses ? stored.sortMode : 'time',
+              bookmarks: new Map(bookmarkEntries),
+              previewSectionIds: previewIsLive ? previewIds : [],
+              previewIndex: storedPreview?.index ?? null,
+            }, uid)) {
+            clearStoredDraft(null);
+          }
+        }
       } catch (err) {
         console.warn('Could not restore the saved scheduler draft:', err);
       }
     }
     restore();
-    // Mount-only: fetchSectionsForCourse etc. are re-created each render but
-    // only read state through setters here.
+    return () => {
+      cancelled = true;
+    };
+    // Keyed on identity only: fetchSectionsForCourse etc. are re-created each
+    // render but only read state through setters here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authLoading, user?.uid]);
 
   // Regenerate the preview from the restored draft. A separate effect so it
   // runs after the restored state has rendered (regenerateFrom reads the
@@ -1018,7 +1089,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     clearTimeout(draftTimerRef.current);
     if (!draftDirtyRef.current || !latestDraftRef.current) return;
     draftDirtyRef.current = false;
-    writeStoredDraft(latestDraftRef.current);
+    writeStoredDraft(latestDraftRef.current, draftOwnerRef.current);
   }, []);
 
   useEffect(() => {

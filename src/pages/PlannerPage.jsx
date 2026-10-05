@@ -524,15 +524,16 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setShowLeaveModal(false);
   }
 
-  function handleLeaveAnyway() {
+  async function handleLeaveAnyway() {
     const action = pendingLeaveAction.current;
     pendingLeaveAction.current = null;
     setShowLeaveModal(false);
     // Flush guest plan so sign-in migration has the latest board state
     if (!user) saveLocalPlan();
-    // Signed in: the student chose to leave without saving (the modal says
-    // the changes will be lost), so the unmount/pagehide flush must not send them.
-    else discardPendingPlanWrite();
+    // Signed in: save the pending edit first. If that fails, stay on the page
+    // (the error badge shows, and the edit is kept for the next flush)
+    // rather than drop it.
+    else if (!(await flushPendingPlanWrite())) return;
     // Clear dirty so beforeunload does not also fire on programmatic navigation
     hasUnsavedChanges.current = false;
     setIsDirty(false);
@@ -2250,7 +2251,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
             <h2 id="unsaved-modal-title">Unsaved changes</h2>
             <p>
               {user
-                ? 'You have unsaved changes. These will be lost if you leave without saving.'
+                ? 'You have unsaved changes. They\'ll be saved when you leave.'
                 : 'You have unsaved changes. Sign in to save your plan, or your changes will be lost.'}
             </p>
             <div className="unsaved-modal-actions">
