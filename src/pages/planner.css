@@ -746,6 +746,66 @@
   font-weight: 600;
   white-space: nowrap;
 }
+/* "HUB tracker 12/26 ⤢" — opens the full HUB view from the planner toolbar.
+   A real secondary button (cream fill, border, label + live count + expand
+   icon), pushed to the right of the row and wrapping under it on narrow
+   widths. A scarlet border flags HUB units still to do. */
+.hub-tracker-pill {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1.5px solid transparent;
+  border-radius: 20px;
+  /* A solid button, not a field: scarlet while HUB units are still to do... */
+  background: var(--scarlet);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background .12s, box-shadow .12s, transform .06s;
+}
+.hub-tracker-pill:hover { background: var(--scarlet-dark); box-shadow: 0 2px 8px rgba(0, 0, 0, .22); }
+.hub-tracker-pill:active { transform: translateY(1px); }
+.hub-tracker-pill:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+/* ...and green once every unit is complete. */
+.hub-tracker-pill:not(.is-incomplete) { background: var(--success-text); }
+.hub-tracker-pill:not(.is-incomplete):hover { background: color-mix(in srgb, var(--success-text) 85%, #000); }
+html[data-theme='dark'] .hub-tracker-pill:not(.is-incomplete) { background: var(--success-strong); color: #052e16; }
+html[data-theme='dark'] .hub-tracker-pill:not(.is-incomplete):hover { background: color-mix(in srgb, var(--success-strong) 85%, #fff); }
+.hub-tracker-pill-count { font-variant-numeric: tabular-nums; }
+.hub-tracker-pill-find { font-weight: 600; }
+.hub-tracker-pill-find::before { content: '·'; margin-right: 10px; opacity: .65; }
+.hub-tracker-pill-icon { font-size: 16px; line-height: 1; }
+/* Narrow phones: drop " courses" so it stays on one line ("HUB 0/26 · Find ⤢"). */
+@media (max-width: 360px) {
+  .hub-tracker-pill { padding: 0 14px; gap: 8px; }
+  .hub-tracker-pill-find-more { display: none; }
+}
+.search-hub-finder-link {
+  display: block;
+  width: 100%;
+  margin: 2px 0 6px;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--scarlet);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.search-hub-finder-link:hover { color: var(--scarlet-dark); }
+html[data-theme='dark'] .search-hub-finder-link { color: var(--warning-border); }
 
 .semester-status-badge {
   font-size: 10px;
@@ -1067,6 +1127,26 @@
   text-overflow: ellipsis;
   max-width: 100%;
 }
+/* HUB tab + its small "open full view" button, side by side in one flex slot. */
+.side-panel-tab-hub {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+.side-panel-tab-hub .side-panel-tab-btn { padding-right: 0; }
+.side-panel-tab-expand {
+  flex-shrink: 0;
+  width: 20px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.side-panel-tab-expand:hover,
+.side-panel-tab-expand:focus-visible { color: var(--scarlet); }
 .side-panel-tab-badge {
   font-size: 8.5px;
   font-weight: 700;
@@ -1185,7 +1265,7 @@
   justify-content: center;
   gap: 8px;
   width: 100%;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   padding: 10px 12px;
   border: none;
   border-radius: var(--radius-md);
@@ -1198,6 +1278,13 @@
   transition: background .12s;
 }
 .hub-full-view-banner:hover { background: var(--scarlet-dark); }
+.hub-full-view-hint {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  text-align: center;
+}
 .hub-full-view-banner-icon {
   font-size: 20px;
   line-height: 1;

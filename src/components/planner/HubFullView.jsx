@@ -747,14 +747,14 @@ export default function HubFullView({
   const segments = segmentGroups(cardOrder, isCollapsed);
 
   return (
-    <div className="full-view" role="dialog" aria-modal="true" aria-label="HUB Tracker">
+    <div className="full-view" role="dialog" aria-modal="true" aria-label="HUB Tracker and Course Finder">
       <header className="full-view-header">
-        <h2 className="full-view-title">HUB Tracker</h2>
+        <h2 className="full-view-title">HUB Tracker &amp; Course Finder</h2>
         <button
           type="button"
           className="full-view-close"
           onClick={onClose}
-          aria-label="Close full-screen HUB Tracker view"
+          aria-label="Close HUB tracker and course finder"
         >
           × Close
         </button>

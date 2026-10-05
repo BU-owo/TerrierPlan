@@ -50,15 +50,18 @@ export default function HubSidebar({
           this one prominent doesn't balloon those other, genuinely
           secondary controls. */}
       {onOpenFullView && (
-        <button
-          type="button"
-          className="hub-full-view-banner"
-          onClick={onOpenFullView}
-          title="Open full-screen HUB Tracker view"
-        >
-          <span className="hub-full-view-banner-icon" aria-hidden="true">⤢</span>
-          Full HUB Tracker View
-        </button>
+        <>
+          <button
+            type="button"
+            className="hub-full-view-banner"
+            onClick={onOpenFullView}
+            title="Open full-screen HUB tracker & course finder"
+          >
+            <span className="hub-full-view-banner-icon" aria-hidden="true">⤢</span>
+            HUB Tracker &amp; Course Finder
+          </button>
+          <p className="hub-full-view-hint">Find courses for missing units and save them.</p>
+        </>
       )}
 
       <p className="panel-summary-line">

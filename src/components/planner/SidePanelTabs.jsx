@@ -60,19 +60,39 @@ export default function SidePanelTabs({
   return (
     <div className="side-panel-tabs">
       <div className="side-panel-tab-bar">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            className={`side-panel-tab-btn${activeTab === tab.id ? ' active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-            title={tab.label}
-          >
-            <span className="side-panel-tab-label">{tab.label}</span>
-            {summaries[tab.id] && (
-              <span className="side-panel-tab-badge">{summaries[tab.id].badge}</span>
-            )}
-          </button>
-        ))}
+        {TABS.map((tab) => {
+          const tabButton = (
+            <button
+              key={tab.id}
+              className={`side-panel-tab-btn${activeTab === tab.id ? ' active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+              title={tab.label}
+            >
+              <span className="side-panel-tab-label">{tab.label}</span>
+              {summaries[tab.id] && (
+                <span className="side-panel-tab-badge">{summaries[tab.id].badge}</span>
+              )}
+            </button>
+          );
+          // The HUB tab also carries a small button that opens the full HUB
+          // view — a sibling of the tab button (not inside it: buttons can't
+          // nest), so selecting the tab and expanding stay separate clicks.
+          if (tab.id !== 'hub' || !onOpenHubFullView) return tabButton;
+          return (
+            <div key={tab.id} className="side-panel-tab-hub">
+              {tabButton}
+              <button
+                type="button"
+                className="side-panel-tab-expand"
+                onClick={onOpenHubFullView}
+                title="Open HUB tracker & course finder"
+                aria-label="Open HUB tracker and course finder"
+              >
+                ⤢
+              </button>
+            </div>
+          );
+        })}
         <button
           className="side-panel-collapse-btn"
           onClick={() => setIsCollapsed(true)}

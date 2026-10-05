@@ -310,6 +310,8 @@ export default function CourseSearch({
   onAddToStash,
   onRemoveFromStash,
   onShowCourseInfo,
+  // Opens the full HUB tracker & course finder (PlannerPage's handler).
+  onOpenHubFullView,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hubFilters, setHubFilters] = useState([]);
@@ -529,6 +531,11 @@ export default function CourseSearch({
           </div>
         )}
         <HubFilterSelect selected={hubFilters} onChange={setHubFilters} />
+        {onOpenHubFullView && (
+          <button type="button" className="search-hub-finder-link" onClick={onOpenHubFullView}>
+            Missing a HUB unit? Open the course finder
+          </button>
+        )}
         <div className="search-sem-target">
           <label htmlFor="sem-target">Add to</label>
           <select

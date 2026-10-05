@@ -29,6 +29,9 @@ export default function SearchPanelTabs({
   // Opens the single course info panel owned by PlannerPage (null = closed
   // there); shared by the search and stash cards.
   onShowCourseInfo,
+  // Opens the full HUB tracker & course finder (shown as a hint in the search
+  // panel's filter row).
+  onOpenHubFullView,
 }) {
   const [activeTab, setActiveTab] = useState('search');
   // Starring a course from Search doesn't switch tabs (so the student can
@@ -82,6 +85,7 @@ export default function SearchPanelTabs({
           onAddToStash={handleAddToStash}
           onRemoveFromStash={onRemoveFromStash}
           onShowCourseInfo={onShowCourseInfo}
+          onOpenHubFullView={onOpenHubFullView}
         />
       </div>
       <div className={`search-panel-tab-body${activeTab === 'stash' ? '' : ' side-panel-hidden'}`}>

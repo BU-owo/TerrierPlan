@@ -55,6 +55,7 @@ import {
   getSemesterStatus,
 } from '../utils/courseEntry';
 import { semesterLabel } from '../utils/hubConstants';
+import { useHubProgress } from '../hooks/useHubProgress';
 import { CURRENT_TERM } from '../utils/term';
 import './planner.css';
 import '../App.css';
@@ -1907,6 +1908,15 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     ...gridSummerCourseKeys,
   ];
   const coursesInPlan = new Set([...gridCourseKeys, ...extraCourseKeys]);
+  // The same HUB count the sidebar's HUB tab shows (same hook, same inputs),
+  // for the toolbar's "HUB tracker" pill — see SemesterBoard.
+  const { fulfilled: hubFulfilled, totalRequired: hubTotal } = useHubProgress({
+    semesters,
+    extraCourseKeys,
+    externalCredits,
+    courseMap,
+    isTransfer,
+  });
 
   // courseKey -> { locked, semesterStatus } — display-only lookup for the
   // Requirements/HUB tracker's completed/current/planned chip distinction
@@ -2122,6 +2132,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               onAddToStash={handleAddToStash}
               onRemoveFromStash={handleRemoveFromStash}
               onShowCourseInfo={setInfoCourseKey}
+              onOpenHubFullView={openHubFullView}
             />
           </aside>
 
@@ -2168,6 +2179,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                   onSetCurrentSemester={handleSetCurrentSemester}
                   completedCourseKeys={completedCourseKeySet}
                   onShowCourseInfo={setInfoCourseKey}
+                  hubSummary={{ fulfilled: hubFulfilled, total: hubTotal }}
+                  onOpenHubFullView={openHubFullView}
                 />
                 <ExtraTermsPanel
                   extraTerms={extraTerms}

@@ -36,6 +36,11 @@ export default function SemesterBoard({
   // Set<courseKey> — the student's own global "completed" list (shared
   // across every plan, see PlannerPage), not scoped to this board.
   completedCourseKeys,
+  // { fulfilled, total } HUB progress + the handler that opens the full HUB
+  // view (the same one the sidebar's button uses); the pill only shows when
+  // both are given.
+  hubSummary = null,
+  onOpenHubFullView,
 }) {
   const yearCount = Math.max(4, Math.ceil(semesters.length / 2));
   const years = Array.from({ length: yearCount }, (_, i) => i);
@@ -106,6 +111,21 @@ export default function SemesterBoard({
             <option key={value} value={value}>{label}</option>
           ))}
         </select>
+        {hubSummary && onOpenHubFullView && (
+          <button
+            type="button"
+            className={`hub-tracker-pill${hubSummary.fulfilled < hubSummary.total ? ' is-incomplete' : ''}`}
+            onClick={onOpenHubFullView}
+            title="Open HUB tracker & course finder"
+            aria-label={`Open HUB tracker and course finder: ${hubSummary.fulfilled} of ${hubSummary.total} units complete`}
+          >
+            <span className="hub-tracker-pill-label">
+              HUB <span className="hub-tracker-pill-count">{hubSummary.fulfilled}/{hubSummary.total}</span>
+            </span>
+            <span className="hub-tracker-pill-find">Find<span className="hub-tracker-pill-find-more"> courses</span></span>
+            <span className="hub-tracker-pill-icon" aria-hidden="true">⤢</span>
+          </button>
+        )}
       </div>
 
       {years.map((year) => {
