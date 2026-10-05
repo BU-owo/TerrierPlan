@@ -127,6 +127,27 @@ function semestersFromFirestore(stored) {
   return normalizeSemesters(Array.from({ length }, (_, i) => stored[i] ?? []));
 }
 
+// A guest blob with nothing in it (default name, no courses, no settings) isn't
+// worth an account plan. External credits live in the profile key, not here.
+function isBlankGuestPlan(plan) {
+  if (!plan || typeof plan !== 'object') return false;
+  const isEmpty = (v) => v == null || (Array.isArray(v) ? v.length === 0 : Object.keys(v).length === 0);
+  const noneSet = (v) => v == null || v === '';
+  return (
+    (plan.semesters || []).every(isEmpty) &&
+    Object.values(plan.gridSummerTerms || {}).every(isEmpty) &&
+    isEmpty(plan.extraTerms) &&
+    isEmpty(plan.stash) &&
+    isEmpty(plan.requirementOverrides) &&
+    noneSet(plan.majorBulletinUrl) &&
+    noneSet(plan.cumulativeGpa) &&
+    noneSet(plan.earnedCredits) &&
+    noneSet(plan.gradePoints) &&
+    !plan.isTransfer &&
+    (plan.name || 'My Plan') === 'My Plan'
+  );
+}
+
 // Shared across Strict Mode double-invokes of the auth effect so we only
 // migrate (and clear localStorage) once per guest session → sign-in.
 let guestMigrationPromise = null;
@@ -270,6 +291,19 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       // Deduplicate concurrent calls (React Strict Mode remounts the effect)
       if (!guestMigrationPromise) {
         const guestRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
+        let guestBlank = false;
+        if (guestRaw) {
+          try {
+            guestBlank = isBlankGuestPlan(JSON.parse(guestRaw));
+          } catch {
+            guestBlank = false;
+          }
+        }
+        if (guestBlank) {
+          localStorage.removeItem(LOCAL_STORAGE_KEY);
+          guestMigrationPromise = Promise.resolve(null);
+          return guestMigrationPromise;
+        }
         const claimedAt = Number(localStorage.getItem(PLAN_MIGRATION_CLAIM_KEY)) || 0;
         if (!guestRaw || Date.now() - claimedAt < MIGRATION_CLAIM_TTL_MS) {
           guestMigrationPromise = Promise.resolve(null);
