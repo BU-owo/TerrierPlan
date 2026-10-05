@@ -130,12 +130,6 @@ function semestersFromFirestore(stored) {
 // Shared across Strict Mode double-invokes of the auth effect so we only
 // migrate (and clear localStorage) once per guest session → sign-in.
 let guestMigrationPromise = null;
-// Sign-in reaches every open tab, so a tab claims the guest-plan migration
-// here before writing; another tab seeing a recent claim skips it. A claim
-// left by a tab that closed mid-migration expires and the next sign-in
-// retries (same approach as SchedulerPage's guest-schedules migration).
-const PLAN_MIGRATION_CLAIM_KEY = 'terrierplan_planner_plan_migrating';
-const MIGRATION_CLAIM_TTL_MS = 60_000;
 const DEBUG_IMPORT = import.meta.env.DEV;
 
 function debugPlanner(stage, payload) {
@@ -257,7 +251,6 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // loadUserProfile has resolved (see issue 2 in the fix-up that added this).
   const profileLoadedForUid = useRef(null);
   const hasUnsavedChanges = useRef(false);
-  const skipGuestSaveRef = useRef(false);
   const pendingLeaveAction = useRef(null);
 
   // ── Load plans on sign-in (and migrate any guest plan first) ──────────────
@@ -270,26 +263,20 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       // Deduplicate concurrent calls (React Strict Mode remounts the effect)
       if (!guestMigrationPromise) {
         const guestRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
-        const claimedAt = Number(localStorage.getItem(PLAN_MIGRATION_CLAIM_KEY)) || 0;
-        if (!guestRaw || Date.now() - claimedAt < MIGRATION_CLAIM_TTL_MS) {
+        if (!guestRaw) {
           guestMigrationPromise = Promise.resolve(null);
         } else {
-          // Claim immediately so a sibling effect or another tab cannot also
-          // migrate / createDefault. The guest plan itself stays in
-          // localStorage until the Firestore write has succeeded.
-          localStorage.setItem(PLAN_MIGRATION_CLAIM_KEY, String(Date.now()));
+          // Claim immediately so a sibling effect cannot also migrate / createDefault
+          localStorage.removeItem(LOCAL_STORAGE_KEY);
           guestMigrationPromise = (async () => {
             try {
               const parsedGuest = JSON.parse(guestRaw);
-              const migratedId = await migrateGuestPlan(uid, parsedGuest);
-              localStorage.removeItem(LOCAL_STORAGE_KEY);
-              return migratedId;
+              return await migrateGuestPlan(uid, parsedGuest);
             } catch (err) {
               console.error('Error migrating guest plan:', err);
+              localStorage.setItem(LOCAL_STORAGE_KEY, guestRaw);
               guestMigrationPromise = null; // allow retry on next sign-in attempt
               return null;
-            } finally {
-              localStorage.removeItem(PLAN_MIGRATION_CLAIM_KEY);
             }
           })();
         }
@@ -356,29 +343,6 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       // Signed out — allow a future sign-in to migrate a new guest plan
       guestMigrationPromise = null;
       profileLoadedForUid.current = null;
-      // Signing out doesn't unmount the page, so the account's plan is still
-      // in state. Reset every plan field to its default first, so a guest
-      // with no saved session sees an empty default plan, and so the guest
-      // autosave below can't write the account's plan into guest storage.
-      setPlans([]);
-      setActivePlanId(null);
-      setPlanLoadError(false);
-      setPlanName('My Plan');
-      setSemesters(EMPTY_SEMESTERS());
-      setGridSummerTerms({});
-      setIsTransfer(false);
-      setMajorBulletinUrl(null);
-      setExtraTerms([]);
-      setExternalCredits([]);
-      setCumulativeGpa(null);
-      setEarnedCredits(null);
-      setGradePoints(null);
-      setRequirementOverrides({});
-      setStash([]);
-      setIsDirty(false);
-      // The guest autosave effect below runs in this same commit with the
-      // previous render's (account) state; skip that one pass.
-      skipGuestSaveRef.current = true;
       loadLocalPlan();
       const localProfile = loadLocalProfile();
       setCurrentSemesterTarget(localProfile.currentSemesterTarget);
@@ -607,12 +571,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // which wrote the *previous* board (stale closure) — so the last course
   // change was never stored, and a single-course plan looked "lost" on sign-in.
   useEffect(() => {
-    if (user || authLoading) return;
-    if (skipGuestSaveRef.current) {
-      skipGuestSaveRef.current = false;
-      return;
-    }
-    if (isInitialLoad.current || !isDirty) return;
+    if (user || authLoading || isInitialLoad.current || !isDirty) return;
     saveLocalPlan();
     // externalCredits deliberately not a dep — see the plan autosave effect
     // above; it's saved via saveLocalProfile in the profile effect instead.
@@ -1919,9 +1878,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         onSignOut={() => requestLeave(handleSignOut)}
         onSignIn={() =>
           requestLeave(() => {
-            // Only a guest who actually edited has anything to migrate; a
-            // blank default plan would otherwise become an account plan.
-            if (isDirty) saveLocalPlan();
+            saveLocalPlan();
             window.location.href = '/login';
           })
         }
@@ -1956,7 +1913,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
             >
               <strong>Browsing as guest</strong> — your plan is saved only in this browser. Sign in to keep it.
             </div>
-            <GuestSignInButton className="guest-signin-btn" onBeforeSignIn={() => { if (isDirty) saveLocalPlan(); }}>
+            <GuestSignInButton className="guest-signin-btn" onBeforeSignIn={() => saveLocalPlan()}>
               <span className="btn-import-transcript-icon" aria-hidden="true">Sign in</span>
               <span className="btn-import-transcript-label">Sign in with Google</span>
             </GuestSignInButton>
