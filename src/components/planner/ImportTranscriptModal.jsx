@@ -257,7 +257,7 @@ export default function ImportTranscriptModal({
       setStep(2);
     } catch (err) {
       console.error(err);
-      setError('Import failed. Please try again.');
+      setError(err?.importApplied ? 'Import applied, and it will save automatically.' : 'Import failed. Please try again.');
     } finally {
       setImporting(false);
     }

@@ -120,6 +120,45 @@ function semestersToFirestore(semesters) {
   }, {});
 }
 
+// Firestore rejects a whole write that contains `undefined` anywhere. Returns
+// a copy of `value` with object keys whose value is undefined dropped and
+// undefined array items turned into null (length kept). Only plain objects and
+// arrays are walked; Date/Timestamp/FieldValue-like instances pass through
+// untouched. Never mutates its input. Dropped paths are pushed onto `removed`.
+function stripUndefined(value, path, removed) {
+  if (Array.isArray(value)) {
+    return value.map((item, i) => {
+      if (item === undefined) {
+        removed.push(`${path}[${i}]`);
+        return null;
+      }
+      return stripUndefined(item, `${path}[${i}]`, removed);
+    });
+  }
+  const proto = value !== null && typeof value === 'object' ? Object.getPrototypeOf(value) : undefined;
+  if (proto === Object.prototype || proto === null) {
+    const out = {};
+    for (const [key, v] of Object.entries(value)) {
+      if (v === undefined) {
+        removed.push(`${path}.${key}`);
+      } else {
+        out[key] = stripUndefined(v, `${path}.${key}`, removed);
+      }
+    }
+    return out;
+  }
+  return value;
+}
+
+function withoutUndefined(value, label) {
+  const removed = [];
+  const out = stripUndefined(value, label, removed);
+  if (import.meta.env.DEV && removed.length > 0) {
+    console.warn('[profile-undefined] removed undefined at:', removed);
+  }
+  return out;
+}
+
 function semestersFromFirestore(stored) {
   if (Array.isArray(stored)) return normalizeSemesters(stored); // tolerate any pre-fix docs written before this migration
   if (!stored) return EMPTY_SEMESTERS();
@@ -236,6 +275,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [rangeFilter, setRangeFilter] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(''); // 'saved' | 'error' | ''
+  const [online, setOnline] = useState(() => navigator.onLine);
+  // A signed-in profile write is queued/unsent (mirrors pendingProfileWriteRef,
+  // which can't drive a render); only used for the offline badge.
+  const [profileUnsaved, setProfileUnsaved] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [draggingId, setDraggingId] = useState(null);
@@ -692,15 +735,20 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const uid = user.uid;
     const profile = { currentSemesterTarget, completedCourseKeys, externalCredits };
     pendingProfileWriteRef.current = { uid, profile };
+    setProfileUnsaved(true);
 
     clearTimeout(profileSaveTimeoutRef.current);
     profileSaveTimeoutRef.current = setTimeout(() => {
-      persistProfile(uid, profile).then(() => {
+      persistProfile(uid, profile).then((saved) => {
+        // A failed write stays pending, so the unmount/pagehide/sign-out
+        // flushes, the next change and the "online" retry all resend it.
+        if (!saved) return;
         // Only clear if nothing newer has queued up behind this write.
         if (pendingProfileWriteRef.current === null) return;
         const pending = pendingProfileWriteRef.current;
         if (pending.uid === uid && pending.profile === profile) {
           pendingProfileWriteRef.current = null;
+          setProfileUnsaved(false);
         }
       });
     }, 800);
@@ -737,6 +785,34 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     }
     window.addEventListener('pagehide', handlePageHide);
     return () => window.removeEventListener('pagehide', handlePageHide);
+  }, []);
+
+  // Offline badge + retry: track connectivity, and when the browser comes back
+  // online resend whatever is still pending — the plan edit (via the same
+  // flush the other leave paths use) and a profile write that failed or hung.
+  useEffect(() => {
+    function handleOnline() {
+      setOnline(true);
+      flushPlanRef.current?.();
+      const pending = pendingProfileWriteRef.current;
+      if (pending && auth.currentUser?.uid === pending.uid) {
+        persistProfile(pending.uid, pending.profile).then((saved) => {
+          if (saved && pendingProfileWriteRef.current === pending) {
+            pendingProfileWriteRef.current = null;
+            setProfileUnsaved(false);
+          }
+        });
+      }
+    }
+    function handleOffline() {
+      setOnline(false);
+    }
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // ── Local plan management (for auth-optional browsing) ─────────────────────
@@ -805,7 +881,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   async function migrateGuestPlan(uid, guestPlan) {
     const name = await uniquePlanName(uid, guestPlan.name || 'Imported Plan');
     // Always addDoc — never overwrite an existing saved plan
-    const ref = await addDoc(collection(db, 'users', uid, 'plans'), {
+    const ref = await addDoc(collection(db, 'users', uid, 'plans'), withoutUndefined({
       name,
       major: guestPlan.major || '',
       majorBulletinUrl: guestPlan.majorBulletinUrl ?? null,
@@ -829,7 +905,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       stash: guestPlan.stash || [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    }, 'migrateGuestPlan'));
     console.log('✅ Guest plan migrated to Firestore:', ref.id);
     return ref.id;
   }
@@ -1014,16 +1090,19 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     try {
       await setDoc(
         doc(db, 'users', uid),
-        {
+        withoutUndefined({
           currentSemesterTarget: profile.currentSemesterTarget,
           completedCourseKeys: profile.completedCourseKeys,
           externalCredits: profile.externalCredits,
-        },
+        }, 'profile'),
         { merge: true },
       );
       return true;
     } catch (err) {
       console.error('Error saving profile:', err);
+      // Same badge the plan save uses.
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus(''), 3000);
       return false;
     }
   }
@@ -1721,7 +1800,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         earnedCredits: result.earnedCredits,
         gradePoints: result.gradePoints,
       });
-      if (!saved) throw new Error('Could not save imported transcript');
+      if (!saved) {
+        // The import is already on the board (and dirty, so autosave retries
+        // it); tell the modal so it doesn't say the import failed.
+        throw Object.assign(new Error('Could not save imported transcript'), { importApplied: true });
+      }
     } else {
       // Avoid stale React state when saving a guest import.
       saveLocalPlan({
@@ -1928,6 +2011,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // above) — either still loading or planLoadError. Guests never hit this.
   const plansPending = Boolean(user) && !activePlanId;
 
+  // Offline with something still unsent: show that instead of a "Saving…"
+  // that can't finish until the connection is back.
+  const offlineUnsaved = Boolean(user) && !online && (isDirty || saving || profileUnsaved);
+
   if (authLoading) {
     return (
       <div className="auth-loading">
@@ -1969,8 +2056,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               plans={plans}
               activePlanId={activePlanId}
               planName={planName}
-              saving={saving}
-              saveStatus={saveStatus}
+              saving={saving && !offlineUnsaved}
+              saveStatus={offlineUnsaved ? 'offline' : saveStatus}
               onSelectPlan={handleSelectPlan}
               onRenamePlan={handleRenamePlan}
               onNewPlan={handleNewPlan}
