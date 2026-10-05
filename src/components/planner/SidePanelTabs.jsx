@@ -24,17 +24,7 @@ export default function SidePanelTabs({
   isTransfer,
   onToggleTransfer,
   majorBulletinUrl,
-  planCourseKeys,
   onMajorSelect,
-  activeSemIndex,
-  semesterOptions,
-  onAddCourse,
-  onEnsureCourseData,
-  onBrowseRange,
-  requirementOverrides,
-  onSetRequirementOverride,
-  onRemoveRequirementOverride,
-  onOpenFullView,
   onOpenHubFullView,
 }) {
   const [activeTab, setActiveTab] = useState('hub');

@@ -569,7 +569,7 @@ export default function HubFullView({
       { prefix: trimmedPrefix, hubUnitCodes: hubSearchInclude, mode: hubSearchMode, excludeUnitCodes: hubSearchExclude },
       excludeKeys,
     );
-  }, [nonProfessionalCourses, trimmedPrefix, hubSearchInclude, hubSearchMode, hubSearchExclude, excludeKeys]);
+  }, [searchActive, nonProfessionalCourses, trimmedPrefix, hubSearchInclude, hubSearchMode, hubSearchExclude, excludeKeys]);
 
   // Per-category collapse state — the ONE source of truth for both the
   // overview ring row and each category's own card; same "override

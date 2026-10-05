@@ -71,12 +71,10 @@ because it can run to dozens of entries per course.
 | history | object[] | `{ term, year, season, sectionCount }[]` |
 | updatedAt | timestamp | |
 
-**Known gap:** `firestore.rules` has no `match` block for this collection,
-so — unlike `courses`/`sections`/`bulletinPages` — it is currently
-unreadable from the client (Firestore default-denies unmatched paths).
-Nothing in the app reads it yet, so this hasn't broken anything in
-practice, but add a public-read rule here (matching `courses`) before
-building anything that needs it.
+**Access:** `firestore.rules` has a `match /offeringHistory/{courseKey}`
+block — public read (`allow read: if true`), no client writes
+(`allow write: if false`), same as `courses`/`sections`. Only the import
+scripts (Admin SDK, which bypasses rules) write it.
 
 ### `bulletinPages/{majorSlug}`
 Stored bulletin text per major, for the planner's side panel (manual

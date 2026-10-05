@@ -257,6 +257,21 @@ function SectionStatus({ status, onRetry, children }) {
   return children;
 }
 
+// Most recent non-future term in the UNFILTERED history — unlike
+// buildOfferingRows it ignores OFFERING_HISTORY_MIN_YEAR, so a course that
+// last ran before the grid's range can still say when.
+function latestOfferingEver(history) {
+  let latest = null;
+  for (const entry of Array.isArray(history) ? history : []) {
+    const year = Number(entry?.year);
+    if (!Number.isInteger(year) || !SEASONS.includes(entry.season) || isFutureTerm(year, entry.season)) continue;
+    if (!latest || year * 3 + SEASON_ORDER[entry.season] > latest.year * 3 + SEASON_ORDER[latest.season]) {
+      latest = { year, season: entry.season };
+    }
+  }
+  return latest;
+}
+
 function PastOfferings({ status, data, currentSections, onRetry }) {
   const history = Array.isArray(data?.history)
     ? data.history.filter((entry) => Number(entry?.year) >= OFFERING_HISTORY_MIN_YEAR)
@@ -265,14 +280,18 @@ function PastOfferings({ status, data, currentSections, onRetry }) {
     ? buildOfferingRows(withCurrentTermEntry(history, currentSections))
     : { rows: [], lastOffered: null };
   const historyRows = status === 'ready' ? buildOfferingRows(history).rows : [];
+  const latestEver = status === 'ready' ? latestOfferingEver(data?.history) : null;
+  const emptyText = status === 'missing'
+    ? 'No offering history available'
+    : latestEver
+      ? `Last offered ${latestEver.season} ${latestEver.year}`
+      : 'No offerings on record';
   return (
     <section className="course-info-section">
       <h4 className="course-info-section-title">Past offerings</h4>
       <SectionStatus status={status === 'missing' ? 'ready' : status} onRetry={onRetry}>
         {rows.length === 0 ? (
-          <p className="course-info-empty">
-            {status === 'missing' ? 'No offering history available' : `Not offered since ${OFFERING_HISTORY_MIN_YEAR}`}
-          </p>
+          <p className="course-info-empty">{emptyText}</p>
         ) : (
           <>
             <p className="course-info-offerings-last">

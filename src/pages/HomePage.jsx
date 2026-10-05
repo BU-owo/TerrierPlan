@@ -74,7 +74,7 @@ const FEATURES = [
       "Pin the sections you want, omit the sections you don't",
       'Conflicts flagged clearly, no guessing needed!',
       'Overlay all possible sections of a course/discussion on your schedule and pick the best fit',
-      'Flag candidates schedules as you browse options',
+      'Flag candidate schedules as you browse options',
       'Save your favorite schedules for later',
       'Design your schedule with customizable colors',
     ],
