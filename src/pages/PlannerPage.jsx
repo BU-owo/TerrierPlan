@@ -610,13 +610,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // ── Autosave on change ────────────────────────────────────────────────────
   useEffect(() => {
     if (isInitialLoad.current || !isDirty || !user) {
-      if (!user) console.log('⏭️  [autosave] Skipped: not logged in');
-      if (!isDirty) console.log('⏭️  [autosave] Skipped: no dirty changes');
-      if (isInitialLoad.current) console.log('⏭️  [autosave] Skipped: initial load');
+      if (import.meta.env.DEV && !user) console.log('⏭️  [autosave] Skipped: not logged in');
+      if (import.meta.env.DEV && !isDirty) console.log('⏭️  [autosave] Skipped: no dirty changes');
+      if (import.meta.env.DEV && isInitialLoad.current) console.log('⏭️  [autosave] Skipped: initial load');
       return;
     }
 
-    console.log('⏲️  [autosave] Debounce scheduled for 1500ms');
+    if (import.meta.env.DEV) console.log('⏲️  [autosave] Debounce scheduled for 1500ms');
     editVersionRef.current += 1;
     pendingPlanWriteRef.current = activePlanId
       ? {
@@ -640,7 +640,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       : null;
     clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      console.log('⏱️  [autosave] Debounce fired, calling persistPlan');
+      if (import.meta.env.DEV) console.log('⏱️  [autosave] Debounce fired, calling persistPlan');
       if (activePlanId) {
         flushPendingPlanWrite();
       } else {
@@ -652,7 +652,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     // pagehide or plan switch can still flush it.
     return () => {
       clearTimeout(saveTimeoutRef.current);
-      console.log('🧹 [autosave] Cleaning up timeout');
+      if (import.meta.env.DEV) console.log('🧹 [autosave] Cleaning up timeout');
     };
     // externalCredits deliberately not a dep here — it's student-level now
     // (see the profile autosave effect below), not plan data, so changing
@@ -906,7 +906,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }, 'migrateGuestPlan'));
-    console.log('✅ Guest plan migrated to Firestore:', ref.id);
+    if (import.meta.env.DEV) console.log('✅ Guest plan migrated to Firestore:', ref.id);
     return ref.id;
   }
 
@@ -1285,13 +1285,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     };
 
     try {
-      console.log('🔄 [persistPlan] Starting save:', debugLog);
+      if (import.meta.env.DEV) console.log('🔄 [persistPlan] Starting save:', debugLog);
 
       if (!uid) throw new Error('Missing uid');
       if (!planId) throw new Error('Missing planId');
 
       const planRef = doc(db, 'users', uid, 'plans', planId);
-      console.log('📍 [persistPlan] Plan ref path:', planRef.path);
+      if (import.meta.env.DEV) console.log('📍 [persistPlan] Plan ref path:', planRef.path);
 
       const payload = {
         name,
@@ -1314,10 +1314,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         updatedAt: serverTimestamp(),
       };
 
-      console.log('💾 [persistPlan] Sending payload:', {
-        ...payload,
-        updatedAt: '(server-timestamp)',
-      });
+      if (import.meta.env.DEV) {
+        console.log('💾 [persistPlan] Sending payload:', {
+          ...payload,
+          updatedAt: '(server-timestamp)',
+        });
+      }
       debugPlanner('persistPlan-payload', { planId, ...payload });
 
       await updateDoc(planRef, payload);
@@ -1326,7 +1328,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       const written = writtenSnap.exists() ? writtenSnap.data() : null;
       debugPlanner('persistPlan-firestore-readback', { planId, ...written });
 
-      console.log('✅ [persistPlan] Write succeeded');
+      if (import.meta.env.DEV) console.log('✅ [persistPlan] Write succeeded');
       // Only clear dirty (and show "Saved") if no edit happened after this
       // snapshot — clearing it would cancel the newer edit's pending timer.
       if (version >= editVersionRef.current) {
