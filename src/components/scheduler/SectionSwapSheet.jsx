@@ -27,6 +27,8 @@ export default function SectionSwapSheet({
   onToggleLock,
   onClearSlot,
   onClose,
+  displaceInfo = null,
+  onContinueDisplace = () => {},
 }) {
   const courseCode = courseMap[slot.courseKey]?.courseNumber ?? slot.courseKey;
   const componentLabel = candidates[0]?.componentLabel || slot.component;
@@ -38,7 +40,10 @@ export default function SectionSwapSheet({
 
   // Every candidate is listed — checked or not, eliminated or not, inside
   // the time filter or not. Those only get a small label (swapGhostReasons).
-  const visible = candidates;
+  // Mid displace flow the slot's section was just displaced: it isn't the
+  // current pick and isn't offered back.
+  const visible = displaceInfo ? candidates.filter((s) => s.id !== slot.currentSectionId) : candidates;
+  const nameOf = (o) => `${courseMap[o.courseKey]?.courseNumber ?? o.courseKey} ${o.componentLabel || classifyComponent(o)}`;
 
   return (
     <div className="sched-swap-sheet-overlay" role="dialog" aria-modal="true" aria-labelledby="swap-sheet-title">
@@ -48,24 +53,33 @@ export default function SectionSwapSheet({
             <h3 id="swap-sheet-title" className={`sched-swap-sheet-title sched-color-${colorIndex}`}>
               {courseCode} — {componentLabel}
             </h3>
-            <p className="sched-swap-sheet-subtitle">
-              {visible.length} section{visible.length === 1 ? '' : 's'} available — tap one to place it, or tap your current one to keep it
+            <p className={`sched-swap-sheet-subtitle${displaceInfo ? ' is-flow' : ''}`}>
+              {displaceInfo ? (
+                <>
+                  <span className="sched-swap-sheet-line">{displaceInfo.sheetLines[0]}</span>
+                  <span className="sched-swap-sheet-line is-todo">{displaceInfo.sheetLines[1]}</span>
+                </>
+              ) : (
+                <>{visible.length} section{visible.length === 1 ? '' : 's'} available — tap one to place it, or tap your current one to keep it</>
+              )}
             </p>
           </div>
-          <button type="button" className="sched-swap-sheet-close" onClick={onClose} aria-label="Cancel — keep current selection">
+          <button type="button" className="sched-swap-sheet-close" onClick={onClose} aria-label={displaceInfo ? 'Undo swap' : 'Cancel — keep current selection'}>
             ×
           </button>
         </div>
 
         <div className="sched-swap-sheet-list">
           {visible.map((section) => {
-            const isCurrent = section.id === slot.currentSectionId;
+            const isCurrent = !displaceInfo && section.id === slot.currentSectionId;
             const isLocked = lockedSectionIds.has(section.id);
             const conflicts = committedOthers.filter((o) => sectionsConflict(o, section));
             const reasons = isCurrent ? [] : swapGhostReasons(section, poolSectionIds, globalTimeFilter);
-            // A conflicting row can't be placed (the current row is always
-            // tappable — that's "keep").
-            const blocked = !isCurrent && conflicts.length > 0;
+            // A clashing row can be placed (it displaces what it clashes
+            // with) unless one of those is pinned; the current row is always
+            // tappable — that's "keep".
+            const pinnedClashes = conflicts.filter((o) => lockedSectionIds.has(o.id));
+            const blocked = !isCurrent && pinnedClashes.length > 0;
             const instructorLabel = section.instructors?.length
               ? section.instructors.map((i) => `${i.first ? i.first[0] + '. ' : ''}${i.last}`.trim()).join(', ')
               : 'Staff';
@@ -120,8 +134,9 @@ export default function SectionSwapSheet({
                 </div>
                 {conflicts.length > 0 && (
                   <div className="sched-swap-sheet-row-conflict">
-                    {blocked ? "Can't place — conflicts with " : 'Conflicts with '}
-                    {[...new Set(conflicts.map((c) => courseMap[c.courseKey]?.courseNumber ?? c.courseKey))].join(', ')}
+                    {blocked
+                      ? `Can't place — conflicts with pinned ${[...new Set(pinnedClashes.map(nameOf))].join(', ')}`
+                      : `Swap in — replaces ${[...new Set(conflicts.map(nameOf))].join(', ')}`}
                   </div>
                 )}
               </div>
@@ -135,11 +150,19 @@ export default function SectionSwapSheet({
         </div>
 
         <div className="sched-swap-sheet-footer">
-          <button type="button" className="sched-swap-sheet-clear-btn" onClick={onClearSlot}>
-            Clear this slot
-          </button>
+          {displaceInfo ? (
+            displaceInfo.noOptions && (
+              <button type="button" className="sched-swap-sheet-clear-btn" onClick={onContinueDisplace}>
+                Continue
+              </button>
+            )
+          ) : (
+            <button type="button" className="sched-swap-sheet-clear-btn" onClick={onClearSlot}>
+              Clear this slot
+            </button>
+          )}
           <button type="button" className="sched-swap-sheet-cancel-btn" onClick={onClose}>
-            Cancel
+            {displaceInfo ? 'Undo swap' : 'Cancel'}
           </button>
         </div>
       </div>

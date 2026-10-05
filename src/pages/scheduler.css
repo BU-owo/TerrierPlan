@@ -1101,6 +1101,18 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   line-height: 1.5;
 }
 
+.sched-grid-incomplete {
+  margin-top: 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--warning-border);
+  background: var(--warning-surface);
+  color: var(--warning-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 /* ===== Section-swap — "preview every other section for one slot" ===== */
 /* Desktop banner, sits above the color legend whenever a slot is being
    browsed. Ghost blocks (below) are the spatial half of this same feature;
@@ -1120,6 +1132,81 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
 }
 .sched-swap-banner-title { color: var(--text); flex: 1; min-width: 160px; }
 .sched-swap-banner-title strong { color: var(--scarlet); }
+/* The displace flow banner: what just happened, then what to do. Sticky at the
+   top of the preview so it stays in view while the grid scrolls, big and high
+   contrast, with an accent bar on the left. Neutral/info colors (theme-aware),
+   not the scarlet of browsing swap. Opaque, since it floats over the grid. */
+.sched-swap-banner.is-flow {
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  padding: 12px 14px 12px 16px;
+  margin-bottom: 10px;
+  background: var(--badge-cool-bg);
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--badge-cool-text) 35%, transparent);
+  border-left: 6px solid var(--badge-cool-text);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.sched-swap-flow-todo { margin-top: 4px; font-weight: 700; }
+.sched-swap-flow-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.sched-swap-flow-btn {
+  padding: 7px 16px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sched-swap-flow-btn:hover { border-color: var(--badge-cool-text); }
+.sched-swap-flow-btn.is-primary { background: var(--badge-cool-text); color: var(--badge-cool-bg); border-color: var(--badge-cool-text); }
+/* Mid flow the rest of the schedule steps back: real blocks are dimmed a
+   little (still readable), can't be clicked, and hide their small buttons, so
+   the dashed options for the class being replaced stand out. The block that
+   was just swapped in stays at full strength with a ring and a chip. */
+.sched-grid-wrap.is-displacing .sched-grid-block { opacity: .6; pointer-events: none; }
+.sched-grid-wrap.is-displacing .sched-grid-block.is-swapped-in { opacity: 1; box-shadow: 0 0 0 2px var(--badge-cool-text); }
+.sched-grid-wrap.is-displacing .sched-grid-block-action-btn { visibility: hidden; }
+.sched-grid-block-chip {
+  margin-right: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--badge-cool-text);
+  color: var(--badge-cool-bg);
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 15px;
+}
+/* Where a displaced section used to be, until it gets a replacement: a dashed
+   outline in its course color, "Removed: <section>" with the section struck
+   through. Drawn before (so under) the real blocks and ghosts, never clickable. */
+.sched-grid-removed {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  box-sizing: border-box;
+  border: 1.5px dashed var(--sched-accent);
+  background: transparent;
+  border-radius: 5px;
+  padding: 3px 5px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  pointer-events: none;
+}
+.sched-grid-removed-label { font-size: 10px; font-weight: 700; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sched-grid-removed-time { font-size: 9px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sched-grid-removed s { text-decoration-thickness: 1.5px; }
 .sched-swap-banner-btn {
   padding: 4px 10px;
   border-radius: var(--radius-sm);
@@ -1175,7 +1262,6 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
 .sched-grid-ghost-block.is-filtered:hover,
 .sched-grid-ghost-block.is-filtered:focus-visible { opacity: .8; }
 .sched-grid-ghost-block.has-conflict {
-  cursor: not-allowed; /* can't be placed — see WeeklyGrid */
   opacity: 1;
   /* The course color keeps identifying the class: border and tint are the
      base ghost's (dashed course-color border, light course-color fill). The
@@ -1185,6 +1271,9 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
      theirs, only ever appears on a ghost that can't be placed. */
   border-left: 3px solid var(--warning-border);
 }
+/* A clash with a pinned section can't be placed; any other clash can (it
+   displaces what it clashes with, see SchedulerPage). */
+.sched-grid-ghost-block.is-blocked { cursor: not-allowed; }
 /* Slightly quieter text than a non-conflicting ghost (still AA on the tint). */
 .sched-grid-ghost-block.has-conflict .sched-grid-ghost-block-code,
 .sched-grid-ghost-block.has-conflict .sched-grid-ghost-block-time {
@@ -1306,6 +1395,20 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   font-size: 15px;
   font-weight: 700;
   color: var(--text);
+}
+.sched-swap-sheet-line { display: block; }
+.sched-swap-sheet-line + .sched-swap-sheet-line { margin-top: 4px; }
+.sched-swap-sheet-line.is-todo { font-weight: 700; }
+/* Displace flow in the sheet: the same two steps, a little bigger, with the
+   same accent bar and info colors as the desktop banner. */
+.sched-swap-sheet-subtitle.is-flow {
+  padding: 8px 10px;
+  border-left: 5px solid var(--badge-cool-text);
+  border-radius: 4px;
+  background: var(--badge-cool-bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
 }
 .sched-swap-sheet-subtitle { margin: 0; padding-left: 14px; font-size: 12px; color: var(--text-secondary); }
 .sched-swap-sheet-close {
@@ -1718,6 +1821,7 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
      comment) — hide the desktop banner/ghost layer and show
      SectionSwapSheet's bottom sheet instead. */
   .sched-swap-banner,
+  .sched-swap-banner.is-flow,
   .sched-grid-ghost-block {
     display: none;
   }

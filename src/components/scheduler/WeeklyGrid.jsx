@@ -175,6 +175,9 @@ export default function WeeklyGrid({
   onSelectSwapSection = () => {},
   onCloseSwap = () => {},
   onClearSwapSlot = () => {},
+  displaceInfo = null,
+  onContinueDisplace = () => {},
+  incompleteLabels = [],
 }) {
   const [openColorFor, setOpenColorFor] = useState(null); // courseKey, or null
 
@@ -206,17 +209,19 @@ export default function WeeklyGrid({
     ? swapCandidates
         .filter((s) => s.id !== swapSlot.currentSectionId)
         .map((section) => {
-          // Course names of every placed section this one would clash with.
-          const clashes = [...new Set(
-            othersCommitted
-              .filter((o) => sectionsConflict(o, section))
-              .map((o) => courseMap[o.courseKey]?.courseNumber ?? o.courseKey),
-          )];
+          // Every placed section this one would clash with. Clicking it
+          // displaces them (the page walks through each), unless one is
+          // pinned — then it stays blocked.
+          const clashSections = othersCommitted.filter((o) => sectionsConflict(o, section));
+          const nameOf = (o) => `${courseMap[o.courseKey]?.courseNumber ?? o.courseKey} ${o.componentLabel || classifyComponent(o)}`;
+          const clashes = [...new Set(clashSections.map(nameOf))];
+          const pinned = [...new Set(clashSections.filter((o) => lockedSectionIds.has(o.id)).map(nameOf))];
           return {
             section,
             meeting: sectionMeeting(section),
             conflict: clashes.length > 0,
             clashes,
+            pinned,
               reasons: swapGhostReasons(section, swapPoolIds, globalTimeFilter),
           };
         })
@@ -228,7 +233,7 @@ export default function WeeklyGrid({
   const currentSection = swapSlot ? sections.find((s) => s.id === swapSlot.currentSectionId) : null;
   const currentMeeting = currentSection ? sectionMeeting(currentSection) : null;
   const ghostCandidates = currentMeeting
-    ? [...alternativeGhosts, { section: currentSection, meeting: currentMeeting, conflict: false, clashes: [], reasons: [], isCurrent: true }]
+    ? [...alternativeGhosts, { section: currentSection, meeting: currentMeeting, conflict: false, clashes: [], pinned: [], reasons: [], isCurrent: true }]
     : alternativeGhosts;
   const swapCourseCode = swapSlot ? (courseMap[swapSlot.courseKey]?.courseNumber ?? swapSlot.courseKey) : '';
   const swapComponentLabel = swapSlot
@@ -253,7 +258,12 @@ export default function WeeklyGrid({
   // stretch to cover the alternatives too, not just whatever's currently
   // committed — an 8am ghost shouldn't render clipped off the top just
   // because every already-placed class happens to be in the afternoon.
-  const allTimed = swapSlot ? [...withMeeting, ...ghostCandidates] : withMeeting;
+  // Removed spots (mid displace flow): the sections just taken off the schedule,
+  // outlined where they were until each gets a replacement or is left out.
+  const removedSpots = (swapSlot && displaceInfo ? displaceInfo.removedSections : [])
+    .map((section) => ({ section, meeting: sectionMeeting(section) }))
+    .filter((r) => r.meeting);
+  const allTimed = swapSlot ? [...withMeeting, ...ghostCandidates, ...removedSpots] : withMeeting;
   const usedDays = new Set(allTimed.flatMap((m) => m.meeting.days));
   const days = DAY_ORDER.filter((d) => !['Sat', 'Sun'].includes(d) || usedDays.has(d));
 
@@ -281,12 +291,28 @@ export default function WeeklyGrid({
   const hourPx = 60 * PX_PER_MIN;
 
   return (
-    <div className="sched-grid-wrap">
+    <div className={`sched-grid-wrap${swapSlot && displaceInfo ? ' is-displacing' : ''}`}>
       {/* Desktop-only banner + ghost overlay — hidden under the mobile
           breakpoint (see scheduler.css), where SchedulerPage's
           SectionSwapSheet takes over instead (a cramped, narrow grid is no
           place to render several overlapping translucent blocks). */}
-      {swapSlot && (
+      {swapSlot && displaceInfo && (
+        <div className="sched-swap-banner is-flow" role="status">
+          <div className="sched-swap-flow-step">{displaceInfo.lines[0]}</div>
+          <div className="sched-swap-flow-todo">{displaceInfo.lines[1]}</div>
+          <div className="sched-swap-flow-actions">
+            {displaceInfo.noOptions && (
+              <button type="button" className="sched-swap-flow-btn is-primary" onClick={onContinueDisplace}>
+                Continue
+              </button>
+            )}
+            <button type="button" className="sched-swap-flow-btn sched-swap-banner-cancel" onClick={onCloseSwap}>
+              Undo swap
+            </button>
+          </div>
+        </div>
+      )}
+      {swapSlot && !displaceInfo && (
         <div className="sched-swap-banner">
           <span className="sched-swap-banner-title">
             Showing all other {swapComponentLabel} sections for <strong>{swapCourseCode}</strong> as ghosts. Click one to place it, or click your current one to keep it
@@ -373,6 +399,23 @@ export default function WeeklyGrid({
         >
           {days.map((day) => (
             <div key={day} className="sched-grid-day-col">
+              {/* Before the real blocks, so a placed class is never overdrawn by its label. */}
+              {removedSpots.filter((r) => r.meeting.days.includes(day)).map(({ section, meeting }) => (
+                <div
+                  key={`removed-${section.id}-${day}`}
+                  className={`sched-grid-removed sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}`}
+                  style={{
+                    top: (meeting.startMin - gridStart) * PX_PER_MIN,
+                    height: Math.max(MIN_BLOCK_HEIGHT, (meeting.endMin - meeting.startMin) * PX_PER_MIN),
+                  }}
+                  title={`Removed — ${courseMap[section.courseKey]?.courseNumber ?? section.courseKey} ${section.componentLabel || classifyComponent(section)} ${section.classSection}`}
+                >
+                  <span className="sched-grid-removed-label">
+                    Removed: <s>{courseMap[section.courseKey]?.courseNumber ?? section.courseKey} {section.classSection}</s>
+                  </span>
+                  <span className="sched-grid-removed-time"><s>{formatClock(meeting.startMin)}–{formatClock(meeting.endMin)}</s></span>
+                </div>
+              ))}
               {withMeeting
                 .filter((m) => m.meeting.days.includes(day))
                 .map(({ section, meeting }) => {
@@ -402,7 +445,7 @@ export default function WeeklyGrid({
                   return (
                     <div
                       key={`${section.id}-${day}`}
-                      className={`sched-grid-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isLocked ? ' is-locked' : ''}`}
+                      className={`sched-grid-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isLocked ? ' is-locked' : ''}${swapSlot && displaceInfo && displaceInfo.swappedInId === section.id ? ' is-swapped-in' : ''}`}
                       style={{
                         top: (meeting.startMin - gridStart) * PX_PER_MIN,
                         height: blockHeight,
@@ -410,6 +453,9 @@ export default function WeeklyGrid({
                       title={blockTitle}
                     >
                       <div className="sched-grid-block-actions">
+                        {swapSlot && displaceInfo && displaceInfo.swappedInId === section.id && (
+                          <span className="sched-grid-block-chip">Swapped in</span>
+                        )}
                         <button
                           type="button"
                           className={`sched-grid-block-action-btn${isLocked ? ' is-locked' : ''}`}
@@ -453,6 +499,7 @@ export default function WeeklyGrid({
                 })}
               {swapSlot && layoutGhostsForDay(ghostCandidates.filter((g) => g.meeting.days.includes(day))).map((ghost) => {
                 const { section, meeting, conflict, lane, laneCount, isCurrent } = ghost;
+                const blocked = ghost.pinned.length > 0;
                 const courseCode = courseMap[section.courseKey]?.courseNumber ?? section.courseKey;
                 const blockHeight = Math.max(MIN_BLOCK_HEIGHT, (meeting.endMin - meeting.startMin) * PX_PER_MIN);
                 const instructorLabel = section.instructors?.length
@@ -460,7 +507,9 @@ export default function WeeklyGrid({
                   : 'Staff';
                 const tooltip = [
                   `${isCurrent ? 'Keep this section — ' : ''}${courseCode} — Section ${section.classSection}`,
-                  ...(conflict ? [`Can't place — conflicts with ${ghost.clashes.join(', ')}`] : []),
+                  ...(blocked
+                    ? [`Can't place — conflicts with pinned ${ghost.pinned.join(', ')}`]
+                    : conflict ? [`Swap in — replaces ${ghost.clashes.join(', ')}`] : []),
                   ...(ghost.reasons.length > 0 ? [ghost.reasons.map((r) => r.text).join(' · ')] : []),
                   describeSectionTime(section),
                   instructorLabel,
@@ -472,8 +521,8 @@ export default function WeeklyGrid({
                     key={`ghost-${section.id}-${day}`}
                     role="button"
                     tabIndex={0}
-                    aria-disabled={conflict || undefined}
-                    className={`sched-grid-ghost-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isCurrent ? ' is-current' : ''}${conflict ? ' has-conflict' : ''}${ghost.reasons.some((r) => r.key === 'unpicked') ? ' is-unpicked' : ''}${ghost.reasons.some((r) => r.key === 'filtered') ? ' is-filtered' : ''}`}
+                    aria-disabled={blocked || undefined}
+                    className={`sched-grid-ghost-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isCurrent ? ' is-current' : ''}${conflict ? ' has-conflict' : ''}${blocked ? ' is-blocked' : ''}${ghost.reasons.some((r) => r.key === 'unpicked') ? ' is-unpicked' : ''}${ghost.reasons.some((r) => r.key === 'filtered') ? ' is-filtered' : ''}`}
                     style={{
                       top: (meeting.startMin - gridStart) * PX_PER_MIN,
                       height: blockHeight,
@@ -481,12 +530,12 @@ export default function WeeklyGrid({
                       width: `${100 / laneCount}%`,
                     }}
                     title={tooltip}
-                    onClick={isCurrent ? onCloseSwap : conflict ? undefined : () => onSelectSwapSection(section.id)}
+                    onClick={isCurrent ? onCloseSwap : blocked ? undefined : () => onSelectSwapSection(section.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         if (isCurrent) onCloseSwap();
-                        else if (!conflict) onSelectSwapSection(section.id);
+                        else if (!blocked) onSelectSwapSection(section.id);
                       }
                     }}
                   >
@@ -505,6 +554,11 @@ export default function WeeklyGrid({
         </div>
       </div>
 
+      {incompleteLabels.length > 0 && (
+        <div className="sched-grid-incomplete" role="note">
+          Incomplete — left out: {incompleteLabels.join(', ')}
+        </div>
+      )}
       {withoutMeeting.length > 0 && (
         <div className="sched-grid-no-meeting">
           No scheduled meeting time: {withoutMeeting

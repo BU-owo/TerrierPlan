@@ -348,6 +348,16 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // previewSlot/previewX so it's never confused with the existing
   // generated-schedule preview machinery already using that word.
   const [sectionSwapSlot, setSectionSwapSlot] = useState(null);
+  // Displace flow: clicking a ghost that clashes with placed sections swaps it
+  // in and removes those ("displaced") sections, then walks through them one
+  // at a time so each can get a replacement (or be left out). null when not in
+  // that flow. { snapshot: the preview as it was before the first click (what
+  // Cancel restores), queue: displaced sections still to resolve (queue[0] is
+  // the one on screen; each item remembers the swap that displaced it —
+  // causedBy — and the whole set that swap displaced — groupIds — so the banner
+  // can say "Replacing 1 of 2" about THAT swap), key: scheduleKey of the
+  // preview it expects }.
+  const [displaceFlow, setDisplaceFlow] = useState(null);
   // Reset to false every time a NEW slot is opened (see
   // handleOpenSectionSwap) — "respect filters by default" per slot.
 
@@ -619,17 +629,99 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     return ids;
   }, [sectionSwapSlot, draftCourses, sectionsById]);
 
+  // What the displace banner / sheet needs: "2 of 3", the slot's name, and
+  // whether the displaced section has no replacement that fits.
+  const componentLabelFor = (courseKey, component) => (
+    (sectionsByCourse[courseKey] || []).find((s) => classifyComponent(s) === component)?.componentLabel || component
+  );
+  // "Laboratory" -> "Lab", "Discussion Section" -> "Discussion" in the swap copy.
+  const shortComponent = (label) => String(label).replace('Laboratory', 'Lab').replace('Discussion Section', 'Discussion');
+  const slotName = (courseKey, component) => (
+    `${courseMap[courseKey]?.courseNumber ?? courseKey} ${shortComponent(componentLabelFor(courseKey, component))}`
+  );
+  // "CAS CS 111 Lab B4": course, component and section code.
+  const sectionName = (section) => (
+    `${slotName(section.courseKey, classifyComponent(section))} ${section.classSection}`
+  );
+  const joinNames = (names) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0] || '');
+  // What the displace banner / sheet say (two lines, shared word for word by
+  // both), plus what the grid needs to outline the removed spots.
+  const displaceInfo = (() => {
+    if (!displaceFlow || !sectionSwapSlot) return null;
+    const head = displaceFlow.queue[0];
+    const placed = previewSectionIds.map((id) => sectionsById[id]).filter(Boolean);
+    const alternatives = sectionSwapCandidates.filter((s) => s.id !== sectionSwapSlot.currentSectionId);
+    const fits = alternatives.filter((s) => !placed.some((o) => sectionsConflict(o, s)));
+    const label = slotName(sectionSwapSlot.courseKey, sectionSwapSlot.component);
+    const removedNames = head.groupIds.map((id) => sectionsById[id]).filter(Boolean).map(sectionName);
+    const swappedIn = previewSectionIds.includes(head.causedBy) ? sectionsById[head.causedBy] : null;
+    const line1 = swappedIn
+      ? `Swapped in ${sectionName(swappedIn)}. Removed ${joinNames(removedNames)} because they overlap.`
+      : `Removed ${joinNames(removedNames)} because they overlapped a class you swapped in.`;
+    const noOptions = fits.length === 0;
+    const onlyOption = alternatives.length === 0;
+    // Step two, in the words the grid ("dashed options") and the mobile sheet
+    // ("options") each need.
+    const step2 = (where) => {
+      if (noOptions) {
+        return onlyOption
+          ? `No other options for ${label}. It will be left out of this schedule.`
+          : `Every other ${label} option overlaps another class. It will be left out of this schedule unless you pick one.`;
+      }
+      const pick = `now pick a new ${label} from the ${where} below.`;
+      return head.groupSize > 1
+        ? `Replacing removed class ${head.groupIndex} of ${head.groupSize}: ${pick}`
+        : `${pick[0].toUpperCase()}${pick.slice(1)}`;
+    };
+    return {
+      lines: [line1, step2('dashed options')],
+      sheetLines: [line1, step2('options')],
+      noOptions,
+      swappedInId: swappedIn ? swappedIn.id : null,
+      removedSections: displaceFlow.queue.map((q) => sectionsById[q.sectionId]).filter(Boolean),
+    };
+  })();
+  // Components a drafted course has no section for in the preview — what's left
+  // after "It will be left out". Derived from the preview itself (a generated
+  // schedule always has every component), so it also holds after a reload or
+  // when a saved incomplete schedule is loaded. Hidden mid-flow, where the
+  // banner already says it.
+  const incompleteLabels = [];
+  if (!displaceFlow) {
+    const previewed = previewSectionIds.map((id) => sectionsById[id]).filter(Boolean);
+    draftCourses.forEach((course) => {
+      const mine = previewed.filter((s) => s.courseKey === course.courseKey);
+      if (mine.length === 0) return;
+      const groups = groupSectionsByComponent((sectionsByCourse[course.courseKey] || []).filter((s) => s.classStat !== 'Cancelled'));
+      groups.forEach((group) => {
+        if (mine.some((s) => classifyComponent(s) === group.key)) return;
+        incompleteLabels.push(`${courseMap[course.courseKey]?.courseNumber ?? course.courseKey} ${shortComponent(group.sections[0]?.componentLabel || group.key)}`);
+      });
+    });
+  }
+
   // Esc exits section-swap without changing the current selection — same
   // "cancel" as the banner/sheet's own Cancel button, just keyboard-
   // reachable. Only listens while a slot is actually open.
   useEffect(() => {
     if (!sectionSwapSlot) return undefined;
     function onKeyDown(e) {
-      if (e.key === 'Escape') setSectionSwapSlot(null);
+      if (e.key === 'Escape') handleCloseSectionSwap();
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [sectionSwapSlot]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionSwapSlot, displaceFlow]);
+
+  // The displace flow only makes sense while the combination on screen is the
+  // one it produced: if something else replaced it (Generate, Prev/Next, a
+  // lock...), or the slot closed some other way, the flow just ends.
+  useEffect(() => {
+    if (displaceFlow && (!sectionSwapSlot || scheduleKey(previewSectionIds) !== displaceFlow.key)) {
+      setDisplaceFlow(null);
+      if (sectionSwapSlot) setSectionSwapSlot(null);
+    }
+  }, [displaceFlow, sectionSwapSlot, previewSectionIds]);
 
   // sectionId -> [{ sectionId, label }] — pairwise time conflicts among
   // every currently locked-or-considering section. Two sections are only
@@ -1199,11 +1291,45 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   // ── Section-swap handlers ───────────────────────────────────────────────────
   function handleOpenSectionSwap(courseKey, component, currentSectionId) {
+    if (displaceFlow) return; // finish or cancel the displace flow first
     setSectionSwapSlot({ courseKey, component, currentSectionId });
   }
 
+  // Closing keeps the selection as it is — except mid displace flow, where
+  // Cancel (and Esc) put the schedule back exactly as it was before the click
+  // that started it.
   function handleCloseSectionSwap() {
+    if (displaceFlow) {
+      const { ids, index, activeSavedId: savedId } = displaceFlow.snapshot;
+      setPreviewSectionIds(ids);
+      setPreviewIndex(index);
+      setActiveSavedId(savedId);
+      setDisplaceFlow(null);
+    }
     setSectionSwapSlot(null);
+  }
+
+  // Moves the displace flow on: open the next displaced section's slot, or
+  // finish. (Anything left out shows up as "incomplete" on the grid — see
+  // incompleteLabels.)
+  function continueDisplaceFlow({ ids, queue, snapshot }) {
+    if (queue.length === 0) {
+      setDisplaceFlow(null);
+      setSectionSwapSlot(null);
+      return;
+    }
+    setDisplaceFlow({ snapshot, queue, key: scheduleKey(ids) });
+    setSectionSwapSlot({ courseKey: queue[0].courseKey, component: queue[0].component, currentSectionId: queue[0].sectionId });
+  }
+
+  // "Continue" when the displaced section has nowhere to go: leave it out.
+  function handleContinueDisplaceFlow() {
+    if (!displaceFlow) return;
+    continueDisplaceFlow({
+      ids: previewSectionIds,
+      queue: displaceFlow.queue.slice(1),
+      snapshot: displaceFlow.snapshot,
+    });
   }
 
   // Places a ghost into the combination on screen — and ONLY there. The
@@ -1214,27 +1340,68 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // the active-saved highlight are dropped; the next Generate / Prev / Next /
   // lock / eliminate re-derives the preview from the draft and the placement
   // is gone (Save keeps it, since it saves what's on screen).
+  //
+  // A ghost that clashes with placed sections is allowed too: it goes in and
+  // those sections are displaced (removed), then the displace flow walks
+  // through them one by one. A clash with a pinned (locked) section is never
+  // allowed.
   function handleSelectSwapSection(sectionId) {
     if (!sectionSwapSlot) return;
-    setSectionSwapSlot(null);
-    if (previewSectionIds.includes(sectionId)) return;
+    if (previewSectionIds.includes(sectionId)) {
+      if (!displaceFlow) setSectionSwapSlot(null);
+      return;
+    }
     const inSlot = (id) => {
       const s = sectionsById[id];
       return s && s.courseKey === sectionSwapSlot.courseKey && classifyComponent(s) === sectionSwapSlot.component;
     };
     // The section the slot was opened on; if the preview has since changed
-    // under it, fall back to whichever section now fills the slot.
+    // under it, fall back to whichever section now fills the slot. (A slot
+    // opened for a displaced section has none: the ghost is simply added.)
     const replaceId = previewSectionIds.includes(sectionSwapSlot.currentSectionId)
       ? sectionSwapSlot.currentSectionId
       : previewSectionIds.find(inSlot);
-    if (!replaceId) return;
-    setPreviewSectionIds(previewSectionIds.map((id) => (id === replaceId ? sectionId : id)));
+    if (!replaceId && !displaceFlow) {
+      setSectionSwapSlot(null);
+      return;
+    }
+    const ghost = sectionsById[sectionId];
+    const displaced = ghost
+      ? previewSectionIds.filter((id) => !inSlot(id) && sectionsById[id] && sectionsConflict(sectionsById[id], ghost))
+      : [];
+    if (displaced.some((id) => allLockedSectionIds.has(id))) return; // pinned: blocked
+    const nextIds = (replaceId
+      ? previewSectionIds.map((id) => (id === replaceId ? sectionId : id))
+      : [...previewSectionIds, sectionId]
+    ).filter((id) => !displaced.includes(id));
+    setPreviewSectionIds(nextIds);
     setPreviewIndex(null);
     setActiveSavedId(null);
+    if (displaced.length === 0 && !displaceFlow) {
+      setSectionSwapSlot(null);
+      return;
+    }
+    // Each displaced section remembers which swap removed it and the full set
+    // that swap removed. If replacing one displaces more (a chain), those go
+    // to the front so each swap's classes are dealt with together.
+    const newItems = displaced.map((id, i) => ({
+      courseKey: sectionsById[id].courseKey,
+      component: classifyComponent(sectionsById[id]),
+      sectionId: id,
+      causedBy: sectionId,
+      groupIds: displaced,
+      groupIndex: i + 1,
+      groupSize: displaced.length,
+    }));
+    continueDisplaceFlow({
+      ids: nextIds,
+      queue: [...newItems, ...(displaceFlow ? displaceFlow.queue.slice(1) : [])],
+      snapshot: displaceFlow ? displaceFlow.snapshot : { ids: previewSectionIds, index: previewIndex, activeSavedId },
+    });
   }
 
   function handleClearSwapSlot() {
-    if (!sectionSwapSlot) return;
+    if (!sectionSwapSlot || displaceFlow) return;
     const next = clearSlotInCourses(draftCourses, sectionSwapSlot.courseKey, sectionSwapSlot.component, sectionsById);
     setDraftCourses(next);
     regenerateFrom(next);
@@ -1670,6 +1837,9 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                 onSelectSwapSection={handleSelectSwapSection}
                 onCloseSwap={handleCloseSectionSwap}
                 onClearSwapSlot={handleClearSwapSlot}
+                displaceInfo={displaceInfo}
+                onContinueDisplace={handleContinueDisplaceFlow}
+                incompleteLabels={incompleteLabels}
               />
             </div>
           )}
@@ -1748,6 +1918,8 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           onToggleLock={handlePreviewToggleLock}
           onClearSlot={handleClearSwapSlot}
           onClose={handleCloseSectionSwap}
+          displaceInfo={displaceInfo}
+          onContinueDisplace={handleContinueDisplaceFlow}
         />
       )}
     </div>
