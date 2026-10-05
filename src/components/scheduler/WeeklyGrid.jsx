@@ -202,7 +202,7 @@ export default function WeeklyGrid({
   // is filtered out by the picks or the time filter — those only add a
   // `reasons` label/style. (Sections with no meeting time can't be drawn on
   // a grid at all, so they're dropped here; the mobile sheet lists them.)
-  const ghostCandidates = swapSlot
+  const alternativeGhosts = swapSlot
     ? swapCandidates
         .filter((s) => s.id !== swapSlot.currentSectionId)
         .map((section) => {
@@ -222,6 +222,14 @@ export default function WeeklyGrid({
         })
         .filter((g) => g.meeting)
     : [];
+  // The slot's current occupant is drawn as a dashed "Current" ghost too, in
+  // the same lane layout as the alternatives (instead of a solid block that
+  // an overlapping ghost could sit on top of). Clicking it keeps it.
+  const currentSection = swapSlot ? sections.find((s) => s.id === swapSlot.currentSectionId) : null;
+  const currentMeeting = currentSection ? sectionMeeting(currentSection) : null;
+  const ghostCandidates = currentMeeting
+    ? [...alternativeGhosts, { section: currentSection, meeting: currentMeeting, conflict: false, clashes: [], reasons: [], isCurrent: true }]
+    : alternativeGhosts;
   const swapCourseCode = swapSlot ? (courseMap[swapSlot.courseKey]?.courseNumber ?? swapSlot.courseKey) : '';
   const swapComponentLabel = swapSlot
     ? (swapCandidates[0]?.componentLabel || swapSlot.component)
@@ -281,7 +289,7 @@ export default function WeeklyGrid({
       {swapSlot && (
         <div className="sched-swap-banner">
           <span className="sched-swap-banner-title">
-            Showing every other {swapComponentLabel} section for <strong>{swapCourseCode}</strong> as ghosts. Click one to place it, or click your current one to keep it
+            Showing all other {swapComponentLabel} sections for <strong>{swapCourseCode}</strong> as ghosts. Click one to place it, or click your current one to keep it
           </span>
           <button type="button" className="sched-swap-banner-btn" onClick={onClearSwapSlot}>
             Clear this slot
@@ -383,27 +391,23 @@ export default function WeeklyGrid({
                   const showProf = Boolean(profLastName) && blockHeight >= PROF_LINE_THRESHOLD;
                   const showRoom = Boolean(roomAndNbr) && blockHeight >= ROOM_LINE_THRESHOLD;
                   // While swapping, whatever currently fills the slot is
-                  // itself clickable: "keep this one" just exits swap mode
-                  // (onCloseSwap — no selection change, no regeneration).
-                  // Not a role="button": the block already contains real
-                  // buttons (below), which can't nest inside one — those
-                  // all stopPropagation, so only a click on the block body
-                  // reaches this. Esc and Cancel remain the keyboard paths.
+                  // drawn as the dashed "Current" ghost instead (clicking it
+                  // keeps it — see the ghost layer below), not as this block.
                   const isSwapKeep = Boolean(swapSlot)
                     && section.courseKey === swapSlot.courseKey
                     && classifyComponent(section) === swapSlot.component;
+                  if (isSwapKeep) return null; // drawn as the "Current" ghost below
                   const blockTitle = `${courseCode} — Section ${section.classSection} — ${describeSectionTime(section)}${section.facilId ? ` — ${section.facilId}` : ''}`;
 
                   return (
                     <div
                       key={`${section.id}-${day}`}
-                      className={`sched-grid-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isLocked ? ' is-locked' : ''}${isSwapKeep ? ' is-swap-keep' : ''}`}
+                      className={`sched-grid-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isLocked ? ' is-locked' : ''}`}
                       style={{
                         top: (meeting.startMin - gridStart) * PX_PER_MIN,
                         height: blockHeight,
                       }}
-                      title={isSwapKeep ? `Keep this section — ${blockTitle}` : blockTitle}
-                      onClick={isSwapKeep ? onCloseSwap : undefined}
+                      title={blockTitle}
                     >
                       <div className="sched-grid-block-actions">
                         <button
@@ -448,14 +452,14 @@ export default function WeeklyGrid({
                   );
                 })}
               {swapSlot && layoutGhostsForDay(ghostCandidates.filter((g) => g.meeting.days.includes(day))).map((ghost) => {
-                const { section, meeting, conflict, lane, laneCount } = ghost;
+                const { section, meeting, conflict, lane, laneCount, isCurrent } = ghost;
                 const courseCode = courseMap[section.courseKey]?.courseNumber ?? section.courseKey;
                 const blockHeight = Math.max(MIN_BLOCK_HEIGHT, (meeting.endMin - meeting.startMin) * PX_PER_MIN);
                 const instructorLabel = section.instructors?.length
                   ? section.instructors.map((i) => `${i.first ? i.first[0] + '. ' : ''}${i.last}`.trim()).join(', ')
                   : 'Staff';
                 const tooltip = [
-                  `${courseCode} — Section ${section.classSection}`,
+                  `${isCurrent ? 'Keep this section — ' : ''}${courseCode} — Section ${section.classSection}`,
                   ...(conflict ? [`Can't place — conflicts with ${ghost.clashes.join(', ')}`] : []),
                   ...(ghost.reasons.length > 0 ? [ghost.reasons.map((r) => r.text).join(' · ')] : []),
                   describeSectionTime(section),
@@ -469,7 +473,7 @@ export default function WeeklyGrid({
                     role="button"
                     tabIndex={0}
                     aria-disabled={conflict || undefined}
-                    className={`sched-grid-ghost-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${conflict ? ' has-conflict' : ''}${ghost.reasons.some((r) => r.key === 'unpicked') ? ' is-unpicked' : ''}${ghost.reasons.some((r) => r.key === 'filtered') ? ' is-filtered' : ''}`}
+                    className={`sched-grid-ghost-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isCurrent ? ' is-current' : ''}${conflict ? ' has-conflict' : ''}${ghost.reasons.some((r) => r.key === 'unpicked') ? ' is-unpicked' : ''}${ghost.reasons.some((r) => r.key === 'filtered') ? ' is-filtered' : ''}`}
                     style={{
                       top: (meeting.startMin - gridStart) * PX_PER_MIN,
                       height: blockHeight,
@@ -477,15 +481,21 @@ export default function WeeklyGrid({
                       width: `${100 / laneCount}%`,
                     }}
                     title={tooltip}
-                    onClick={conflict ? undefined : () => onSelectSwapSection(section.id)}
+                    onClick={isCurrent ? onCloseSwap : conflict ? undefined : () => onSelectSwapSection(section.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        if (!conflict) onSelectSwapSection(section.id);
+                        if (isCurrent) onCloseSwap();
+                        else if (!conflict) onSelectSwapSection(section.id);
                       }
                     }}
                   >
-                    <span className="sched-grid-ghost-block-code">{section.classSection}</span>
+                    <span className="sched-grid-ghost-icon" aria-hidden="true"><SwapIcon /></span>
+                    <span className="sched-grid-ghost-block-head">
+                      <span className="sched-grid-ghost-block-code">{section.classSection}</span>
+                      {isCurrent && <span className="sched-grid-ghost-chip is-current">Current</span>}
+                      {conflict && <span className="sched-grid-ghost-chip is-conflict">conflict</span>}
+                    </span>
                     <span className="sched-grid-ghost-block-time">{formatClock(meeting.startMin)}–{formatClock(meeting.endMin)}</span>
                   </div>
                 );

@@ -1049,10 +1049,6 @@ html[data-theme='dark'] {
   gap: 2px;
 }
 .sched-grid-block.is-locked { box-shadow: inset 0 0 0 1.5px var(--badge-warm-text); }
-/* Section-swap: the slot's current occupant is clickable to "keep" it. */
-.sched-grid-block.is-swap-keep { cursor: pointer; }
-.sched-grid-block.is-swap-keep:hover { box-shadow: inset 0 0 0 1.5px var(--scarlet); }
-.sched-grid-block.is-swap-keep.is-locked:hover { box-shadow: inset 0 0 0 1.5px var(--badge-warm-text), 0 0 0 1.5px var(--scarlet); }
 .sched-grid-block-action-btn { cursor: pointer; }
 /* Lock/eliminate — same actions as the draft picker's SectionRow, just
    reachable from the generated-schedule preview too (see WeeklyGrid.jsx).
@@ -1148,41 +1144,130 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
 .sched-grid-ghost-block {
   position: absolute;
   z-index: 2;
-  border-width: 1.5px;
-  border-style: dashed;
+  border: 1.5px dashed var(--sched-accent);
   border-radius: 5px;
   padding: 3px 5px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  opacity: .68;
   cursor: pointer;
+  /* A very light, SOLID tint of the course color mixed into the page
+     background (--cream: light and dark values), so it reads as a calm
+     preview and nothing from a real block underneath shows through. The
+     plain --cream line is the fallback for browsers without color-mix. */
+  background: var(--cream);
+  background: color-mix(in srgb, var(--sched-accent) 14%, var(--cream));
+  /* Lane width varies (full / half / third of the day column) — the chip
+     rules below key off this ghost's own width. */
+  container-type: inline-size;
 }
-/* Border color and the pale fill both come from whichever sched-color-N
-   class is applied alongside this one (same course-color system real
-   blocks use) — deliberately not set here, so this rule only supplies the
-   properties that make a ghost READ as a ghost (dashed, translucent)
-   without introducing a second, parallel color system. */
+/* --sched-accent comes from whichever sched-color-N class is applied
+   alongside this one (the same course-color system real blocks use), so
+   there's no second, parallel color system here. Real blocks keep their
+   solid fill and solid border. */
 .sched-grid-ghost-block:hover,
-.sched-grid-ghost-block:focus-visible { opacity: .92; outline: none; }
-/* Ghosts for sections outside the student's normal picks: unchecked or
-   eliminated (dotted instead of dashed) and/or outside the time filter
-   (fainter). Both stay clickable; the tooltip says why. */
-.sched-grid-ghost-block.is-unpicked { border-style: dotted; }
+.sched-grid-ghost-block:focus-visible { filter: brightness(.97); outline: none; }
+/* Ghosts for sections outside the student's normal picks (unchecked or
+   eliminated) and/or outside the time filter (fainter). They stay clickable;
+   the tooltip says why. */
 .sched-grid-ghost-block.is-filtered { opacity: .4; }
 .sched-grid-ghost-block.is-filtered:hover,
 .sched-grid-ghost-block.is-filtered:focus-visible { opacity: .8; }
 .sched-grid-ghost-block.has-conflict {
-  border-color: var(--warning-border);
-  border-style: solid;
-  box-shadow: 0 0 0 1.5px var(--warning-border);
   cursor: not-allowed; /* can't be placed — see WeeklyGrid */
+  opacity: 1;
+  /* The course color keeps identifying the class: border and tint are the
+     base ghost's (dashed course-color border, light course-color fill). The
+     conflict is signaled only by the red chip (or "!" glyph in a narrow
+     lane) and this 3px solid red bar on the left edge. Real blocks' own left
+     bar is the course color, so the red one is a different color and, unlike
+     theirs, only ever appears on a ghost that can't be placed. */
+  border-left: 3px solid var(--warning-border);
 }
-.sched-grid-ghost-block.has-conflict:hover,
-.sched-grid-ghost-block.has-conflict:focus-visible { opacity: .68; }
-.sched-grid-ghost-block-code { font-size: 10px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Slightly quieter text than a non-conflicting ghost (still AA on the tint). */
+.sched-grid-ghost-block.has-conflict .sched-grid-ghost-block-code,
+.sched-grid-ghost-block.has-conflict .sched-grid-ghost-block-time {
+  color: color-mix(in srgb, var(--text-secondary) 94%, var(--cream));
+}
+/* The slot's current occupant, drawn as a ghost too: clicking it keeps it. */
+.sched-grid-ghost-block.is-current { border-color: var(--scarlet); border-width: 2px; }
+/* Ghost icon in the top-right corner — the same glyph as the swap button, at a
+   visible (not loud) contrast. The first line (code + chip) reserves room for
+   it below, the time sits on the line under it, and the container query at
+   the end hides it in lanes too narrow to fit it without overlap. */
+.sched-grid-ghost-icon {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  line-height: 0;
+  color: var(--text-secondary);
+  opacity: .75;
+  pointer-events: none;
+}
+.sched-grid-ghost-icon svg { width: 14px; height: 14px; display: block; }
+/* Code + chip share one line. The section code never shrinks; the chip gives
+   way instead (ellipsis, then a dot in a narrow lane — see the container
+   query below), so the code is always readable. */
+.sched-grid-ghost-block-head { display: flex; align-items: center; gap: 4px; min-width: 0; padding-right: 16px; }
+.sched-grid-ghost-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 13px;
+  white-space: nowrap;
+}
+.sched-grid-ghost-chip.is-current { background: var(--scarlet); color: #fff; }
+.sched-grid-ghost-chip.is-conflict {
+  background: var(--warning-surface);
+  color: var(--warning-text);
+  border: 1px solid var(--warning-border);
+  line-height: 11px;
+}
+.sched-grid-ghost-block-code { flex-shrink: 0; max-width: 100%; font-size: 10px; font-weight: 700; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sched-grid-ghost-block-time { font-size: 9px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Narrow lanes. The chip words stay in the DOM for screen readers and the
+   explanation stays in the ghost's tooltip; only what's drawn changes.
+   - up to 88px (less than a full lane): "Current" becomes a small dot and
+     "conflict" a small "!" glyph, so the section code is never squeezed;
+   - up to 62px (half-width or less): the ghost icon is hidden too, rather
+     than overlap the code or chip. */
+@container (max-width: 88px) {
+  .sched-grid-ghost-chip {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 0;
+    line-height: 0;
+  }
+  .sched-grid-ghost-chip.is-conflict {
+    width: 12px;
+    height: 12px;
+    line-height: 0; /* the base rule's line-height would leave an empty line above the "!" */
+    border: 0;
+    background: var(--warning-border);
+    color: var(--warning-surface);
+  }
+  .sched-grid-ghost-chip.is-conflict::after {
+    content: '!';
+    display: block;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 12px;
+    text-align: center;
+  }
+}
+@container (max-width: 62px) {
+  .sched-grid-ghost-icon { display: none; }
+  .sched-grid-ghost-block-head { padding-right: 0; }
+}
 
 /* ===== Section-swap mobile bottom sheet ===== */
 .sched-swap-sheet-overlay {
@@ -1259,7 +1344,7 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
 .sched-swap-sheet-row.has-conflict { border-color: var(--warning-border); }
 .sched-swap-sheet-row.is-blocked { cursor: not-allowed; opacity: .75; }
 .sched-swap-sheet-row.is-blocked:hover { border-color: var(--warning-border); }
-.sched-swap-sheet-row-top { display: flex; align-items: center; gap: 8px; }
+.sched-swap-sheet-row-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .sched-swap-sheet-row-section { font-size: 13px; font-weight: 700; color: var(--text); }
 .sched-swap-sheet-row-current-badge {
   padding: 1px 8px;
