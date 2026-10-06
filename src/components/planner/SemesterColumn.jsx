@@ -145,6 +145,7 @@ export default function SemesterColumn({
                 key={entry.id}
                 note={entry}
                 initiallyEditing={entry.id === newNoteId}
+                compact={compact}
                 onUpdate={(patch) => onUpdateNote(entry.id, patch)}
                 onRemove={() => onRemoveNote(entry.id)}
               />

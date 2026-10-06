@@ -3182,6 +3182,60 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   letter-spacing: .4px;
   color: var(--text-muted);
 }
+/* "All semesters": one line, same box as a compact course card (25px, 1px
+   border — dashed here), italic name left, credits right. Name and credits
+   stay click-to-edit inline; the × shows on hover/focus at the right edge,
+   and the row makes room for it (credits stay visible — they're an edit
+   control here, unlike a course card's). */
+.note-card.is-compact {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 25px;
+  padding: 0 6px;
+  border-width: 1px;
+}
+.note-card.is-compact .note-card-footer { display: contents; }
+.note-card.is-compact .note-card-text {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  padding: 0;
+  font-size: 10.5px;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+.note-card.is-compact .note-card-credits {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 14px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.note-card.is-compact .note-card-text-input,
+.note-card.is-compact .note-card-credits-input {
+  height: 18px;
+  padding: 0 4px;
+  font-size: 10.5px;
+}
+.note-card.is-compact .note-card-text-input { flex: 1 1 0; min-width: 0; width: auto; }
+.note-card.is-compact .note-card-credits-input { flex: 0 0 auto; width: 40px; }
+.note-card.is-compact .note-card-remove {
+  top: 50%;
+  right: 3px;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  background: var(--white);
+}
+.note-card.is-compact:focus-within .note-card-remove { opacity: 1; }
+@media (hover: hover) {
+  .note-card.is-compact:is(:hover, :focus-within) { padding-right: 20px; }
+}
 .add-note-btn {
   align-self: flex-start;
   margin: 2px 4px 0;
