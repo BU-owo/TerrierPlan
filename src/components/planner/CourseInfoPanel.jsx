@@ -3,6 +3,7 @@ import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/
 import { db } from '../../firebase';
 import { HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { getOfferingBadge } from '../../utils/offeringPattern';
+import useUpcomingSeasons from '../../hooks/useUpcomingSeasons';
 import { isProfessionalCareer } from '../../utils/courseQuery';
 import { CURRENT_TERM, CURRENT_TERM_LABEL } from '../../utils/term';
 import { describeSectionTime, describeSeatStatus } from '../../utils/sectionTime';
@@ -280,7 +281,11 @@ function PastOfferings({ status, data, currentSections, onRetry }) {
   const history = Array.isArray(data?.history)
     ? data.history.filter((entry) => Number(entry?.year) >= OFFERING_HISTORY_MIN_YEAR)
     : [];
-  const { rows, lastOffered } = status === 'ready'
+  // No offeringHistory doc ('missing', e.g. a course created from the
+  // schedule) counts as an empty history, so current-term sections still
+  // give the table its one row.
+  const noHistoryDoc = status === 'missing';
+  const { rows, lastOffered } = status === 'ready' || noHistoryDoc
     ? buildOfferingRows(withCurrentTermEntry(history, currentSections))
     : { rows: [], lastOffered: null };
   const historyRows = status === 'ready' ? buildOfferingRows(history).rows : [];
@@ -298,9 +303,18 @@ function PastOfferings({ status, data, currentSections, onRetry }) {
           <p className="course-info-empty">{emptyText}</p>
         ) : (
           <>
-            <p className="course-info-offerings-last">
-              Last offered: {lastOffered.season} {lastOffered.year}
-            </p>
+            {noHistoryDoc ? (
+              <>
+                <p className="course-info-offerings-last">
+                  Scheduled {lastOffered.season} {lastOffered.year}
+                </p>
+                <p className="course-info-offerings-summary">No earlier offerings on record</p>
+              </>
+            ) : (
+              <p className="course-info-offerings-last">
+                Last offered: {lastOffered.season} {lastOffered.year}
+              </p>
+            )}
             {historyRows.length > 0 && (
               <p className="course-info-offerings-summary">{summarizeSeasons(historyRows)}</p>
             )}
@@ -399,6 +413,7 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
   const courseFetch = useCachedFetch(courseDocCache, courseKey, fetchCourseDoc);
   const historyFetch = useCachedFetch(offeringHistoryCache, courseKey, fetchOfferingHistory);
   const termFetch = useCachedFetch(fall2026Cache, courseKey, fetchFall2026);
+  const upcomingSeasons = useUpcomingSeasons(courseKey);
 
   useEffect(() => {
     if (!courseKey) return undefined;
@@ -413,7 +428,7 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
 
   const { status, data: course } = courseFetch;
   const courseNumber = course?.courseNumber ?? courseKey;
-  const offeringBadge = course ? getOfferingBadge(course.offeringPattern) : null;
+  const offeringBadge = course ? getOfferingBadge(course.offeringPattern, upcomingSeasons) : null;
   const hubUnits = course?.hubUnits ?? [];
 
   return (
@@ -488,7 +503,9 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
                 )}
                 {course.studyAbroad && <span className="offering-badge offering-badge-abroad">Study abroad</span>}
                 {offeringBadge ? (
-                  <span className={`offering-badge ${offeringBadge.className}`}>{offeringBadge.label}</span>
+                  <span className={`offering-badge ${offeringBadge.className}`} title={offeringBadge.text}>
+                    {offeringBadge.label}
+                  </span>
                 ) : (
                   course.offeringPattern && (
                     <span className="offering-badge offering-badge-neutral">{course.offeringPattern}</span>

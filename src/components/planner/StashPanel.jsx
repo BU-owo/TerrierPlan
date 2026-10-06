@@ -3,6 +3,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { getOfferingBadge } from '../../utils/offeringPattern';
 import SemesterPickerModal from './SemesterPickerModal';
+import useUpcomingSeasons from '../../hooks/useUpcomingSeasons';
 
 // Reuses CourseSearch's result-card visual style AND its drag-and-drop
 // wiring (same `useDraggable` shape, tagged `from: 'stash'` instead of
@@ -24,7 +25,8 @@ function StashResultCard({
     disabled: alreadyAdded,
   });
 
-  const offeringBadge = getOfferingBadge(course.offeringPattern);
+  const upcomingSeasons = useUpcomingSeasons(course.id);
+  const offeringBadge = getOfferingBadge(course.offeringPattern, upcomingSeasons);
   const courseLabel = course.courseNumber ?? course.id;
 
   return (
@@ -57,7 +59,7 @@ function StashResultCard({
         <div className="search-result-name-row">
           <span className="search-result-name">{course.name ?? '—'}</span>
           {offeringBadge && (
-            <span className={`offering-badge ${offeringBadge.className}`}>
+            <span className={`offering-badge ${offeringBadge.className}`} title={offeringBadge.text}>
               {offeringBadge.label}
             </span>
           )}

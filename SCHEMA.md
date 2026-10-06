@@ -213,3 +213,10 @@ unbounded storage growth over time.
    merges onto courseKeys that already have a `courses` doc, skipping the
    rest (e.g. non-catalog entries) rather than creating stray docs.
    Idempotent (`set` with `merge: true`), safe to re-run.
+5. Run `export-catalog.cjs` last, after every import above (and after moving
+   `CURRENT_TERM` in `src/utils/term.js`) — read-only, rewrites
+   `public/courses.json`. That file's `upcomingSeasons` (e.g. `["Spring 2027"]`,
+   the terms at or after `CURRENT_TERM` with a non-cancelled section, only
+   emitted when one falls outside the course's usual `offeringPattern`) is a
+   snapshot of `sections`, not a Firestore field: it goes stale until the
+   export is re-run.

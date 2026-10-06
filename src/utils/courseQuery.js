@@ -15,6 +15,15 @@ import { normalizeCourseKey, compareByCatalogNumber } from './courseKey';
 // If the file is missing or unusable, falls back to reading the collection.
 let coursesPromise = null;
 
+// courseKey → `upcomingSeasons` (see scripts/export-catalog.cjs), built once
+// the catalog loads so placed cards and the info panel (which read Firestore
+// course docs) can look it up without a new read. null until then.
+let upcomingSeasonsByKey = null;
+
+export function getUpcomingSeasonsIndex() {
+  return upcomingSeasonsByKey;
+}
+
 async function loadCoursesFromStaticFile() {
   const res = await fetch('/courses.json');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -37,6 +46,12 @@ export function loadAllCourses() {
       .catch((err) => {
         console.warn('Static course catalog unavailable, falling back to Firestore:', err);
         return loadCoursesFromFirestore();
+      })
+      .then((courses) => {
+        upcomingSeasonsByKey = new Map(
+          courses.filter((c) => c.upcomingSeasons?.length).map((c) => [c.id, c.upcomingSeasons]),
+        );
+        return courses;
       })
       .catch((err) => {
         coursesPromise = null; // let the next caller retry instead of caching a failure
