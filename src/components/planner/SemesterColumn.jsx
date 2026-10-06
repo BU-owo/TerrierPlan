@@ -56,8 +56,13 @@ export default function SemesterColumn({
   const allLocked = courseEntries.length > 0
     && courseEntries.every((entry) => completedCourseKeys.has(entryCourseKey(entry)));
 
+  // Overview: the whole grid cell is the drop target (so the blank space
+  // under a short semester still takes drops), and .semester-block draws
+  // the visible box/rings filling that cell. Detailed keeps the course list
+  // as the target, and .semester-block is display:contents.
   return (
     <div
+      ref={compact ? setNodeRef : undefined}
       className={[
         'semester-column',
         isActive ? 'is-active' : '',
@@ -70,6 +75,7 @@ export default function SemesterColumn({
         .join(' ')}
       onClick={onColumnClick}
     >
+      <div className="semester-block">
       <div className="semester-header">
         <span className="semester-name">{label}</span>
         <div className="semester-header-right">
@@ -131,7 +137,7 @@ export default function SemesterColumn({
         </div>
       </div>
 
-      <div ref={setNodeRef} className="semester-courses">
+      <div ref={compact ? undefined : setNodeRef} className="semester-courses">
         {courses.map((entry) => {
           if (isNoteEntry(entry)) {
             return (
@@ -182,6 +188,7 @@ export default function SemesterColumn({
             + Add placeholder
           </button>
         )}
+      </div>
       </div>
     </div>
   );

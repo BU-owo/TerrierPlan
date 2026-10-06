@@ -625,6 +625,9 @@
   border-color: var(--drag-over-border);
   background: var(--drag-over-bg);
 }
+/* Wrapper used only by the "All semesters" view (see is-compact); no box
+   of its own here, so Detailed lays out exactly as before. */
+.semester-block { display: contents; }
 .semester-header {
   display: flex;
   align-items: center;
@@ -3021,7 +3024,23 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
     gap: 12px;
     scroll-snap-type: x proximity;
   }
+  /* Each year is its own sideways-swiping row, one semester at a time: the
+     year label sits above (not beside) the row so a column can be ~84vw,
+     and columns keep that fixed width instead of the desktop flex: 1. */
+  .year-row { flex-direction: column; gap: 6px; }
+  .year-label {
+    width: auto;
+    justify-content: flex-start;
+    writing-mode: horizontal-tb;
+    transform: none;
+  }
+  .year-semesters {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+  }
   .semester-column {
+    flex: 0 0 auto;
     width: 84vw;
     max-width: 360px;
     scroll-snap-align: center;
@@ -3260,13 +3279,34 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
 .board-view-toggle button:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
 
 .semester-board.is-overview { min-height: 0; gap: 8px; padding-bottom: 8px; }
+/* Aligned grid: four year columns; each year spans four rows (label, Fall,
+   Spring, Summer) through a subgrid, so every Spring starts at the same
+   height and each row is as tall as its tallest semester. Years 5+ wrap
+   into a second band below with the same layout. .year-semesters is
+   display:contents so the semesters are the subgrid's own items. Without
+   subgrid support each year just stacks, as before. */
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 8px;
-  align-items: start;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px 8px;
 }
-.overview-year { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.overview-year {
+  display: grid;
+  grid-row: span 4;
+  grid-template-rows: subgrid;
+  row-gap: 5px;
+  min-width: 0;
+}
+.overview-year .year-semesters { display: contents; }
+.overview-year:nth-child(n+5) .year-label { margin-top: 6px; }
+/* Narrow board (small desktop window, side panels open): two years per band
+   (Years 1–2, then 3–4) instead of four ~100px columns. Keyed to the board's
+   own width, not the window, since collapsing a side panel changes it. */
+.semester-board.is-overview { container-type: inline-size; }
+@container (max-width: 719px) {
+  .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .overview-year:nth-child(n+3) .year-label { margin-top: 6px; }
+}
 .overview-year .year-label {
   width: auto;
   justify-content: flex-start;
@@ -3274,9 +3314,9 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   transform: none;
   font-size: 11px;
 }
-.overview-year .year-semesters { flex-direction: column; gap: 5px; }
 .overview-year .add-summer-term-btn {
   flex: none;
+  align-self: start;
   min-height: 24px;
   padding: 2px 6px;
   font-size: 10px;
@@ -3296,20 +3336,48 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
 }
 .semester-add-note:hover, .semester-add-note:focus-visible { border-color: var(--scarlet); color: var(--scarlet); }
 
-.semester-column.is-compact {
+/* Overview: the column is the whole grid cell (stretched to the row, and the
+   drop target — see SemesterColumn), so it's invisible; .semester-block is
+   the visible box filling it, and carries the rings and drag-over
+   highlight. */
+.semester-column.is-compact,
+.semester-column.is-compact.is-active,
+.semester-column.is-compact.is-current,
+.semester-column.is-compact.is-drag-over {
   flex: none;
-  border-width: 1.5px;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+/* Fills the whole cell, so every block in a row is the same height; the
+   course list takes the leftover height, so blank space sits inside the
+   block under the last card. */
+.semester-column.is-compact .semester-block {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--white);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color .15s, background .15s;
+}
+.semester-column.is-compact.is-drag-over .semester-block {
+  border-color: var(--drag-over-border);
+  background: var(--drag-over-bg);
 }
 /* Selected / current: a flat 2px ring (outline drawn over the 1.5px border,
    so nothing shifts) instead of border + soft halo. */
-.semester-column.is-compact.is-active,
-.semester-column.is-compact.is-current {
-  box-shadow: none;
+.semester-column.is-compact.is-active .semester-block,
+.semester-column.is-compact.is-current .semester-block {
   outline: 2px solid var(--scarlet);
   outline-offset: -2px;
 }
-.semester-column.is-compact.is-current { outline-color: var(--success-strong); }
+.semester-column.is-compact.is-current .semester-block { outline-color: var(--success-strong); }
 .semester-column.is-compact .semester-header { padding: 2px 6px; gap: 4px; }
 .semester-column.is-compact .semester-name { font-size: 10px; }
 
@@ -3341,8 +3409,17 @@ html[data-theme='dark'] {
   color: var(--text);
 }
 .semester-column.is-compact .semester-header-right { gap: 4px; min-width: 0; }
-.semester-column.is-compact .semester-credits { font-size: 10px; padding: 0 5px; }
-.semester-column.is-compact .semester-status-badge { font-size: 9px; padding: 0 5px; }
+/* Narrow columns: the credit total stays on one line; the status badge
+   gives up width first ("COMPL…") instead. */
+.semester-column.is-compact .semester-name { flex-shrink: 0; }
+.semester-column.is-compact .semester-credits { font-size: 10px; padding: 0 5px; white-space: nowrap; flex-shrink: 0; }
+.semester-column.is-compact .semester-status-badge {
+  font-size: 9px;
+  padding: 0 5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .semester-column.is-compact .semester-lock-toggle { font-size: 10px; padding: 0 1px; }
 /* Header "+" and lock: quiet until hovered/focused. */
 .semester-column.is-compact .semester-add-note { opacity: .45; }
@@ -3350,7 +3427,7 @@ html[data-theme='dark'] {
 .semester-column.is-compact .semester-lock-toggle.is-locked { opacity: .6; }
 .semester-column.is-compact .semester-add-note:is(:hover, :focus-visible),
 .semester-column.is-compact .semester-lock-toggle:is(:hover, :focus-visible) { opacity: 1; }
-.semester-column.is-compact .semester-courses { flex: none; overflow: visible; padding: 3px; gap: 2px; }
+.semester-column.is-compact .semester-courses { flex: 1 1 auto; min-height: 0; overflow: visible; padding: 3px; gap: 2px; }
 .semester-column.is-compact .semester-empty {
   flex: none;
   min-height: 20px;
