@@ -111,6 +111,11 @@
   .app-footer { padding: 8px 12px; }
   .app-footer-row { flex-direction: column; gap: 6px; }
 }
+/* Small screens: hide the counter pill with CSS only — GlobalFooter stays
+   mounted, so useSiteStats keeps counting and sending presence heartbeats. */
+@media (max-width: 860px), (max-height: 799px) {
+  .app-footer-stats { display: none; }
+}
 
 /* ── Guest sign-in prompts (Planner sub-bar, Scheduler banner + post-save note) ──
    One component's worth of styling shared by all three. The button is the

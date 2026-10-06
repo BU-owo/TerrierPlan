@@ -6,8 +6,9 @@ import { DEFAULT_NOTE_CREDITS } from '../../utils/courseEntry';
 // course: no drag, no lock, no HUB chips or offering warning. Its credits
 // count toward the column/plan credit totals only. Text and credits are
 // edited inline; `initiallyEditing` opens a freshly added note straight
-// into the text field.
-export default function NoteCard({ note, initiallyEditing = false, onUpdate, onRemove }) {
+// into the text field. `compact` ("All semesters" view): one line like a
+// compact course card, with "Placeholder" moved into the tooltip.
+export default function NoteCard({ note, initiallyEditing = false, onUpdate, onRemove, compact = false }) {
   const [isEditingText, setIsEditingText] = useState(initiallyEditing);
   const [textDraft, setTextDraft] = useState(note.text);
   const [isEditingCredits, setIsEditingCredits] = useState(false);
@@ -41,7 +42,11 @@ export default function NoteCard({ note, initiallyEditing = false, onUpdate, onR
   const label = note.text || 'Untitled placeholder';
 
   return (
-    <div className="note-card" onClick={(e) => e.stopPropagation()}>
+    <div
+      className={`note-card${compact ? ' is-compact' : ''}`}
+      title={compact ? `Placeholder: ${label} · ${note.credits} cr` : undefined}
+      onClick={(e) => e.stopPropagation()}
+    >
       <button
         type="button"
         className="note-card-remove"
@@ -74,7 +79,7 @@ export default function NoteCard({ note, initiallyEditing = false, onUpdate, onR
           type="button"
           className={`note-card-text${note.text ? '' : ' is-empty'}`}
           onClick={startTextEdit}
-          title="Click to edit placeholder"
+          title={compact ? undefined : 'Click to edit placeholder'}
         >
           {label}
         </button>
@@ -109,7 +114,7 @@ export default function NoteCard({ note, initiallyEditing = false, onUpdate, onR
             {note.credits} cr
           </button>
         )}
-        <span className="note-card-tag">Placeholder</span>
+        {!compact && <span className="note-card-tag">Placeholder</span>}
       </div>
     </div>
   );

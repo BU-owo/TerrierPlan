@@ -4,7 +4,7 @@ import { BU_SCHOOLS } from '../../data/bu-programs';
 // Cascading school → program picker. Owns its own "which school is the
 // dropdown showing" state; the actual selection (a bulletin URL) is fully
 // controlled by the parent via selectedProgramUrl/onProgramSelect, so more
-// than one picker (BulletinPanel, RequirementsSidebar) can stay in sync with
+// than one picker (Requirements tab, Requirements full view) can stay in sync with
 // the same plan field without knowing about each other. idPrefix keeps
 // element ids unique when multiple pickers are mounted at once.
 export default function MajorPicker({ selectedProgramUrl = '', onProgramSelect, idPrefix = 'major-picker' }) {

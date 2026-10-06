@@ -41,6 +41,11 @@ export default function SemesterBoard({
   // both are given.
   hubSummary = null,
   onOpenHubFullView,
+  // "All semesters" overview (desktop only): years as columns, compact cards.
+  // onBoardViewChange is undefined on narrow screens, which hides the toggle.
+  overview = false,
+  boardView = 'detailed',
+  onBoardViewChange,
 }) {
   const yearCount = Math.max(4, Math.ceil(semesters.length / 2));
   const years = Array.from({ length: yearCount }, (_, i) => i);
@@ -83,7 +88,7 @@ export default function SemesterBoard({
     : semesterOptions;
 
   return (
-    <div className="semester-board">
+    <div className={`semester-board${overview ? ' is-overview' : ''}`}>
       {/* Lets a student mark where they actually are in the program — shared
           across every plan of theirs, not just this one. Every course in a
           semester chronologically before it auto-locks as completed (same
@@ -111,6 +116,26 @@ export default function SemesterBoard({
             <option key={value} value={value}>{label}</option>
           ))}
         </select>
+        {onBoardViewChange && (
+          <div className="board-view-toggle" role="group" aria-label="Board view">
+            <button
+              type="button"
+              className={boardView === 'detailed' ? 'is-on' : ''}
+              aria-pressed={boardView === 'detailed'}
+              onClick={() => onBoardViewChange('detailed')}
+            >
+              Detailed
+            </button>
+            <button
+              type="button"
+              className={boardView === 'overview' ? 'is-on' : ''}
+              aria-pressed={boardView === 'overview'}
+              onClick={() => onBoardViewChange('overview')}
+            >
+              All semesters
+            </button>
+          </div>
+        )}
         {hubSummary && onOpenHubFullView && (
           <button
             type="button"
@@ -128,6 +153,7 @@ export default function SemesterBoard({
         )}
       </div>
 
+      <div className={overview ? 'overview-grid' : 'board-years'}>
       {years.map((year) => {
         const fallIndex = year * 2;
         const springIndex = year * 2 + 1;
@@ -140,7 +166,7 @@ export default function SemesterBoard({
           : null;
 
         return (
-          <div key={year} className="year-row">
+          <div key={year} className={overview ? 'overview-year' : 'year-row'}>
             <div className="year-label">Year {year + 1}</div>
             <div className="year-semesters">
               <SemesterColumn
@@ -160,6 +186,7 @@ export default function SemesterBoard({
                 draggingId={draggingId}
                 status={fallStatus}
                 completedCourseKeys={completedCourseKeys}
+                compact={overview}
               />
               <SemesterColumn
                 dropId={`col-${springIndex}`}
@@ -178,6 +205,7 @@ export default function SemesterBoard({
                 draggingId={draggingId}
                 status={springStatus}
                 completedCourseKeys={completedCourseKeys}
+                compact={overview}
               />
               {hasSummer ? (
                 <SemesterColumn
@@ -202,6 +230,7 @@ export default function SemesterBoard({
                   draggingId={draggingId}
                   status={summerStatus}
                   completedCourseKeys={completedCourseKeys}
+                  compact={overview}
                 />
               ) : (
                 <button
@@ -210,13 +239,14 @@ export default function SemesterBoard({
                   onClick={() => onToggleSummerYear(year, true)}
                   title="Add a Summer term for this year"
                 >
-                  + Add Summer term
+                  {overview ? '+ Summer' : '+ Add Summer term'}
                 </button>
               )}
             </div>
           </div>
         );
       })}
+      </div>
 
       <button
         type="button"
