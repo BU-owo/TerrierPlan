@@ -8,26 +8,31 @@
 //
 // `shortLabel` is shown directly on the course card (so the warning is
 // self-explanatory without a hover); `text` is the fuller sentence used as
-// the hover tooltip for anyone who wants the detail.
+// the hover tooltip for anyone who wants the detail. History isn't a
+// guarantee, so the wording never says the course can't run that term.
+function mismatchText(usualSeason, placedSeason) {
+  return `Usually offered in ${usualSeason}. Check MyBU for ${placedSeason}.`;
+}
+
 const FALL_SPRING_ONLY = {
-  Fall: { mismatchSeason: 'spring', shortLabel: 'Fall only', text: 'Usually only offered in Fall' },
-  Spring: { mismatchSeason: 'fall', shortLabel: 'Spring only', text: 'Usually only offered in Spring' },
+  Fall: { mismatchSeason: 'spring', shortLabel: 'Usually Fall', text: mismatchText('Fall', 'Spring') },
+  Spring: { mismatchSeason: 'fall', shortLabel: 'Usually Spring', text: mismatchText('Spring', 'Fall') },
 };
 
 const ALTERNATING = {
   'Alternating Fall': {
     mainSeason: 'fall',
     mismatchSeason: 'spring',
-    mismatchShortLabel: 'Fall only',
-    mismatchText: 'Usually only offered in Fall',
+    mismatchShortLabel: 'Usually Fall',
+    mismatchText: mismatchText('Fall', 'Spring'),
     noticeShortLabel: 'Not every Fall',
     noticeText: 'Not offered every Fall — worth double-checking',
   },
   'Alternating Spring': {
     mainSeason: 'spring',
     mismatchSeason: 'fall',
-    mismatchShortLabel: 'Spring only',
-    mismatchText: 'Usually only offered in Spring',
+    mismatchShortLabel: 'Usually Spring',
+    mismatchText: mismatchText('Spring', 'Fall'),
     noticeShortLabel: 'Not every Spring',
     noticeText: 'Not offered every Spring — worth double-checking',
   },
@@ -50,7 +55,7 @@ export function getOfferingWarning(offeringPattern, season) {
 
   if (offeringPattern === 'Summer') {
     return season === 'fall' || season === 'spring'
-      ? { severity: 'warning', shortLabel: 'Summer only', text: 'Usually only offered in Summer' }
+      ? { severity: 'warning', shortLabel: 'Usually Summer', text: mismatchText('Summer', season === 'fall' ? 'Fall' : 'Spring') }
       : null;
   }
 
@@ -82,8 +87,8 @@ export function getOfferingWarning(offeringPattern, season) {
 // what this course's history generally looks like." Distinct from
 // getOfferingWarning above, which needs a specific placed season.
 const OFFERING_BADGES = {
-  Fall: { className: 'offering-badge-neutral', label: 'Fall only' },
-  Spring: { className: 'offering-badge-neutral', label: 'Spring only' },
+  Fall: { className: 'offering-badge-neutral', label: 'Usually Fall' },
+  Spring: { className: 'offering-badge-neutral', label: 'Usually Spring' },
   'Alternating Fall': { className: 'offering-badge-warn', label: 'Offered some years' },
   'Alternating Spring': { className: 'offering-badge-warn', label: 'Offered some years' },
   'Not offered in 5 years': { className: 'offering-badge-rare', label: 'Rarely offered' },
