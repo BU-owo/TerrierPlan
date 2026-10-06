@@ -20,7 +20,7 @@ import HelpSupportModal from '../components/HelpSupportModal';
 import SchedulerSearch from '../components/scheduler/SchedulerSearch';
 import DraftCourseCard from '../components/scheduler/DraftCourseCard';
 import GlobalTimeFilter from '../components/scheduler/GlobalTimeFilter';
-import ScheduleStepper from '../components/scheduler/ScheduleStepper';
+import ScheduleStepper, { ManualScheduleHeader } from '../components/scheduler/ScheduleStepper';
 import WeeklyGrid from '../components/scheduler/WeeklyGrid';
 import SectionSwapSheet from '../components/scheduler/SectionSwapSheet';
 import { nextAutoColors } from '../utils/scheduleColors';
@@ -32,11 +32,10 @@ import { CURRENT_TERM, CURRENT_TERM_LABEL, scheduleTerm, termLabel } from '../ut
 import { sectionsConflict, describeSectionTime } from '../utils/sectionTime';
 import { classifyComponent, groupSectionsByComponent } from '../utils/sectionComponents';
 import {
-  generateSchedules,
+  generateSchedulesAsync,
+  overlapSummary,
   buildGenerationSlots,
-  diagnoseNoSchedule,
   scheduleKey,
-  isCourseReady,
   missingGroupsForCourse,
   totalCredits,
 } from '../utils/scheduleCombos';
@@ -57,6 +56,8 @@ const COURSE_COLORS_LOCAL_KEY = 'terrierplan_scheduler_course_colors';
 // The guest "you're not signed in" banner stays dismissed for the rest of the
 // browser session (sessionStorage), and comes back on the next visit.
 const GUEST_BANNER_DISMISSED_KEY = 'terrierplan_scheduler_guest_banner_dismissed';
+// Shared empty Set for props, so a card's prop doesn't change every render.
+const EMPTY_SET = new Set();
 // Mirrors scheduler.css's .scheduler-right min-width — the drag can widen
 // the preview past its CSS default, never shrink it past this floor.
 const PREVIEW_MIN_WIDTH = 460;
@@ -309,6 +310,23 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // dimmed rather than removed (see DraftCourseCard) so overriding for one
   // specific section doesn't need its own control.
   const [globalTimeFilter, setGlobalTimeFilter] = useState(EMPTY_GLOBAL_FILTERS);
+  // 'auto' | 'manual'. Auto: conflict-free schedules are generated from the
+  // checked/pinned sections automatically (never with overlaps). Manual: the
+  // student places one section per component per course by hand, overlaps
+  // allowed, kept in manualSectionIds — separate from Auto's checkboxes, so
+  // switching modes loses nothing. Both are saved with the draft.
+  const [scheduleMode, setScheduleMode] = useState('auto');
+  const [manualSectionIds, setManualSectionIds] = useState([]);
+  // "Show all" ghosts: Set of `${courseKey}|${groupKey}` whose every section
+  // is drawn as a ghost on the grid. View-only state; cleared on mode change.
+  const [ghostGroups, setGhostGroups] = useState(() => new Set());
+  // Something the student is looking at on purpose that automatic
+  // regeneration must not replace: 'saved' (a loaded saved schedule),
+  // 'bookmark' (a previewed bookmark not in the current batch), 'foreign'
+  // (another term's schedule) or 'swap' (a swap placement). null = the grid
+  // follows the generated batch. See the auto-regenerate effect.
+  const [previewHold, setPreviewHold] = useState(null);
+  const [generating, setGenerating] = useState(false);
 
   // ── Generated combinations + preview ───────────────────────────────────────
   const [generated, setGenerated] = useState(null); // { schedules: sectionId[][], truncated } | null
@@ -797,15 +815,75 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     });
   }, [draftCourses, sectionsByCourse, sectionsById, courseMap, loadingSectionsFor, globalTimeFilter]);
 
-  const canGenerate = draftCourses.length > 0 && generateBlockers.length === 0;
+  // courseKey -> reason, for the short hint on each incomplete course's card
+  // (Auto). Same wording as the old list under the Generate button.
+  const blockerByCourse = useMemo(
+    () => Object.fromEntries(generateBlockers.map((b) => [b.courseKey, b.reason])),
+    [generateBlockers],
+  );
+  // Auto generates piece by piece: only the courses with every component
+  // picked go into generation; the rest show as "not finished" on the grid.
+  const completeCourses = useMemo(
+    () => draftCourses.filter((c) => !blockerByCourse[c.courseKey]),
+    [draftCourses, blockerByCourse],
+  );
+  const incompleteCourses = useMemo(
+    () => draftCourses.filter((c) => blockerByCourse[c.courseKey]),
+    [draftCourses, blockerByCourse],
+  );
+  // Checked/pinned sections of incomplete courses — the faint grid blocks.
+  const pendingSectionIds = useMemo(
+    () => [...new Set(incompleteCourses.flatMap((c) => [...c.locked, ...Object.values(c.considering).flat()]))],
+    [incompleteCourses],
+  );
 
   // Only computed once generation has actually come back empty — points at
   // which course(s) to blame instead of leaving the student to guess
   // between a time restriction, a pinned section, and a genuine clash.
-  const noScheduleCulprits = useMemo(() => {
-    if (!generated || generated.schedules.length > 0) return [];
-    return diagnoseNoSchedule(draftCourses, sectionsByCourse, sectionsById);
-  }, [generated, draftCourses, sectionsByCourse, sectionsById]);
+  // Diagnoses the courses that were actually generated (the complete ones).
+  // Filled in by the automatic regenerate (chunked like the search itself,
+  // since it re-runs the search once per course) — see diagnoseAsync there.
+  const [noScheduleCulprits, setNoScheduleCulprits] = useState([]);
+
+  // Manual mode: course -> "pick a Lecture" for components with nothing placed.
+  const manualHintByCourse = useMemo(() => {
+    const hints = {};
+    const placed = manualSectionIds.map((id) => sectionsById[id]).filter(Boolean);
+    for (const course of draftCourses) {
+      const groups = groupSectionsByComponent(sectionsByCourse[course.courseKey] || []);
+      const missing = groups.filter((g) => !placed.some((s) => s.courseKey === course.courseKey && classifyComponent(s) === g.key));
+      if (groups.length > 0 && missing.length > 0) {
+        const labels = missing.map((g) => (g.label === 'Other' ? 'one of the ungrouped sections' : `${/^[aeiou]/i.test(g.label) ? 'an' : 'a'} ${g.label}`));
+        hints[course.courseKey] = `pick ${labels.join(' and ')}`;
+      }
+    }
+    return hints;
+  }, [manualSectionIds, draftCourses, sectionsByCourse, sectionsById]);
+
+  const manualPlacedSet = useMemo(() => new Set(manualSectionIds), [manualSectionIds]);
+  // courseKey -> Set of group keys with "Show all" on, for each card.
+  const ghostKeysByCourse = useMemo(() => {
+    const byCourse = {};
+    for (const key of ghostGroups) {
+      const [courseKey, groupKey] = key.split('|');
+      (byCourse[courseKey] ??= new Set()).add(groupKey);
+    }
+    return byCourse;
+  }, [ghostGroups]);
+
+  // Every section of each "Show all" group, minus what's already drawn.
+  const showAllGhostSections = useMemo(() => {
+    if (ghostGroups.size === 0) return [];
+    const drawn = new Set([...previewSectionIds, ...(scheduleMode === 'auto' ? pendingSectionIds : [])]);
+    const out = [];
+    for (const key of ghostGroups) {
+      const [courseKey, groupKey] = key.split('|');
+      for (const s of sectionsByCourse[courseKey] || []) {
+        if (classifyComponent(s) === groupKey && s.classStat !== 'Cancelled' && !drawn.has(s.id)) out.push(s);
+      }
+    }
+    return out;
+  }, [ghostGroups, sectionsByCourse, previewSectionIds, pendingSectionIds, scheduleMode]);
 
   // [{ key, sectionIds }], in bookmarking order — the full shortlist,
   // independent of whatever's currently generated. Feeds
@@ -859,16 +937,39 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // only re-syncs to it (previewIndex) when it happens to still be there;
   // otherwise the grid still shows it fine via previewSectionIds alone,
   // the stepper just hides until Prev/Next/Generate moves on.
+  //
+  // Manual mode: the bookmark becomes the manual schedule. Auto: if it isn't
+  // in the current batch it's held on screen (see previewHold) so automatic
+  // regeneration doesn't replace it.
   function handlePreviewBookmark(sectionIds) {
-    setPreviewSectionIds(sectionIds);
     setActiveSavedId(null);
-    if (generated) {
-      const key = scheduleKey(sectionIds);
-      const idx = generated.schedules.findIndex((ids) => scheduleKey(ids) === key);
-      setPreviewIndex(idx >= 0 ? idx : null);
-    } else {
-      setPreviewIndex(null);
+    if (scheduleMode === 'manual') {
+      setManualSectionIds(sectionIds);
+      setPreviewHold(null);
+      return;
     }
+    setPreviewSectionIds(sectionIds);
+    const key = scheduleKey(sectionIds);
+    const idx = generated ? generated.schedules.findIndex((ids) => scheduleKey(ids) === key) : -1;
+    setPreviewIndex(idx >= 0 ? idx : null);
+    setPreviewHold(idx >= 0 ? null : 'bookmark');
+  }
+
+  // Manual header: bookmark / save the placed sections.
+  function handleToggleManualBookmark() {
+    if (manualSectionIds.length === 0) return;
+    const key = scheduleKey(manualSectionIds);
+    setBookmarks((prev) => {
+      const next = new Map(prev);
+      if (next.has(key)) next.delete(key);
+      else next.set(key, manualSectionIds);
+      return next;
+    });
+  }
+
+  function handleSaveManual() {
+    if (manualSectionIds.length === 0) return;
+    handleSaveSchedule(`Schedule ${savedSchedules.filter((s) => scheduleTerm(s) === CURRENT_TERM).length + 1}`, manualSectionIds);
   }
 
   // "Turning a flag into a saved" in one click — reuses the same save path
@@ -902,6 +1003,88 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     setActiveSavedId(null);
   }
 
+  // A draft edit means the student is back to working on the draft: whatever
+  // was held on screen (a loaded saved schedule, a bookmark, a swap placement)
+  // gives way to the automatic results again. The preview itself is left up
+  // so the next regenerate can keep it if it's still among the results.
+  function markDraftEdited() {
+    setPreviewHold(null);
+    setActiveSavedId(null);
+  }
+
+  // ── Manual mode ─────────────────────────────────────────────────────────────
+  // One placed section per (course, component): placing another replaces it,
+  // clicking the placed one removes it. Overlaps are allowed; the time filter
+  // doesn't block anything here.
+  function handlePlaceManual(courseKey, groupKey, sectionId) {
+    setManualSectionIds((prev) => {
+      if (prev.includes(sectionId)) return prev.filter((id) => id !== sectionId);
+      const sameSlot = (id) => sectionsById[id]?.courseKey === courseKey && classifyComponent(sectionsById[id]) === groupKey;
+      return [...prev.filter((id) => !sameSlot(id)), sectionId];
+    });
+    setPreviewHold(null);
+    setActiveSavedId(null);
+  }
+
+  function handlePlaceGhost(sectionId) {
+    const section = sectionsById[sectionId];
+    if (section) handlePlaceManual(section.courseKey, classifyComponent(section), sectionId);
+  }
+
+  function handleRemovePlaced(sectionId) {
+    setManualSectionIds((prev) => prev.filter((id) => id !== sectionId));
+    setActiveSavedId(null);
+  }
+
+  function handleClearManual() {
+    setManualSectionIds([]);
+    setActiveSavedId(null);
+  }
+
+  // Switching modes keeps both modes' state; only view state (ghosts, an
+  // open swap slot, anything held on screen) is dropped. Going back to Auto
+  // shows the current batch right away (the debounced regenerate follows).
+  function handleSetMode(mode) {
+    if (mode === scheduleMode) return;
+    setScheduleMode(mode);
+    setGhostGroups(new Set());
+    setSectionSwapSlot(null);
+    setDisplaceFlow(null);
+    setPreviewHold(null);
+    setActiveSavedId(null);
+    if (mode === 'auto') {
+      const first = generated?.schedules?.[0];
+      setPreviewIndex(first ? 0 : null);
+      setPreviewSectionIds(first || []);
+    }
+  }
+
+  // Stepper "Edit manually": the schedule on screen becomes the manual one.
+  function handleEditManually() {
+    setManualSectionIds(previewSectionIds);
+    handleSetMode('manual');
+  }
+
+  function handleToggleGhostGroup(courseKey, groupKey) {
+    const key = `${courseKey}|${groupKey}`;
+    setGhostGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  // "Update from draft": let go of whatever was held and show the batch.
+  function handleUpdateFromDraft() {
+    setPreviewHold(null);
+    setActiveSavedId(null);
+    if (scheduleMode === 'manual') return; // the manual sync effect shows the placed sections
+    const first = generated?.schedules?.[0];
+    setPreviewIndex(first ? 0 : null);
+    setPreviewSectionIds(first || []);
+  }
+
   // ── Draft handlers ──────────────────────────────────────────────────────────
   function handleAddCourse(courseKey) {
     if (draftCourseKeys.has(courseKey)) return;
@@ -913,14 +1096,16 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       return cachedSections ? autoCheckSingleOptionGroups(next, courseKey, cachedSections) : next;
     });
     setCollapseSignal((n) => n + 1);
-    invalidateGenerated();
+    markDraftEdited();
     if (!courseMap[courseKey]) fetchCourseDocs([courseKey]);
     if (!cachedSections) fetchSectionsForCourse(courseKey);
   }
 
   function handleRemoveCourse(courseKey) {
     setDraftCourses((prev) => prev.filter((c) => c.courseKey !== courseKey));
-    invalidateGenerated();
+    setManualSectionIds((prev) => prev.filter((id) => sectionsById[id]?.courseKey !== courseKey));
+    setGhostGroups((prev) => new Set([...prev].filter((key) => !key.startsWith(`${courseKey}|`))));
+    markDraftEdited();
   }
 
   function handleToggleSection(courseKey, groupKey, sectionId) {
@@ -938,7 +1123,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
         };
       }),
     );
-    invalidateGenerated();
+    markDraftEdited();
   }
 
   // Locking is a stronger constraint than checking (see scheduleCombos.js's
@@ -953,7 +1138,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // it.
   function handleToggleLock(courseKey, groupKey, sectionId) {
     setDraftCourses((prev) => toggleLockInCourses(prev, courseKey, groupKey, sectionId));
-    invalidateGenerated();
+    markDraftEdited();
   }
 
   // sectionIds is the explicit list to select, not "every section in the
@@ -968,7 +1153,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           : c,
       ),
     );
-    invalidateGenerated();
+    markDraftEdited();
   }
 
   // Scoped to the checkbox pool only — a lock is released via its own pin
@@ -978,12 +1163,14 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     setDraftCourses((prev) =>
       prev.map((c) => (c.courseKey === courseKey ? { ...c, considering: { ...c.considering, [groupKey]: [] } } : c)),
     );
-    invalidateGenerated();
+    markDraftEdited();
   }
 
   function handleClearAll() {
     setDraftCourses([]);
-    invalidateGenerated();
+    setManualSectionIds([]);
+    setGhostGroups(new Set());
+    markDraftEdited();
   }
 
   // ── Draft + bookmark persistence (utils/draftStorage.js) ───────────────────
@@ -1035,6 +1222,10 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       setBookmarks(new Map());
       setGlobalTimeFilter(EMPTY_GLOBAL_FILTERS);
       setSectionSortMode('time');
+      setScheduleMode('auto');
+      setManualSectionIds([]);
+      setGhostGroups(new Set());
+      setPreviewHold(null);
       setSectionSwapSlot(null);
       invalidateGenerated();
     }
@@ -1074,7 +1265,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             locked: c.locked.filter((id) => validIds[c.courseKey].has(id)),
           }));
 
-        const bookmarkIds = [...new Set([...stored.bookmarks.flat(), ...(stored.preview?.sectionIds || [])])];
+        const bookmarkIds = [...new Set([...stored.bookmarks.flat(), ...(stored.preview?.sectionIds || []), ...stored.manualSectionIds])];
         const liveSections = {};
         for (let i = 0; i < bookmarkIds.length; i += 30) {
           const snap = await getDocs(query(collection(db, 'sections'), where(documentId(), 'in', bookmarkIds.slice(i, i + 30))));
@@ -1102,6 +1293,8 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           setDraftCourses(courses);
           setGlobalTimeFilter(stored.globalTimeFilter);
           setSectionSortMode(stored.sortMode);
+          setScheduleMode(stored.scheduleMode);
+          setManualSectionIds(stored.manualSectionIds.filter((id) => liveSections[id]));
           if (previewIsLive) restoredPreviewRef.current = { ids: previewIds, index: storedPreview.index };
           setPendingRegen(true);
         } else if (previewIsLive && draftCoursesRef.current.length === 0) {
@@ -1143,28 +1336,20 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.uid]);
 
-  // Regenerate the preview from the restored draft. A separate effect so it
-  // runs after the restored state has rendered (regenerateFrom reads the
-  // section lists from the current render); skipped if a preview is already up.
+  // Put the restored draft's stored combination back on screen. The automatic
+  // regenerate (below) then finds it in the new batch and sets the stepper
+  // position; if it isn't in the batch (e.g. a swap placement), it's held
+  // instead of replaced — see restoredKeyRef. Skipped if a preview is already up.
+  const restoredKeyRef = useRef(null);
   useEffect(() => {
     if (!pendingRegen) return;
     setPendingRegen(false);
     const target = restoredPreviewRef.current;
     restoredPreviewRef.current = null;
-    if (previewSectionIds.length > 0) return;
-    const result = regenerateFrom(draftCourses);
-    if (!target) return;
-    // Put the stored combination back over the batch's first one. The stepper
-    // position is the stored index when that slot still holds this exact
-    // combination, else wherever it now sits in the batch, else none (e.g. a
-    // swapped-in section that's not in any generated schedule).
-    const key = scheduleKey(target.ids);
-    const batch = result?.schedules ?? [];
-    const idx = target.index != null && batch[target.index] && scheduleKey(batch[target.index]) === key
-      ? target.index
-      : batch.findIndex((ids) => scheduleKey(ids) === key);
+    if (previewSectionIds.length > 0 || !target) return;
+    restoredKeyRef.current = scheduleKey(target.ids);
     setPreviewSectionIds(target.ids);
-    setPreviewIndex(idx >= 0 ? idx : null);
+    setPreviewIndex(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingRegen]);
 
@@ -1186,11 +1371,11 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   useEffect(() => {
     if (!draftRestoredRef.current) return;
-    latestDraftRef.current = { draftCourses, globalTimeFilter, sectionSortMode, bookmarks, previewSectionIds, previewIndex };
+    latestDraftRef.current = { draftCourses, globalTimeFilter, sectionSortMode, scheduleMode, manualSectionIds, bookmarks, previewSectionIds, previewIndex };
     draftDirtyRef.current = true;
     clearTimeout(draftTimerRef.current);
     draftTimerRef.current = setTimeout(flushDraft, 500);
-  }, [draftCourses, globalTimeFilter, sectionSortMode, bookmarks, previewSectionIds, previewIndex, flushDraft]);
+  }, [draftCourses, globalTimeFilter, sectionSortMode, scheduleMode, manualSectionIds, bookmarks, previewSectionIds, previewIndex, flushDraft]);
 
   useEffect(() => {
     function onVisibilityChange() {
@@ -1205,60 +1390,112 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     };
   }, [flushDraft]);
 
-  function handleGenerate() {
-    const slots = buildGenerationSlots(draftCourses, sectionsByCourse, sectionsById);
-    const result = generateSchedules(slots, sectionsById);
-    setGenerated(result);
-    setActiveSavedId(null);
-    if (result.schedules.length > 0) {
-      setPreviewIndex(0);
-      setPreviewSectionIds(result.schedules[0]);
-    } else {
-      setPreviewIndex(null);
-      setPreviewSectionIds([]);
-    }
-    setMobileView('preview');
-  }
-
   function handlePreview(index) {
     if (!generated) return;
     setPreviewIndex(index);
     setPreviewSectionIds(generated.schedules[index]);
     setActiveSavedId(null);
+    setPreviewHold(null);
   }
 
-  // Re-runs generation from an already-computed draftCourses state (used by
-  // the Preview grid's lock/eliminate controls, which need the stepper's
-  // combination count to update immediately rather than waiting on a
-  // separate "Generate schedules" click). Bails out to the normal "not
-  // ready" empty state instead of generating anything if the edit left some
-  // course's component group with zero options — eliminating a section can
-  // do that, and silently producing a schedule missing that piece would be
-  // exactly the incomplete-schedule bug this app exists to avoid.
-  function regenerateFrom(nextDraftCourses) {
-    const allReady = nextDraftCourses.length > 0 && nextDraftCourses.every((course) =>
-      isCourseReady(course, sectionsByCourse[course.courseKey] || [], sectionsById),
-    );
-    if (!allReady) {
-      setGenerated(null);
-      setPreviewIndex(null);
-      setPreviewSectionIds([]);
-      setActiveSavedId(null);
-      return null;
+  // ── Automatic generation (Auto mode) ───────────────────────────────────────
+  // Regenerates ~300ms after the last change that can affect results: the
+  // checked/pinned sections (any draft edit — add/remove a course, check,
+  // pin, eliminate) or a course's section list arriving. Only the complete
+  // courses are generated (see completeCourses); the others are drawn as
+  // "not finished". The time filter isn't a trigger: it only dims sections,
+  // it doesn't change which are checked, so it can't change the results.
+  //
+  // Cost per change: one debounced run of the strict search over the
+  // complete courses, with the same MAX_EXPLORED / MAX_RESULTS caps as
+  // before, run in chunks that yield to the browser (generateSchedulesAsync)
+  // so typing and checkboxes stay responsive. A newer change cancels an
+  // older run at its next yield (genRunRef). Paused while a swap slot is
+  // open (re-run when it closes) and in Manual mode.
+  //
+  // What's on screen is kept when it can be: the same combination if it's
+  // still in the batch (stepper moves to it), else the first. Something the
+  // student is looking at on purpose (previewHold) is never replaced — the
+  // batch updates underneath and "Update from draft" shows instead.
+  const genRunRef = useRef(0);
+  const liveViewRef = useRef({});
+  liveViewRef.current = { previewSectionIds, previewHold, sectionsById };
+  useEffect(() => {
+    const run = ++genRunRef.current;
+    if (!draftRestoredRef.current || scheduleMode !== 'auto' || sectionSwapSlot) {
+      setGenerating(false);
+      return undefined;
     }
-    const slots = buildGenerationSlots(nextDraftCourses, sectionsByCourse, sectionsById);
-    const result = generateSchedules(slots, sectionsById);
-    setGenerated(result);
-    setActiveSavedId(null);
-    if (result.schedules.length > 0) {
-      setPreviewIndex(0);
-      setPreviewSectionIds(result.schedules[0]);
-    } else {
-      setPreviewIndex(null);
-      setPreviewSectionIds([]);
-    }
-    return result;
-  }
+    const timer = setTimeout(async () => {
+      if (completeCourses.length === 0) {
+        setGenerated(null);
+        setGenerating(false);
+        if (!liveViewRef.current.previewHold) {
+          setPreviewIndex(null);
+          setPreviewSectionIds([]);
+        }
+        return;
+      }
+      setGenerating(true);
+      const byId = liveViewRef.current.sectionsById;
+      const slots = buildGenerationSlots(completeCourses, sectionsByCourse, byId);
+      const cancelled = () => genRunRef.current !== run;
+      const result = await generateSchedulesAsync(slots, byId, { isCancelled: cancelled });
+      if (!result || cancelled()) return;
+      if (result.schedules.length === 0 && !result.truncated) {
+        // Same rule as diagnoseNoSchedule (one course: it's that course;
+        // otherwise a course whose removal lets a schedule through), each
+        // re-run stopping at the first schedule found. Skipped when the
+        // search itself hit MAX_EXPLORED: then nothing can be concluded, and
+        // N more capped searches would multiply the cost of one change.
+        let culprits = [];
+        if (completeCourses.length === 1) {
+          culprits = [completeCourses[0].courseKey];
+        } else {
+          for (let i = 0; i < completeCourses.length; i++) {
+            const without = completeCourses.filter((_, idx) => idx !== i);
+            const r = await generateSchedulesAsync(buildGenerationSlots(without, sectionsByCourse, byId), byId, { limit: 1, isCancelled: cancelled });
+            if (!r || cancelled()) return;
+            if (r.schedules.length > 0) culprits.push(completeCourses[i].courseKey);
+          }
+        }
+        setNoScheduleCulprits(culprits);
+      } else {
+        setNoScheduleCulprits([]);
+      }
+      setGenerated(result);
+      setGenerating(false);
+      const { previewSectionIds: shown, previewHold: hold } = liveViewRef.current;
+      const shownKey = scheduleKey(shown);
+      const idx = shown.length > 0 ? result.schedules.findIndex((ids) => scheduleKey(ids) === shownKey) : -1;
+      if (hold) {
+        // Keep the held schedule; if it happens to be in the batch the
+        // stepper can still show where.
+        setPreviewIndex(idx >= 0 ? idx : null);
+        return;
+      }
+      if (idx < 0 && shown.length > 0 && restoredKeyRef.current === shownKey) {
+        // A restored combination that isn't in the batch (an old swap): keep it.
+        restoredKeyRef.current = null;
+        setPreviewHold('swap');
+        setPreviewIndex(null);
+        return;
+      }
+      restoredKeyRef.current = null;
+      const i = idx >= 0 ? idx : (result.schedules.length > 0 ? 0 : null);
+      setPreviewIndex(i);
+      setPreviewSectionIds(i == null ? [] : result.schedules[i]);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [scheduleMode, completeCourses, sectionsByCourse, sectionSwapSlot]);
+
+  // Manual mode: the grid shows exactly the placed sections (unless another
+  // term's schedule is being looked at).
+  useEffect(() => {
+    if (scheduleMode !== 'manual' || previewHold === 'foreign') return;
+    setPreviewSectionIds(manualSectionIds);
+    setPreviewIndex(null);
+  }, [scheduleMode, manualSectionIds, previewHold]);
 
   // Lock/eliminate controls on the Preview grid's blocks themselves — same
   // underlying state changes as the draft picker's controls, just triggered
@@ -1277,7 +1514,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       ? lockSwappedInSection(draftCourses, section.courseKey, groupKey, sectionId, previewSectionIds, sectionsById)
       : toggleLockInCourses(draftCourses, section.courseKey, groupKey, sectionId);
     setDraftCourses(next);
-    regenerateFrom(next);
+    markDraftEdited();
   }
 
   function handlePreviewEliminate(sectionId) {
@@ -1286,7 +1523,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     const groupKey = classifyComponent(section);
     const next = eliminateFromCourses(draftCourses, section.courseKey, groupKey, sectionId);
     setDraftCourses(next);
-    regenerateFrom(next);
+    markDraftEdited();
   }
 
   // ── Section-swap handlers ───────────────────────────────────────────────────
@@ -1300,10 +1537,11 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // that started it.
   function handleCloseSectionSwap() {
     if (displaceFlow) {
-      const { ids, index, activeSavedId: savedId } = displaceFlow.snapshot;
+      const { ids, index, activeSavedId: savedId, hold } = displaceFlow.snapshot;
       setPreviewSectionIds(ids);
       setPreviewIndex(index);
       setActiveSavedId(savedId);
+      setPreviewHold(hold ?? null);
       setDisplaceFlow(null);
     }
     setSectionSwapSlot(null);
@@ -1345,6 +1583,10 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // those sections are displaced (removed), then the displace flow walks
   // through them one by one. A clash with a pinned (locked) section is never
   // allowed.
+  //
+  // The placement is held on screen (previewHold 'swap') so automatic
+  // regeneration doesn't wipe it; the next draft edit or "Update from draft"
+  // lets it go (it was never in the draft — Save or pin it to keep it).
   function handleSelectSwapSection(sectionId) {
     if (!sectionSwapSlot) return;
     if (previewSectionIds.includes(sectionId)) {
@@ -1377,6 +1619,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     setPreviewSectionIds(nextIds);
     setPreviewIndex(null);
     setActiveSavedId(null);
+    setPreviewHold('swap');
     if (displaced.length === 0 && !displaceFlow) {
       setSectionSwapSlot(null);
       return;
@@ -1396,7 +1639,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     continueDisplaceFlow({
       ids: nextIds,
       queue: [...newItems, ...(displaceFlow ? displaceFlow.queue.slice(1) : [])],
-      snapshot: displaceFlow ? displaceFlow.snapshot : { ids: previewSectionIds, index: previewIndex, activeSavedId },
+      snapshot: displaceFlow ? displaceFlow.snapshot : { ids: previewSectionIds, index: previewIndex, activeSavedId, hold: previewHold },
     });
   }
 
@@ -1404,7 +1647,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     if (!sectionSwapSlot || displaceFlow) return;
     const next = clearSlotInCourses(draftCourses, sectionSwapSlot.courseKey, sectionSwapSlot.component, sectionsById);
     setDraftCourses(next);
-    regenerateFrom(next);
+    markDraftEdited();
     setSectionSwapSlot(null);
   }
 
@@ -1550,6 +1793,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       setPreviewIndex(null);
       setPreviewSectionIds(ids);
       setActiveSavedId(schedule.id);
+      setPreviewHold('foreign');
       setMobileView('preview');
       return;
     }
@@ -1620,6 +1864,14 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     setPreviewIndex(null);
     setPreviewSectionIds(ids);
     setActiveSavedId(schedule.id);
+    // Auto: hold it so the automatic regenerate from the replaced draft
+    // doesn't swap it out. Manual: it becomes the manual schedule.
+    if (scheduleMode === 'manual') {
+      setManualSectionIds(ids);
+      setPreviewHold(null);
+    } else {
+      setPreviewHold('saved');
+    }
     setMobileView('preview');
   }
 
@@ -1676,6 +1928,26 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           <div className="sched-draft-toolbar">
             <h2>Your Schedule Draft — {CURRENT_TERM_LABEL}</h2>
             <div className="sched-draft-toolbar-actions">
+              <div className="hub-year-toggle-group sched-mode-toggle" role="group" aria-label="Schedule mode">
+                <button
+                  type="button"
+                  className={`hub-year-toggle-btn${scheduleMode === 'auto' ? ' active' : ''}`}
+                  aria-pressed={scheduleMode === 'auto'}
+                  onClick={() => handleSetMode('auto')}
+                  title="Generate conflict-free schedules from your checked sections"
+                >
+                  Auto
+                </button>
+                <button
+                  type="button"
+                  className={`hub-year-toggle-btn${scheduleMode === 'manual' ? ' active' : ''}`}
+                  aria-pressed={scheduleMode === 'manual'}
+                  onClick={() => handleSetMode('manual')}
+                  title="Place sections on the grid yourself — overlaps allowed"
+                >
+                  Manual
+                </button>
+              </div>
               <div className="hub-year-toggle-group sched-sort-toggle">
                 <button
                   type="button"
@@ -1735,25 +2007,16 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
               onSelectAll={(groupKey, sectionIds) => handleSelectAllSections(courseKey, groupKey, sectionIds)}
               onDeselectAll={(groupKey) => handleDeselectAllSections(courseKey, groupKey)}
               onRemoveCourse={() => handleRemoveCourse(courseKey)}
+              mode={scheduleMode}
+              placedIds={manualPlacedSet}
+              onPlace={(groupKey, sectionId) => handlePlaceManual(courseKey, groupKey, sectionId)}
+              ghostGroupKeys={ghostKeysByCourse[courseKey] || EMPTY_SET}
+              onToggleGhosts={(groupKey) => handleToggleGhostGroup(courseKey, groupKey)}
+              hint={scheduleMode === 'manual'
+                ? (loadingSectionsFor.has(courseKey) ? null : manualHintByCourse[courseKey] || null)
+                : blockerByCourse[courseKey] || null}
             />
           ))}
-
-          {draftCourses.length > 0 && (
-            <div className="sched-generate-row">
-              <button type="button" className="sched-generate-btn" onClick={handleGenerate} disabled={!canGenerate}>
-                Generate schedules
-              </button>
-              {generateBlockers.length > 0 && (
-                <ul className="sched-generate-blockers">
-                  {generateBlockers.map((b) => (
-                    <li key={b.courseKey}>
-                      <strong>{b.label}</strong>: {b.reason}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
         </main>
 
         <div
@@ -1771,16 +2034,30 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
         >
           <div className="sched-right-header">
             <h2>{activeSavedId && savedSchedules.find((s) => s.id === activeSavedId)?.name || 'Preview'}</h2>
+            {generating && previewIndex == null && <span className="sched-stepper-updating" role="status">Updating…</span>}
+            {previewHold && (scheduleMode === 'auto' || previewHold === 'foreign') && (
+              <button
+                type="button"
+                className="sched-update-from-draft-btn"
+                onClick={handleUpdateFromDraft}
+                title={scheduleMode === 'manual' ? 'Back to your manual schedule' : 'Show the schedules generated from your draft'}
+              >
+                Update from draft
+              </button>
+            )}
             {previewCreditsLabel && <span className="sched-right-credits">{previewCreditsLabel}</span>}
           </div>
 
-          {generated && generated.schedules.length === 0 ? (
+          {scheduleMode === 'auto' && !previewHold && generated && generated.schedules.length === 0 ? (
             <div className="sched-generated-empty">
               <p>
                 No conflict-free combination exists for the sections currently in consideration — try
                 checking an additional section for one of your courses.
               </p>
-              {draftCourses.length === 1 && noScheduleCulprits.length === 1 && (
+              {generated.truncated && (
+                <p className="sched-generated-empty-culprit">(stopped early — narrow your sections to see more)</p>
+              )}
+              {!generated.truncated && completeCourses.length === 1 && noScheduleCulprits.length === 1 && (
                 <p className="sched-generated-empty-culprit">
                   The problem is within{' '}
                   <strong>{courseMap[noScheduleCulprits[0]]?.courseNumber ?? noScheduleCulprits[0]}</strong> itself —
@@ -1788,7 +2065,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                   conflict-free pairing. Try considering a different section for one of its parts.
                 </p>
               )}
-              {draftCourses.length > 1 && noScheduleCulprits.length > 0 && (
+              {!generated.truncated && completeCourses.length > 1 && noScheduleCulprits.length > 0 && (
                 <p className="sched-generated-empty-culprit">
                   Likely culprit{noScheduleCulprits.length > 1 ? 's' : ''}:{' '}
                   {noScheduleCulprits.map((key, idx) => (
@@ -1802,23 +2079,42 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                   unblock a schedule. If it's pinned, check whether that's the section forcing the clash.
                 </p>
               )}
-              {draftCourses.length > 1 && noScheduleCulprits.length === 0 && (
+              {!generated.truncated && completeCourses.length > 1 && noScheduleCulprits.length === 0 && (
                 <p className="sched-generated-empty-culprit">
                   No single course explains it — at least two of your courses are each unsatisfiable on their own
                   (or the clash only shows up across three or more together). Try temporarily removing courses one
                   at a time to isolate it.
                 </p>
               )}
+              <button type="button" className="sched-build-manually-btn" onClick={() => handleSetMode('manual')}>
+                Build manually
+              </button>
             </div>
           ) : (
             <div className="sched-preview-scroll">
-              <ScheduleStepper
-                generated={generated}
-                previewIndex={previewIndex}
-                onJump={handlePreview}
-                bookmarkedIndices={bookmarkedIndices}
-                onToggleBookmark={handleToggleBookmark}
-              />
+              {scheduleMode === 'manual' && previewHold !== 'foreign' ? (
+                <ManualScheduleHeader
+                  creditsLabel={previewCreditsLabel}
+                  overlapCount={overlapSummary(manualSectionIds, sectionsById).pairs}
+                  isBookmarked={manualSectionIds.length > 0 && bookmarks.has(scheduleKey(manualSectionIds))}
+                  canAct={manualSectionIds.length > 0}
+                  onToggleBookmark={handleToggleManualBookmark}
+                  onSave={handleSaveManual}
+                  onClear={handleClearManual}
+                />
+              ) : (
+                <ScheduleStepper
+                  generated={generated}
+                  previewIndex={previewIndex}
+                  onJump={handlePreview}
+                  bookmarkedIndices={bookmarkedIndices}
+                  onToggleBookmark={handleToggleBookmark}
+                  sectionIds={previewSectionIds}
+                  sectionsById={sectionsById}
+                  updating={generating}
+                  onEditManually={scheduleMode === 'auto' && previewSectionIds.length > 0 ? handleEditManually : undefined}
+                />
+              )}
               <WeeklyGrid
                 sectionIds={previewSectionIds}
                 sectionsById={sectionsById}
@@ -1839,7 +2135,13 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                 onClearSwapSlot={handleClearSwapSlot}
                 displaceInfo={displaceInfo}
                 onContinueDisplace={handleContinueDisplaceFlow}
-                incompleteLabels={incompleteLabels}
+                incompleteLabels={scheduleMode === 'manual' ? [] : incompleteLabels}
+                mode={scheduleMode === 'manual' && previewHold !== 'foreign' ? 'manual' : 'auto'}
+                onRemovePlaced={handleRemovePlaced}
+                pendingSectionIds={scheduleMode === 'auto' && !previewHold ? pendingSectionIds : []}
+                showAllGhosts={previewHold === 'foreign' ? [] : showAllGhostSections}
+                onPlaceGhost={scheduleMode === 'manual' ? handlePlaceGhost : null}
+                onClearGhosts={() => setGhostGroups(new Set())}
               />
             </div>
           )}

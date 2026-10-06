@@ -3,6 +3,7 @@ import { compareSectionsByTime } from '../../utils/sectionTime';
 import { groupSectionsByComponent } from '../../utils/sectionComponents';
 import { matchesFilters, isGlobalFilterActive } from '../../utils/sectionFilters';
 import SectionRow from './SectionRow';
+import SwapIcon from './SwapIcon';
 
 function groupStatusLabel(considering, lockedIdsInGroup) {
   const consideringCount = considering.length;
@@ -30,7 +31,18 @@ export default function DraftCourseCard({
   onDeselectAll,
   onRemoveCourse,
   collapseSignal,
+  // Manual mode: rows place/remove a section on the grid (one per group)
+  // instead of checking it into the generation pool.
+  mode = 'auto',
+  placedIds = new Set(),
+  onPlace = () => {},
+  // "Show all" ghosts: which of this course's group keys are drawn on the grid.
+  ghostGroupKeys = new Set(),
+  onToggleGhosts = () => {},
+  // Short "what's missing" note for this course (e.g. "pick a Lecture"), or null.
+  hint = null,
 }) {
+  const manual = mode === 'manual';
   // Collapse state is deliberately local (not lifted to SchedulerPage) —
   // it's a per-card view preference, not something that needs to survive
   // a page reload. Newly-added cards default to expanded so the student
@@ -66,7 +78,9 @@ export default function DraftCourseCard({
     return { ...group, groupConsidering, groupLockedIds, matchingIds };
   });
 
-  const isReady = groups.length > 0 && groups.every((g) => g.groupConsidering.length > 0 || g.groupLockedIds.length > 0);
+  const isReady = groups.length > 0 && (manual
+    ? groups.every((g) => g.sections.some((s) => placedIds.has(s.id)))
+    : groups.every((g) => g.groupConsidering.length > 0 || g.groupLockedIds.length > 0));
   const creditsLabel = sections[0]?.credits != null ? `${sections[0].credits} cr` : null;
   const anyFilterActive = isGlobalFilterActive(globalTimeFilter);
 
@@ -102,6 +116,8 @@ export default function DraftCourseCard({
         </button>
       </div>
 
+      {hint && !loading && <div className="sched-draft-card-pick-hint">{hint}</div>}
+
       {!collapsed && loading && <div className="sched-draft-card-loading">Loading sections…</div>}
 
       {!collapsed && !loading && sections.length === 0 && (
@@ -113,6 +129,8 @@ export default function DraftCourseCard({
         const allMatchingSelected = matchingCount > 0 &&
           group.sections.every((s) => !group.matchingIds.has(s.id) ||
             group.groupConsidering.includes(s.id) || group.groupLockedIds.includes(s.id));
+        const placedInGroup = group.sections.find((s) => placedIds.has(s.id));
+        const ghostsOn = ghostGroupKeys.has(group.key);
 
         return (
           <div className="sched-section-group" key={group.key}>
@@ -121,10 +139,12 @@ export default function DraftCourseCard({
               <span className={`sched-section-group-hint${group.commonNotes ? ' is-notes' : ''}`}>
                 {group.commonNotes || group.hint}
               </span>
-              <span className={`sched-draft-card-hint${group.groupLockedIds.length > 0 ? ' is-locked' : ''}`}>
-                {groupStatusLabel(group.groupConsidering, group.groupLockedIds)}
+              <span className={`sched-draft-card-hint${!manual && group.groupLockedIds.length > 0 ? ' is-locked' : ''}`}>
+                {manual
+                  ? (placedInGroup ? `Placed: ${placedInGroup.classSection}` : 'Pick one')
+                  : groupStatusLabel(group.groupConsidering, group.groupLockedIds)}
               </span>
-              {matchingCount > 0 && (
+              {!manual && matchingCount > 0 && (
                 <button
                   type="button"
                   className="sched-select-all-btn"
@@ -133,6 +153,20 @@ export default function DraftCourseCard({
                     : onSelectAll(group.key, group.sections.filter((s) => group.matchingIds.has(s.id)).map((s) => s.id)))}
                 >
                   {allMatchingSelected ? 'Deselect all' : 'Select all'}
+                </button>
+              )}
+              {group.sections.length > 0 && (
+                <button
+                  type="button"
+                  className={`sched-select-all-btn sched-ghost-toggle-btn${ghostsOn ? ' is-on' : ''}`}
+                  onClick={() => onToggleGhosts(group.key)}
+                  aria-pressed={ghostsOn}
+                  title={manual
+                    ? 'Show every section in this group as ghosts on the grid. Click one to place it'
+                    : 'Show every section in this group as ghosts on the grid'}
+                >
+                  <SwapIcon />
+                  Show all
                 </button>
               )}
             </div>
@@ -144,13 +178,14 @@ export default function DraftCourseCard({
                 <SectionRow
                   key={section.id}
                   section={section}
-                  checked={group.groupConsidering.includes(section.id)}
-                  locked={lockedIds.has(section.id)}
-                  conflicts={conflictMap[section.id]}
+                  checked={manual ? placedIds.has(section.id) : group.groupConsidering.includes(section.id)}
+                  locked={!manual && lockedIds.has(section.id)}
+                  conflicts={manual ? undefined : conflictMap[section.id]}
                   notes={!group.commonNotes ? section.notes : null}
                   filteredOut={!group.matchingIds.has(section.id)}
-                  onToggle={() => onToggleSection(group.key, section.id)}
+                  onToggle={() => (manual ? onPlace(group.key, section.id) : onToggleSection(group.key, section.id))}
                   onToggleLock={() => onToggleLock(group.key, section.id)}
+                  manual={manual}
                 />
               ))}
             </div>

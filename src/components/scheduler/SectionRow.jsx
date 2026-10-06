@@ -12,7 +12,10 @@ import { describeSectionTime } from '../../utils/sectionTime';
 // (the lock already implies it's "in", and un-checking it while leaving the
 // lock in place would be a confusing state to be in), and it gets its own
 // pin/border treatment distinct from a plain checked row.
-export default function SectionRow({ section, checked, locked, conflicts, notes, filteredOut, onToggle, onToggleLock }) {
+//
+// `manual` (Manual mode): the checkbox means "placed on the grid" instead of
+// "in consideration", and there's no lock — pins only steer generation.
+export default function SectionRow({ section, checked, locked, conflicts, notes, filteredOut, onToggle, onToggleLock, manual = false }) {
   const [conflictExpanded, setConflictExpanded] = useState(false);
 
   const instructorLabel = section.instructors?.length
@@ -39,7 +42,7 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
           checked={checked || locked}
           disabled={locked}
           onChange={onToggle}
-          aria-label={`Consider section ${section.classSection}`}
+          aria-label={manual ? `Place section ${section.classSection} on your schedule` : `Consider section ${section.classSection}`}
         />
         <div className="sched-section-row-info">
           <div className="sched-section-row-top">
@@ -63,16 +66,18 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
         </div>
       </label>
 
-      <button
-        type="button"
-        className={`sched-lock-btn${locked ? ' is-locked' : ''}`}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => { e.stopPropagation(); onToggleLock(); }}
-        aria-label={locked ? `Unlock section ${section.classSection}` : `Lock section ${section.classSection} into every generated schedule`}
-        title={locked ? 'Locked into every generated schedule — click to unlock' : 'Lock this section into every generated schedule'}
-      >
-        {locked ? '📌' : '📍'}
-      </button>
+      {!manual && (
+        <button
+          type="button"
+          className={`sched-lock-btn${locked ? ' is-locked' : ''}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onToggleLock(); }}
+          aria-label={locked ? `Unlock section ${section.classSection}` : `Lock section ${section.classSection} into every generated schedule`}
+          title={locked ? 'Locked into every generated schedule — click to unlock' : 'Lock this section into every generated schedule'}
+        >
+          {locked ? '📌' : '📍'}
+        </button>
+      )}
 
       {conflictCount > 0 && (
         <button

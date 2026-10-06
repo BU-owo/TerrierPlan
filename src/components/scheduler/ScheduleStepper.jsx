@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import FlagIcon from './FlagIcon';
+import { overlapSummary } from '../../utils/scheduleCombos';
 
 // Browses one generated schedule at a time — replaces an earlier "list of
 // every combination" UI that either had to truncate the DOM or render
@@ -18,7 +19,24 @@ import FlagIcon from './FlagIcon';
 // "Bookmarked" repoints Prev/Next/First/Last at just the bookmarked ones
 // and relabels the counter ("Bookmarked 2 of 5"), so it's never ambiguous
 // which universe you're currently stepping through.
-export default function ScheduleStepper({ generated, previewIndex, onJump, bookmarkedIndices, onToggleBookmark }) {
+//
+// `sectionIds` (what the grid shows) drives the "N overlaps" note — counted
+// from the schedule itself, so it's right even after a swap.
+//
+// `updating`: an automatic regenerate is running (see SchedulerPage) — a
+// quiet note, the current schedule stays up meanwhile. `onEditManually`
+// copies the schedule on screen into Manual mode.
+export default function ScheduleStepper({
+  generated,
+  previewIndex,
+  onJump,
+  bookmarkedIndices,
+  onToggleBookmark,
+  sectionIds = [],
+  sectionsById = {},
+  updating = false,
+  onEditManually,
+}) {
   const [mode, setMode] = useState('all');
 
   // Falls back to "All" the moment there's nothing left to browse in
@@ -31,6 +49,7 @@ export default function ScheduleStepper({ generated, previewIndex, onJump, bookm
   if (!generated || generated.schedules.length === 0 || previewIndex == null) return null;
 
   const { schedules, truncated } = generated;
+  const overlapCount = overlapSummary(sectionIds, sectionsById).pairs;
   const isBookmarked = bookmarkedIndices.includes(previewIndex);
   const hasBookmarks = bookmarkedIndices.length > 0;
 
@@ -75,9 +94,16 @@ export default function ScheduleStepper({ generated, previewIndex, onJump, bookm
       <div className="sched-stepper-top">
         <div className="sched-stepper-count">
           {countLabel}
+          {overlapCount > 0 && (
+            <>
+              {' · '}
+              <span className="sched-overlap-count">{overlapCount} overlap{overlapCount === 1 ? '' : 's'}</span>
+            </>
+          )}
           {mode === 'all' && truncated && (
             <span className="sched-stepper-truncated"> (stopped early — narrow your sections to see more)</span>
           )}
+          {updating && <span className="sched-stepper-updating" role="status"> Updating…</span>}
         </div>
         {hasBookmarks && (
           <div className="sched-stepper-mode-toggle" role="tablist" aria-label="Browse all or just bookmarked schedules">
@@ -125,6 +151,56 @@ export default function ScheduleStepper({ generated, previewIndex, onJump, bookm
         >
           <FlagIcon filled={isBookmarked} />
           {isBookmarked ? 'Bookmarked' : 'Bookmark'}
+        </button>
+        {onEditManually && (
+          <button
+            type="button"
+            className="sched-edit-manually-btn"
+            onClick={onEditManually}
+            title="Copy this schedule into Manual mode to place sections yourself"
+          >
+            Edit manually
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Manual mode's slim header in place of the stepper: what's placed, plus
+// Bookmark / Save / Clear for it.
+export function ManualScheduleHeader({ creditsLabel, overlapCount, isBookmarked, canAct, onToggleBookmark, onSave, onClear }) {
+  return (
+    <div className="sched-stepper sched-manual-header">
+      <div className="sched-stepper-top">
+        <div className="sched-stepper-count">
+          Manual schedule
+          {creditsLabel && <> · {creditsLabel}</>}
+          {overlapCount > 0 && (
+            <>
+              {' · '}
+              <span className="sched-overlap-count">{overlapCount} overlap{overlapCount === 1 ? '' : 's'}</span>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="sched-stepper-controls">
+        <button
+          type="button"
+          className={`sched-flag-btn${isBookmarked ? ' is-flagged' : ''}`}
+          onClick={onToggleBookmark}
+          disabled={!canAct}
+          aria-pressed={isBookmarked}
+          title={isBookmarked ? 'On your shortlist — click to remove' : 'Add to your shortlist — a quick list kept in this browser, not a saved schedule. Use Save to keep a schedule.'}
+        >
+          <FlagIcon filled={isBookmarked} />
+          {isBookmarked ? 'Bookmarked' : 'Bookmark'}
+        </button>
+        <button type="button" className="sched-manual-btn" onClick={onSave} disabled={!canAct}>
+          Save
+        </button>
+        <button type="button" className="sched-manual-btn" onClick={onClear} disabled={!canAct}>
+          Clear
         </button>
       </div>
     </div>

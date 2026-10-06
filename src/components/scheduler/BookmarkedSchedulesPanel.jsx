@@ -1,4 +1,4 @@
-import { describeSectionSet, totalCredits } from '../../utils/scheduleCombos';
+import { describeSectionSet, totalCredits, overlapSummary } from '../../utils/scheduleCombos';
 import FlagIcon from './FlagIcon';
 
 // The lightweight shortlist from the stepper's bookmark toggle — separate
@@ -38,6 +38,7 @@ export default function BookmarkedSchedulesPanel({
         {bookmarks.map(({ key, sectionIds }) => {
           const { compact, lines } = describeSectionSet(sectionIds, sectionsById, courseMap);
           const credits = totalCredits(sectionIds, sectionsById);
+          const overlaps = overlapSummary(sectionIds, sectionsById).pairs;
           return (
             <div key={key} className={`sched-bookmark-row${activeKey === key ? ' is-active' : ''}`}>
               <button
@@ -47,6 +48,12 @@ export default function BookmarkedSchedulesPanel({
                 title={lines.join('\n')}
               >
                 <span className="sched-bookmark-row-summary">{compact || `${sectionIds.length} sections`}</span>
+                {overlaps > 0 && (
+                  <span className="sched-overlap-count">
+                    <span className="sched-visually-hidden"> · </span>
+                    {overlaps} overlap{overlaps === 1 ? '' : 's'}
+                  </span>
+                )}
                 <span className="sched-bookmark-row-credits">{credits} cr</span>
               </button>
               <button
