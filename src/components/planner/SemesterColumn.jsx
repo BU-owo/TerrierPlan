@@ -64,6 +64,7 @@ export default function SemesterColumn({
         isOver ? 'is-drag-over' : '',
         status === 'current' ? 'is-current' : '',
         compact ? 'is-compact' : '',
+        season ? `is-${season}` : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -154,6 +155,7 @@ export default function SemesterColumn({
               locked={locked}
               season={season}
               compact={compact}
+              semesterLocked={allLocked}
               isDragging={draggingId === key}
               onRemove={locked ? undefined : () => onRemoveCourse(key)}
               onToggleLock={() => onToggleLock(key)}

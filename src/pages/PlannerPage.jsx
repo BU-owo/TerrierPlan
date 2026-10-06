@@ -32,7 +32,6 @@ import CourseCard from '../components/planner/CourseCard';
 import SidePanelTabs from '../components/planner/SidePanelTabs';
 import RequirementsFullView from '../components/planner/RequirementsFullView';
 import HubFullView from '../components/planner/HubFullView';
-import BulletinPanel from '../components/planner/BulletinPanel';
 import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
 import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
 import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
@@ -2313,12 +2312,6 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         />
       )}
 
-      {/* ── Bulletin Panel ── */}
-      <BulletinPanel
-        selectedProgramUrl={majorBulletinUrl || ''}
-        onProgramSelect={handleMajorSelect}
-      />
-
       <ImportTranscriptModal
         open={showImportModal}
         onClose={() => setShowImportModal(false)}
@@ -2337,8 +2330,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
            layout because its drawer position reads --app-header-h from it. ── */}
       <CourseInfoPanel courseKey={infoCourseKey} onClose={closeCourseInfo} />
 
-      {/* ── Mobile tab bar (hidden on wide screens via CSS; stays bottom-most
-           so the bulletin panel expands upward above it) ── */}
+      {/* ── Mobile tab bar (hidden on wide screens via CSS; stays bottom-most) ── */}
       <nav className="mobile-tab-bar" aria-label="Planner sections">
         <button
           className={`mobile-tab-btn${mobileView === 'search' ? ' active' : ''}`}

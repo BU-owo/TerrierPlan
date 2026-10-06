@@ -14,8 +14,11 @@ export default function CourseCard({
   onToggleLock,
   onShowInfo,
   isDragOverlay = false,
-  // "All semesters" overview: one-line card, no name (it's in the tooltip).
+  // "All semesters" overview: one-line card (code, name, credits); HUB units
+  // are in the tooltip.
   compact = false,
+  // Compact only: every course in this card's semester is locked.
+  semesterLocked = false,
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: courseKey,
@@ -55,12 +58,13 @@ export default function CourseCard({
 
   if (compact && !isDragOverlay) {
     const tip = [
-      `${courseNumber} — ${courseName}`,
-      creditStr,
-      hubUnits.length ? `HUB: ${hubUnits.join(', ')}` : null,
+      [courseName, creditStr, hubUnits.length ? `HUB: ${hubUnits.join(', ')}` : null].filter(Boolean).join(' · '),
       data?.studyAbroad ? 'Study abroad' : null,
       offeringWarning?.text,
     ].filter(Boolean).join('\n');
+    // A fully locked semester shows its lock in the header, so skip the
+    // per-card one there; a card locked on its own keeps it.
+    const showLock = onToggleLock && !(locked && semesterLocked);
     function openInfo() {
       if (draggedRef.current || !onShowInfo) return;
       onShowInfo();
@@ -76,7 +80,7 @@ export default function CourseCard({
         }}
         {...(locked ? { role: 'button', tabIndex: 0 } : { ...attributes, ...listeners })}
       >
-        {onToggleLock && (
+        {showLock && (
           <button
             type="button"
             className={`course-card-lock${locked ? ' is-locked' : ''}`}

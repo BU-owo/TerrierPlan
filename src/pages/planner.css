@@ -550,7 +550,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: calc(100dvh - var(--app-header-h) - 40px);  /* header + bulletin toggle */
+  min-height: calc(100dvh - var(--app-header-h));  /* header */
   padding-bottom: 14px;
 }
 
@@ -629,7 +629,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 10px 7px;
+  padding: 7px 10px 6px;
   background: var(--cream-dark);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -711,7 +711,7 @@
   padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 .semester-empty {
   flex: 1;
@@ -851,7 +851,7 @@ html[data-theme='dark'] .search-hub-finder-link { color: var(--warning-border); 
   background: var(--white);
   border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 7px 8px;
+  padding: 6px 8px;
   position: relative;
   touch-action: none;
   user-select: none;
@@ -2611,72 +2611,7 @@ html[data-theme='dark'] .search-hub-finder-link { color: var(--warning-border); 
   background: rgba(255,255,255,.2);
 }
 
-/* ===== BULLETIN PANEL ===== */
-.bulletin-panel {
-  flex-shrink: 0;
-  border-top: 1px solid var(--border);
-  background: var(--white);
-}
-
-.bulletin-toggle-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  height: 38px;
-  cursor: pointer;
-  user-select: none;
-  transition: background .12s;
-}
-.bulletin-toggle-bar:hover { background: var(--cream); }
-
-.bulletin-toggle-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.bulletin-selected-label {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
-.bulletin-toggle-arrow {
-  font-size: 10px;
-  transition: transform .2s;
-  color: var(--text-muted);
-}
-.bulletin-toggle-arrow.open { transform: rotate(180deg); }
-
-.bulletin-body {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows .25s ease;
-}
-.bulletin-body.open { grid-template-rows: 1fr; }
-
-.bulletin-body-inner { overflow: hidden; }
-
-/* Side-by-side: selectors left, viewer right */
-.bulletin-content-area {
-  display: flex;
-  gap: 16px;
-  padding: 12px 16px 16px;
-  height: 320px;
-}
-
-.bulletin-left {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 200px;
-  flex-shrink: 0;
-}
-
+/* ===== MAJOR PICKER (MajorPicker.jsx) ===== */
 .bulletin-major-selector {
   display: flex;
   flex-direction: column;
@@ -2710,63 +2645,6 @@ html[data-theme='dark'] .search-hub-finder-link { color: var(--warning-border); 
   margin: 0;
 }
 .bulletin-hint a { color: var(--scarlet); }
-
-.bulletin-right {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.bulletin-open-new-tab {
-  font-size: 11px;
-  color: var(--scarlet);
-  text-decoration: none;
-  flex-shrink: 0;
-}
-.bulletin-open-new-tab:hover { text-decoration: underline; }
-
-.bulletin-iframe-wrapper {
-  flex: 1;
-  position: relative;
-}
-
-.bulletin-iframe {
-  width: 100%;
-  height: 100%;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  display: block;
-}
-.bulletin-iframe.hidden { display: none; }
-
-.bulletin-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  color: var(--text-muted);
-  background: var(--cream);
-  border-radius: var(--radius-sm);
-}
-
-.bulletin-empty {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  font-size: 12px;
-  text-align: center;
-  padding: 20px;
-  line-height: 1.6;
-  background: var(--cream);
-  border-radius: var(--radius-sm);
-  border: 1.5px dashed var(--border);
-}
 
 .beta-overlay {
   position: fixed;
@@ -3137,7 +3015,7 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   /* Semester board becomes a horizontally swipeable, near-one-card view
      instead of a wide multi-column strip. */
   .semester-board {
-    min-height: calc(100dvh - var(--app-header-h) - 40px - 54px); /* header + bulletin bar + tab bar; grows with added years like desktop */
+    min-height: calc(100dvh - var(--app-header-h) - 54px); /* header + tab bar; grows with added years like desktop */
     flex-shrink: 0; /* .planner-center is a flex column here — don't squeeze the board back down to min-height */
     padding: 0 5vw 14px;
     gap: 12px;
@@ -3171,17 +3049,6 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
 
   /* 16px avoids iOS Safari auto-zooming the page on input focus */
   .search-input, .plan-name-input { font-size: 16px; }
-
-  /* Bulletin: stack selectors above the iframe instead of side-by-side */
-  .bulletin-content-area {
-    flex-direction: column;
-    height: auto;
-    max-height: 65vh;
-    overflow-y: auto;
-    padding: 12px;
-  }
-  .bulletin-left { width: 100%; }
-  .bulletin-right { min-height: 320px; }
 
   /* Keep the guest banner above the tab bar instead of overlapping it */
   .unauthenticated-banner { bottom: 58px; }
@@ -3434,15 +3301,55 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   border-width: 1.5px;
   border-radius: var(--radius-md);
 }
+/* Selected / current: a flat 2px ring (outline drawn over the 1.5px border,
+   so nothing shifts) instead of border + soft halo. */
 .semester-column.is-compact.is-active,
-.semester-column.is-compact.is-current { box-shadow: 0 0 0 2px var(--scarlet-light); }
-.semester-column.is-compact.is-current { box-shadow: 0 0 0 2px var(--success-surface); }
+.semester-column.is-compact.is-current {
+  box-shadow: none;
+  outline: 2px solid var(--scarlet);
+  outline-offset: -2px;
+}
+.semester-column.is-compact.is-current { outline-color: var(--success-strong); }
 .semester-column.is-compact .semester-header { padding: 2px 6px; gap: 4px; }
 .semester-column.is-compact .semester-name { font-size: 10px; }
+
+/* Season cue on overview headers: just a 3px accent bar on the left edge
+   (an inset shadow, so the header doesn't grow). Header stays the normal
+   gray with dark text. Amber / blue / sand only — red and green already
+   mean "selected" and "current". The name's line-height matches the
+   header's 16px "+" button, so the header doesn't get any taller. */
+:root {
+  --season-fall-accent: #C2620A;
+  --season-spring-accent: #3B6FC4;
+  --season-summer-accent: #8F8470;
+}
+html[data-theme='dark'] {
+  --season-fall-accent: #D98E3F;
+  --season-spring-accent: #6B98DE;
+  --season-summer-accent: #A3977F;
+}
+.semester-column.is-compact.is-fall   { --season-accent: var(--season-fall-accent); }
+.semester-column.is-compact.is-spring { --season-accent: var(--season-spring-accent); }
+.semester-column.is-compact.is-summer { --season-accent: var(--season-summer-accent); }
+.semester-column.is-compact:is(.is-fall, .is-spring, .is-summer) .semester-header {
+  padding-left: 9px;
+  box-shadow: inset 3px 0 0 var(--season-accent);
+}
+.semester-column.is-compact:is(.is-fall, .is-spring, .is-summer) .semester-name {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text);
+}
 .semester-column.is-compact .semester-header-right { gap: 4px; min-width: 0; }
 .semester-column.is-compact .semester-credits { font-size: 10px; padding: 0 5px; }
 .semester-column.is-compact .semester-status-badge { font-size: 9px; padding: 0 5px; }
 .semester-column.is-compact .semester-lock-toggle { font-size: 10px; padding: 0 1px; }
+/* Header "+" and lock: quiet until hovered/focused. */
+.semester-column.is-compact .semester-add-note { opacity: .45; }
+.semester-column.is-compact .semester-lock-toggle { opacity: .35; }
+.semester-column.is-compact .semester-lock-toggle.is-locked { opacity: .6; }
+.semester-column.is-compact .semester-add-note:is(:hover, :focus-visible),
+.semester-column.is-compact .semester-lock-toggle:is(:hover, :focus-visible) { opacity: 1; }
 .semester-column.is-compact .semester-courses { flex: none; overflow: visible; padding: 3px; gap: 2px; }
 .semester-column.is-compact .semester-empty {
   flex: none;
@@ -3457,24 +3364,35 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   font-size: 9.5px;
 }
 
+/* One line: code, name (ellipsized), ⚠, credits. 25px tall; HUB units live
+   in the tooltip. Flat: 1px --border (so stacked cards stay distinct on the
+   white column), no shadow. */
 .course-card.is-compact {
   display: flex;
   align-items: center;
   gap: 5px;
-  min-height: 22px;
-  padding: 1px 6px;
+  min-height: 25px;
+  padding: 0 6px;
   border-width: 1px;
+  border-color: var(--border);
+  box-shadow: none;
   overflow: hidden;
 }
+.course-card.is-compact:hover { box-shadow: none; border-color: var(--text-muted); }
 .course-card.is-compact.has-info { cursor: pointer; }
 .course-card.is-compact.has-info:not(.is-locked) { cursor: grab; }
 .course-card.is-compact .course-card-code {
   padding: 0;
   font-size: 10px;
+  line-height: 14px;
   letter-spacing: 0;
   white-space: nowrap;
   flex-shrink: 0;
+  color: var(--text);
 }
+/* Scarlet only as a hover/focus cue (dark theme uses the lighter red for contrast). */
+.course-card.is-compact:is(:hover, :focus-within) .course-card-code { color: var(--scarlet); }
+html[data-theme='dark'] .course-card.is-compact:is(:hover, :focus-within) .course-card-code { color: var(--warning-border); }
 /* Name takes the leftover width and ellipsizes; credits never truncate. */
 .course-card.is-compact .course-card-name {
   display: block;
@@ -3482,7 +3400,7 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   min-width: 0;
   margin: 0;
   font-size: 10.5px;
-  line-height: 1.4;
+  line-height: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3490,9 +3408,10 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
 }
 .course-card.is-compact .course-card-credits {
   flex: 0 0 auto;
-  min-width: 28px;
-  font-size: 9.5px;
-  text-align: right;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 14px;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 .course-card.is-compact .course-card-offering-warning.is-icon {
@@ -3502,9 +3421,11 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   line-height: 1.4;
   flex-shrink: 0;
 }
-/* Unlocked: lock + remove sit over the credits slot on hover/focus (credits
-   hide meanwhile, so no text is underneath). Locked: the lock stays in the
-   row, always visible, in place of the controls. */
+/* Unlocked: lock + remove take the credits' slot on hover/focus — credits
+   drop out and the card reserves room on the right, so the name just
+   truncates sooner and nothing overlaps. Locked: no remove, and the 🔒 sits
+   in the row after the credits (absent when the whole semester is locked —
+   the header shows it). */
 .course-card.is-compact .course-card-lock,
 .course-card.is-compact .course-card-remove {
   top: 50%;
@@ -3513,14 +3434,18 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   height: 14px;
   background: var(--white);
 }
-.course-card.is-compact .course-card-lock { right: 3px; }
+.course-card.is-compact .course-card-lock,
+.course-card.is-compact .course-card-remove { right: 3px; }
 .course-card.is-compact:has(.course-card-lock) .course-card-remove { right: 17px; }
 .course-card.is-compact:hover .course-card-lock,
 .course-card.is-compact:hover .course-card-remove,
 .course-card.is-compact:focus-within .course-card-lock,
 .course-card.is-compact:focus-within .course-card-remove { opacity: 1; }
-.course-card.is-compact:not(.is-locked):hover .course-card-credits,
-.course-card.is-compact:not(.is-locked):focus-within .course-card-credits { visibility: hidden; }
+@media (hover: hover) {
+  .course-card.is-compact:not(.is-locked):is(:hover, :focus-within) { padding-right: 20px; }
+  .course-card.is-compact:not(.is-locked):has(.course-card-lock):is(:hover, :focus-within) { padding-right: 34px; }
+  .course-card.is-compact:not(.is-locked):is(:hover, :focus-within) .course-card-credits { display: none; }
+}
 .course-card.is-compact .course-card-lock.is-locked {
   position: static;
   transform: none;
