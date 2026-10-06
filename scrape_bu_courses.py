@@ -8,10 +8,10 @@ HUB area shorthand mapping:
   PLM = Philosophical Inquiry and Life's Meanings
   AEX = Aesthetic Exploration
   HCO = Historical Consciousness
-  SI1 = Social Inquiry I
-  SI2 = Social Inquiry II
-  SO1 = Scientific Inquiry I
-  SO2 = Scientific Inquiry II
+  SI1 = Scientific Inquiry I
+  SI2 = Scientific Inquiry II
+  SO1 = Social Inquiry I
+  SO2 = Social Inquiry II
   QR1 = Quantitative Reasoning I
   QR2 = Quantitative Reasoning II
   IIC = The Individual in Community
@@ -38,10 +38,10 @@ HUB_FULL_TO_SHORT = {
     "Philosophical Inquiry and Life's Meanings": "PLM",
     "Aesthetic Exploration": "AEX",
     "Historical Consciousness": "HCO",
-    "Social Inquiry I": "SI1",
-    "Social Inquiry II": "SI2",
-    "Scientific Inquiry I": "SO1",
-    "Scientific Inquiry II": "SO2",
+    "Social Inquiry I": "SO1",
+    "Social Inquiry II": "SO2",
+    "Scientific Inquiry I": "SI1",
+    "Scientific Inquiry II": "SI2",
     "Quantitative Reasoning I": "QR1",
     "Quantitative Reasoning II": "QR2",
     "The Individual in Community": "IIC",
