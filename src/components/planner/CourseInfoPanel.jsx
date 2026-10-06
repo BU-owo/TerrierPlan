@@ -218,14 +218,18 @@ function withCurrentTermEntry(history, currentSections) {
   return [...history, { year: CURRENT_TERM_YEAR, season: CURRENT_TERM_SEASON, sectionCount }];
 }
 
-// "Fall 5 of 7 · Spring 7 of 7 · Summer 0 of 7". Per season, M is the number
-// of terms of that season in the row range strictly before the current term
-// and N is how many of those have a dot. Takes rows built from offeringHistory
-// alone, so the current term (counted from sections, not history) is in
-// neither N nor M.
+// "Fall 4 of 4 · Spring 3 of 4 · Summer 0 of 4". Per season, M is the number
+// of terms of that season from the course's first offered year (in the row
+// range) up to, but not including, the current term, and N is how many of
+// those have a dot. Takes rows built from offeringHistory alone, so the
+// current term (counted from sections, not history) is in neither N nor M.
 function summarizeSeasons(rows) {
+  const offeredYears = rows
+    .filter((row) => SEASONS.some((season) => row[season] != null))
+    .map((row) => row.year);
+  const firstYear = Math.min(...offeredYears);
   return SEASONS.map((season) => {
-    const happened = rows.filter((row) => isPastTerm(row.year, season));
+    const happened = rows.filter((row) => row.year >= firstYear && isPastTerm(row.year, season));
     const offered = happened.filter((row) => row[season] != null).length;
     return `${season} ${offered} of ${happened.length}`;
   }).join(' · ');
