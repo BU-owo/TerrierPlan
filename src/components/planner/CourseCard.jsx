@@ -3,6 +3,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { getOfferingWarning } from '../../utils/offeringPattern';
 import { isProfessionalCareer } from '../../utils/courseQuery';
+import useUpcomingSeasons from '../../hooks/useUpcomingSeasons';
 
 export default function CourseCard({
   courseKey,
@@ -53,7 +54,9 @@ export default function CourseCard({
   const creditStr = credits != null ? `${credits} cr` : '—';
   // Historical offering data, not a guarantee — informational only, never
   // blocks placement or feeds into HUB/requirement logic.
-  const offeringWarning = !isDragOverlay ? getOfferingWarning(data?.offeringPattern, season) : null;
+  // A real upcoming section (cached catalog) overrides the history.
+  const upcomingSeasons = useUpcomingSeasons(courseKey);
+  const offeringWarning = !isDragOverlay ? getOfferingWarning(data?.offeringPattern, season, upcomingSeasons) : null;
   const showOfferingWarning = offeringWarning && !(offeringWarning.severity === 'notice' && noticeDismissed);
 
   if (compact && !isDragOverlay) {

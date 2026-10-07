@@ -163,6 +163,92 @@ def get_course_links_from_listing(listing_url: str) -> list[str]:
     return links
 
 
+# Prerequisite labels as BU pages spell them: Prerequisite(s), Prerequisites,
+# Prerequiste (sic), Pre-requisite(s), Prereq — optionally after
+# Undergraduate / Graduate / Undergrad.
+PREREQ_LABEL_RE = re.compile(
+    r"(?:\b(?:Undergraduate|Graduate|Undergrad)\s+)?"
+    r"\b(?:Prerequisite\(s\)|Pre-?requisites?|Prerequiste|Prereqs?)\s*:\s*",
+    re.IGNORECASE,
+)
+# " - " ends the prerequisites, except right after "Undergrad"/"Graduate"
+# ("Pre-requisites: Undergrad - COM JO205; Graduate - COM JO710.").
+PREREQ_DASH_RE = re.compile(r"(?<!Undergrad)(?<!Undergraduate)(?<!Graduate)\s+[-–]\s*")
+# A bare course-code list then the description: "CFA TH 415 Building on ...",
+# or with the space missing: "ENGEK 307Technologies ...". A one-word sentence
+# after the codes still belongs to them ("MET AR 100 Lab. Promoting ...").
+COURSE_CODE = r"[A-Z]{2,4}\s?[A-Z]{2}\s?\d{3}(?:[A-Z](?![a-z]))?"
+PREREQ_CODES_RE = re.compile(
+    rf"^{COURSE_CODE}(?:\s*(?:,|;|/|\bor\b|\band\b)\s*{COURSE_CODE})*"
+    r"(\s*)(?=[A-Z][a-z]*\b(?!\.))(?!(?:Or|And)\b)"
+)
+# A " - " further than this from the label is taken to be inside the
+# description, not the end of the prerequisites.
+PREREQ_DASH_MAX = 400
+# A sentence end, unless the next sentence still belongs to the prerequisites.
+PREREQ_SENTENCE_END_RE = re.compile(
+    r"(?<!e\.g)(?<!i\.e)\.(\s+)(?=[A-Z])(?!(?:Or|And|Graduate|Undergraduate|Undergrad)\b)"
+)
+# Longest first, so "Social Inquiry II" is stripped whole rather than as
+# "Social Inquiry I" plus a stray "I".
+HUB_NAMES_LONGEST_FIRST = sorted(HUB_FULL_TO_SHORT, key=len, reverse=True)
+LEADING_HUB_NAMES_RE = re.compile(
+    r"^(?:(?:" + "|".join(re.escape(n) for n in HUB_NAMES_LONGEST_FIRST) + r")\b\s*)+",
+    re.IGNORECASE,
+)
+# Placeholder text BU shows instead of a description.
+PLACEHOLDER_DESC_RE = re.compile(
+    r"(?:This\s+)?course\s+description\s+(?:is\s+)?(?:currently\s+)?"
+    r"(?:under\s+construction|TBD|TBA|to\s+be\s+(?:determined|announced)|coming\s+soon)\.?",
+    re.IGNORECASE,
+)
+
+
+def split_description(raw_desc: str) -> tuple[str, str]:
+    """Cleaned raw description block -> (prerequisites, description)."""
+    prereqs = ""
+    description = raw_desc
+
+    label = PREREQ_LABEL_RE.search(raw_desc)
+    if label:
+        rest = raw_desc[label.end():]
+        # Where the prerequisites end, in order of preference: a bare list of
+        # course codes, then a nearby " - ", then the first sentence end.
+        codes = PREREQ_CODES_RE.search(rest)
+        dash = PREREQ_DASH_RE.search(rest)
+        sentence = PREREQ_SENTENCE_END_RE.search(rest)
+        if codes:
+            end = (codes.start(1), codes.end(1))
+        elif dash and dash.start() <= PREREQ_DASH_MAX:
+            end = (dash.start(), dash.end())
+        elif sentence:
+            end = (sentence.start(1), sentence.end(1))
+        else:
+            end = None
+        if end:
+            prereqs = rest[:end[0]].strip()
+            description = rest[end[1]:].strip()
+
+    description = re.sub(r"\s+", " ", description).strip()
+
+    # Remove "BU Hub Learn More" header and any leading HUB area names
+    description = re.sub(r"^BU\s+Hub\s+Learn\s+More\s*", "", description, flags=re.IGNORECASE)
+    # Strip any leading known HUB area full names (they appear before the actual description)
+    description = LEADING_HUB_NAMES_RE.sub("", description).strip()
+    # Remove trailing schedule fragments like "SPRG 2026 Schedule…" / "FALL 2025 Schedule…"
+    description = re.sub(
+        r"\s*(?:FALL|FAL|SPRING|SPRG|SUMMER|SUM)\s+\d{4}\s+Sch.*$", "", description,
+        flags=re.IGNORECASE | re.DOTALL
+    ).strip()
+    description = re.sub(
+        r"\s*Note that this information.*$", "", description,
+        flags=re.IGNORECASE | re.DOTALL
+    ).strip()
+    if PLACEHOLDER_DESC_RE.fullmatch(description):
+        description = ""
+    return prereqs, description
+
+
 def parse_course_page(url: str) -> dict | None:
     """Scrape one individual course page and return a row dict."""
     soup = get_soup(url)
@@ -253,36 +339,7 @@ def parse_course_page(url: str) -> dict | None:
     raw_desc = re.sub(r"Units?:\s*\d+", "", raw_desc, flags=re.IGNORECASE)
     raw_desc = re.sub(r"\s{2,}", " ", raw_desc).strip()
 
-    # ── Split prerequisites from description ──────────────────────────────
-    prereqs = ""
-    description = raw_desc
-
-    prereq_match = re.search(
-        r"(?:Undergraduate|Graduate)\s+Prerequisites?:\s*(.+?)\s+-\s*",
-        raw_desc, flags=re.IGNORECASE
-    )
-    if prereq_match:
-        prereqs = prereq_match.group(1).strip()
-        description = raw_desc[prereq_match.end():].strip()
-
-    description = re.sub(r"\s+", " ", description).strip()
-
-    # Remove "BU Hub Learn More" header and any leading HUB area names
-    description = re.sub(r"^BU\s+Hub\s+Learn\s+More\s*", "", description, flags=re.IGNORECASE)
-    # Strip any leading known HUB area full names (they appear before the actual description)
-    all_hub_names = "|".join(re.escape(n) for n in HUB_FULL_TO_SHORT)
-    description = re.sub(
-        rf"^(?:(?:{all_hub_names})\s*)+", "", description, flags=re.IGNORECASE
-    ).strip()
-    # Remove trailing schedule fragments like "SPRG 2026 Schedule…" / "FALL 2025 Schedule…"
-    description = re.sub(
-        r"\s*(?:FALL|FAL|SPRING|SPRG|SUMMER|SUM)\s+\d{4}\s+Sch.*$", "", description,
-        flags=re.IGNORECASE | re.DOTALL
-    ).strip()
-    description = re.sub(
-        r"\s*Note that this information.*$", "", description,
-        flags=re.IGNORECASE | re.DOTALL
-    ).strip()
+    prereqs, description = split_description(raw_desc)
 
     # ── Build row ─────────────────────────────────────────────────────────
     row = {

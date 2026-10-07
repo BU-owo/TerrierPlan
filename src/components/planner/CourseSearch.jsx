@@ -199,7 +199,9 @@ function SearchResultCard({
     disabled: alreadyAdded,
   });
 
-  const offeringBadge = getOfferingBadge(course.offeringPattern);
+  // Search results are the cached catalog's own entries, so upcomingSeasons
+  // is already on them (absent on the Firestore fallback).
+  const offeringBadge = getOfferingBadge(course.offeringPattern, course.upcomingSeasons);
   const courseLabel = course.courseNumber ?? course.id;
 
   return (
@@ -234,7 +236,7 @@ function SearchResultCard({
         <div className="search-result-name-row">
           <span className="search-result-name">{course.name ?? '—'}</span>
           {offeringBadge && (
-            <span className={`offering-badge ${offeringBadge.className}`}>
+            <span className={`offering-badge ${offeringBadge.className}`} title={offeringBadge.text}>
               {offeringBadge.label}
             </span>
           )}
