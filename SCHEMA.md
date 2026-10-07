@@ -58,6 +58,7 @@ collapse into one doc with an `instructors` array.
 | componentLabel | string | Human-readable form of `component`, e.g. `"Discussion Section"`, `"Laboratory"`, `"Pre-lab Section"` — falls back to the raw code when PeopleSoft has no friendlier label for it. Same import-source caveat as `component`. |
 | notes | string | Free text — linked lecture/discussion info lives here, unstructured. `component`/`componentLabel` now cover "what kind of section is this" structurally; notes still carries anything finer, e.g. which specific lecture a given discussion/lab pairs with. |
 | finalExam | string | |
+| meetings | object[] | Optional. Every recurring weekly meeting of the section, primary class meeting first. Entry: `{ daysOfWeek, startTime, endTime, facilId, meetingStartDate, meetingEndDate, kind }` — the first six are formatted exactly like the top-level fields, `kind` is `"class"` or `"exam"` (an evening exam block, e.g. "NO ROOM" Tue 6:30 PM; ignore `"exam"` entries when checking class overlaps). `meetings[0]` is the same meeting as the top-level meeting fields. Dated one-offs (date span 7 days or less) are left out. **Written only for undergrad sections with 2+ distinct recurring patterns** (OTPMS, MED and LAW excluded), by `import-sections.cjs` / `backfill-meetings.cjs` via `scripts/lib/meetings.cjs`. **Legacy fallback:** a missing `meetings` means "one meeting, read the top-level fields", so readers must handle docs without it. |
 | importedAt | timestamp | |
 
 ### `offeringHistory/{courseKey}`

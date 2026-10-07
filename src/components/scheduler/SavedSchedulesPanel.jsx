@@ -39,6 +39,7 @@ export default function SavedSchedulesPanel({
   actionError = null,
   onDismissError = () => {},
   isGuest = false,
+  saveNote = null,
 }) {
   const [name, setName] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -205,7 +206,7 @@ export default function SavedSchedulesPanel({
       <div className="sched-save-section">
         <div className="sched-save-heading">Save the schedule you’re previewing as a contender</div>
         <form className="sched-save-form" onSubmit={handleSave}>
-          <button type="submit" className={`sched-save-btn${alreadySaved ? ' is-saved' : ''}`} disabled={saveBlocked}>
+          <button type="submit" className={`sched-save-btn${alreadySaved ? ' is-saved' : ''}`} disabled={saveBlocked} title={canSave && saveNote ? saveNote : undefined}>
             {!canSave
               ? 'Preview a schedule to save it'
               : justSaved

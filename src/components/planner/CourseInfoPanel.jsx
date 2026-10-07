@@ -6,7 +6,9 @@ import { getOfferingBadge } from '../../utils/offeringPattern';
 import useUpcomingSeasons from '../../hooks/useUpcomingSeasons';
 import { isProfessionalCareer } from '../../utils/courseQuery';
 import { CURRENT_TERM, CURRENT_TERM_LABEL } from '../../utils/term';
-import { describeSectionTime, describeSeatStatus } from '../../utils/sectionTime';
+import { describeSectionTime, describeExamTime, describeSeatStatus } from '../../utils/sectionTime';
+import { withMockMeetings } from '../../utils/mockMeetings';
+import { sectionTypeLabel } from '../../utils/sectionType';
 import { groupSectionsByComponent } from '../../utils/sectionComponents';
 import { instructorLabel } from '../../utils/sectionInstructors';
 import './CourseInfoPanel.css';
@@ -69,7 +71,7 @@ async function fetchFall2026(courseKey) {
   const snap = await getDocs(
     query(collection(db, 'sections'), where('courseKey', '==', courseKey), where('term', '==', CURRENT_TERM)),
   );
-  const sections = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const sections = snap.docs.map((d) => withMockMeetings({ id: d.id, ...d.data() }));
   let credits = creditsRange(sections.map((s) => s.credits));
   if (!credits) {
     const fallback = await getDocs(query(collection(db, 'sections'), where('courseKey', '==', courseKey), limit(1)));
@@ -385,9 +387,15 @@ function CurrentTermSections({ status, data, onRetry }) {
                   return (
                     <li key={section.id} className="course-info-section-row">
                       <div className="course-info-section-top">
-                        <span className="course-info-section-label">Section {section.classSection}</span>
+                        <span className="course-info-section-label">
+                          <span className="sched-type-pill" title={sectionTypeLabel(section).full}>{sectionTypeLabel(section).abbr}</span>{' '}
+                          Section {section.classSection}
+                        </span>
                         <span className="course-info-section-time">{describeSectionTime(section)}</span>
                       </div>
+                      {describeExamTime(section) && (
+                        <div className="course-info-section-exam">Exam: {describeExamTime(section)}</div>
+                      )}
                       <div className="course-info-section-instructor">{instructorLabel(section)}</div>
                       <div className={`course-info-section-seats ${isOpen ? 'is-open' : 'is-closed'}`}>
                         {describeSeatStatus(section)}

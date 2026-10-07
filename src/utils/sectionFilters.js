@@ -1,4 +1,4 @@
-import { sectionMeeting, DAY_ORDER } from './sectionTime';
+import { classMeetings, DAY_ORDER } from './sectionTime.js';
 
 // The section picker's one filter layer: a global time filter, applied to
 // every course in the draft at once (see GlobalTimeFilter.jsx). Shared
@@ -43,11 +43,9 @@ function dayBoundsActive(bounds) {
   return Boolean(bounds && (bounds.startMin != null || bounds.endMin != null));
 }
 
-function passesBounds(section, startMin, endMin) {
-  const meeting = sectionMeeting(section);
-  if (!meeting) return false; // no determinable time — can't match a time bound
+function passesBounds(meeting, startMin, endMin) {
   // Earliest/latest bound the whole meeting, not just its start — "latest
-  // 4pm" means the student is out of the classroom by 4pm, so a section
+  // 4pm" means the student is out of the classroom by 4pm, so a meeting
   // has to both START at/after `startMin` AND END at/before `endMin`.
   if (startMin != null && meeting.startMin < startMin) return false;
   if (endMin != null && meeting.endMin > endMin) return false;
@@ -71,16 +69,16 @@ export function isGlobalFilterActive(globalFilter) {
 
 export function passesGlobalFilter(section, globalFilter) {
   if (!isGlobalFilterActive(globalFilter)) return true;
-  const meeting = sectionMeeting(section);
-  if (!meeting) return false;
-  // A section only has to satisfy the bound(s) that govern the day(s) it
+  const meetings = classMeetings(section);
+  if (meetings.length === 0) return false; // no determinable time — can't match a time bound
+  // Every class meeting has to satisfy the bound(s) that govern the day(s) it
   // actually meets on — a day with nothing configured (and no same-every-
   // day fallback) never blocks it.
-  return meeting.days.every((day) => {
+  return meetings.every((meeting) => meeting.days.every((day) => {
     const bounds = effectiveBoundsForDay(globalFilter, day);
     if (!dayBoundsActive(bounds)) return true;
-    return passesBounds(section, bounds.startMin, bounds.endMin);
-  });
+    return passesBounds(meeting, bounds.startMin, bounds.endMin);
+  }));
 }
 
 export function matchesFilters(section, globalFilter) {

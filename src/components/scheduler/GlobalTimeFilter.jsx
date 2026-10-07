@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DAY_ORDER, formatClock } from '../../utils/sectionTime';
 import { TIME_PRESETS, EMPTY_DAY_BOUNDS, isGlobalFilterActive } from '../../utils/sectionFilters';
 import TimeSelect from './TimeSelect';
@@ -53,8 +53,17 @@ function BoundPill({ label, value, defaultValue, onChange }) {
   );
 }
 
-export default function GlobalTimeFilter({ value, onChange, onClear }) {
+export default function GlobalTimeFilter({ value, onChange, onClear, openSignal = 0 }) {
   const [collapsed, setCollapsed] = useState(true);
+  const rootRef = useRef(null);
+  // A link elsewhere on the page (the "lots of sections" banner) asks for this
+  // filter to open and come into view: bump `openSignal`.
+  useEffect(() => {
+    if (openSignal > 0) {
+      setCollapsed(false);
+      rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [openSignal]);
   const mode = value.mode === 'custom' ? 'custom' : 'same';
   const globalBounds = value.global;
   const active = isGlobalFilterActive(value);
@@ -77,7 +86,7 @@ export default function GlobalTimeFilter({ value, onChange, onClear }) {
   }
 
   return (
-    <div className="sched-global-filter-bar">
+    <div className="sched-global-filter-bar" ref={rootRef}>
       <button
         type="button"
         className="sched-draft-card-toggle"

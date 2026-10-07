@@ -1,5 +1,6 @@
-import { sectionsConflict, sectionMeeting, describeSectionTime } from './sectionTime';
-import { classifyComponent, groupSectionsByComponent } from './sectionComponents';
+import { sectionsConflict, classMeetings, describeSectionTime } from './sectionTime.js';
+import { classifyComponent, groupSectionsByComponent } from './sectionComponents.js';
+import { describeSectionName } from './sectionType.js';
 
 // Safety valves against a pathological input (e.g. 8 courses × 6 sections
 // each = 1.6M raw combinations) freezing the tab — NOT the "artificial cap
@@ -109,15 +110,20 @@ export async function generateSchedulesAsync(slots, sectionsById, { limit = MAX_
   return { schedules, truncated };
 }
 
-// Minutes two sections overlap in a week (overlap per shared day × shared
-// days), 0 if they don't. Positive exactly when sectionsConflict is true.
+// Minutes two sections overlap in a week, summed over every pair of their
+// class meetings (overlap per shared day × shared days), 0 if they don't, or
+// if they're the same section. Positive exactly when sectionsConflict is true.
 export function overlapMinutes(a, b) {
-  const ma = sectionMeeting(a);
-  const mb = sectionMeeting(b);
-  if (!ma || !mb) return 0;
-  const sharedDays = ma.days.filter((d) => mb.days.includes(d)).length;
-  const perDay = Math.min(ma.endMin, mb.endMin) - Math.max(ma.startMin, mb.startMin);
-  return sharedDays > 0 && perDay > 0 ? sharedDays * perDay : 0;
+  if (a === b || (a?.id != null && a.id === b?.id)) return 0;
+  let total = 0;
+  for (const ma of classMeetings(a)) {
+    for (const mb of classMeetings(b)) {
+      const sharedDays = ma.days.filter((d) => mb.days.includes(d)).length;
+      const perDay = Math.min(ma.endMin, mb.endMin) - Math.max(ma.startMin, mb.startMin);
+      if (sharedDays > 0 && perDay > 0) total += sharedDays * perDay;
+    }
+  }
+  return total;
 }
 
 // { pairs, minutes } for a set of section ids: how many pairs of sections
@@ -397,7 +403,7 @@ export function describeSectionSet(sectionIds, sectionsById, courseMap) {
       seenCourses.add(section.courseKey);
       compactParts.push(courseLabel);
     }
-    lines.push(`${courseLabel} ${section.classSection} (${describeSectionTime(section)})`);
+    lines.push(`${describeSectionName(section, courseLabel)} (${describeSectionTime(section)})`);
   }
   return { compact: compactParts.join(', '), lines };
 }

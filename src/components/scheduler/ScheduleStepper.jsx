@@ -169,7 +169,7 @@ export default function ScheduleStepper({
 
 // Manual mode's slim header in place of the stepper: what's placed, plus
 // Bookmark / Save / Clear for it.
-export function ManualScheduleHeader({ creditsLabel, overlapCount, isBookmarked, canAct, onToggleBookmark, onSave, onClear }) {
+export function ManualScheduleHeader({ creditsLabel, overlapCount, onStepOverlap, isBookmarked, canAct, onToggleBookmark, onSave, onClear }) {
   return (
     <div className="sched-stepper sched-manual-header">
       <div className="sched-stepper-top">
@@ -179,7 +179,14 @@ export function ManualScheduleHeader({ creditsLabel, overlapCount, isBookmarked,
           {overlapCount > 0 && (
             <>
               {' · '}
-              <span className="sched-overlap-count">{overlapCount} overlap{overlapCount === 1 ? '' : 's'}</span>
+              <button
+                type="button"
+                className="sched-overlap-count sched-overlap-step-btn"
+                onClick={onStepOverlap}
+                title="Show the next overlap on the grid"
+              >
+                {overlapCount} overlap{overlapCount === 1 ? '' : 's'}
+              </button>
             </>
           )}
         </div>
