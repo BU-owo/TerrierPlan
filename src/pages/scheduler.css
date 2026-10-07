@@ -617,6 +617,16 @@ html[data-theme='dark'] {
   background: var(--border-light);
   color: var(--text-muted);
 }
+.sched-exam-chip {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  background: var(--badge-warm-bg);
+  color: var(--badge-warm-text);
+}
 .sched-section-row-main {
   display: flex;
   align-items: flex-start;
@@ -755,6 +765,197 @@ html[data-theme='dark'] {
 .sched-generated-empty p { margin: 0; }
 .sched-generated-empty p + p { margin-top: 10px; }
 .sched-generated-empty-culprit strong { color: var(--text-secondary); font-weight: 700; }
+
+/* "Build manually" in the no-conflict-free message (switches to Manual). */
+.sched-build-manually-btn {
+  margin-top: 12px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--scarlet);
+  background: var(--white);
+  color: var(--scarlet);
+  font-size: 12px;
+  font-weight: 700;
+}
+.sched-build-manually-btn:hover { background: var(--scarlet); color: #fff; }
+
+/* Auto | Manual switch in the draft toolbar (same look as Time | Section). */
+.sched-mode-toggle { flex-shrink: 0; }
+
+/* Per-course "pick a Lecture" note (what's still missing before this course
+   can be generated / is complete in Manual). A hint, not an error. */
+.sched-draft-card-pick-hint {
+  margin: 2px 0 6px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* What this course still needs (Auto): each component with a check, or
+   "none picked" in the warning color, clickable to jump to that group. */
+.sched-draft-card-status {
+  margin: 2px 0 6px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+.sched-draft-card-status-item.is-done { color: var(--success-strong); font-weight: 600; }
+.sched-draft-card-status-item.is-missing {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--warning-text);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.sched-draft-card-status-item.is-missing:hover { color: var(--warning-border); }
+.sched-section-group { scroll-margin-top: 8px; }
+.sched-large-selection-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--badge-warm-text);
+  background: var(--badge-warm-bg);
+  color: var(--badge-warm-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.sched-large-selection-banner > span { flex: 1; min-width: 0; }
+.sched-large-selection-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.sched-large-selection-link:hover { color: var(--text); }
+.sched-large-selection-dismiss {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sched-large-selection-dismiss:hover { background: rgba(0, 0, 0, .1); }
+.sched-course-select-all { font-size: 10.5px; padding: 2px 8px; }
+.sched-select-all-btn:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+.sched-select-all-btn:disabled:hover { border-color: var(--border); color: var(--text-secondary); }
+
+/* Above the preview grid: which drafted courses still lack a component. */
+.sched-incomplete-banner {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--badge-warm-text);
+  background: var(--badge-warm-bg);
+  color: var(--badge-warm-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.sched-incomplete-banner-item {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.sched-incomplete-banner-item:hover { color: var(--text); }
+
+/* "Show all" ghost toggle in a component group header. */
+.sched-ghost-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.sched-ghost-toggle-btn svg { width: 12px; height: 12px; display: block; }
+.sched-ghost-toggle-btn.is-on {
+  border-color: var(--scarlet);
+  color: var(--scarlet);
+  background: var(--scarlet-light);
+}
+
+/* Quiet "Updating…" while an automatic regenerate runs, and the "Update
+   from draft" action shown while something is held on screen. */
+.sched-stepper-updating { font-size: 11px; font-weight: 400; color: var(--text-muted); }
+.sched-update-from-draft-btn {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sched-update-from-draft-btn:hover { border-color: var(--scarlet); color: var(--scarlet); }
+
+/* "Clear ghosts", at the end of the grid's color legend row. */
+.sched-clear-ghosts-btn {
+  margin-left: auto;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--scarlet);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Text that reads aloud / copies but isn't drawn (the " · " before an
+   overlap chip in the saved and bookmarked rows). */
+.sched-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* "2 overlaps" — stepper header, bookmarked and saved rows. Same red family
+   as the swap ghosts' "conflict" chip. */
+button.sched-overlap-step-btn { font-family: inherit; cursor: pointer; }
+button.sched-overlap-step-btn:hover { filter: brightness(.95); }
+.sched-overlap-count {
+  flex-shrink: 0;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  border: 1px solid var(--warning-border);
+  background: var(--warning-surface);
+  color: var(--warning-text);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 15px;
+  white-space: nowrap;
+}
 
 /* ===== Schedule browsing stepper (right panel, above the grid) ===== */
 .sched-stepper {
@@ -896,6 +1097,10 @@ html[data-theme='dark'] {
   cursor: pointer;
 }
 .sched-color-legend-swatch:hover { filter: brightness(0.92); }
+/* A course that still lacks a component: an amber ring around its dot. */
+.sched-color-legend-swatch.is-incomplete {
+  box-shadow: 0 0 0 2px var(--white), 0 0 0 3.5px var(--badge-warm-text);
+}
 .sched-color-legend-label {
   font-size: 11px;
   font-weight: 600;
@@ -1042,13 +1247,24 @@ html[data-theme='dark'] {
   right: 2px;
   border-left: 3px solid;
   border-radius: 5px;
-  padding: 5px 6px;
+  padding: 3px 6px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
+.sched-grid-block { container: sched-lane / size; }
 .sched-grid-block.is-locked { box-shadow: inset 0 0 0 1.5px var(--badge-warm-text); }
+/* Classes that overlap share their day column in lanes (see WeeklyGrid's
+   layoutGhostsForDay) and get a red outline plus an "overlap" chip — the
+   swap ghosts' conflict language. An outline, not a box-shadow, so it
+   coexists with the locked ring. Lanes can get narrow, so the block is a
+   container for the rules at the end of this section. */
+.sched-grid-block.has-overlap {
+  outline: 1.5px solid var(--warning-border);
+  outline-offset: -1.5px;
+  container: sched-block sched-lane / size;
+}
 .sched-grid-block-action-btn { cursor: pointer; }
 /* Lock/eliminate — same actions as the draft picker's SectionRow, just
    reachable from the generated-schedule preview too (see WeeklyGrid.jsx).
@@ -1094,6 +1310,244 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   overflow: hidden;
   text-overflow: ellipsis;
 }
+button.sched-grid-block-chip.is-overlap {
+  font-family: inherit;
+  cursor: pointer;
+}
+button.sched-grid-block-chip.is-overlap:hover,
+button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95); outline: 1.5px solid var(--warning-border); outline-offset: 1px; }
+.sched-grid-block-chip.is-overlap {
+  background: var(--warning-surface);
+  color: var(--warning-text);
+  border: 1px solid var(--warning-border);
+  line-height: 13px;
+}
+/* Overlap lanes. The chip word stays in the DOM (and the tooltip names the
+   overlapping class and has every detail); only what's drawn changes, never
+   overprinted or broken mid-word:
+   - up to 90px: the chip becomes a "!" dot, buttons shrink, and the code
+     wraps at spaces ("CAS MA / 123 A3"); the time is cut with an ellipsis;
+   - up to 60px: the lock/swap/remove buttons are hidden (widen the preview
+     panel, or use the draft list, to reach them) so the text keeps the room;
+   - under 50px: just the section code ("A3") and the "!". */
+@container sched-block (max-width: 90px) {
+  .sched-grid-block-chip.is-overlap {
+    flex: 0 0 auto;
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    font-size: 0;
+    line-height: 0;
+    background: var(--warning-border);
+    color: var(--warning-surface);
+  }
+  .sched-grid-block-chip.is-overlap::after {
+    content: '!';
+    display: block;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 12px;
+    text-align: center;
+  }
+  .sched-grid-block-actions { gap: 1px; }
+  .sched-grid-block-action-btn { width: 14px; height: 14px; font-size: 8.5px; }
+  .sched-grid-block-code { font-size: 10px; }
+  .sched-grid-block-time { font-size: 9px; }
+  .sched-grid-block-prof,
+  .sched-grid-block-room { display: none; }
+}
+@container sched-block (max-width: 60px) {
+  .sched-grid-block-action-btn { display: none; }
+  .sched-grid-block-actions { justify-content: flex-start; min-height: 12px; }
+}
+@container sched-block (max-width: 49px) {
+  .sched-grid-pending-chip { display: none; }
+}
+
+/* Section type on blocks, ghosts and placeholders: course number, then a fixed
+   3-letter type pill + section code, then the time. By lane width (the
+   container is the block/ghost itself):
+   - 190px and up: the pill gives way to the full name, "Discussion Section · B3";
+   - 130px and up: "DIS · B3";  under that: "DIS B3";
+   - up to 90px: the short course number ("CH 110"), time left to the tooltip;
+   - up to 49px: just the pill and section code.
+   The pill carries letters, so the type never rests on color alone. */
+.sched-lane-short { display: none; }
+.sched-type-line {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.sched-type-pill {
+  flex-shrink: 0;
+  padding: 0 4px;
+  border-radius: 4px;
+  border: 1px solid var(--badge-cool-text);
+  background: var(--badge-cool-bg);
+  color: var(--badge-cool-text);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .4px;
+  line-height: 11px;
+}
+.sched-type-fullname,
+.sched-type-sep { display: none; }
+.sched-type-sec { flex-shrink: 0; }
+@container sched-lane (min-width: 130px) {
+  .sched-type-sep { display: inline; }
+}
+@container sched-lane (min-width: 190px) {
+  .sched-type-pill { display: none; }
+  .sched-type-fullname { display: inline; overflow: hidden; text-overflow: ellipsis; }
+}
+@container sched-lane (max-width: 130px) {
+  .sched-grid-block-room { display: none; }
+}
+/* In a narrow lane the instructor goes first (under ~100px), then the time (under
+   ~90px, so the longest time, "10:10am–11:00am", never has to be cut). */
+@container sched-lane (max-width: 100px) {
+  .sched-grid-block-prof { display: none; }
+}
+@container sched-lane (max-width: 90px) {
+  .sched-lane-long { display: none; }
+  .sched-lane-short { display: inline; }
+  .sched-grid-block-time,
+  .sched-grid-ghost-block-time { display: none; }
+}
+@container sched-lane (max-width: 49px) {
+  .sched-grid-block-code,
+  .sched-grid-ghost-block-code { display: none; }
+  /* Squeeze the pill so pill + section code fit a lane this narrow. */
+  .sched-type-line { gap: 2px; }
+  .sched-type-pill { padding: 0 2px; font-size: 8px; letter-spacing: 0; }
+}
+
+/* What a block, ghost or placeholder says depends on its HEIGHT as well as its
+   width, so lines are dropped whole, never cut: every line has an explicit
+   line-height (not the page's 1.5), the text column can shrink (min-height: 0)
+   and hides what doesn't fit. Heights below are the box's inner height (about
+   6px less than a block).
+   - tall (about 95px and up): course, type + section, time, instructor, room;
+   - medium (about 64-94px): course, type + section, the full time on its own
+     row, then the instructor when it fits (from about 77px; the room is in the
+     tooltip). Four lines need 17 (buttons) + 13 + 13 + 12 + 12 + 4 gaps = 71px
+     inside the block, so a 3px/6px padding and 1px gaps let them fit in 80px;
+   - short (about 40-63px): course, then the type and section (and the start
+     time only if it fits); the buttons float over the corner;
+   - very short (under about 40px): one line, "CH 110 [LEC] A1". */
+.sched-lane-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.sched-grid-block-code,
+.sched-grid-ghost-block-code,
+.sched-type-line { line-height: 13px; }
+.sched-grid-block-time,
+.sched-grid-block-prof,
+.sched-grid-block-room,
+.sched-grid-ghost-block-time { line-height: 12px; }
+.sched-grid-block-code,
+.sched-grid-block-time,
+.sched-grid-block-prof,
+.sched-grid-block-room,
+.sched-grid-ghost-block-code,
+.sched-grid-ghost-block-time {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A time is never ellipsized: it's hidden whole in lanes too narrow for it. */
+.sched-grid-block-time,
+.sched-grid-ghost-block-time { text-overflow: clip; }
+.sched-type-start { display: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+@container sched-lane (max-height: 88px) {
+  .sched-grid-block-room { display: none; }
+  /* The pill, not the full name, from here down. */
+  .sched-type-pill { display: inline-block; }
+  .sched-type-fullname { display: none; }
+}
+@container sched-lane (max-height: 70px) {
+  .sched-grid-block-prof { display: none; }
+}
+@container sched-lane (max-height: 57px) {
+  .sched-grid-block-time,
+  .sched-grid-ghost-block-time,
+  .sched-grid-block-prof { display: none; }
+  .sched-type-start { display: inline; }
+  .sched-grid-pending-chip { display: none; }
+  .sched-grid-block-actions { position: absolute; top: 3px; right: 4px; margin: 0; z-index: 1; }
+  .sched-grid-block .sched-lane-text { padding-right: min(56px, 40%); }
+}
+@container sched-lane (max-height: 57px) and (max-width: 100px) {
+  .sched-type-start { display: none; }
+}
+@container sched-lane (max-height: 33px) {
+  .sched-lane-text { flex-direction: row; align-items: center; gap: 4px; }
+  .sched-type-start { display: none; }
+  .sched-lane-text > .sched-grid-block-code,
+  .sched-lane-text > .sched-grid-ghost-block-head { flex-shrink: 0; max-width: 60%; }
+  .sched-lane-text > .sched-type-line { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+}
+@container sched-lane (max-height: 33px) and (max-width: 49px) {
+  .sched-lane-text > .sched-grid-block-code,
+  .sched-lane-text > .sched-grid-ghost-block-head { display: none; }
+}
+
+/* Auto: sections checked for a course that isn't complete yet — faint,
+   dashed, "not finished", never part of the schedule. Shares lanes with the
+   real blocks (see WeeklyGrid) so it never prints over one. */
+.sched-grid-pending {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  box-sizing: border-box;
+  border: 1.5px dashed var(--sched-accent);
+  border-radius: 5px;
+  padding: 3px 5px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: transparent;
+  opacity: .75;
+  pointer-events: auto;
+  container: sched-block sched-lane / size;
+}
+.sched-grid-pending .sched-grid-block-code { font-size: 10px; color: var(--text-secondary); }
+.sched-grid-pending .sched-grid-block-time { font-size: 9px; }
+.sched-grid-pending-chip {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 5px;
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 12px;
+}
+
+/* "Show all" ghosts in Auto are display-only (nothing to click). */
+.sched-grid-ghost-block.is-display-only { cursor: default; }
+.sched-grid-ghost-block.is-display-only:hover { filter: none; }
+
+/* Stepper "Edit manually" and the Manual header's Save / Clear share the
+   stepper's button look (.sched-stepper-controls button). */
+.sched-manual-header .sched-stepper-count { font-weight: 600; }
 .sched-grid-no-meeting {
   margin-top: 10px;
   font-size: 11.5px;
@@ -1186,6 +1640,78 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   font-weight: 700;
   line-height: 15px;
 }
+/* Manual: while a block (or its overlap chip) is hovered or focused, every block
+   it overlaps gets a thicker warning outline and the unrelated ones step back. */
+.sched-grid-block { transition: opacity .12s ease; }
+.sched-grid-block.is-overlap-hl {
+  outline: 3px solid var(--warning-border);
+  outline-offset: -3px;
+  z-index: 1;
+}
+.sched-grid-block.is-dimmed { opacity: .5; }
+/* "N overlaps" stepper: the pair it just scrolled to pulses. */
+@keyframes sched-overlap-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 4px var(--warning-border); }
+}
+.sched-grid-block.is-pulse { animation: sched-overlap-pulse .6s ease-in-out 3; z-index: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .sched-grid-block.is-pulse { animation: none; box-shadow: 0 0 0 3px var(--warning-border); }
+}
+/* "Resolving: A overlaps B · Cancel" above the grid (Manual swap from an overlap). */
+.sched-resolve-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--warning-border);
+  background: var(--warning-surface);
+  color: var(--warning-text);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.sched-resolve-bar > span { flex: 1; min-width: 0; }
+/* The overlap popover (portal, fixed position). */
+.sched-overlap-popover {
+  position: fixed;
+  z-index: 70;
+  width: min(300px, calc(100vw - 16px));
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--warning-border);
+  background: var(--white);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  font-size: 12px;
+}
+.sched-overlap-popover-title {
+  margin-bottom: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  color: var(--warning-text);
+}
+.sched-overlap-popover-row { padding: 6px 0; border-top: 1px solid var(--border-light); }
+.sched-overlap-popover-row:first-of-type { border-top: none; }
+.sched-overlap-popover-label { font-weight: 700; line-height: 1.4; }
+.sched-overlap-popover-time { font-weight: 500; color: var(--text-secondary); }
+.sched-overlap-popover-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.sched-overlap-popover-actions button {
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sched-overlap-popover-actions button:hover { border-color: var(--scarlet); color: var(--scarlet); }
+.sched-overlap-popover-actions button.is-remove:hover { border-color: var(--warning-border); color: var(--warning-text); }
 /* Where a displaced section used to be, until it gets a replacement: a dashed
    outline in its course color, "Removed: <section>" with the section struck
    through. Drawn before (so under) the real blocks and ghosts, never clickable. */
@@ -1203,6 +1729,67 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   flex-direction: column;
   gap: 1px;
   pointer-events: none;
+}
+/* An exam meeting of a placed section: a full-width overlay across its day
+   column, above the class blocks. Dashed outline and a light tint of the
+   course color; pointer-events: none so a class under it stays clickable. Not
+   in the lanes, so it takes no gutter. Only the small label pill takes the
+   pointer (for its tooltip). */
+.sched-grid-exam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  border: 1.5px dashed var(--sched-accent);
+  border-radius: 5px;
+  background: transparent; /* fallback if color-mix isn't supported */
+  background: color-mix(in srgb, var(--sched-accent) 13%, transparent);
+  pointer-events: none;
+  /* The label pill picks its text layout from this overlay's own width. */
+  container-type: inline-size;
+}
+/* The label names the class: "CAS PY 212 · Exam 6:30–8:15pm". Solid background,
+   in the upper-left corner unless a class block is under it (WeeklyGrid picks the
+   nearest free corner). Narrower overlays use two lines, then "PY 212 exam". */
+.sched-grid-exam-label {
+  position: absolute;
+  max-width: calc(100% - 6px);
+  padding: 0 5px;
+  border: 1px solid var(--sched-accent);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: auto;
+  cursor: default;
+}
+.sched-grid-exam-label.is-top-left { top: 3px; left: 3px; }
+.sched-grid-exam-label.is-top-right { top: 3px; right: 3px; }
+.sched-grid-exam-label.is-bottom-left { bottom: 3px; left: 3px; }
+.sched-grid-exam-label.is-bottom-right { bottom: 3px; right: 3px; }
+.sched-grid-exam-two,
+.sched-grid-exam-short { display: none; }
+.sched-grid-exam-two > span { display: block; overflow: hidden; text-overflow: ellipsis; }
+@container (max-width: 175px) {
+  .sched-grid-exam-full { display: none; }
+  .sched-grid-exam-two { display: block; }
+}
+@container (max-width: 100px) {
+  .sched-grid-exam-two { display: none; }
+  .sched-grid-exam-short { display: inline; }
+  /* Too narrow for one line: let "PY 212 exam" wrap rather than be cut off. */
+  .sched-grid-exam-label {
+    padding: 0 3px;
+    font-size: 8.5px;
+    line-height: 11px;
+    text-align: center;
+    white-space: normal;
+  }
 }
 .sched-grid-removed-label { font-size: 10px; font-weight: 700; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sched-grid-removed-time { font-size: 9px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1247,7 +1834,7 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   background: color-mix(in srgb, var(--sched-accent) 14%, var(--cream));
   /* Lane width varies (full / half / third of the day column) — the chip
      rules below key off this ghost's own width. */
-  container-type: inline-size;
+  container: sched-lane / size;
 }
 /* --sched-accent comes from whichever sched-color-N class is applied
    alongside this one (the same course-color system real blocks use), so
@@ -1278,6 +1865,31 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
 .sched-grid-ghost-block.has-conflict .sched-grid-ghost-block-code,
 .sched-grid-ghost-block.has-conflict .sched-grid-ghost-block-time {
   color: color-mix(in srgb, var(--text-secondary) 94%, var(--cream));
+}
+/* Auto: a show-all ghost whose section is already selected — solid outline
+   and a check mark in place of the swap glyph. Unselected ghosts stay dashed. */
+.sched-grid-ghost-block.is-selected { border-style: solid; }
+.sched-grid-ghost-icon.is-check {
+  width: 14px;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--sched-accent);
+  opacity: 1;
+}
+/* Manual swap: a ghost that fits with no overlap — solid green outline and a
+   "fits" tag. Ghosts that still overlap keep the red bar and "overlap" chip. */
+.sched-grid-ghost-block.is-fits {
+  border-style: solid;
+  border-color: var(--success-strong);
+}
+.sched-grid-ghost-chip.is-fits {
+  background: var(--success-surface);
+  color: var(--success-text);
+  border: 1px solid var(--success-strong);
+  line-height: 11px;
 }
 /* The slot's current occupant, drawn as a ghost too: clicking it keeps it. */
 .sched-grid-ghost-block.is-current { border-color: var(--scarlet); border-width: 2px; }
@@ -1343,6 +1955,22 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
     border: 0;
     background: var(--warning-border);
     color: var(--warning-surface);
+  }
+  .sched-grid-ghost-chip.is-fits {
+    width: 12px;
+    height: 12px;
+    line-height: 0;
+    border: 0;
+    background: var(--success-strong);
+    color: #fff;
+  }
+  .sched-grid-ghost-chip.is-fits::after {
+    content: '✓';
+    display: block;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 12px;
+    text-align: center;
   }
   .sched-grid-ghost-chip.is-conflict::after {
     content: '!';
@@ -1464,6 +2092,11 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   color: var(--text-secondary);
   font-size: 10px;
   font-weight: 600;
+}
+.sched-swap-sheet-row-tag.is-fits {
+  border: 1px solid var(--success-strong);
+  background: var(--success-surface);
+  color: var(--success-text);
 }
 .sched-swap-sheet-row.is-offpool { border-style: dashed; }
 .sched-swap-sheet-pin-btn {
@@ -1825,9 +2458,23 @@ html[data-theme='dark'] .sched-grid-block-action-btn { background: rgba(0,0,0,.3
   .sched-grid-ghost-block {
     display: none;
   }
+  /* The preview pane fills the viewport here; its desktop 460px floor would
+     make it wider than a phone and cut off the right-hand day columns. */
+  .scheduler-right { min-width: 0; }
   .sched-swap-sheet-overlay {
     display: flex;
   }
   .sched-block-key-desktop { display: none; }
   .sched-block-key-mobile { display: inline; }
+  /* Ghost blocks aren't drawn on the narrow grid (see above), so the
+     "Show all" toggle and its "Clear ghosts" link aren't offered here. */
+  .sched-ghost-toggle-btn,
+  .sched-clear-ghosts-btn { display: none; }
+  /* Card header: on a phone the course title keeps its room and the "Select
+     all sections" button drops to its own line under it. */
+  .sched-draft-card-header { flex-wrap: wrap; }
+  .sched-draft-card-toggle { order: 1; flex: 1 1 200px; }
+  .sched-remove-course-btn { order: 2; }
+  .sched-course-select-all { order: 3; margin-left: 20px; }
+  .sched-draft-card-code { white-space: nowrap; }
 }

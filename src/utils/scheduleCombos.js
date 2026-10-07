@@ -1,5 +1,6 @@
-import { sectionsConflict, describeSectionTime } from './sectionTime';
-import { classifyComponent, groupSectionsByComponent } from './sectionComponents';
+import { sectionsConflict, classMeetings, describeSectionTime } from './sectionTime.js';
+import { classifyComponent, groupSectionsByComponent } from './sectionComponents.js';
+import { describeSectionName } from './sectionType.js';
 
 // Safety valves against a pathological input (e.g. 8 courses × 6 sections
 // each = 1.6M raw combinations) freezing the tab — NOT the "artificial cap
@@ -17,7 +18,11 @@ export const MAX_RESULTS = 2_000;
 // slot-by-slot (rather than building the full cartesian product then
 // filtering) so a conflict prunes an entire branch early instead of being
 // discovered after the fact.
-export function generateSchedules(slots, sectionsById, { limit = MAX_RESULTS } = {}) {
+//
+// `allowOverlaps`: time conflicts stop being failures — see
+// generateRankedByOverlap below. Off, this is unchanged.
+export function generateSchedules(slots, sectionsById, { limit = MAX_RESULTS, allowOverlaps = false } = {}) {
+  if (allowOverlaps) return generateRankedByOverlap(slots, sectionsById, limit);
   const lists = slots.filter((s) => s.options.length > 0).map((s) => s.options);
 
   const schedules = [];
@@ -50,6 +55,211 @@ export function generateSchedules(slots, sectionsById, { limit = MAX_RESULTS } =
   if (lists.length > 0) backtrack(0, []);
 
   return { schedules, truncated };
+}
+
+// Same search and same results (same order, same caps) as generateSchedules'
+// strict path, but iterative so it can hand control back to the browser
+// every `yieldEvery` candidates — the Scheduler runs it automatically on
+// every draft edit, and a big draft must not freeze typing or checkboxes.
+// `isCancelled()` is checked at each yield; a cancelled run resolves to null.
+export async function generateSchedulesAsync(slots, sectionsById, { limit = MAX_RESULTS, yieldEvery = 2000, isCancelled = () => false } = {}) {
+  const lists = slots.filter((s) => s.options.length > 0).map((s) => s.options);
+  const schedules = [];
+  let explored = 0;
+  let truncated = false;
+  if (lists.length === 0) return { schedules, truncated };
+
+  const chosen = [];
+  const next = new Array(lists.length).fill(0); // next option to try per level
+  let i = 0;
+  let sinceYield = 0;
+  while (i >= 0) {
+    if (i === lists.length) {
+      schedules.push([...chosen]);
+      if (schedules.length >= limit) {
+        truncated = true;
+        break;
+      }
+      i--;
+      chosen.pop();
+      continue;
+    }
+    if (next[i] >= lists[i].length) {
+      next[i] = 0;
+      i--;
+      if (i >= 0) chosen.pop();
+      continue;
+    }
+    const sectionId = lists[i][next[i]++];
+    explored++;
+    if (explored > MAX_EXPLORED) {
+      truncated = true;
+      break;
+    }
+    if (++sinceYield >= yieldEvery) {
+      sinceYield = 0;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (isCancelled()) return null;
+    }
+    const candidate = sectionsById[sectionId];
+    if (!candidate) continue;
+    if (chosen.some((id) => sectionsConflict(sectionsById[id], candidate))) continue;
+    chosen.push(sectionId);
+    i++;
+  }
+  return { schedules, truncated };
+}
+
+// Minutes two sections overlap in a week, summed over every pair of their
+// class meetings (overlap per shared day × shared days), 0 if they don't, or
+// if they're the same section. Positive exactly when sectionsConflict is true.
+export function overlapMinutes(a, b) {
+  if (a === b || (a?.id != null && a.id === b?.id)) return 0;
+  let total = 0;
+  for (const ma of classMeetings(a)) {
+    for (const mb of classMeetings(b)) {
+      const sharedDays = ma.days.filter((d) => mb.days.includes(d)).length;
+      const perDay = Math.min(ma.endMin, mb.endMin) - Math.max(ma.startMin, mb.startMin);
+      if (sharedDays > 0 && perDay > 0) total += sharedDays * perDay;
+    }
+  }
+  return total;
+}
+
+// { pairs, minutes } for a set of section ids: how many pairs of sections
+// overlap, and the total overlap time. Used for the stepper header and the
+// bookmarked/saved rows, so it works for any schedule, generated or not.
+export function overlapSummary(sectionIds, sectionsById) {
+  const sections = sectionIds.map((id) => sectionsById[id]).filter(Boolean);
+  let pairs = 0;
+  let minutes = 0;
+  for (let i = 0; i < sections.length; i++) {
+    for (let j = i + 1; j < sections.length; j++) {
+      const m = overlapMinutes(sections[i], sections[j]);
+      if (m > 0) {
+        pairs++;
+        minutes += m;
+      }
+    }
+  }
+  return { pairs, minutes };
+}
+
+// "Allow overlaps" generation: still one pick per slot, but a time conflict
+// only costs a point instead of pruning the branch. Results come back
+// fewest overlapping pairs first, then least total overlap time — so every
+// conflict-free schedule comes first, then the one-overlap ones, and so on.
+//
+// Search is depth-first branch-and-bound that keeps only the best `limit`
+// combinations seen (a max-heap on [pairs, minutes]):
+// - at each step it tries the options that add the fewest overlaps first,
+//   so low-overlap schedules are found early;
+// - once `limit` are kept, any branch that's already no better than the
+//   worst kept one is cut (overlaps only ever grow along a branch);
+// - `explored` counts every option tried and stops the search past
+//   MAX_EXPLORED, like the strict search.
+// Memory never exceeds `limit` schedules. Without the MAX_EXPLORED stop the
+// result is exactly the best `limit`; with it, it's the best found so far
+// (still sorted), and `truncated` says so either way.
+// (Iterative deepening — "all with 0 overlaps, then ≤1, …" — was tried
+// first: with many mutually-overlapping courses every schedule has many
+// overlaps and it used the whole budget on the empty low levels, returning
+// nothing at all.)
+function generateRankedByOverlap(slots, sectionsById, limit) {
+  const lists = slots.filter((s) => s.options.length > 0).map((s) => s.options);
+  let explored = 0;
+  let truncated = false;
+  if (lists.length === 0) return { schedules: [], truncated, allowOverlaps: true };
+
+  const pairCache = new Map();
+  function pairCost(idA, idB) {
+    const key = idA < idB ? `${idA}|${idB}` : `${idB}|${idA}`;
+    let m = pairCache.get(key);
+    if (m === undefined) {
+      m = overlapMinutes(sectionsById[idA], sectionsById[idB]);
+      pairCache.set(key, m);
+    }
+    return m;
+  }
+
+  // Max-heap of kept results; heap[0] is the worst kept one. `seq` keeps
+  // ties in discovery order.
+  const heap = [];
+  const worse = (a, b) => a.pairs !== b.pairs ? a.pairs > b.pairs
+    : a.minutes !== b.minutes ? a.minutes > b.minutes : a.seq > b.seq;
+  function siftUp(i) {
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (!worse(heap[i], heap[p])) break;
+      [heap[i], heap[p]] = [heap[p], heap[i]];
+      i = p;
+    }
+  }
+  function siftDown(i) {
+    for (;;) {
+      const l = 2 * i + 1;
+      const r = l + 1;
+      let m = i;
+      if (l < heap.length && worse(heap[l], heap[m])) m = l;
+      if (r < heap.length && worse(heap[r], heap[m])) m = r;
+      if (m === i) break;
+      [heap[i], heap[m]] = [heap[m], heap[i]];
+      i = m;
+    }
+  }
+  // Can a (pairs, minutes) branch still beat the worst kept result?
+  const canImprove = (pairs, minutes) => heap.length < limit
+    || pairs < heap[0].pairs || (pairs === heap[0].pairs && minutes < heap[0].minutes);
+
+  let seq = 0;
+  function search(i, chosen, pairs, minutes) {
+    if (i === lists.length) {
+      const entry = { ids: [...chosen], pairs, minutes, seq: seq++ };
+      if (heap.length < limit) {
+        heap.push(entry);
+        siftUp(heap.length - 1);
+      } else {
+        heap[0] = entry;
+        siftDown(0);
+        truncated = true; // a kept schedule was bumped: there are more than `limit`
+      }
+      return;
+    }
+    const options = [];
+    for (const sectionId of lists[i]) {
+      if (!sectionsById[sectionId]) continue;
+      let addPairs = 0;
+      let addMinutes = 0;
+      for (const id of chosen) {
+        const m = pairCost(id, sectionId);
+        if (m > 0) {
+          addPairs++;
+          addMinutes += m;
+        }
+      }
+      options.push({ sectionId, addPairs, addMinutes });
+    }
+    options.sort((a, b) => a.addPairs - b.addPairs || a.addMinutes - b.addMinutes);
+    for (const { sectionId, addPairs, addMinutes } of options) {
+      if (explored >= MAX_EXPLORED) {
+        truncated = true;
+        return;
+      }
+      explored++;
+      if (!canImprove(pairs + addPairs, minutes + addMinutes)) {
+        // Options are sorted, so no later one at this step can do better.
+        if (heap.length >= limit) truncated = true;
+        return;
+      }
+      chosen.push(sectionId);
+      search(i + 1, chosen, pairs + addPairs, minutes + addMinutes);
+      chosen.pop();
+    }
+  }
+  search(0, [], 0, 0);
+
+  heap.sort((a, b) => (worse(a, b) ? 1 : -1));
+  return { schedules: heap.map((e) => e.ids), truncated, allowOverlaps: true };
 }
 
 // draftCourses: [{ courseKey, considering: { [componentKey]: sectionId[]
@@ -193,7 +403,7 @@ export function describeSectionSet(sectionIds, sectionsById, courseMap) {
       seenCourses.add(section.courseKey);
       compactParts.push(courseLabel);
     }
-    lines.push(`${courseLabel} ${section.classSection} (${describeSectionTime(section)})`);
+    lines.push(`${describeSectionName(section, courseLabel)} (${describeSectionTime(section)})`);
   }
   return { compact: compactParts.join(', '), lines };
 }

@@ -225,6 +225,7 @@ html[data-theme='dark'] .course-info-offerings-dot { color: var(--warning-border
   gap: 2px 10px;
 }
 .course-info-section-label { font-weight: 700; color: var(--text); }
+.course-info-section-exam { color: var(--text-muted); }
 .course-info-section-seats { font-weight: 600; }
 .course-info-section-seats.is-open { color: var(--success-text); }
 .course-info-section-seats.is-closed { color: var(--warning-text); }
@@ -247,4 +248,17 @@ html[data-theme='dark'] .course-info-offerings-dot { color: var(--warning-border
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     padding-bottom: env(safe-area-inset-bottom, 0);
   }
+}
+
+/* The 3-letter section type pill (same look as on the Scheduler's blocks). */
+.course-info-section-label .sched-type-pill {
+  padding: 0 4px;
+  border-radius: 4px;
+  border: 1px solid var(--badge-cool-text);
+  background: var(--badge-cool-bg);
+  color: var(--badge-cool-text);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .4px;
+  line-height: 12px;
 }

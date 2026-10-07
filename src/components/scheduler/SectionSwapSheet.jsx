@@ -1,4 +1,5 @@
-import { sectionsConflict, describeSectionTime, describeSeatStatus } from '../../utils/sectionTime';
+import { sectionTypeLabel } from '../../utils/sectionType';
+import { sectionsConflict, describeSectionTime, describeExamTime, describeSeatStatus } from '../../utils/sectionTime';
 import { classifyComponent } from '../../utils/sectionComponents';
 import { swapGhostReasons } from '../../utils/swapReasons';
 import { resolvedCourseColorIndex } from '../../utils/scheduleColors';
@@ -29,6 +30,9 @@ export default function SectionSwapSheet({
   onClose,
   displaceInfo = null,
   onContinueDisplace = () => {},
+  // Manual: overlaps are allowed (so a clash says "Overlaps", not "replaces"), a
+  // ghost with no clash is marked "fits", and there's no pin or draft filter.
+  manual = false,
 }) {
   const courseCode = courseMap[slot.courseKey]?.courseNumber ?? slot.courseKey;
   const componentLabel = candidates[0]?.componentLabel || slot.component;
@@ -74,7 +78,7 @@ export default function SectionSwapSheet({
             const isCurrent = !displaceInfo && section.id === slot.currentSectionId;
             const isLocked = lockedSectionIds.has(section.id);
             const conflicts = committedOthers.filter((o) => sectionsConflict(o, section));
-            const reasons = isCurrent ? [] : swapGhostReasons(section, poolSectionIds, globalTimeFilter);
+            const reasons = isCurrent || manual ? [] : swapGhostReasons(section, poolSectionIds, globalTimeFilter);
             // A clashing row can be placed (it displaces what it clashes
             // with) unless one of those is pinned; the current row is always
             // tappable — that's "keep".
@@ -110,12 +114,16 @@ export default function SectionSwapSheet({
                 }}
               >
                 <div className="sched-swap-sheet-row-top">
+                  <span className="sched-type-pill" title={sectionTypeLabel(section).full}>{sectionTypeLabel(section).abbr}</span>
                   <span className="sched-swap-sheet-row-section">Section {section.classSection}</span>
                   {isCurrent && <span className="sched-swap-sheet-row-current-badge">Current</span>}
                   {reasons.map((r) => (
                     <span key={r.key} className="sched-swap-sheet-row-tag" title={r.text}>{r.label}</span>
                   ))}
-                  {isCurrent && (
+                  {!isCurrent && manual && conflicts.length === 0 && (
+                    <span className="sched-swap-sheet-row-tag is-fits" title="No overlap with your other sections">fits</span>
+                  )}
+                  {isCurrent && !manual && (
                     <button
                       type="button"
                       className={`sched-swap-sheet-pin-btn${isLocked ? ' is-locked' : ''}`}
@@ -129,6 +137,7 @@ export default function SectionSwapSheet({
                 </div>
                 <div className="sched-swap-sheet-row-details">
                   <span>{describeSectionTime(section)}</span>
+                  {describeExamTime(section) && <span>Exam: {describeExamTime(section)}</span>}
                   <span>{instructorLabel}</span>
                   <span>{describeSeatStatus(section)}</span>
                 </div>
@@ -136,7 +145,9 @@ export default function SectionSwapSheet({
                   <div className="sched-swap-sheet-row-conflict">
                     {blocked
                       ? `Can't place — conflicts with pinned ${[...new Set(pinnedClashes.map(nameOf))].join(', ')}`
-                      : `Swap in — replaces ${[...new Set(conflicts.map(nameOf))].join(', ')}`}
+                      : manual
+                        ? `Overlaps ${[...new Set(conflicts.map(nameOf))].join(', ')} (allowed)`
+                        : `Swap in — replaces ${[...new Set(conflicts.map(nameOf))].join(', ')}`}
                   </div>
                 )}
               </div>

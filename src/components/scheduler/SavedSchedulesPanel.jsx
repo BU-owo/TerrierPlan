@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CURRENT_TERM, CURRENT_TERM_LABEL, scheduleTerm, termLabel } from '../../utils/term';
-import { describeSectionSet, scheduleKey } from '../../utils/scheduleCombos';
+import { describeSectionSet, scheduleKey, overlapSummary } from '../../utils/scheduleCombos';
 import GuestSignInButton from '../GuestSignInButton';
 
 // Small inline pencil glyph for the rename affordance — a real icon asset
@@ -39,6 +39,7 @@ export default function SavedSchedulesPanel({
   actionError = null,
   onDismissError = () => {},
   isGuest = false,
+  saveNote = null,
 }) {
   const [name, setName] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -113,6 +114,8 @@ export default function SavedSchedulesPanel({
 
   function renderRow(schedule) {
     const { compact, lines } = describeSectionSet(schedule.selectedSectionIds || [], sectionsById, courseMap);
+    // Only counts sections whose data is loaded (0 otherwise, so nothing shows).
+    const overlaps = overlapSummary(schedule.selectedSectionIds || [], sectionsById).pairs;
     const isEditing = editingId === schedule.id;
     return (
       <div
@@ -154,6 +157,12 @@ export default function SavedSchedulesPanel({
                   section id. */}
               {compact && <span className="sched-saved-row-contents">{compact}</span>}
             </span>
+            {overlaps > 0 && (
+              <span className="sched-overlap-count">
+                <span className="sched-visually-hidden"> · </span>
+                {overlaps} overlap{overlaps === 1 ? '' : 's'}
+              </span>
+            )}
             <span className="sched-saved-row-count">{(schedule.selectedSectionIds || []).length} sections</span>
           </button>
         )}
@@ -197,7 +206,7 @@ export default function SavedSchedulesPanel({
       <div className="sched-save-section">
         <div className="sched-save-heading">Save the schedule you’re previewing as a contender</div>
         <form className="sched-save-form" onSubmit={handleSave}>
-          <button type="submit" className={`sched-save-btn${alreadySaved ? ' is-saved' : ''}`} disabled={saveBlocked}>
+          <button type="submit" className={`sched-save-btn${alreadySaved ? ' is-saved' : ''}`} disabled={saveBlocked} title={canSave && saveNote ? saveNote : undefined}>
             {!canSave
               ? 'Preview a schedule to save it'
               : justSaved

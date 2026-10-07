@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { describeSectionTime } from '../../utils/sectionTime';
+import SectionNotes from './SectionNotes';
+import { describeSectionTime, describeExamTime, describeMeeting, classMeetings, examMeetings } from '../../utils/sectionTime';
 
 // One selectable section under a DraftCourseCard. Checkbox membership is
 // the "in consideration" set for its course — multiple rows can be checked
@@ -12,7 +13,10 @@ import { describeSectionTime } from '../../utils/sectionTime';
 // (the lock already implies it's "in", and un-checking it while leaving the
 // lock in place would be a confusing state to be in), and it gets its own
 // pin/border treatment distinct from a plain checked row.
-export default function SectionRow({ section, checked, locked, conflicts, notes, filteredOut, onToggle, onToggleLock }) {
+//
+// `manual` (Manual mode): the checkbox means "placed on the grid" instead of
+// "in consideration", and there's no lock — pins only steer generation.
+export default function SectionRow({ section, checked, locked, conflicts, notes, filteredOut, onToggle, onToggleLock, manual = false }) {
   const [conflictExpanded, setConflictExpanded] = useState(false);
 
   const instructorLabel = section.instructors?.length
@@ -21,6 +25,13 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
   const seatsLabel = section.capEnrl != null ? `${section.totEnrl ?? 0}/${section.capEnrl} seats` : null;
   const isOpen = (section.enrlStat || '').toLowerCase() === 'open';
   const conflictCount = conflicts?.length ?? 0;
+  // Rooms per class meeting: one shared room reads as before; differing rooms
+  // are shown next to each meeting's own time.
+  const meetings = classMeetings(section);
+  const rooms = [...new Set(meetings.map((m) => m.facilId).filter(Boolean))];
+  const roomsDiffer = rooms.length > 1;
+  const singleRoom = meetings.length === 0 ? section.facilId : rooms[0];
+  const examTime = examMeetings(section).length > 0 ? describeExamTime(section) : '';
   const conflictFullText = conflictCount > 0 ? `Conflicts with ${conflicts.map((c) => c.label).join('; ')}` : '';
 
   return (
@@ -39,7 +50,7 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
           checked={checked || locked}
           disabled={locked}
           onChange={onToggle}
-          aria-label={`Consider section ${section.classSection}`}
+          aria-label={manual ? `Place section ${section.classSection} on your schedule` : `Consider section ${section.classSection}`}
         />
         <div className="sched-section-row-info">
           <div className="sched-section-row-top">
@@ -47,32 +58,40 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
             <span className={`sched-enrl-badge ${isOpen ? 'is-open' : 'is-closed'}`}>
               {section.enrlStat || '—'}
             </span>
+            {examTime && <span className="sched-exam-chip" title="This section has an exam block — it doesn't count as a time conflict">Exam block</span>}
             {filteredOut && (
               <span className="sched-filtered-out-badge" title="Doesn't fit your time filter">Outside filter</span>
             )}
           </div>
           <div className="sched-section-row-details">
-            <span>{describeSectionTime(section)}</span>
-            {section.facilId && <span>{section.facilId}</span>}
+            <span>
+              {roomsDiffer
+                ? meetings.map((m) => `${describeMeeting(m)}${m.facilId ? ` (${m.facilId})` : ''}`).join(' · ')
+                : describeSectionTime(section)}
+            </span>
+            {!roomsDiffer && singleRoom && <span>{singleRoom}</span>}
+            {examTime && <span>Exam: {examTime}</span>}
             <span>{instructorLabel}</span>
             {section.mode && <span>{section.mode}</span>}
             {seatsLabel && <span>{seatsLabel}</span>}
             {section.credits != null && <span>{section.credits} cr</span>}
           </div>
-          {notes && <div className="sched-section-row-notes">{notes}</div>}
+          {notes && <div className="sched-section-row-notes"><SectionNotes notes={notes} /></div>}
         </div>
       </label>
 
-      <button
-        type="button"
-        className={`sched-lock-btn${locked ? ' is-locked' : ''}`}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => { e.stopPropagation(); onToggleLock(); }}
-        aria-label={locked ? `Unlock section ${section.classSection}` : `Lock section ${section.classSection} into every generated schedule`}
-        title={locked ? 'Locked into every generated schedule — click to unlock' : 'Lock this section into every generated schedule'}
-      >
-        {locked ? '📌' : '📍'}
-      </button>
+      {!manual && (
+        <button
+          type="button"
+          className={`sched-lock-btn${locked ? ' is-locked' : ''}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onToggleLock(); }}
+          aria-label={locked ? `Unlock section ${section.classSection}` : `Lock section ${section.classSection} into every generated schedule`}
+          title={locked ? 'Locked into every generated schedule — click to unlock' : 'Lock this section into every generated schedule'}
+        >
+          {locked ? '📌' : '📍'}
+        </button>
+      )}
 
       {conflictCount > 0 && (
         <button

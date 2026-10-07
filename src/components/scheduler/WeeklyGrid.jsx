@@ -1,17 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   DAY_ORDER,
-  sectionMeeting,
+  classMeetings,
+  examMeetings,
   sectionsConflict,
   describeSectionTime,
+  describeExamTime,
   describeSeatStatus,
+  describeMeetingShort,
   formatClock,
+  formatClockRange,
 } from '../../utils/sectionTime';
+import { sectionTypeLabel, shortCourseCode, describeInstructors, describeSectionName } from '../../utils/sectionType';
 import { classifyComponent } from '../../utils/sectionComponents';
 import { swapGhostReasons } from '../../utils/swapReasons';
 import { SCHED_COLOR_COUNT, resolvedCourseColorIndex } from '../../utils/scheduleColors';
 import PinIcon from './PinIcon';
 import SwapIcon from './SwapIcon';
+import OverlapPopover from './OverlapPopover';
 
 const PX_PER_MIN = 1.6;
 const DEFAULT_START = 8 * 60; // 8:00am — only used as the empty-schedule fallback range
@@ -25,12 +31,96 @@ const MIN_RANGE_SPAN_MIN = 5 * 60; // never show less than a 5-hour window, so o
 // keeps a short class's block from either forcing everything else taller
 // than it needs to be, or cramming 4 lines into a box that only fits 2 and
 // having the bottom ones clip.
-const BLOCK_PADDING_V = 10;
-const ACTIONS_ROW_H = 17;
-const LINE_H = 14;
-const MIN_BLOCK_HEIGHT = BLOCK_PADDING_V + ACTIONS_ROW_H + LINE_H * 2;
-const PROF_LINE_THRESHOLD = MIN_BLOCK_HEIGHT + LINE_H;
-const ROOM_LINE_THRESHOLD = PROF_LINE_THRESHOLD + LINE_H;
+// A block's text is chosen by its height AND width in scheduler.css (container
+// queries on the block itself), so a short block drops whole lines instead of
+// clipping them; the floor is just enough for one line. Room and instructor are
+// instructor is drawn from 64px up (scheduler.css drops it whole when the lines
+// above leave no room), the room only in tall blocks (95px+).
+const MIN_BLOCK_HEIGHT = 22;
+const PROF_LINE_THRESHOLD = 64; // drawn from here; scheduler.css drops it when it doesn't fit
+const ROOM_LINE_THRESHOLD = 95;
+
+// One entry per CLASS meeting of a section, so a section that meets twice is
+// drawn (and lane-packed) as two blocks. `mi` keeps React keys unique.
+function toEntries(section, extra) {
+  return classMeetings(section).map((meeting, mi) => ({ section, meeting, mi, ...extra }));
+}
+
+// Two entries clash only if they belong to different sections and share the
+// given day at overlapping times — a section's own meetings never count.
+function entriesOverlapOnDay(a, b, day) {
+  return a.section.id !== b.section.id
+    && a.meeting.days.includes(day) && b.meeting.days.includes(day)
+    && a.meeting.startMin < b.meeting.endMin && b.meeting.startMin < a.meeting.endMin;
+}
+
+// An exam overlay shorter than this shows its label only in the tooltip.
+const EXAM_LABEL_MIN_HEIGHT = 45;
+
+// What a section is, as text for its blocks: the course number (a short form
+// without the school in narrow lanes), then a fixed 3-letter type pill with the
+// section code ("DIS · B3"; in a wide lane the pill gives way to the full name,
+// "Discussion Section · B3"). Which of these is drawn depends on the lane's width
+// (container queries on .sched-lane-text in scheduler.css), in this order as
+// space runs out: course number, type and section, time, room and instructor.
+// The full text is always in the tooltip.
+function CourseCode({ courseCode }) {
+  return (
+    <>
+      <span className="sched-lane-long">{courseCode}</span>
+      <span className="sched-lane-short">{shortCourseCode(courseCode)}</span>
+    </>
+  );
+}
+// `start` ("10:10am") is shown on this line only in the short tier, where the time
+// no longer gets a line of its own (see scheduler.css).
+function TypeLine({ section, start }) {
+  const { abbr, full } = sectionTypeLabel(section);
+  return (
+    <span className="sched-type-line">
+      <span className="sched-type-pill" title={full}>{abbr}</span>
+      <span className="sched-type-fullname">{full}</span>
+      <span className="sched-type-sep"> · </span>
+      <span className="sched-type-sec">{section.classSection}</span>
+      {start && <span className="sched-type-start">· {start}</span>}
+    </span>
+  );
+}
+
+// "CAS CH 110 · Discussion Section B3": a section named in full for tooltips.
+const longName = (courseCode, section) => `${courseCode} · ${sectionTypeLabel(section).full} ${section.classSection}`;
+
+// Ghost text: the course number (and chips) on the first line, the type and
+// section under it, then the time.
+function GhostHead({ courseCode, children }) {
+  return (
+    <span className="sched-grid-ghost-block-head">
+      <span className="sched-grid-ghost-block-code"><CourseCode courseCode={courseCode} /></span>
+      {children}
+    </span>
+  );
+}
+function GhostTime({ children }) {
+  return <span className="sched-grid-ghost-block-time">{children}</span>;
+}
+
+// Which corner of an exam overlay its label pill goes in: the upper-left, unless
+// a class block sits under that spot — then the nearest corner with nothing
+// under it (upper-right, lower-left, lower-right). `laidOut` is the day's class
+// blocks with their lanes. The pill is taken to be ~60% of the column wide and
+// two lines (28px) tall, the larger of its layouts.
+function pickExamCorner(meeting, laidOut) {
+  const pillMin = 28 / PX_PER_MIN;
+  const span = 0.6;
+  const bands = { top: [meeting.startMin, meeting.startMin + pillMin], bottom: [meeting.endMin - pillMin, meeting.endMin] };
+  const sides = { left: [0, span], right: [1 - span, 1] };
+  const hits = (band, side) => laidOut.some((e) => e.meeting.startMin < band[1] && band[0] < e.meeting.endMin
+    && e.lane / e.laneCount < side[1] && side[0] < (e.lane + 1) / e.laneCount);
+  for (const [v, h] of [['top', 'left'], ['top', 'right'], ['bottom', 'left'], ['bottom', 'right']]) {
+    if (!hits(bands[v], sides[h])) return `${v}-${h}`;
+  }
+  return 'top-left';
+}
 
 function formatHourLabel(hour) {
   const h = hour % 24;
@@ -46,6 +136,8 @@ function formatHourLabel(hour) {
 // gap with nothing spanning it ends a cluster), then within each cluster
 // greedily hand each item the first lane whose previous occupant has
 // already ended. Items outside any overlap get laneCount 1 (full width).
+// Also lays out the committed blocks themselves, so a schedule with
+// overlapping classes draws them side by side.
 function layoutGhostsForDay(items) {
   const sorted = [...items].sort((a, b) => a.meeting.startMin - b.meeting.startMin);
   const results = [];
@@ -178,19 +270,76 @@ export default function WeeklyGrid({
   displaceInfo = null,
   onContinueDisplace = () => {},
   incompleteLabels = [],
+  // 'auto' | 'manual'. Manual: the blocks are what the student placed by
+  // hand, so each only offers × (onRemovePlaced) — no pin, no swap.
+  mode = 'auto',
+  onRemovePlaced = () => {},
+  // Auto: sections checked for courses that aren't complete yet, drawn faint
+  // and dashed ("not finished") — display only, never part of the schedule.
+  pendingSectionIds = [],
+  // "Show all" ghosts (a component group's every section, see
+  // DraftCourseCard). Clickable only when onPlaceGhost is given (Manual).
+  showAllGhosts = [],
+  onPlaceGhost = null,
+  // Auto: clicking a show-all ghost toggles that section's checkbox in the
+  // draft; `selectedGhostIds` are the ghosts whose section is already checked.
+  onToggleGhost = null,
+  selectedGhostIds = new Set(),
+  // courseKey -> ["Laboratory", "Discussion"] for each course that still lacks
+  // a component (Auto): drives the placeholders' "needs ..." label and the
+  // amber ring on the legend dot.
+  missingByCourse = {},
+  onClearGhosts = () => {},
+  // Manual: "Resolving: A overlaps B" bar above the grid while a swap was started
+  // from an overlap ({ text }); a { a, b, n } pair to scroll to and pulse (the
+  // "N overlaps" stepper); and "Find another time" from the overlap popover.
+  resolving = null,
+  pulse = null,
+  onFindAnotherTime = () => {},
 }) {
   const [openColorFor, setOpenColorFor] = useState(null); // courseKey, or null
+  const manual = mode === 'manual';
+  // Manual overlap tools: the section whose overlaps are highlighted (hover or
+  // keyboard focus), the open overlap popover, and the blocks currently pulsing.
+  const [hoverId, setHoverId] = useState(null);
+  const [popover, setPopover] = useState(null); // { sectionId, anchorEl }
+  const [pulseKeys, setPulseKeys] = useState(() => new Set());
+  const rootRef = useRef(null);
+  const entriesRef = useRef([]);
+  useEffect(() => {
+    if (!pulse) return undefined;
+    const a = entriesRef.current.filter((e) => e.section.id === pulse.a);
+    const b = entriesRef.current.filter((e) => e.section.id === pulse.b);
+    let day = null;
+    for (const ea of a) for (const eb of b) for (const d of ea.meeting.days) if (!day && entriesOverlapOnDay(ea, eb, d)) day = d;
+    if (!day) return undefined;
+    setPulseKeys(new Set([`${pulse.a}|${day}`, `${pulse.b}|${day}`]));
+    rootRef.current?.querySelector(`[data-section-id="${pulse.a}"][data-day="${day}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const timer = setTimeout(() => setPulseKeys(new Set()), 1800);
+    return () => clearTimeout(timer);
+  }, [pulse]);
 
   const sections = sectionIds.map((id) => sectionsById[id]).filter(Boolean);
-  const withMeeting = sections
-    .map((section) => ({ section, meeting: sectionMeeting(section) }))
-    .filter((m) => m.meeting);
-  const withoutMeeting = sections.filter((s) => !sectionMeeting(s));
+  const withMeeting = sections.flatMap((section) => toEntries(section));
+  entriesRef.current = withMeeting;
+  const withoutMeeting = sections.filter((s) => classMeetings(s).length === 0);
+  const pending = pendingSectionIds
+    .map((id) => sectionsById[id])
+    .filter(Boolean)
+    .flatMap((section) => toEntries(section, { isPending: true }));
+  // Show-all ghosts aren't drawn while a swap slot is open (that has its own
+  // ghost layer); ones with no meeting time are listed under the grid.
+  const showAllActive = swapSlot ? [] : showAllGhosts;
+  const showAllTimed = showAllActive.flatMap((section) => toEntries(section));
+  const showAllUntimed = showAllActive.filter((s) => classMeetings(s).length === 0);
 
-  if (sections.length === 0) {
+  if (sections.length === 0 && pending.length === 0 && showAllActive.length === 0) {
     return (
       <div className="sched-grid-empty">
-        Generate schedules or load a saved one to preview it here.
+        {manual
+          ? 'Click sections on the left to place them here.'
+          : 'Check sections for your courses, or load a saved schedule, to preview it here.'}
       </div>
     );
   }
@@ -208,7 +357,7 @@ export default function WeeklyGrid({
   const alternativeGhosts = swapSlot
     ? swapCandidates
         .filter((s) => s.id !== swapSlot.currentSectionId)
-        .map((section) => {
+        .flatMap((section) => {
           // Every placed section this one would clash with. Clicking it
           // displaces them (the page walks through each), unless one is
           // pinned — then it stays blocked.
@@ -216,25 +365,22 @@ export default function WeeklyGrid({
           const nameOf = (o) => `${courseMap[o.courseKey]?.courseNumber ?? o.courseKey} ${o.componentLabel || classifyComponent(o)}`;
           const clashes = [...new Set(clashSections.map(nameOf))];
           const pinned = [...new Set(clashSections.filter((o) => lockedSectionIds.has(o.id)).map(nameOf))];
-          return {
-            section,
-            meeting: sectionMeeting(section),
+          return toEntries(section, {
             conflict: clashes.length > 0,
             clashes,
             pinned,
-              reasons: swapGhostReasons(section, swapPoolIds, globalTimeFilter),
-          };
+            reasons: manual ? [] : swapGhostReasons(section, swapPoolIds, globalTimeFilter),
+          });
         })
-        .filter((g) => g.meeting)
     : [];
   // The slot's current occupant is drawn as a dashed "Current" ghost too, in
   // the same lane layout as the alternatives (instead of a solid block that
   // an overlapping ghost could sit on top of). Clicking it keeps it.
   const currentSection = swapSlot ? sections.find((s) => s.id === swapSlot.currentSectionId) : null;
-  const currentMeeting = currentSection ? sectionMeeting(currentSection) : null;
-  const ghostCandidates = currentMeeting
-    ? [...alternativeGhosts, { section: currentSection, meeting: currentMeeting, conflict: false, clashes: [], pinned: [], reasons: [], isCurrent: true }]
-    : alternativeGhosts;
+  const currentEntries = currentSection
+    ? toEntries(currentSection, { conflict: false, clashes: [], pinned: [], reasons: [], isCurrent: true })
+    : [];
+  const ghostCandidates = [...alternativeGhosts, ...currentEntries];
   const swapCourseCode = swapSlot ? (courseMap[swapSlot.courseKey]?.courseNumber ?? swapSlot.courseKey) : '';
   const swapComponentLabel = swapSlot
     ? (swapCandidates[0]?.componentLabel || swapSlot.component)
@@ -245,12 +391,13 @@ export default function WeeklyGrid({
   // the same combo, not alphabetical/hash order.
   const seenCourseKeys = new Set();
   const legendCourses = [];
-  for (const section of sections) {
+  for (const section of [...sections, ...pending.map((p) => p.section), ...showAllActive]) {
     if (seenCourseKeys.has(section.courseKey)) continue;
     seenCourseKeys.add(section.courseKey);
     legendCourses.push({
       courseKey: section.courseKey,
       label: courseMap[section.courseKey]?.courseNumber ?? section.courseKey,
+      missing: missingByCourse[section.courseKey] || null,
     });
   }
 
@@ -261,9 +408,25 @@ export default function WeeklyGrid({
   // Removed spots (mid displace flow): the sections just taken off the schedule,
   // outlined where they were until each gets a replacement or is left out.
   const removedSpots = (swapSlot && displaceInfo ? displaceInfo.removedSections : [])
-    .map((section) => ({ section, meeting: sectionMeeting(section) }))
-    .filter((r) => r.meeting);
-  const allTimed = swapSlot ? [...withMeeting, ...ghostCandidates, ...removedSpots] : withMeeting;
+    .flatMap((section) => toEntries(section));
+  // While swapping, whatever currently fills the slot is drawn as the dashed
+  // "Current" ghost instead (clicking it keeps it), not as a normal block.
+  const isSwapKeep = (section) => Boolean(swapSlot)
+    && section.courseKey === swapSlot.courseKey
+    && classifyComponent(section) === swapSlot.component;
+  // Exam meetings of the committed sections: a thin, non-interactive layer
+  // under the class blocks. They count toward the grid's day/time range but
+  // never toward lanes or overlaps. Ghosts only mention an exam in their tooltip.
+  const examEntries = sections
+    .filter((s) => !isSwapKeep(s))
+    .flatMap((section) => examMeetings(section).map((meeting, mi) => ({ section, meeting, mi })));
+  const allTimed = [
+    ...withMeeting,
+    ...pending,
+    ...showAllTimed,
+    ...examEntries,
+    ...(swapSlot ? [...ghostCandidates, ...removedSpots] : []),
+  ];
   const usedDays = new Set(allTimed.flatMap((m) => m.meeting.days));
   const days = DAY_ORDER.filter((d) => !['Sat', 'Sun'].includes(d) || usedDays.has(d));
 
@@ -290,8 +453,60 @@ export default function WeeklyGrid({
   const gridHeight = (gridEnd - gridStart) * PX_PER_MIN;
   const hourPx = 60 * PX_PER_MIN;
 
+  const blockName = (s) => `${courseMap[s.courseKey]?.courseNumber ?? s.courseKey} ${s.componentLabel || classifyComponent(s)} ${s.classSection}`;
+  const shortName = (s) => describeSectionName(s, courseMap[s.courseKey]?.courseNumber ?? s.courseKey);
+
+  // Manual: section id -> ids of the placed sections it overlaps (on any day).
+  const overlapMap = new Map();
+  if (manual) {
+    const solid = withMeeting.filter((e) => !isSwapKeep(e.section));
+    for (const a of solid) {
+      for (const b of solid) {
+        if (a.section.id === b.section.id) continue;
+        if (a.meeting.days.some((d) => entriesOverlapOnDay(a, b, d))) {
+          if (!overlapMap.has(a.section.id)) overlapMap.set(a.section.id, new Set());
+          overlapMap.get(a.section.id).add(b.section.id);
+        }
+      }
+    }
+  }
+  const activePopover = popover && overlapMap.has(popover.sectionId) ? popover : null;
+  // Whose overlaps are lit: the open popover's section, else the hovered/focused one.
+  const hlId = activePopover?.sectionId ?? hoverId;
+  const hlPartners = hlId && overlapMap.has(hlId) ? overlapMap.get(hlId) : null;
+  const popoverRows = (() => {
+    if (!activePopover) return null;
+    const ids = [activePopover.sectionId, ...overlapMap.get(activePopover.sectionId)];
+    const involved = withMeeting.filter((e) => ids.includes(e.section.id));
+    return ids.map((id) => {
+      const theirs = involved.filter((e) => e.section.id !== id);
+      const times = involved.filter((e) => e.section.id === id).flatMap((e) => {
+        const shared = e.meeting.days.filter((d) => theirs.some((o) => entriesOverlapOnDay(e, o, d)));
+        return shared.length ? [`${shared.join(' ')} ${formatClockRange(e.meeting.startMin, e.meeting.endMin)}`] : [];
+      });
+      return { id, label: shortName(sectionsById[id]), time: [...new Set(times)].join(' · ') };
+    });
+  })();
+  function handleFindAnotherTime(id) {
+    const others = [activePopover.sectionId, ...overlapMap.get(activePopover.sectionId)].filter((x) => x !== id);
+    setPopover(null);
+    onFindAnotherTime(sectionsById[id], `${shortName(sectionsById[id])} overlaps ${others.map((x) => shortName(sectionsById[x])).join(' and ')}`);
+  }
+  function handleRemoveFromPopover(id) {
+    setPopover(null);
+    onRemovePlaced(id);
+  }
+
   return (
-    <div className={`sched-grid-wrap${swapSlot && displaceInfo ? ' is-displacing' : ''}`}>
+    <div ref={rootRef} className={`sched-grid-wrap${swapSlot && displaceInfo ? ' is-displacing' : ''}`}>
+      {manual && resolving && swapSlot && (
+        <div className="sched-resolve-bar" role="status">
+          <span>Resolving: {resolving.text}</span>
+          <button type="button" className="sched-swap-banner-btn sched-swap-banner-cancel" onClick={onCloseSwap}>
+            Cancel
+          </button>
+        </div>
+      )}
       {/* Desktop-only banner + ghost overlay — hidden under the mobile
           breakpoint (see scheduler.css), where SchedulerPage's
           SectionSwapSheet takes over instead (a cramped, narrow grid is no
@@ -331,16 +546,16 @@ export default function WeeklyGrid({
         </div>
       )}
       <div className="sched-color-legend">
-        {legendCourses.map(({ courseKey, label }) => (
+        {legendCourses.map(({ courseKey, label, missing }) => (
           <div className="sched-color-legend-item" key={courseKey}>
             <button
               type="button"
-              className={`sched-color-legend-swatch sched-color-${resolvedCourseColorIndex(courseKey, courseColors)}`}
+              className={`sched-color-legend-swatch sched-color-${resolvedCourseColorIndex(courseKey, courseColors)}${missing ? ' is-incomplete' : ''}`}
               onClick={() => setOpenColorFor((cur) => (cur === courseKey ? null : courseKey))}
               aria-haspopup="true"
               aria-expanded={openColorFor === courseKey}
-              aria-label={`Change color for ${label}`}
-              title={`Change color for ${label}`}
+              aria-label={`Change color for ${label}${missing ? ` (not complete: needs ${missing.join(', ')})` : ''}`}
+              title={missing ? `${label} isn't complete yet: needs ${missing.join(', ')}. Click to change its color` : `Change color for ${label}`}
             />
             <span className="sched-color-legend-label">{label}</span>
             {openColorFor === courseKey && (
@@ -356,11 +571,28 @@ export default function WeeklyGrid({
             )}
           </div>
         ))}
+        {showAllActive.length > 0 && (
+          <button type="button" className="sched-clear-ghosts-btn" onClick={onClearGhosts}>
+            Clear ghosts
+          </button>
+        )}
       </div>
       {/* Always-visible key for the block action buttons below — the title
           tooltips are hover-only, so they never reach touch users. Reuses
           the same glyphs so the key can't drift from the buttons. */}
-      {legendCourses.length > 0 && (
+      {legendCourses.length > 0 && manual && (
+        <ul className="sched-block-key">
+          <li className="sched-block-key-item">
+            <span className="sched-block-key-icon" aria-hidden="true"><SwapIcon /></span>
+            Overlay other sections on your schedule
+          </li>
+          <li className="sched-block-key-item">
+            <span className="sched-block-key-icon sched-block-key-icon-x" aria-hidden="true">×</span>
+            Remove from this schedule
+          </li>
+        </ul>
+      )}
+      {legendCourses.length > 0 && !manual && (
         <ul className="sched-block-key">
           <li className="sched-block-key-item">
             <span className="sched-block-key-icon" aria-hidden="true"><PinIcon /></span>
@@ -386,7 +618,7 @@ export default function WeeklyGrid({
         ))}
       </div>
       <div className="sched-grid-body" style={{ height: gridHeight }}>
-        <div className="sched-grid-time-gutter">
+        <div className="sched-grid-time-gutter" style={{ minHeight: gridHeight }}>
           {hours.map((h) => (
             <div key={h} className="sched-grid-hour-label" style={{ top: (h * 60 - gridStart) * PX_PER_MIN }}>
               {formatHourLabel(h)}
@@ -395,14 +627,14 @@ export default function WeeklyGrid({
         </div>
         <div
           className="sched-grid-days"
-          style={{ backgroundSize: `100% ${hourPx}px`, backgroundPosition: '0 0' }}
+          style={{ backgroundSize: `100% ${hourPx}px`, backgroundPosition: '0 0', minHeight: gridHeight }}
         >
           {days.map((day) => (
             <div key={day} className="sched-grid-day-col">
               {/* Before the real blocks, so a placed class is never overdrawn by its label. */}
-              {removedSpots.filter((r) => r.meeting.days.includes(day)).map(({ section, meeting }) => (
+              {removedSpots.filter((r) => r.meeting.days.includes(day)).map(({ section, meeting, mi }) => (
                 <div
-                  key={`removed-${section.id}-${day}`}
+                  key={`removed-${section.id}-${day}-${mi}`}
                   className={`sched-grid-removed sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}`}
                   style={{
                     top: (meeting.startMin - gridStart) * PX_PER_MIN,
@@ -416,15 +648,45 @@ export default function WeeklyGrid({
                   <span className="sched-grid-removed-time"><s>{formatClock(meeting.startMin)}–{formatClock(meeting.endMin)}</s></span>
                 </div>
               ))}
-              {withMeeting
-                .filter((m) => m.meeting.days.includes(day))
-                .map(({ section, meeting }) => {
+              {(() => {
+                // Classes that overlap on this day share the column in
+                // side-by-side lanes (same packing as the swap ghosts), so
+                // each stays readable instead of being drawn on top of another.
+                // Faint "not finished" blocks share the lanes too, so they
+                // never print over a real class (they don't count as overlaps).
+                const dayBlocks = withMeeting.filter((m) => m.meeting.days.includes(day) && !isSwapKeep(m.section));
+                const dayPending = pending.filter((p) => p.meeting.days.includes(day));
+                return layoutGhostsForDay([...dayBlocks, ...dayPending]).map(({ section, meeting, mi, lane, laneCount, isPending }) => {
                   const courseCode = courseMap[section.courseKey]?.courseNumber ?? section.courseKey;
+                  const laneStyle = laneCount > 1
+                    ? { left: `calc(${(lane / laneCount) * 100}% + 2px)`, width: `calc(${100 / laneCount}% - 4px)`, right: 'auto' }
+                    : null;
+                  if (isPending) {
+                    return (
+                      <div
+                        key={`pending-${section.id}-${day}-${mi}`}
+                        className={`sched-grid-pending sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}`}
+                        style={{
+                          top: (meeting.startMin - gridStart) * PX_PER_MIN,
+                          height: Math.max(MIN_BLOCK_HEIGHT, (meeting.endMin - meeting.startMin) * PX_PER_MIN),
+                          ...laneStyle,
+                        }}
+                        title={`${courseCode} · ${sectionTypeLabel(section).abbr} ${section.classSection}${missingByCourse[section.courseKey] ? ` · needs ${missingByCourse[section.courseKey].join(', ')}` : ' · not finished'}\n${longName(courseCode, section)} · ${describeMeetingShort(meeting)}${meeting.facilId ? ` · ${meeting.facilId}` : ''}${describeInstructors(section) ? ` · ${describeInstructors(section)}` : ''}`}
+                      >
+                        <span className="sched-grid-pending-chip">
+                          {missingByCourse[section.courseKey] ? `needs ${missingByCourse[section.courseKey].join(', ')}` : 'not finished'}
+                        </span>
+                        <div className="sched-lane-text">
+                          <span className="sched-grid-block-code"><CourseCode courseCode={courseCode} /></span>
+                          <TypeLine section={section} start={formatClock(meeting.startMin)} />
+                          <span className="sched-grid-block-time">{formatClock(meeting.startMin)}–{formatClock(meeting.endMin)}</span>
+                        </div>
+                      </div>
+                    );
+                  }
                   const isLocked = lockedSectionIds.has(section.id);
                   const profLastName = section.instructors?.[0]?.last || null;
-                  const roomAndNbr = [section.facilId, section.classNbr ? `#${section.classNbr}` : null]
-                    .filter(Boolean)
-                    .join(' · ');
+                  const room = meeting.facilId || null;
                   // Course code + time always show; professor/room only
                   // once the block is actually tall enough for them, so a
                   // short class shows fewer, complete lines instead of a
@@ -432,30 +694,80 @@ export default function WeeklyGrid({
                   // constants above.
                   const blockHeight = Math.max(MIN_BLOCK_HEIGHT, (meeting.endMin - meeting.startMin) * PX_PER_MIN);
                   const showProf = Boolean(profLastName) && blockHeight >= PROF_LINE_THRESHOLD;
-                  const showRoom = Boolean(roomAndNbr) && blockHeight >= ROOM_LINE_THRESHOLD;
-                  // While swapping, whatever currently fills the slot is
-                  // drawn as the dashed "Current" ghost instead (clicking it
-                  // keeps it — see the ghost layer below), not as this block.
-                  const isSwapKeep = Boolean(swapSlot)
-                    && section.courseKey === swapSlot.courseKey
-                    && classifyComponent(section) === swapSlot.component;
-                  if (isSwapKeep) return null; // drawn as the "Current" ghost below
-                  const blockTitle = `${courseCode} — Section ${section.classSection} — ${describeSectionTime(section)}${section.facilId ? ` — ${section.facilId}` : ''}`;
+                  const showRoom = Boolean(room) && blockHeight >= ROOM_LINE_THRESHOLD;
+                  // Other classes on this day whose times actually intersect
+                  // this one's (lanes alone can't say: a cluster is transitive).
+                  const overlapsHere = dayBlocks.filter((o) => entriesOverlapOnDay(o, { section, meeting }, day));
+                  const hasOverlap = overlapsHere.length > 0;
+                  const blockTitle = `${longName(courseCode, section)} · ${describeMeetingShort(meeting)}${meeting.facilId ? ` · ${meeting.facilId}` : ''}${describeInstructors(section) ? ` · ${describeInstructors(section)}` : ''}${hasOverlap ? `\nOverlaps ${[...new Set(overlapsHere.map((o) => blockName(o.section)))].join(', ')}` : ''}`;
 
                   return (
                     <div
-                      key={`${section.id}-${day}`}
-                      className={`sched-grid-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isLocked ? ' is-locked' : ''}${swapSlot && displaceInfo && displaceInfo.swappedInId === section.id ? ' is-swapped-in' : ''}`}
+                      key={`${section.id}-${day}-${mi}`}
+                      data-section-id={section.id}
+                      data-day={day}
+                      className={`sched-grid-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isLocked ? ' is-locked' : ''}${hasOverlap ? ' has-overlap' : ''}${swapSlot && displaceInfo && displaceInfo.swappedInId === section.id ? ' is-swapped-in' : ''}${hlPartners && hlPartners.has(section.id) ? ' is-overlap-hl' : ''}${hlPartners && section.id !== hlId && !hlPartners.has(section.id) ? ' is-dimmed' : ''}${pulseKeys.has(`${section.id}|${day}`) ? ' is-pulse' : ''}`}
                       style={{
                         top: (meeting.startMin - gridStart) * PX_PER_MIN,
                         height: blockHeight,
+                        ...laneStyle,
                       }}
                       title={blockTitle}
+                      tabIndex={manual && overlapMap.has(section.id) ? 0 : undefined}
+                      onMouseEnter={manual && overlapMap.has(section.id) ? () => setHoverId(section.id) : undefined}
+                      onMouseLeave={manual ? () => setHoverId(null) : undefined}
+                      onFocus={manual && overlapMap.has(section.id) ? () => setHoverId(section.id) : undefined}
+                      onBlur={manual ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setHoverId(null); } : undefined}
                     >
                       <div className="sched-grid-block-actions">
                         {swapSlot && displaceInfo && displaceInfo.swappedInId === section.id && (
                           <span className="sched-grid-block-chip">Swapped in</span>
                         )}
+                        {hasOverlap && !manual && (
+                          <span className="sched-grid-block-chip is-overlap">overlap</span>
+                        )}
+                        {hasOverlap && manual && (
+                          <button
+                            type="button"
+                            className="sched-grid-block-chip is-overlap"
+                            aria-haspopup="dialog"
+                            aria-expanded={activePopover?.sectionId === section.id}
+                            title="See what overlaps and fix it"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const chip = e.currentTarget;
+                              setPopover((cur) => (cur && cur.sectionId === section.id ? null : { sectionId: section.id, anchorEl: chip }));
+                            }}
+                          >
+                            overlap
+                          </button>
+                        )}
+                        {manual && (
+                          <button
+                            type="button"
+                            className="sched-grid-block-action-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenSwap(section.courseKey, classifyComponent(section), section.id);
+                            }}
+                            aria-label={`Overlay other sections for ${courseCode}'s ${section.componentLabel || 'section'} as ghosts on your schedule`}
+                            title="Overlay other sections as ghosts. Click one to swap it in (overlaps are allowed)"
+                          >
+                            <SwapIcon />
+                          </button>
+                        )}
+                        {manual && (
+                          <button
+                            type="button"
+                            className="sched-grid-block-action-btn sched-grid-block-eliminate-btn"
+                            onClick={(e) => { e.stopPropagation(); onRemovePlaced(section.id); }}
+                            aria-label={`Remove ${courseCode} section ${section.classSection} from this schedule`}
+                            title="Remove from this schedule"
+                          >
+                            ×
+                          </button>
+                        )}
+                        {!manual && (<>
                         <button
                           type="button"
                           className={`sched-grid-block-action-btn${isLocked ? ' is-locked' : ''}`}
@@ -489,40 +801,85 @@ export default function WeeklyGrid({
                         >
                           ×
                         </button>
+                        </>)}
                       </div>
-                      <span className="sched-grid-block-code">{courseCode} {section.classSection}</span>
-                      <span className="sched-grid-block-time">{formatClock(meeting.startMin)}–{formatClock(meeting.endMin)}</span>
-                      {showProf && <span className="sched-grid-block-prof">{profLastName}</span>}
-                      {showRoom && <span className="sched-grid-block-room">{roomAndNbr}</span>}
+                      <div className="sched-lane-text">
+                        <span className="sched-grid-block-code"><CourseCode courseCode={courseCode} /></span>
+                        <TypeLine section={section} start={formatClock(meeting.startMin)} />
+                        <span className="sched-grid-block-time">{formatClock(meeting.startMin)}–{formatClock(meeting.endMin)}</span>
+                        {showProf && <span className="sched-grid-block-prof">{profLastName}</span>}
+                        {showRoom && <span className="sched-grid-block-room">{room}</span>}
+                      </div>
                     </div>
                   );
-                })}
+                });
+              })()}
+              {/* Exam meetings: a full-width dashed overlay above the class blocks
+                  with pointer-events: none, so a class beneath stays visible and
+                  clickable. Never in the lanes, never an overlap. Only its small
+                  label pill takes the pointer (for the tooltip). */}
+              {examEntries.filter((x) => x.meeting.days.includes(day)).map(({ section, meeting, mi }) => {
+                const examCode = courseMap[section.courseKey]?.courseNumber ?? section.courseKey;
+                const examHeight = Math.max(18, (meeting.endMin - meeting.startMin) * PX_PER_MIN);
+                const range = formatClockRange(meeting.startMin, meeting.endMin);
+                const shortCode = shortCourseCode(examCode);
+                const examTip = [
+                  `Exam — ${examCode} ${section.classSection}`,
+                  `${day} ${formatClock(meeting.startMin)}–${formatClock(meeting.endMin)}`,
+                  meeting.facilId,
+                ].filter(Boolean).join('\n');
+                const showPill = examHeight >= EXAM_LABEL_MIN_HEIGHT;
+                const corner = showPill
+                  ? pickExamCorner(meeting, layoutGhostsForDay([
+                    ...withMeeting.filter((m) => m.meeting.days.includes(day) && !isSwapKeep(m.section)),
+                    ...pending.filter((p) => p.meeting.days.includes(day)),
+                  ]))
+                  : null;
+                return (
+                  <div
+                    key={`exam-${section.id}-${day}-${mi}`}
+                    className={`sched-grid-exam sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}`}
+                    style={{ top: (meeting.startMin - gridStart) * PX_PER_MIN, height: examHeight }}
+                    title={showPill ? undefined : examTip}
+                  >
+                    {showPill && (
+                      <span className={`sched-grid-exam-label is-${corner}`} title={examTip}>
+                        <span className="sched-grid-exam-full">{examCode} · Exam {range}</span>
+                        <span className="sched-grid-exam-two"><span>{examCode}</span><span>Exam {range}</span></span>
+                        <span className="sched-grid-exam-short">{shortCode} exam</span>
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
               {swapSlot && layoutGhostsForDay(ghostCandidates.filter((g) => g.meeting.days.includes(day))).map((ghost) => {
-                const { section, meeting, conflict, lane, laneCount, isCurrent } = ghost;
+                const { section, meeting, mi, conflict, lane, laneCount, isCurrent } = ghost;
                 const blocked = ghost.pinned.length > 0;
                 const courseCode = courseMap[section.courseKey]?.courseNumber ?? section.courseKey;
                 const blockHeight = Math.max(MIN_BLOCK_HEIGHT, (meeting.endMin - meeting.startMin) * PX_PER_MIN);
-                const instructorLabel = section.instructors?.length
-                  ? section.instructors.map((i) => `${i.first ? i.first[0] + '. ' : ''}${i.last}`.trim()).join(', ')
-                  : 'Staff';
+                const instructorLabel = describeInstructors(section) || 'Staff';
+                const fits = manual && !isCurrent && !conflict;
                 const tooltip = [
-                  `${isCurrent ? 'Keep this section — ' : ''}${courseCode} — Section ${section.classSection}`,
+                  `${isCurrent ? (manual ? 'Keep this section (click to leave swap mode) — ' : 'Keep this section — ') : ''}${longName(courseCode, section)}`,
                   ...(blocked
                     ? [`Can't place — conflicts with pinned ${ghost.pinned.join(', ')}`]
-                    : conflict ? [`Swap in — replaces ${ghost.clashes.join(', ')}`] : []),
+                    : conflict
+                      ? [manual ? `Overlaps ${ghost.clashes.join(', ')} (allowed)` : `Swap in — replaces ${ghost.clashes.join(', ')}`]
+                      : fits ? ['Fits — no overlap with your other sections'] : []),
                   ...(ghost.reasons.length > 0 ? [ghost.reasons.map((r) => r.text).join(' · ')] : []),
                   describeSectionTime(section),
+                  ...(describeExamTime(section) ? [`Exam: ${describeExamTime(section)}`] : []),
                   instructorLabel,
                   describeSeatStatus(section),
                 ].join('\n');
 
                 return (
                   <div
-                    key={`ghost-${section.id}-${day}`}
+                    key={`ghost-${section.id}-${day}-${mi}`}
                     role="button"
                     tabIndex={0}
                     aria-disabled={blocked || undefined}
-                    className={`sched-grid-ghost-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isCurrent ? ' is-current' : ''}${conflict ? ' has-conflict' : ''}${blocked ? ' is-blocked' : ''}${ghost.reasons.some((r) => r.key === 'unpicked') ? ' is-unpicked' : ''}${ghost.reasons.some((r) => r.key === 'filtered') ? ' is-filtered' : ''}`}
+                    className={`sched-grid-ghost-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isCurrent ? ' is-current' : ''}${conflict ? ' has-conflict' : ''}${fits ? ' is-fits' : ''}${blocked ? ' is-blocked' : ''}${ghost.reasons.some((r) => r.key === 'unpicked') ? ' is-unpicked' : ''}${ghost.reasons.some((r) => r.key === 'filtered') ? ' is-filtered' : ''}`}
                     style={{
                       top: (meeting.startMin - gridStart) * PX_PER_MIN,
                       height: blockHeight,
@@ -540,12 +897,66 @@ export default function WeeklyGrid({
                     }}
                   >
                     <span className="sched-grid-ghost-icon" aria-hidden="true"><SwapIcon /></span>
-                    <span className="sched-grid-ghost-block-head">
-                      <span className="sched-grid-ghost-block-code">{section.classSection}</span>
-                      {isCurrent && <span className="sched-grid-ghost-chip is-current">Current</span>}
-                      {conflict && <span className="sched-grid-ghost-chip is-conflict">conflict</span>}
-                    </span>
-                    <span className="sched-grid-ghost-block-time">{formatClock(meeting.startMin)}–{formatClock(meeting.endMin)}</span>
+                    <div className="sched-lane-text">
+                      <GhostHead courseCode={courseCode}>
+                        {isCurrent && <span className="sched-grid-ghost-chip is-current">Current</span>}
+                        {conflict && <span className="sched-grid-ghost-chip is-conflict">{manual ? 'overlap' : 'conflict'}</span>}
+                        {fits && <span className="sched-grid-ghost-chip is-fits">fits</span>}
+                      </GhostHead>
+                      <TypeLine section={section} start={formatClock(meeting.startMin)} />
+                      <GhostTime>{formatClock(meeting.startMin)}–{formatClock(meeting.endMin)}</GhostTime>
+                    </div>
+                  </div>
+                );
+              })}
+              {layoutGhostsForDay(showAllTimed.filter((g) => g.meeting.days.includes(day))).map(({ section, meeting, mi, lane, laneCount }) => {
+                // What it would overlap among what's drawn on this day.
+                const clashes = [...withMeeting, ...pending].filter((o) => entriesOverlapOnDay(o, { section, meeting }, day));
+                const overlap = clashes.length > 0;
+                const toggles = !onPlaceGhost && Boolean(onToggleGhost);
+                const clickable = Boolean(onPlaceGhost) || toggles;
+                const selected = toggles && selectedGhostIds.has(section.id);
+                const ghostCourseCode = courseMap[section.courseKey]?.courseNumber ?? section.courseKey;
+                const onGhostClick = () => (onPlaceGhost ? onPlaceGhost(section.id) : onToggleGhost(section.id));
+                const tooltip = [
+                  `${longName(ghostCourseCode, section)} · ${describeMeetingShort(meeting)}${meeting.facilId ? ` · ${meeting.facilId}` : ''}${describeInstructors(section) ? ` · ${describeInstructors(section)}` : ''}${onPlaceGhost ? ' — click to place' : toggles ? (selected ? ' — selected, click to unselect' : ' — click to select') : ''}`,
+                  ...(overlap ? [`Overlaps ${[...new Set(clashes.map((o) => blockName(o.section)))].join(', ')}`] : []),
+                  describeSectionTime(section),
+                  ...(describeExamTime(section) ? [`Exam: ${describeExamTime(section)}`] : []),
+                  describeSeatStatus(section),
+                ].join('\n');
+                return (
+                  <div
+                    key={`showall-${section.id}-${day}-${mi}`}
+                    role={clickable ? 'button' : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    aria-pressed={toggles ? selected : undefined}
+                    className={`sched-grid-ghost-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${overlap ? ' has-conflict' : ''}${clickable ? '' : ' is-display-only'}${selected ? ' is-selected' : ''}`}
+                    style={{
+                      top: (meeting.startMin - gridStart) * PX_PER_MIN,
+                      height: Math.max(MIN_BLOCK_HEIGHT, (meeting.endMin - meeting.startMin) * PX_PER_MIN),
+                      left: `${(lane / laneCount) * 100}%`,
+                      width: `${100 / laneCount}%`,
+                    }}
+                    title={tooltip}
+                    onClick={clickable ? onGhostClick : undefined}
+                    onKeyDown={clickable ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onGhostClick();
+                      }
+                    } : undefined}
+                  >
+                    {selected
+                      ? <span className="sched-grid-ghost-icon is-check" aria-hidden="true">✓</span>
+                      : <span className="sched-grid-ghost-icon" aria-hidden="true"><SwapIcon /></span>}
+                    <div className="sched-lane-text">
+                      <GhostHead courseCode={ghostCourseCode}>
+                        {overlap && <span className="sched-grid-ghost-chip is-conflict">overlap</span>}
+                      </GhostHead>
+                      <TypeLine section={section} start={formatClock(meeting.startMin)} />
+                      <GhostTime>{formatClock(meeting.startMin)}–{formatClock(meeting.endMin)}</GhostTime>
+                    </div>
                   </div>
                 );
               })}
@@ -554,6 +965,22 @@ export default function WeeklyGrid({
         </div>
       </div>
 
+      {showAllUntimed.length > 0 && (
+        <div className="sched-grid-no-meeting">
+          Not drawn (no meeting time): {showAllUntimed
+            .map((s) => `${courseMap[s.courseKey]?.courseNumber ?? s.courseKey} (${s.classSection})`)
+            .join(', ')}
+        </div>
+      )}
+      {activePopover && popoverRows && (
+        <OverlapPopover
+          anchorEl={activePopover.anchorEl}
+          rows={popoverRows}
+          onFindAnotherTime={handleFindAnotherTime}
+          onRemove={handleRemoveFromPopover}
+          onClose={() => setPopover(null)}
+        />
+      )}
       {incompleteLabels.length > 0 && (
         <div className="sched-grid-incomplete" role="note">
           Incomplete — left out: {incompleteLabels.join(', ')}

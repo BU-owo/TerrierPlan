@@ -2,7 +2,8 @@ import { CURRENT_TERM } from './term';
 import { EMPTY_GLOBAL_FILTERS } from './sectionFilters';
 
 // The Scheduler's in-progress work — draft courses (checked/locked sections),
-// the time filter, the section sort mode, the bookmark shortlist, and the
+// the time filter, the section sort mode, Auto/Manual mode and the manually
+// placed sections, the bookmark shortlist, and the
 // combination being previewed (with its stepper position) — saved to one
 // localStorage key so a refresh doesn't lose it. Guests use the plain key; a
 // signed-in user's draft lives under that key + their uid, so a shared
@@ -64,6 +65,9 @@ export function readStoredDraft(uid) {
       courses: sanitizeCourses(parsed.draft?.courses),
       globalTimeFilter: sanitizeFilter(parsed.draft?.globalTimeFilter),
       sortMode: parsed.draft?.sortMode === 'section' ? 'section' : 'time',
+      // Absent in drafts saved before Manual mode existed: Auto, nothing placed.
+      scheduleMode: parsed.draft?.scheduleMode === 'manual' ? 'manual' : 'auto',
+      manualSectionIds: strings(parsed.draft?.manualSectionIds),
       bookmarks, // string[][] — each a bookmarked combination's section ids
       // The combination on screen and its stepper position, or null.
       preview: strings(parsed.preview?.sectionIds).length > 0
@@ -83,7 +87,7 @@ export function readStoredDraft(uid) {
 // load). With nothing to keep — no courses and no bookmarks — the key is
 // removed instead of storing an empty shell. Returns true when the write (or
 // removal) went through, false when it didn't.
-export function writeStoredDraft({ draftCourses, globalTimeFilter, sectionSortMode, bookmarks, previewSectionIds, previewIndex }, uid) {
+export function writeStoredDraft({ draftCourses, globalTimeFilter, sectionSortMode, scheduleMode, manualSectionIds = [], bookmarks, previewSectionIds, previewIndex }, uid) {
   try {
     // Only a current-term combination is worth keeping (section ids start
     // with their term, "2271_1234"); a previewed other-term schedule isn't.
@@ -98,7 +102,13 @@ export function writeStoredDraft({ draftCourses, globalTimeFilter, sectionSortMo
         version: DRAFT_STORAGE_VERSION,
         term: CURRENT_TERM,
         savedAt: new Date().toISOString(),
-        draft: { courses: draftCourses, globalTimeFilter, sortMode: sectionSortMode },
+        draft: {
+          courses: draftCourses,
+          globalTimeFilter,
+          sortMode: sectionSortMode,
+          scheduleMode: scheduleMode === 'manual' ? 'manual' : 'auto',
+          manualSectionIds,
+        },
         bookmarks: Array.from(bookmarks.values()),
         preview: keepPreview ? { sectionIds: previewSectionIds, index: previewIndex } : null,
       }),
