@@ -40,7 +40,7 @@ function hintForGroup(group, index, groups) {
 // each group by `comparator`. Group order: the "LEC" (lecture) group first
 // if present, then the rest alphabetically by label, with the blank-
 // component "Other" group always last (least meaningful, pure fallback).
-// When every section in a group shares one identical, non-empty `notes`
+// When every section in a group has one identical, non-empty `notes`
 // string, it's hoisted to `commonNotes` so it can be shown once instead of
 // repeated per row.
 export function groupSectionsByComponent(sections, comparator) {
@@ -53,12 +53,14 @@ export function groupSectionsByComponent(sections, comparator) {
 
   const groups = [...byKey.entries()].map(([key, groupSections]) => {
     if (comparator) groupSections.sort(comparator);
-    const notesSet = new Set(groupSections.map((s) => (s.notes || '').trim()).filter(Boolean));
+    // Hoisted only when EVERY section carries that exact note: a blank sibling
+    // would otherwise look like it shares a note it doesn't have.
+    const notesSet = new Set(groupSections.map((s) => (s.notes || '').trim()));
     return {
       key,
       label: labelForGroup(key, groupSections),
       sections: groupSections,
-      commonNotes: notesSet.size === 1 ? [...notesSet][0] : null,
+      commonNotes: notesSet.size === 1 && [...notesSet][0] ? [...notesSet][0] : null,
     };
   });
 

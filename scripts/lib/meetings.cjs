@@ -244,6 +244,7 @@ const DAY_NAMES = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri' }
 const TIME_RANGE = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|—|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/gi;
 const EXAM_WORDING = /\bexam block\b|\breserve\b[^.;]*?\bfor\s+(?:\w+\s+){0,4}(?:exams?|midterms?)\b|\bexams?\s+for\s+\S+(?:\s+\S+)?\s+take\s+place\s+on\b/i;
 const EXAM_HINT = /exam|midterm|reserve/i;
+const ALL_SECTIONS = /\ball\s+(?:\S+\s+){0,2}\S*\d\S*\s+sections\b/i;
 
 function formatTime(minutes) {
   const h24 = Math.floor(minutes / 60);
@@ -294,7 +295,14 @@ function parseNotesExams(notes) {
       rejected.push({ reason: 'start not before end', text: segment });
       continue;
     }
-    exams.push({ days, startTime: formatTime(start), endTime: formatTime(end), text: segment });
+    // "all CS111 sections": the note says the exam applies to every section of the course.
+    exams.push({
+      days,
+      startTime: formatTime(start),
+      endTime: formatTime(end),
+      allSections: ALL_SECTIONS.test(segment),
+      text: segment,
+    });
   }
   return { exams, rejected };
 }
@@ -375,6 +383,87 @@ function buildMeetings(section, { noRoomPatterns, storedPick = false, notesExams
   };
 }
 
+
+// ── Whole-term build, with exam propagation ─────────────────────────────────
+// buildMeetings looks at one section. Some notes ("Students in all CS132
+// sections must reserve Tuesday 6:30 - 7:45pm for exams") sit on only one
+// lecture section. buildTermMeetings builds every in-scope section, then, with
+// `propagate` (default true), copies a notes-derived exam to its siblings:
+//   source  = an undergrad LEC section whose own notes gave an exam and whose
+//             note says "all <COURSE> sections"
+//   target  = another in-scope LEC section of the same course with at least one
+//             class meeting and no exam meeting at all
+// Labs, discussions and other components never receive one, and neither does a
+// section with no meeting rows. Two sources with different exam times in one
+// course are treated as ambiguous: nothing is propagated for that course.
+// The copied meeting keeps the source's days/time and 'NO ROOM', with the
+// target's own first class meeting's dates. Each built result gets
+// `propagatedExamCount` and `propagatedFrom` (the source docId); patternCount
+// includes propagated exams. `storedPickFor(section)` says which sections' top-level
+// fields hold the pickPrimaryMeeting row (see buildMeetings).
+function buildTermMeetings(groups, { storedPickFor = () => false, propagate = true } = {}) {
+  const noRoom = noRoomPatternsByCourse(groups);
+  const built = new Map();
+  for (const [docId, section] of groups) {
+    if (!inMeetingsScope(section)) continue;
+    const result = buildMeetings(section, {
+      noRoomPatterns: noRoom.get(section.courseKey),
+      storedPick: storedPickFor(section),
+      notesExams: true,
+    });
+    result.propagatedExamCount = 0;
+    result.propagatedFrom = null;
+    result.propagationSkips = [];
+    built.set(docId, result);
+  }
+  if (!propagate) return built;
+
+  const lecByCourse = new Map();
+  for (const [docId, section] of groups) {
+    if (!built.has(docId) || cell(section.rows[0], 'Component') !== 'LEC') continue;
+    if (!lecByCourse.has(section.courseKey)) lecByCourse.set(section.courseKey, []);
+    lecByCourse.get(section.courseKey).push(docId);
+  }
+  for (const [courseKey, docIds] of lecByCourse) {
+    const sources = docIds.filter((id) => {
+      const b = built.get(id);
+      return b.syntheticExamCount > 0 && b.notesInfo.exams.some((e) => e.allSections);
+    });
+    if (sources.length === 0) continue;
+    const timeOf = (id) => built.get(id).meetings.filter((m) => m.kind === 'exam')
+      .map((m) => `${m.daysOfWeek} ${m.startTime}-${m.endTime}`).join(',');
+    const distinct = new Set(sources.map(timeOf));
+    if (distinct.size !== 1) {
+      for (const id of docIds) built.get(id).propagationSkips.push(`${courseKey}: sources disagree on the exam time`);
+      continue;
+    }
+    const source = built.get(sources[0]);
+    const examMeeting = source.meetings.filter((m) => m.kind === 'exam').pop();
+    for (const id of docIds) {
+      const target = built.get(id);
+      if (sources.includes(id)) continue;
+      if (target.meetings.some((m) => m.kind === 'exam')) {
+        target.propagationSkips.push('already has an exam meeting');
+        continue;
+      }
+      const firstClass = target.meetings.find((m) => m.kind === 'class');
+      if (!firstClass) {
+        target.propagationSkips.push('no meeting rows');
+        continue;
+      }
+      target.meetings.push({
+        ...examMeeting,
+        meetingStartDate: firstClass.meetingStartDate,
+        meetingEndDate: firstClass.meetingEndDate,
+      });
+      target.propagatedExamCount = 1;
+      target.propagatedFrom = sources[0];
+      target.patternCount += 1;
+    }
+  }
+  return built;
+}
+
 module.exports = {
   MEETING_COLUMNS,
   MEETING_FIELDS,
@@ -395,6 +484,7 @@ module.exports = {
   classifyKind,
   storedRow,
   buildMeetings,
+  buildTermMeetings,
   parseNotesExams,
   sectionNotes,
 };

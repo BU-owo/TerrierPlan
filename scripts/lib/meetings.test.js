@@ -15,7 +15,7 @@ const CH102 = 'Exam Block: Tuesdays 6:30-8:00 PM ; Students registering for CAS 
 const EK103 = 'Exams for EK103 take place on Fridays 6-9pm throughout the semester.';
 const FIELDWORK = 'Open to the BU community. Reserve Thurs Mornings 8-10 for Fieldwork in local schools. Meets w/ ME 618';
 
-function row(subject, nbr, section, days, start, end, facil, notes) {
+function row(subject, nbr, section, days, start, end, facil, notes, component = 'LEC') {
   return {
     Term: '2271',
     'Class Nbr': `${subject}${nbr}${section}`,
@@ -30,6 +30,7 @@ function row(subject, nbr, section, days, start, end, facil, notes) {
     'Meeting Start Date': '01/19/2027',
     'Meeting End Date': '04/29/2027',
     Notes: notes,
+    Component: component,
   };
 }
 
@@ -149,4 +150,99 @@ test('an exam already present at that day/time is not duplicated', () => {
   const after = build(rows, { notesExams: true });
   assert.equal(after.meetings.filter((m) => m.kind === 'exam').length, 1);
   assert.equal(after.syntheticExamCount, 0);
+});
+
+// ── Propagation ("all <COURSE> sections") ───────────────────────────────────
+function term(rows, opts) {
+  return M.buildTermMeetings(M.groupSections(rows, '2271'), opts);
+}
+const examsOf = (built) => built.meetings.filter((m) => m.kind === 'exam').map((m) => `${m.daysOfWeek} ${m.startTime}-${m.endTime} ${m.facilId}`);
+const id = (subject, nbr, section) => `2271_${subject}${nbr}${section}`;
+
+test('propagation: CS132 A2 (blank notes) gains the exam from A1; labs/discussions do not', () => {
+  const rows = [
+    row('CAS CS', '132', 'A1', 'Tue Thu', '11:00AM', '12:15PM', 'FLR 123', CS132),
+    row('CAS CS', '132', 'A2', 'Tue Thu', '12:30PM', '01:45PM', 'FLR 123', ''),
+    row('CAS CS', '132', 'B1', 'Wed', '12:20PM', '01:10PM', 'CAS 324', '', 'DIS'),
+    row('CAS CS', '132', 'B2', 'Wed', '01:25PM', '02:15PM', 'MCS B33', '', 'LAB'),
+  ];
+  const built = term(rows);
+  assert.deepEqual(examsOf(built.get(id('CAS CS', '132', 'A1'))), ['Tue 06:30PM-07:45PM NO ROOM']);
+  const a2 = built.get(id('CAS CS', '132', 'A2'));
+  assert.deepEqual(examsOf(a2), ['Tue 06:30PM-07:45PM NO ROOM']);
+  assert.equal(a2.propagatedExamCount, 1);
+  assert.equal(a2.propagatedFrom, id('CAS CS', '132', 'A1'));
+  assert.equal(a2.patternCount, 2);
+  assert.equal(a2.meetings[0].daysOfWeek, 'Tue Thu'); // meetings[0] still the class meeting
+  assert.equal(a2.meetings[0].startTime, '12:30PM');
+  assert.equal(a2.meetings[1].meetingStartDate, '01/19/2027');
+  for (const lab of ['B1', 'B2']) {
+    const b = built.get(id('CAS CS', '132', lab));
+    assert.deepEqual(examsOf(b), [], lab);
+    assert.equal(b.propagatedExamCount, 0, lab);
+  }
+  // Off: nothing is copied.
+  assert.deepEqual(examsOf(term(rows, { propagate: false }).get(id('CAS CS', '132', 'A2'))), []);
+});
+
+test('propagation: CS111, CS112, CS131 already have the note on each lecture, so nothing is propagated', () => {
+  const cases = [
+    ['111', CS111, CS111, 'Wed 06:30PM-07:45PM NO ROOM'],
+    ['112', CS112, CS112, 'Wed 06:30PM-08:00PM NO ROOM'],
+    ['131', CS131, 'Co-Teach with Assaf Khoury || ' + CS131, 'Thu 06:30PM-07:45PM NO ROOM'],
+  ];
+  for (const [nbr, a1, a2, want] of cases) {
+    const rows = [
+      row('CAS CS', nbr, 'A1', 'Tue Thu', '11:00AM', '12:15PM', 'R1', a1),
+      row('CAS CS', nbr, 'A2', 'Tue Thu', '12:30PM', '01:45PM', 'R2', a2),
+    ];
+    const withP = term(rows);
+    const without = term(rows, { propagate: false });
+    for (const sec of ['A1', 'A2']) {
+      const key = id('CAS CS', nbr, sec);
+      assert.deepEqual(examsOf(withP.get(key)), [want], `${nbr} ${sec}`);
+      assert.equal(withP.get(key).propagatedExamCount, 0, `${nbr} ${sec}`);
+      assert.deepEqual(withP.get(key).meetings, without.get(key).meetings, `${nbr} ${sec}`);
+    }
+  }
+});
+
+test('propagation: ENGEK103 A5 (no meeting rows) gets no exam, even from an "all sections" source', () => {
+  const blank = { ...row('ENG EK', '103', 'A5', '', '', '', '', ''), 'Days Of The Week': '', 'Start Time': '', 'End Time': '', 'Facil ID': '', 'Meeting Start Date': '', 'Meeting End Date': '' };
+  const rows = [
+    row('ENG EK', '103', 'A1', 'Tue Thu', '09:30AM', '10:45AM', 'PHO 203', EK103),
+    blank,
+  ];
+  assert.equal(examsOf(term(rows).get(id('ENG EK', '103', 'A5'))).length, 0);
+  // Same with a source that does say "all ... sections".
+  const rows2 = [
+    row('ENG EK', '103', 'A1', 'Tue Thu', '09:30AM', '10:45AM', 'PHO 203', CS132.replace(/CS132/g, 'EK103')),
+    blank,
+  ];
+  const a5 = term(rows2).get(id('ENG EK', '103', 'A5'));
+  assert.deepEqual(examsOf(a5), []);
+  assert.deepEqual(a5.propagationSkips, ['no meeting rows']);
+});
+
+test('propagation: a note without "all <COURSE> sections" is never copied; a lab never sources one', () => {
+  const rows = [
+    row('ENG EK', '103', 'A1', 'Tue Thu', '09:30AM', '10:45AM', 'PHO 203', EK103),
+    row('ENG EK', '103', 'A2', 'Tue Thu', '11:00AM', '12:15PM', 'EPC 205', ''),
+  ];
+  assert.deepEqual(examsOf(term(rows).get(id('ENG EK', '103', 'A2'))), []);
+  const labSource = [
+    row('CAS CS', '132', 'A1', 'Tue Thu', '11:00AM', '12:15PM', 'R1', ''),
+    row('CAS CS', '132', 'B1', 'Wed', '12:20PM', '01:10PM', 'R2', CS132, 'LAB'),
+  ];
+  assert.deepEqual(examsOf(term(labSource).get(id('CAS CS', '132', 'A1'))), []);
+});
+
+test('propagation: sources that disagree on the time propagate nothing', () => {
+  const rows = [
+    row('CAS XX', '100', 'A1', 'Tue Thu', '09:00AM', '10:15AM', 'R1', 'Students in all XX100 sections must reserve Tuesday 6:30 - 7:45pm for exams.'),
+    row('CAS XX', '100', 'A2', 'Tue Thu', '10:30AM', '11:45AM', 'R2', 'Students in all XX100 sections must reserve Wednesday 6:30 - 7:45pm for exams.'),
+    row('CAS XX', '100', 'A3', 'Tue Thu', '12:00PM', '01:15PM', 'R3', ''),
+  ];
+  const built = term(rows);
+  assert.deepEqual(examsOf(built.get(id('CAS XX', '100', 'A3'))), []);
 });

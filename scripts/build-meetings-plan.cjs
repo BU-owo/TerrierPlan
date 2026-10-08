@@ -42,7 +42,7 @@ function brief(m) {
 function main() {
   const rows = parse(fs.readFileSync(CSV_PATH, 'utf8'), { columns: true, skip_empty_lines: true });
   const sections = M.groupSections(rows, TERM);
-  const noRoom = M.noRoomPatternsByCourse(sections);
+  const builtByDoc = M.buildTermMeetings(sections, { storedPickFor: (s) => ALLOWLIST.has(s.classNbr) });
 
   const plan = [];
   const excludedAllowlist = [];
@@ -56,11 +56,7 @@ function main() {
       if (allowlisted) excludedAllowlist.push(section.label);
       continue;
     }
-    const built = M.buildMeetings(section, {
-      noRoomPatterns: noRoom.get(section.courseKey),
-      storedPick: allowlisted,
-      notesExams: true,
-    });
+    const built = builtByDoc.get(section.docId);
     const multi = built.patternCount >= 2;
     if (!multi && !allowlisted) continue;
     if (multi) inScopeByMulti++;
@@ -163,7 +159,7 @@ function main() {
   L.push('Not edited. To write `meetings` on future imports:', '');
   L.push("1. `const M = require('./lib/meetings.cjs');` near the top (and drop the copied pickPrimaryMeeting logic from the importer if the meeting-patch branch lands, so there is one copy).");
   L.push('2. While looping rows, also push every row onto a per-key list (the importer already groups by `term_classNbr`).');
-  L.push('3. After the loop: `const groups = M.groupSections(rows, term)` (or per term), `const noRoom = M.noRoomPatternsByCourse(groups)`, then for each section `M.buildMeetings(group, { noRoomPatterns: noRoom.get(group.courseKey), notesExams: true })`.');
+  L.push('3. After the loop: `const groups = M.groupSections(rows, term)` (or per term), then `const built = M.buildTermMeetings(groups, { storedPickFor })`. It builds every in-scope section, including notes-derived exams and "all <COURSE> sections" propagation; look each section up by docId.');
   L.push('4. In the `batch.set(..., { merge: true })` payload add `meetings` when the section is undergrad, not OTPMS/MED/LAW and `patternCount >= 2` (match the backfill scope), so single-meeting docs stay unchanged.');
   L.push('5. Top-level fields should then come from `meetings[0]` (or stay as pickPrimaryMeeting) so the two never disagree.');
   L.push('');
