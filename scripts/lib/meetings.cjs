@@ -228,6 +228,82 @@ function classifyKind(section, row, noRoomPatterns) {
   return 'class';
 }
 
+
+// ── Notes-derived exam meetings ─────────────────────────────────────────────
+// Some courses (CS111, MA123, ...) only state their weekly exam block in the
+// section notes ("must reserve Wednesday 6:30 - 7:45pm for exams"); BU's CSV
+// has no row for it. parseNotesExams reads one notes string and returns
+//   { exams: [{ days: ['Wed'], startTime: '06:30PM', endTime: '07:45PM', text }],
+//     rejected: [{ reason, text }] }
+// A segment (sentence / ';' / '||' piece) counts only if it has exam wording
+// ("exam block", "reserve ... for exams", or "Exams for <course> take place on"), exactly one weekday and exactly
+// one time range with an am/pm on the end time. Segments that have a weekday
+// and a time but fail a rule are reported in `rejected`, never guessed at.
+const DAY_WORD = /\b(mon(?:day)?s?|tue(?:s(?:day)?)?s?|wed(?:nesday)?s?|thu(?:r(?:s(?:day)?)?)?s?|fri(?:day)?s?)\b/gi;
+const DAY_NAMES = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri' };
+const TIME_RANGE = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|—|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/gi;
+const EXAM_WORDING = /\bexam block\b|\breserve\b[^.;]*?\bfor\s+(?:\w+\s+){0,4}(?:exams?|midterms?)\b|\bexams?\s+for\s+\S+(?:\s+\S+)?\s+take\s+place\s+on\b/i;
+const EXAM_HINT = /exam|midterm|reserve/i;
+
+function formatTime(minutes) {
+  const h24 = Math.floor(minutes / 60);
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${String(h12).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}${h24 >= 12 ? 'PM' : 'AM'}`;
+}
+
+function toMinutes(hour, minute, meridiem) {
+  let h = Number(hour) % 12;
+  if (meridiem.toLowerCase() === 'pm') h += 12;
+  return h * 60 + Number(minute || 0);
+}
+
+function noteSegments(notes) {
+  const text = String(notes || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\b([ap])\.m\./gi, '$1m')
+    .replace(/&nbsp;/gi, ' ');
+  return text.split(/\|\||;|\n|(?<=[.!?])\s+/).map((t) => t.replace(/\s+/g, ' ').trim()).filter(Boolean);
+}
+
+function parseNotesExams(notes) {
+  const exams = [];
+  const rejected = [];
+  for (const segment of noteSegments(notes)) {
+    if (!EXAM_HINT.test(segment)) continue;
+    const days = [...new Set([...segment.matchAll(DAY_WORD)].map((m) => DAY_NAMES[m[1].slice(0, 3).toLowerCase()]))];
+    const ranges = [...segment.matchAll(TIME_RANGE)];
+    if (days.length === 0 || ranges.length === 0) continue;
+    if (!EXAM_WORDING.test(segment)) {
+      rejected.push({ reason: 'no exam wording', text: segment });
+      continue;
+    }
+    if (days.length !== 1) {
+      rejected.push({ reason: `${days.length} weekdays`, text: segment });
+      continue;
+    }
+    const distinct = new Set(ranges.map((m) => m[0].toLowerCase().replace(/\s+/g, '')));
+    if (distinct.size !== 1) {
+      rejected.push({ reason: 'multiple time ranges', text: segment });
+      continue;
+    }
+    const [, sh, sm, sMer, eh, em, eMer] = ranges[0];
+    const end = toMinutes(eh, em, eMer);
+    let start = toMinutes(sh, sm, sMer || eMer);
+    if (!sMer && start >= end) start = toMinutes(sh, sm, eMer.toLowerCase() === 'pm' ? 'am' : 'pm');
+    if (start >= end) {
+      rejected.push({ reason: 'start not before end', text: segment });
+      continue;
+    }
+    exams.push({ days, startTime: formatTime(start), endTime: formatTime(end), text: segment });
+  }
+  return { exams, rejected };
+}
+
+// Distinct non-empty Notes values across a section's rows, joined.
+function sectionNotes(section) {
+  return [...new Set(section.rows.map((r) => cell(r, 'Notes')).filter(Boolean))].join(' || ');
+}
+
 // The row the section doc's top-level fields come from. Today's importer keeps
 // the first row; `storedPick: true` means the doc was patched to the
 // pickPrimaryMeeting row instead (the 22 allowlisted Class Nbrs).
@@ -243,7 +319,16 @@ function storedRow(section, { storedPick = false } = {}) {
 // `stored` is the row the top-level fields hold; the stored row's pattern goes
 // first when it's a class meeting, then the rest of the class meetings, then
 // exam blocks (file order inside each group).
-function buildMeetings(section, { noRoomPatterns, storedPick = false } = {}) {
+//
+// `notesExams` (default false, so existing callers are unchanged): for an
+// in-scope section with no exam meeting, append one synthetic kind:'exam'
+// meeting per exam time parsed from its notes (see parseNotesExams), after the
+// class meetings, with the room 'NO ROOM' and the first class meeting's date
+// span. An exam already present at that day/time is not duplicated. Synthetic
+// exams count toward `patternCount` (recurringCount + synthetic), the number to
+// gate "2+ patterns" on when notes exams are wanted; `recurringCount` is
+// unchanged. `notesInfo` is the parse result either way, for reporting.
+function buildMeetings(section, { noRoomPatterns, storedPick = false, notesExams = false } = {}) {
   const { rows, collisions } = recurringRows(section);
   const stored = storedRow(section, { storedPick });
   const entries = rows.map((row) => ({ row, kind: classifyKind(section, row, noRoomPatterns) }));
@@ -256,9 +341,34 @@ function buildMeetings(section, { noRoomPatterns, storedPick = false } = {}) {
     .map(({ e }) => e);
 
   const meetings = ordered.map(({ row, kind }) => ({ ...toFields(row), kind }));
+
+  const notesInfo = inMeetingsScope(section) ? parseNotesExams(sectionNotes(section)) : { exams: [], rejected: [] };
+  let synthetic = 0;
+  const firstClass = meetings.find((m) => m.kind === 'class');
+  if (notesExams && firstClass && !meetings.some((m) => m.kind === 'exam')) {
+    for (const exam of notesInfo.exams) {
+      const daysOfWeek = exam.days.join(' ');
+      const dup = meetings.some((m) => m.kind === 'exam' && m.daysOfWeek === daysOfWeek
+        && m.startTime === exam.startTime && m.endTime === exam.endTime);
+      if (dup) continue;
+      meetings.push({
+        daysOfWeek,
+        startTime: exam.startTime,
+        endTime: exam.endTime,
+        facilId: 'NO ROOM',
+        meetingStartDate: firstClass.meetingStartDate,
+        meetingEndDate: firstClass.meetingEndDate,
+        kind: 'exam',
+      });
+      synthetic++;
+    }
+  }
   return {
     meetings,
     recurringCount: rows.length,
+    syntheticExamCount: synthetic,
+    patternCount: rows.length + synthetic,
+    notesInfo,
     collisions,
     stored: toFields(stored),
     primaryIsExam: meetings.length > 0 && meetings[0].kind === 'exam',
@@ -285,4 +395,6 @@ module.exports = {
   classifyKind,
   storedRow,
   buildMeetings,
+  parseNotesExams,
+  sectionNotes,
 };

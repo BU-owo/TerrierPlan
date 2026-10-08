@@ -17,7 +17,8 @@
 //     (also writes the `meetings` each section would get, for diffing)
 //
 // Sections with 2+ recurring weekly patterns (undergrad only; see
-// scripts/lib/meetings.cjs) also get a `meetings` array; meetings[0] is the
+// scripts/lib/meetings.cjs; an exam time stated only in the section notes counts as
+// one pattern, appended as a kind:'exam' meeting) also get a `meetings` array; meetings[0] is the
 // same meeting as the top-level meeting fields.
 //
 // Requires: firebase-admin, csv-parse
@@ -157,8 +158,8 @@ async function importSections(csvPath) {
     const noRoom = noRoomPatternsByCourse(groups);
     for (const [docId, group] of groups) {
       if (!inMeetingsScope(group)) continue;
-      const built = buildMeetings(group, { noRoomPatterns: noRoom.get(group.courseKey), storedPick: true });
-      if (built.recurringCount < 2) continue;
+      const built = buildMeetings(group, { noRoomPatterns: noRoom.get(group.courseKey), storedPick: true, notesExams: true });
+      if (built.patternCount < 2) continue;
       if (!sameFields(built.meetings[0], sectionsByKey.get(docId))) {
         inconsistent.push({ group, first: built.meetings[0], section: sectionsByKey.get(docId) });
         continue;
