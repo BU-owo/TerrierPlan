@@ -31,7 +31,7 @@ const ALLOWLIST = new Set([
 
 // Course keys called out in the report.
 const AMBIGUOUS = [
-  { courseKey: 'ENGEK125', sections: ['A1', 'A2', 'A3'], why: 'Fri block is NO ROOM in a sibling section; forced to class by override' },
+  { courseKey: 'ENGEK125', sections: ['A1', 'A2', 'A3'], why: 'Fri 4:30-6:15 PM block is an exam (confirmed on MyBU), forced by override; MoWe row stays class' },
   { courseKey: 'CASBI576', sections: ['A1'], why: 'Wed 2:30 pm pattern overlaps the MW lecture; could be a lab/discussion or a duplicate' },
 ];
 

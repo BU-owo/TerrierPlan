@@ -25,8 +25,15 @@ const MEETING_FIELDS = {
   meetingEndDate: 'Meeting End Date',
 };
 
-// Every ENGEK 125 meeting is a class meeting (the Fri block is real).
+// Every ENGEK 125 meeting is a class meeting, except the shared Fri 4:30-6:15 PM
+// row below: it's an exam block (confirmed on MyBU). A1/A2 list it with a real
+// room and A3 with NO ROOM, so the NO ROOM sibling logic can't be trusted here.
 const ALL_CLASS_COURSES = new Set(['ENGEK125']);
+// courseKey -> patternKeys (days|start|end, as in the CSV) that are exam blocks.
+// Checked before ALL_CLASS_COURSES.
+const FORCED_EXAM_PATTERNS = new Map([
+  ['ENGEK125', new Set(['Fri|04:30PM|06:15PM'])],
+]);
 // Same for single sections whose "NO ROOM" row is a real class meeting.
 const ALL_CLASS_DOC_IDS = new Set(['2271_10107']); // COM CM 581 A1
 
@@ -212,7 +219,9 @@ function isEveningSingleDay(row) {
 }
 
 function classifyKind(section, row, noRoomPatterns) {
-  if (ALL_CLASS_COURSES.has(section.courseKey) || ALL_CLASS_DOC_IDS.has(section.docId)) return 'class';
+  if (ALL_CLASS_DOC_IDS.has(section.docId)) return 'class';
+  if (FORCED_EXAM_PATTERNS.get(section.courseKey)?.has(patternKey(row))) return 'exam';
+  if (ALL_CLASS_COURSES.has(section.courseKey)) return 'class';
   if (cell(row, 'Facil ID') === 'NO ROOM') return 'exam';
   if (noRoomPatterns?.has(patternKey(row))) return 'exam';
   if (isEveningSingleDay(row) && section.rows.some((r) => EXAM_NOTES.test(cell(r, 'Notes')))) return 'exam';
