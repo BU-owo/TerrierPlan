@@ -37,6 +37,8 @@ const MIN_RANGE_SPAN_MIN = 5 * 60; // never show less than a 5-hour window, so o
 // instructor is drawn from 64px up (scheduler.css drops it whole when the lines
 // above leave no room), the room only in tall blocks (95px+).
 const MIN_BLOCK_HEIGHT = 22;
+// Height of the strip at the top of an overlapping placed block that holds its controls.
+const CHIP_ZONE_PX = 26;
 const PROF_LINE_THRESHOLD = 64; // drawn from here; scheduler.css drops it when it doesn't fit
 const ROOM_LINE_THRESHOLD = 95;
 
@@ -296,6 +298,9 @@ export default function WeeklyGrid({
   resolving = null,
   pulse = null,
   onFindAnotherTime = () => {},
+  // Manual: does this placed section's course+component have any other section
+  // to move to? (false -> the overlap popover offers no "Find another time").
+  hasOtherSections = () => true,
 }) {
   const [openColorFor, setOpenColorFor] = useState(null); // courseKey, or null
   const manual = mode === 'manual';
@@ -317,7 +322,16 @@ export default function WeeklyGrid({
     rootRef.current?.querySelector(`[data-section-id="${pulse.a}"][data-day="${day}"]`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     const timer = setTimeout(() => setPulseKeys(new Set()), 1800);
-    return () => clearTimeout(timer);
+    // Once the smooth scroll has brought the block into view, open the overlap
+    // popover for it (the popover closes itself if its anchor is off screen).
+    const openTimer = setTimeout(() => {
+      const el = rootRef.current?.querySelector(`[data-section-id="${pulse.a}"][data-day="${day}"]`);
+      if (el) setPopover({ sectionId: pulse.a, anchorEl: el });
+    }, 600);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(openTimer);
+    };
   }, [pulse]);
 
   const sections = sectionIds.map((id) => sectionsById[id]).filter(Boolean);
@@ -484,9 +498,12 @@ export default function WeeklyGrid({
         const shared = e.meeting.days.filter((d) => theirs.some((o) => entriesOverlapOnDay(e, o, d)));
         return shared.length ? [`${shared.join(' ')} ${formatClockRange(e.meeting.startMin, e.meeting.endMin)}`] : [];
       });
-      return { id, label: shortName(sectionsById[id]), time: [...new Set(times)].join(' · ') };
+      return { id, label: shortName(sectionsById[id]), time: [...new Set(times)].join(' · '), canMove: hasOtherSections(sectionsById[id]) };
     });
   })();
+  function togglePopoverFor(sectionId, anchorEl) {
+    setPopover((cur) => (cur && cur.sectionId === sectionId ? null : { sectionId, anchorEl }));
+  }
   function handleFindAnotherTime(id) {
     const others = [activePopover.sectionId, ...overlapMap.get(activePopover.sectionId)].filter((x) => x !== id);
     setPopover(null);
@@ -706,7 +723,7 @@ export default function WeeklyGrid({
                       key={`${section.id}-${day}-${mi}`}
                       data-section-id={section.id}
                       data-day={day}
-                      className={`sched-grid-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isLocked ? ' is-locked' : ''}${hasOverlap ? ' has-overlap' : ''}${swapSlot && displaceInfo && displaceInfo.swappedInId === section.id ? ' is-swapped-in' : ''}${hlPartners && hlPartners.has(section.id) ? ' is-overlap-hl' : ''}${hlPartners && section.id !== hlId && !hlPartners.has(section.id) ? ' is-dimmed' : ''}${pulseKeys.has(`${section.id}|${day}`) ? ' is-pulse' : ''}`}
+                      className={`sched-grid-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${isLocked ? ' is-locked' : ''}${hasOverlap ? ' has-overlap' : ''}${swapSlot && displaceInfo && displaceInfo.swappedInId === section.id ? ' is-swapped-in' : ''}${hlPartners && hlPartners.has(section.id) ? ' is-overlap-hl' : ''}${hlPartners && section.id !== hlId && !hlPartners.has(section.id) ? ' is-dimmed' : ''}${pulseKeys.has(`${section.id}|${day}`) ? ' is-pulse' : ''}${manual && hasOverlap ? ' is-overlap-clickable' : ''}`}
                       style={{
                         top: (meeting.startMin - gridStart) * PX_PER_MIN,
                         height: blockHeight,
@@ -718,6 +735,15 @@ export default function WeeklyGrid({
                       onMouseLeave={manual ? () => setHoverId(null) : undefined}
                       onFocus={manual && overlapMap.has(section.id) ? () => setHoverId(section.id) : undefined}
                       onBlur={manual ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setHoverId(null); } : undefined}
+                      aria-haspopup={manual && hasOverlap ? 'dialog' : undefined}
+                      onClick={manual && hasOverlap ? (e) => togglePopoverFor(section.id, e.currentTarget) : undefined}
+                      onKeyDown={manual && hasOverlap ? (e) => {
+                        // Only when the block itself has focus, not one of its buttons.
+                        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          togglePopoverFor(section.id, e.currentTarget);
+                        }
+                      } : undefined}
                     >
                       <div className="sched-grid-block-actions">
                         {swapSlot && displaceInfo && displaceInfo.swappedInId === section.id && (
@@ -740,6 +766,22 @@ export default function WeeklyGrid({
                             }}
                           >
                             overlap
+                          </button>
+                        )}
+                        {hasOverlap && manual && (
+                          <button
+                            type="button"
+                            className="sched-grid-block-more"
+                            aria-haspopup="dialog"
+                            aria-expanded={activePopover?.sectionId === section.id}
+                            aria-label="See what overlaps and fix it"
+                            title="See what overlaps and fix it"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePopoverFor(section.id, e.currentTarget);
+                            }}
+                          >
+                            …
                           </button>
                         )}
                         {manual && (
@@ -909,7 +951,25 @@ export default function WeeklyGrid({
                   </div>
                 );
               })}
-              {layoutGhostsForDay(showAllTimed.filter((g) => g.meeting.days.includes(day))).map(({ section, meeting, mi, lane, laneCount }) => {
+              {(() => {
+                // Manual: the top strip of each overlapping placed block holds its
+                // "!" / "…" controls. A "Show all" ghost that sits over one of those
+                // strips lets clicks through to the block instead of covering it.
+                const dayShowAll = showAllTimed.filter((g) => g.meeting.days.includes(day));
+                const solidToday = withMeeting.filter((m) => m.meeting.days.includes(day) && !isSwapKeep(m.section));
+                const chipZones = manual && dayShowAll.length > 0
+                  ? layoutGhostsForDay([...solidToday, ...pending.filter((p) => p.meeting.days.includes(day))])
+                    .filter((b) => !b.isPending && solidToday.some((o) => o.section.id !== b.section.id && entriesOverlapOnDay(o, b, day)))
+                    .map((b) => ({
+                      from: b.lane / b.laneCount,
+                      to: (b.lane + 1) / b.laneCount,
+                      startMin: b.meeting.startMin,
+                      endMin: b.meeting.startMin + CHIP_ZONE_PX / PX_PER_MIN,
+                    }))
+                  : [];
+                return layoutGhostsForDay(dayShowAll).map(({ section, meeting, mi, lane, laneCount }) => {
+                const overChip = chipZones.some((z) => lane / laneCount < z.to && z.from < (lane + 1) / laneCount
+                  && meeting.startMin < z.endMin && z.startMin < meeting.endMin);
                 // What it would overlap among what's drawn on this day.
                 const clashes = [...withMeeting, ...pending].filter((o) => entriesOverlapOnDay(o, { section, meeting }, day));
                 const overlap = clashes.length > 0;
@@ -931,7 +991,7 @@ export default function WeeklyGrid({
                     role={clickable ? 'button' : undefined}
                     tabIndex={clickable ? 0 : undefined}
                     aria-pressed={toggles ? selected : undefined}
-                    className={`sched-grid-ghost-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${overlap ? ' has-conflict' : ''}${clickable ? '' : ' is-display-only'}${selected ? ' is-selected' : ''}`}
+                    className={`sched-grid-ghost-block sched-color-${resolvedCourseColorIndex(section.courseKey, courseColors)}${overlap ? ' has-conflict' : ''}${clickable ? '' : ' is-display-only'}${selected ? ' is-selected' : ''}${overChip ? ' is-over-chip' : ''}`}
                     style={{
                       top: (meeting.startMin - gridStart) * PX_PER_MIN,
                       height: Math.max(MIN_BLOCK_HEIGHT, (meeting.endMin - meeting.startMin) * PX_PER_MIN),
@@ -959,7 +1019,8 @@ export default function WeeklyGrid({
                     </div>
                   </div>
                 );
-              })}
+                });
+              })()}
             </div>
           ))}
         </div>

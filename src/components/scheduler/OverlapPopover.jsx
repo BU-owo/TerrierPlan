@@ -38,8 +38,10 @@ export default function OverlapPopover({ anchorEl, rows, onFindAnotherTime, onRe
     }
     function onPointerDown(e) {
       if (ref.current?.contains(e.target)) return;
-      // The chip toggles the popover itself; don't close-then-reopen it.
-      if (e.target.closest?.('.sched-grid-block-chip.is-overlap')) return;
+      // The chip, the "…" button and the anchor block toggle the popover
+      // themselves; don't close-then-reopen it.
+      if (anchorEl.contains(e.target)) return;
+      if (e.target.closest?.('.sched-grid-block-chip.is-overlap, .sched-grid-block-more')) return;
       onClose();
     }
     function onMove() {
@@ -80,7 +82,9 @@ export default function OverlapPopover({ anchorEl, rows, onFindAnotherTime, onRe
             {row.label}{row.time && <span className="sched-overlap-popover-time"> · {row.time}</span>}
           </div>
           <div className="sched-overlap-popover-actions">
-            <button type="button" onClick={() => onFindAnotherTime(row.id)}>Find another time</button>
+            {row.canMove === false
+              ? <button type="button" disabled>No other times</button>
+              : <button type="button" onClick={() => onFindAnotherTime(row.id)}>Find another time</button>}
             <button type="button" className="is-remove" onClick={() => onRemove(row.id)}>Remove</button>
           </div>
         </div>

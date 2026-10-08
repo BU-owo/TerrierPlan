@@ -2374,6 +2374,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                 resolving={scheduleMode === 'manual' ? swapOrigin : null}
                 pulse={scheduleMode === 'manual' ? overlapPulse : null}
                 onFindAnotherTime={handleFindAnotherTime}
+                hasOtherSections={(section) => (sectionsByCourse[section.courseKey] || []).some((s) => s.id !== section.id && classifyComponent(s) === classifyComponent(section))}
                 selectedGhostIds={selectedGhostIds}
                 missingByCourse={previewHold ? EMPTY_OBJ : missingByCourse}
                 onClearGhosts={() => setGhostGroups(new Set())}

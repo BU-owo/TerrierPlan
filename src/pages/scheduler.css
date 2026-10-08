@@ -1271,6 +1271,29 @@ button.sched-overlap-step-btn:hover { filter: brightness(.95); }
   container: sched-block sched-lane / size;
 }
 .sched-grid-block-action-btn { cursor: pointer; }
+/* Manual: an overlapping block opens the overlap popover when clicked or tapped. */
+.sched-grid-block.is-overlap-clickable { cursor: pointer; }
+/* "…" on an overlapping block: only shown in narrow lanes (see the 60px container rule below). */
+.sched-grid-block-more {
+  display: none;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255,255,255,.7);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+html[data-theme='dark'] .sched-grid-block-more { background: rgba(0,0,0,.4); }
+.sched-grid-block-more:hover,
+.sched-grid-block-more:focus-visible { outline: 1.5px solid var(--warning-border); outline-offset: 1px; }
 /* Lock/eliminate — same actions as the draft picker's SectionRow, just
    reachable from the generated-schedule preview too (see WeeklyGrid.jsx).
    Its own row so it never eats into the text lines below it. */
@@ -1366,6 +1389,9 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
 @container sched-block (max-width: 60px) {
   .sched-grid-block-action-btn { display: none; }
   .sched-grid-block-actions { justify-content: flex-start; min-height: 12px; }
+  /* The buttons above are gone, so an overlapping block keeps one control: "…",
+     which opens the same overlap popover as the "!" dot. */
+  .sched-grid-block-more { display: flex; }
 }
 @container sched-block (max-width: 49px) {
   .sched-grid-pending-chip { display: none; }
@@ -1716,6 +1742,8 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
   cursor: pointer;
 }
 .sched-overlap-popover-actions button:hover { border-color: var(--scarlet); color: var(--scarlet); }
+.sched-overlap-popover-actions button:disabled { opacity: .55; cursor: default; }
+.sched-overlap-popover-actions button:disabled:hover { border-color: var(--border); color: inherit; }
 .sched-overlap-popover-actions button.is-remove:hover { border-color: var(--warning-border); color: var(--warning-text); }
 /* Where a displaced section used to be, until it gets a replacement: a dashed
    outline in its course color, "Removed: <section>" with the section struck
@@ -1847,6 +1875,8 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
    solid fill and solid border. */
 .sched-grid-ghost-block:hover,
 .sched-grid-ghost-block:focus-visible { filter: brightness(.97); outline: none; }
+/* A "Show all" ghost over an overlapping block's "!" / "…" strip lets clicks through. */
+.sched-grid-ghost-block.is-over-chip { pointer-events: none; }
 /* Ghosts for sections outside the student's normal picks (unchecked or
    eliminated) and/or outside the time filter (fainter). They stay clickable;
    the tooltip says why. */
