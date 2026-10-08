@@ -2,6 +2,8 @@ import { useState } from 'react';
 import HubSidebar from './HubSidebar';
 import RequirementsBulletinTab from './RequirementsBulletinTab';
 import CreditsPanel from './CreditsPanel';
+import { PanelCollapseButton, PanelRail } from './PanelCollapseControls';
+import usePanelCollapse from '../../hooks/usePanelCollapse';
 
 const TABS = [
   { id: 'hub', label: 'HUB' },
@@ -28,7 +30,7 @@ export default function SidePanelTabs({
   onOpenHubFullView,
 }) {
   const [activeTab, setActiveTab] = useState('hub');
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const { collapsed: isCollapsed, desktop, setCollapsed } = usePanelCollapse('terrierplan_planner_right_collapsed');
   const [summaries, setSummaries] = useState({});
 
   function makeSummaryHandler(tabId) {
@@ -46,13 +48,12 @@ export default function SidePanelTabs({
     const activeSummary = summaries[activeTab];
     return (
       <div className="side-panel-tabs side-panel-collapsed">
-        <button
-          className="side-panel-expand-btn"
-          onClick={() => setIsCollapsed(false)}
-          title="Expand status panel"
-        >
-          {activeMeta.label}{activeSummary ? ` ${activeSummary.badge}` : ''}
-        </button>
+        <PanelRail
+          side="right"
+          name="HUB"
+          text={`${activeMeta.label}${activeSummary ? ` ${activeSummary.badge}` : ''}`}
+          onExpand={() => setCollapsed(false)}
+        />
       </div>
     );
   }
@@ -93,13 +94,9 @@ export default function SidePanelTabs({
             </div>
           );
         })}
-        <button
-          className="side-panel-collapse-btn"
-          onClick={() => setIsCollapsed(true)}
-          title="Collapse status panel"
-        >
-          −
-        </button>
+        {desktop && (
+          <PanelCollapseButton side="right" name="HUB" onClick={() => setCollapsed(true)} />
+        )}
       </div>
 
       <div className="side-panel-content">

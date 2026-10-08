@@ -30,6 +30,8 @@ import SearchPanelTabs from '../components/planner/SearchPanelTabs';
 import SemesterBoard from '../components/planner/SemesterBoard';
 import CourseCard from '../components/planner/CourseCard';
 import SidePanelTabs from '../components/planner/SidePanelTabs';
+import { PanelCollapseButton, PanelRail } from '../components/planner/PanelCollapseControls';
+import usePanelCollapse from '../hooks/usePanelCollapse';
 import RequirementsFullView from '../components/planner/RequirementsFullView';
 import HubFullView from '../components/planner/HubFullView';
 import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
@@ -273,6 +275,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [activeSemIndex, setActiveSemIndex] = useState(0);
   // Which single panel is shown on narrow/mobile screens: 'search' | 'board' | 'hub'
   const [mobileView, setMobileView] = useState('board');
+  const { collapsed: leftCollapsed, desktop: isDesktopLayout, setCollapsed: setLeftCollapsed } = usePanelCollapse('terrierplan_planner_left_collapsed');
   // 'detailed' | 'overview' — "All semesters" compact board (desktop only).
   const [boardView, setBoardView] = useState(() => {
     try {
@@ -2145,7 +2148,15 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       >
         <div className="planner-body" data-mobile-view={mobileView}>
           {/* Left: search */}
-          <aside className="planner-left">
+          <aside className={`planner-left${leftCollapsed ? ' is-collapsed' : ''}`}>
+            {isDesktopLayout && !leftCollapsed && (
+              <div className="planner-panel-header">
+                <PanelCollapseButton side="left" name="search" onClick={() => setLeftCollapsed(true)} />
+              </div>
+            )}
+            {leftCollapsed && (
+              <PanelRail side="left" name="search" text="Search" onExpand={() => setLeftCollapsed(false)} />
+            )}
             <SearchPanelTabs
               theme={theme}
               activeSemIndex={activeSemIndex}

@@ -192,6 +192,11 @@ html[data-theme='dark'] {
 }
 .sched-clear-all-btn:hover:not(:disabled) { background: var(--warning-border); color: #fff; }
 .sched-clear-all-btn:disabled { opacity: .4; cursor: default; }
+/* Phone width: let the toolbar controls wrap instead of running off the edge. */
+@media (max-width: 480px) {
+  .sched-draft-toolbar,
+  .sched-draft-toolbar-actions { flex-wrap: wrap; }
+}
 
 .sched-draft-empty {
   background: var(--white);
@@ -2473,8 +2478,12 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
   /* Card header: on a phone the course title keeps its room and the "Select
      all sections" button drops to its own line under it. */
   .sched-draft-card-header { flex-wrap: wrap; }
-  .sched-draft-card-toggle { order: 1; flex: 1 1 200px; }
+  .sched-draft-card-header .sched-draft-card-toggle { order: 1; flex: 1 1 200px; }
   .sched-remove-course-btn { order: 2; }
   .sched-course-select-all { order: 3; margin-left: 20px; }
   .sched-draft-card-code { white-space: nowrap; }
 }
+
+/* Dark mode: --scarlet on the navy surfaces is too dark to read, so use the lighter text token. */
+html[data-theme='dark'] .sched-draft-card-code,
+html[data-theme='dark'] .sched-global-filter-label { color: var(--scarlet-text); }
