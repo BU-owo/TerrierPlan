@@ -89,7 +89,12 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse }) {
             type="text"
             placeholder="e.g. CAS CS 111 or Calculus"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              // Same update as the query, so the empty message can't flash
+              // for a render before the debounced search starts.
+              if (e.target.value.trim()) setSearching(true);
+            }}
             autoComplete="off"
             spellCheck={false}
           />

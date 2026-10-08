@@ -1345,6 +1345,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   }
 
   function handleClearAll() {
+    if (!window.confirm('Clear your whole draft? This removes every course and pick, including any pinned sections.')) return;
     setAutoUnchecked(new Set());
     setHandTouched(new Set());
     setDraftCourses([]);

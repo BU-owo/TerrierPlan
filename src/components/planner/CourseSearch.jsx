@@ -510,7 +510,12 @@ export default function CourseSearch({
             type="text"
             placeholder="e.g. CAS CS 111 or Calculus"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              // Same update as the query, so "No courses found" can't flash for
+              // a render before the debounced search starts.
+              if (e.target.value.trim() && coursesLoaded) setLoading(true);
+            }}
             onFocus={requestCatalogLoad}
             autoComplete="off"
             spellCheck={false}

@@ -92,10 +92,60 @@
 
 /* Collapse the right panel when its single tabbed status panel is collapsed. */
 .planner-right:has(.side-panel-collapsed) {
-  width: 50px;
-  border-left: none;
-  padding: 8px 4px;
+  width: 36px;
+  border-left: 1px solid var(--border);
+  padding: 0;
 }
+
+/* ===== COLLAPSIBLE SIDE PANELS (desktop only; see usePanelCollapse) =====
+   Search (left) and HUB (right) share one chevron button and one thin rail.
+   Under 860px neither is rendered, so the mobile tab layout is untouched. */
+.planner-left { transition: width 200ms ease-out; }
+.planner-left.is-collapsed { width: 36px; }
+.planner-left.is-collapsed .search-panel-tabs { display: none; }
+.planner-panel-header {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  padding: 6px 8px 0;
+}
+.planner-panel-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0 0 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--cream);
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.planner-panel-btn:hover { background: var(--cream-dark); color: var(--text); }
+.planner-panel-btn:focus-visible { outline: 2px solid var(--scarlet); outline-offset: 1px; }
+.planner-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+.planner-rail-label {
+  writing-mode: vertical-rl;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+/* In the right panel's tab bar the button sits at the end of the row. */
+.side-panel-tab-bar .planner-panel-btn { align-self: center; width: 22px; margin: 0 3px; }
 
 /* ===== PLAN SELECTOR ===== */
 .plan-selector {
@@ -2915,7 +2965,7 @@ html[data-theme='dark'] .search-picker-modal,
 html[data-theme='dark'] .import-modal,
 html[data-theme='dark'] .beta-modal { background: var(--white); }
 html[data-theme='dark'] .search-input:focus { background: var(--white); }
-html[data-theme='dark'] .hub-year-toggle-btn.active { background: var(--white); }
+html[data-theme='dark'] .hub-year-toggle-btn.active { background: var(--white); color: var(--scarlet-text); }
 html[data-theme='dark'] .plan-side-panel,
 html[data-theme='dark'] .external-credit-hub-picker select,
 html[data-theme='dark'] .external-credit-no-hub,
