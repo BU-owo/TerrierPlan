@@ -2826,6 +2826,7 @@ html[data-theme='dark'] .search-hub-finder-link { color: var(--warning-border); 
   flex-shrink: 0;
 }
 .btn-import-transcript:hover { background: rgba(255, 255, 255, 0.22); }
+.btn-import-transcript:disabled { opacity: 0.5; cursor: not-allowed; background: rgba(255, 255, 255, 0.12); }
 .btn-import-transcript-icon { display: none; }
 .plan-side-panel { margin-top: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--white); padding: 14px; }
 .plan-side-panel-header { display: flex; justify-content: space-between; gap: 12px; }

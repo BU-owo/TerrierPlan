@@ -316,6 +316,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverlay, setDragOverlay] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  // 'idle' | 'busy' | 'error' — "Download plan PDF" button.
+  const [planPdfStatus, setPlanPdfStatus] = useState('idle');
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [deletePlanId, setDeletePlanId] = useState(null); // non-null → confirm-delete modal open for this plan id
 
@@ -1788,6 +1790,35 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setIsDirty(true);
   }
 
+  // pdf-lib (and the PDF drawing code) load only when this is clicked.
+  async function handleDownloadPlanPdf() {
+    if (planPdfStatus === 'busy') return;
+    setPlanPdfStatus('busy');
+    try {
+      const { downloadPlanPdf } = await import('../utils/planPdf');
+      await downloadPlanPdf({
+        planName,
+        majorBulletinUrl,
+        isTransfer,
+        semesters,
+        serializedSemesters: semestersToFirestore(semesters),
+        gridSummerTerms,
+        extraTerms,
+        stash,
+        requirementOverrides,
+        completedCourseKeys,
+        externalCredits,
+        courseMap,
+        creditsMap,
+        totalCredits,
+      });
+      setPlanPdfStatus('idle');
+    } catch (err) {
+      console.error('Plan PDF failed:', err);
+      setPlanPdfStatus('error');
+    }
+  }
+
   async function handleTranscriptImport(result) {
     const normalizedExternalCredits = normalizeExternalCredits(result.externalCredits);
     debugPlanner('handleTranscriptImport-result', {
@@ -2050,6 +2081,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   const totalCredits = planCourseCredits + externalCreditTotal;
 
+  const planIsEmpty = semesters.every((sem) => sem.length === 0)
+    && Object.values(gridSummerTerms).every((entries) => entries.length === 0);
+
   // Signed in but no plan loaded yet (same signal as the `?view=` effect
   // above) — either still loading or planLoadError. Guests never hit this.
   const plansPending = Boolean(user) && !activePlanId;
@@ -2135,6 +2169,18 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         >
           <span className="btn-import-transcript-icon" aria-hidden="true">Import</span>
           <span className="btn-import-transcript-label">Import Transcript</span>
+        </button>
+        <button
+          type="button"
+          className="btn-import-transcript"
+          onClick={handleDownloadPlanPdf}
+          disabled={plansPending || planIsEmpty || planPdfStatus === 'busy'}
+          title={planIsEmpty ? 'Add a course first' : 'Download plan PDF'}
+        >
+          <span className="btn-import-transcript-icon" aria-hidden="true">PDF</span>
+          <span className="btn-import-transcript-label">
+            {planPdfStatus === 'busy' ? 'Making PDF…' : planPdfStatus === 'error' ? "Couldn't make PDF, try again" : 'Download plan PDF'}
+          </span>
         </button>
       </AppHeader>
 
