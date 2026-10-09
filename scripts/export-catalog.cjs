@@ -21,7 +21,7 @@
 //   GOOGLE_APPLICATION_CREDENTIALS=/path/outside/repo/key.json node scripts/export-catalog.cjs
 //
 // Output: a compact JSON array, sorted by id, of
-//   { id, courseNumber, name, hubUnits, offeringPattern, career, studyAbroad, upcomingSeasons }
+//   { id, courseNumber, name, hubUnits, offeringPattern, career, studyAbroad, credits, upcomingSeasons }
 // with any field that is undefined/null/empty-array/false omitted.
 
 const { initializeApp, applicationDefault } = require('firebase-admin/app');
@@ -32,7 +32,7 @@ const zlib = require('zlib');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const OUTPUT_PATH = path.join(REPO_ROOT, 'public', 'courses.json');
-const FIELDS = ['courseNumber', 'name', 'hubUnits', 'offeringPattern', 'career', 'studyAbroad', 'upcomingSeasons'];
+const FIELDS = ['courseNumber', 'name', 'hubUnits', 'offeringPattern', 'career', 'studyAbroad', 'credits', 'upcomingSeasons'];
 const SAMPLE_IDS = ['CASCS111', 'CASAH716', 'SARHS438'];
 
 // Read CURRENT_TERM from the app's own constant (an ES module) so the two

@@ -1432,14 +1432,14 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         snap.docs.forEach((d) => { newCourses[d.id] = d.data(); });
       }
       setCourseMap((prev) => ({ ...prev, ...newCourses }));
-      fetchCredits(Object.keys(newCourses));
+      fetchCredits(Object.keys(newCourses), newCourses);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [courseMap],
   );
 
   // Fetch credits from sections (batched)
-  async function fetchCredits(courseKeys) {
+  async function fetchCredits(courseKeys, courseDocs = {}) {
     const missing = courseKeys.filter((k) => !(k in creditsMap));
     if (missing.length === 0) return;
     const newCredits = {};
@@ -1463,6 +1463,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       for (const [k, v] of Object.entries(fallbackCredits)) {
         if (!(k in newCredits)) newCredits[k] = v;
       }
+    }
+    // Courses with no section credits in any term fall back to the course
+    // doc's own `credits` (see scripts/import-credits.cjs). Sections win.
+    for (const k of missing) {
+      const own = courseDocs[k]?.credits;
+      if (!(k in newCredits) && typeof own === 'number' && own > 0) newCredits[k] = own;
     }
     setCreditsMap((prev) => ({ ...prev, ...newCredits }));
   }
