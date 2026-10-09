@@ -111,17 +111,79 @@ function GhostTime({ children }) {
 // under it (upper-right, lower-left, lower-right). `laidOut` is the day's class
 // blocks with their lanes. The pill is taken to be ~60% of the column wide and
 // two lines (28px) tall, the larger of its layouts.
-function pickExamCorner(meeting, laidOut) {
+function pickExamCorner(meeting, laidOut, order = ['top-left', 'top-right', 'bottom-left', 'bottom-right']) {
   const pillMin = 28 / PX_PER_MIN;
   const span = 0.6;
   const bands = { top: [meeting.startMin, meeting.startMin + pillMin], bottom: [meeting.endMin - pillMin, meeting.endMin] };
   const sides = { left: [0, span], right: [1 - span, 1] };
   const hits = (band, side) => laidOut.some((e) => e.meeting.startMin < band[1] && band[0] < e.meeting.endMin
     && e.lane / e.laneCount < side[1] && side[0] < (e.lane + 1) / e.laneCount);
-  for (const [v, h] of [['top', 'left'], ['top', 'right'], ['bottom', 'left'], ['bottom', 'right']]) {
-    if (!hits(bands[v], sides[h])) return `${v}-${h}`;
+  for (const corner of order) {
+    const [v, h] = corner.split('-');
+    if (!hits(bands[v], sides[h])) return corner;
   }
-  return 'top-left';
+  return order[0];
+}
+
+// Where each exam's label pill goes on one day. `exams` are the day's exam
+// entries that show a pill; `laidOut` is the day's class blocks with lanes.
+// Exams overlap freely, but their solid labels must not sit on each other.
+// Exams that overlap in time form a group (sorted earliest end first):
+//   - alone: the usual corner (pickExamCorner);
+//   - two with different ends: the earlier-ending one keeps its corner at the
+//     top, the later-ending one anchors at the bottom edge of its own overlay;
+//   - otherwise (same end, or 3+): the labels stack, each below the previous,
+//     all on one side.
+// If two labels would still share rows, the pair stacks too. Returns a Map of
+// entry -> { corner, top } (top: px from its overlay's top edge, stack only).
+const EXAM_LABEL_PX = 30; // two-line label (28) plus its border
+const EXAM_LABEL_GAP_PX = 2;
+const EXAM_LABEL_INSET_PX = 3;
+function placeExamLabels(exams, heightOf, laidOut) {
+  const placed = new Map();
+  const byStart = [...exams].sort((a, b) => a.meeting.startMin - b.meeting.startMin || a.meeting.endMin - b.meeting.endMin);
+  const groups = [];
+  let maxEnd = -Infinity;
+  for (const e of byStart) {
+    if (groups.length && e.meeting.startMin < maxEnd) groups[groups.length - 1].push(e);
+    else { groups.push([e]); maxEnd = -Infinity; }
+    maxEnd = Math.max(maxEnd, e.meeting.endMin);
+  }
+  const labelMin = EXAM_LABEL_PX / PX_PER_MIN;
+  const insetMin = EXAM_LABEL_INSET_PX / PX_PER_MIN;
+  const rowsOf = (e, corner) => (corner.startsWith('top')
+    ? [e.meeting.startMin + insetMin, e.meeting.startMin + insetMin + labelMin]
+    : [e.meeting.endMin - insetMin - labelMin, e.meeting.endMin - insetMin]);
+  function stack(group) {
+    const side = pickExamCorner(group[0].meeting, laidOut).endsWith('right') ? 'right' : 'left';
+    let prevBottom = -Infinity;
+    for (const e of group) {
+      const wanted = Math.max(e.meeting.startMin + insetMin, prevBottom + EXAM_LABEL_GAP_PX / PX_PER_MIN);
+      const maxTop = heightOf(e) - EXAM_LABEL_PX - EXAM_LABEL_INSET_PX;
+      const top = Math.max(EXAM_LABEL_INSET_PX, Math.min((wanted - e.meeting.startMin) * PX_PER_MIN, maxTop));
+      placed.set(e, { corner: `top-${side}`, top });
+      prevBottom = e.meeting.startMin + (top + EXAM_LABEL_PX) / PX_PER_MIN;
+    }
+  }
+  for (const group of groups) {
+    if (group.length === 1) {
+      placed.set(group[0], { corner: pickExamCorner(group[0].meeting, laidOut), top: null });
+    } else if (group.length === 2 && group[0].meeting.endMin !== group[1].meeting.endMin) {
+      const [a, b] = [...group].sort((x, y) => x.meeting.endMin - y.meeting.endMin);
+      const aCorner = pickExamCorner(a.meeting, laidOut);
+      const bCorner = pickExamCorner(b.meeting, laidOut, ['bottom-left', 'bottom-right']);
+      const [a0, a1] = rowsOf(a, aCorner);
+      const [b0, b1] = rowsOf(b, bCorner);
+      if (a0 < b1 && b0 < a1) stack(group.sort((x, y) => x.meeting.endMin - y.meeting.endMin));
+      else {
+        placed.set(a, { corner: aCorner, top: null });
+        placed.set(b, { corner: bCorner, top: null });
+      }
+    } else {
+      stack(group);
+    }
+  }
+  return placed;
 }
 
 function formatHourLabel(hour) {
@@ -860,9 +922,21 @@ export default function WeeklyGrid({
                   with pointer-events: none, so a class beneath stays visible and
                   clickable. Never in the lanes, never an overlap. Only its small
                   label pill takes the pointer (for the tooltip). */}
-              {examEntries.filter((x) => x.meeting.days.includes(day)).map(({ section, meeting, mi }) => {
+              {(() => {
+                const examsToday = examEntries.filter((x) => x.meeting.days.includes(day));
+                const examHeightOf = (x) => Math.max(18, (x.meeting.endMin - x.meeting.startMin) * PX_PER_MIN);
+                const labelPlaces = placeExamLabels(
+                  examsToday.filter((x) => examHeightOf(x) >= EXAM_LABEL_MIN_HEIGHT),
+                  examHeightOf,
+                  layoutGhostsForDay([
+                    ...withMeeting.filter((m) => m.meeting.days.includes(day) && !isSwapKeep(m.section)),
+                    ...pending.filter((p) => p.meeting.days.includes(day)),
+                  ]),
+                );
+                return examsToday.map((entry) => {
+                const { section, meeting, mi } = entry;
                 const examCode = courseMap[section.courseKey]?.courseNumber ?? section.courseKey;
-                const examHeight = Math.max(18, (meeting.endMin - meeting.startMin) * PX_PER_MIN);
+                const examHeight = examHeightOf(entry);
                 const range = formatClockRange(meeting.startMin, meeting.endMin);
                 const shortCode = shortCourseCode(examCode);
                 const examTip = [
@@ -871,12 +945,7 @@ export default function WeeklyGrid({
                   meeting.facilId,
                 ].filter(Boolean).join('\n');
                 const showPill = examHeight >= EXAM_LABEL_MIN_HEIGHT;
-                const corner = showPill
-                  ? pickExamCorner(meeting, layoutGhostsForDay([
-                    ...withMeeting.filter((m) => m.meeting.days.includes(day) && !isSwapKeep(m.section)),
-                    ...pending.filter((p) => p.meeting.days.includes(day)),
-                  ]))
-                  : null;
+                const place = showPill ? labelPlaces.get(entry) : null;
                 return (
                   <div
                     key={`exam-${section.id}-${day}-${mi}`}
@@ -885,7 +954,11 @@ export default function WeeklyGrid({
                     title={showPill ? undefined : examTip}
                   >
                     {showPill && (
-                      <span className={`sched-grid-exam-label is-${corner}`} title={examTip}>
+                      <span
+                        className={`sched-grid-exam-label is-${place.corner}`}
+                        style={place.top != null ? { top: place.top } : undefined}
+                        title={examTip}
+                      >
                         <span className="sched-grid-exam-full">{examCode} · Exam {range}</span>
                         <span className="sched-grid-exam-two"><span>{examCode}</span><span>Exam {range}</span></span>
                         <span className="sched-grid-exam-short">{shortCode} exam</span>
@@ -893,7 +966,8 @@ export default function WeeklyGrid({
                     )}
                   </div>
                 );
-              })}
+                });
+              })()}
               {swapSlot && layoutGhostsForDay(ghostCandidates.filter((g) => g.meeting.days.includes(day))).map((ghost) => {
                 const { section, meeting, mi, conflict, lane, laneCount, isCurrent } = ghost;
                 const blocked = ghost.pinned.length > 0;

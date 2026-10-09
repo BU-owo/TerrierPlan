@@ -199,13 +199,19 @@ export default function SavedSchedulesPanel({
 
   return (
     <div className="sched-saved-panel">
-      {/* Save is the one action in this box that actually preserves
-          something — the name field is just optional labeling for it, so
-          it's styled as the loud, primary control with the input visually
-          secondary (see .sched-save-btn / .sched-save-name-input below). */}
+      {/* Naming is part of the save flow: the optional name goes above the
+          Save button (blank falls back to "Schedule N" in handleSave). */}
       <div className="sched-save-section">
         <div className="sched-save-heading">Save the schedule you’re previewing as a contender</div>
         <form className="sched-save-form" onSubmit={handleSave}>
+          <input
+            type="text"
+            className="sched-save-name-input"
+            placeholder="Name (optional)"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={saveBlocked}
+          />
           <button type="submit" className={`sched-save-btn${alreadySaved ? ' is-saved' : ''}`} disabled={saveBlocked} title={canSave && saveNote ? saveNote : undefined}>
             {!canSave
               ? 'Preview a schedule to save it'
@@ -215,14 +221,6 @@ export default function SavedSchedulesPanel({
                   ? 'Already saved'
                   : `Save this schedule${creditsLabel ? ` · ${creditsLabel}` : ''}`}
           </button>
-          <input
-            type="text"
-            className="sched-save-name-input"
-            placeholder="Optional name…"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={saveBlocked}
-          />
         </form>
         {actionError && (
           <div className="sched-saved-error" role="alert">

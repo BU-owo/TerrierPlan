@@ -1969,11 +1969,12 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
 .sched-grid-ghost-block-time { font-size: 9px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Narrow lanes. The chip words stay in the DOM for screen readers and the
    explanation stays in the ghost's tooltip; only what's drawn changes.
-   - up to 88px (less than a full lane): "Current" becomes a small dot and
-     "conflict" a small "!" glyph, so the section code is never squeezed;
+   - up to 110px (less than a full lane): "Current" becomes a small "★",
+     "conflict" a small "!" and "fits" a small "✓", so the chip is a whole
+     word or a glyph, never clipped text, and the section code is never squeezed;
    - up to 62px (half-width or less): the ghost icon is hidden too, rather
      than overlap the code or chip. */
-@container (max-width: 88px) {
+@container (max-width: 110px) {
   .sched-grid-ghost-chip {
     flex: 0 0 auto;
     width: 8px;
@@ -1998,6 +1999,18 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
     border: 0;
     background: var(--success-strong);
     color: #fff;
+  }
+  .sched-grid-ghost-chip.is-current {
+    width: 12px;
+    height: 12px;
+    line-height: 0;
+  }
+  .sched-grid-ghost-chip.is-current::after {
+    content: '★';
+    display: block;
+    font-size: 9px;
+    line-height: 12px;
+    text-align: center;
   }
   .sched-grid-ghost-chip.is-fits::after {
     content: '✓';
@@ -2298,9 +2311,9 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
   cursor: pointer;
 }
 /* Save is the one control here that actually preserves something, so it
-   leads — full-width, solid scarlet, its own row — with the name field
-   demoted underneath as a small optional/secondary input, instead of the
-   two competing for attention side by side. */
+   gets the emphasis — full-width, solid scarlet, its own row — under a small
+   optional name field, instead of the two competing for attention side by
+   side. */
 .sched-save-form { display: flex; flex-direction: column; gap: 6px; }
 .sched-save-btn {
   padding: 10px 14px;
