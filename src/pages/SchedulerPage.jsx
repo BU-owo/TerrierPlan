@@ -40,6 +40,7 @@ import {
   scheduleKey,
   missingGroupsForCourse,
   totalCredits,
+  pinInGroup,
 } from '../utils/scheduleCombos';
 import { EMPTY_GLOBAL_FILTERS, filterBlockDetail, matchesFilters, isGlobalFilterActive } from '../utils/sectionFilters';
 import { combinationProduct, SLOW_GENERATION_PRODUCT } from '../utils/selectionEstimate';
@@ -173,7 +174,7 @@ async function lookupCourses(courseKeys) {
 // button and the Preview grid's lock/eliminate controls (see
 // handlePreviewToggleLock/handlePreviewEliminate) so both go through
 // identical logic rather than two hand-maintained copies of it.
-function toggleLockInCourses(courses, courseKey, groupKey, sectionId) {
+function toggleLockInCourses(courses, courseKey, groupKey, sectionId, sectionsById) {
   return courses.map((c) => {
     if (c.courseKey !== courseKey) return c;
     const isLocked = c.locked.includes(sectionId);
@@ -188,11 +189,7 @@ function toggleLockInCourses(courses, courseKey, groupKey, sectionId) {
         },
       };
     }
-    return {
-      ...c,
-      locked: [...c.locked, sectionId],
-      considering: { ...c.considering, [groupKey]: [] },
-    };
+    return pinInGroup(c, groupKey, sectionId, sectionsById);
   });
 }
 
@@ -1311,13 +1308,15 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // distinct components (LEC/DIS/LAB/...) each need their own lock
   // independent of the others. Locking one section clears OTHER currently-
   // checked (non-locked) alternatives within that SAME component — they're
-  // moot once one from that group is mandatory — but leaves every other
-  // component and any other existing locks untouched. Unlocking releases
+  // moot once one from that group is mandatory — and replaces that
+  // component's earlier pin, which goes back to checked (the "Other" group
+  // keeps every pin; see pinInGroup). Every other component and its locks
+  // are untouched. Unlocking releases
   // it back into that component's checked pool rather than just dropping
   // it.
   function handleToggleLock(courseKey, groupKey, sectionId) {
     markHandTouched([sectionId]);
-    setDraftCourses((prev) => toggleLockInCourses(prev, courseKey, groupKey, sectionId));
+    setDraftCourses((prev) => toggleLockInCourses(prev, courseKey, groupKey, sectionId, sectionsById));
     markDraftEdited();
   }
 
@@ -1727,7 +1726,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       && !(course.considering[groupKey] || []).includes(sectionId);
     const next = isSwappedIn
       ? lockSwappedInSection(draftCourses, section.courseKey, groupKey, sectionId, previewSectionIds, sectionsById)
-      : toggleLockInCourses(draftCourses, section.courseKey, groupKey, sectionId);
+      : toggleLockInCourses(draftCourses, section.courseKey, groupKey, sectionId, sectionsById);
     setDraftCourses(next);
     markDraftEdited();
   }

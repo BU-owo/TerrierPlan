@@ -1,15 +1,20 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { compareSectionsByTime } from '../../utils/sectionTime';
-import { groupSectionsByComponent } from '../../utils/sectionComponents';
+import { groupSectionsByComponent, UNKNOWN_KEY } from '../../utils/sectionComponents';
 import { matchesFilters, isGlobalFilterActive } from '../../utils/sectionFilters';
 import SectionRow from './SectionRow';
 import SectionNotes from './SectionNotes';
 import SwapIcon from './SwapIcon';
 
-function groupStatusLabel(considering, lockedIdsInGroup) {
+function groupStatusLabel(considering, lockedIdsInGroup, groupKey) {
   const consideringCount = considering.length;
   if (lockedIdsInGroup.length > 0) {
-    return `📌 ${lockedIdsInGroup.length > 1 ? `${lockedIdsInGroup.length} locked` : 'Locked'}${
+    // Several pins in a real component (an old draft) are "pick one of these";
+    // only the "Other" group uses every pin.
+    const several = groupKey === UNKNOWN_KEY
+      ? `${lockedIdsInGroup.length} locked`
+      : `${lockedIdsInGroup.length} pinned, one will be used`;
+    return `📌 ${lockedIdsInGroup.length > 1 ? several : 'Locked'}${
       consideringCount > 0 ? ` + ${consideringCount} more in consideration` : ''
     }`;
   }
@@ -224,7 +229,7 @@ export default function DraftCourseCard({
               <span className={`sched-draft-card-hint${!manual && group.groupLockedIds.length > 0 ? ' is-locked' : ''}`}>
                 {manual
                   ? (placedInGroup ? `Placed: ${placedInGroup.classSection}` : 'Pick one')
-                  : groupStatusLabel(group.groupConsidering, group.groupLockedIds)}
+                  : groupStatusLabel(group.groupConsidering, group.groupLockedIds, group.key)}
               </span>
               {!manual && matchingCount > 0 && (
                 <button

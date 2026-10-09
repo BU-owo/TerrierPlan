@@ -12,7 +12,7 @@
 // A blank `component` (sections imported before schedule_with_types.csv
 // existed, or roster-less cancelled-class rows) falls into its own single
 // "Other" group per course rather than being dropped or crashing.
-const UNKNOWN_KEY = '__unknown__';
+export const UNKNOWN_KEY = '__unknown__';
 
 export function classifyComponent(section) {
   return section?.component?.trim() || UNKNOWN_KEY;

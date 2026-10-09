@@ -1,5 +1,5 @@
 import { sectionsConflict, classMeetings, describeSectionTime } from './sectionTime.js';
-import { classifyComponent, groupSectionsByComponent } from './sectionComponents.js';
+import { classifyComponent, groupSectionsByComponent, UNKNOWN_KEY } from './sectionComponents.js';
 import { describeSectionName } from './sectionType.js';
 
 // Safety valves against a pathological input (e.g. 8 courses × 6 sections
@@ -292,7 +292,10 @@ export function buildGenerationSlots(draftCourses, sectionsByCourse, sectionsByI
     }
     for (const group of groups) {
       const locked = lockedByGroup[group.key] || [];
-      if (locked.length > 0) {
+      if (locked.length > 1 && group.key !== UNKNOWN_KEY) {
+        // Several pins in one real component (an old draft): pick one of them.
+        slots.push({ options: locked });
+      } else if (locked.length > 0) {
         locked.forEach((id) => slots.push({ options: [id] }));
       } else {
         const considering = course.considering[group.key] || [];
@@ -301,6 +304,27 @@ export function buildGenerationSlots(draftCourses, sectionsByCourse, sectionsByI
     }
   }
   return slots;
+}
+
+// Pins sectionId in one course's groupKey. Outside the "Other" group a
+// component holds one pin: the group's existing pins are released back
+// into its considering list (checked again) and replaced. The "Other"
+// group keeps adding pins, as before. Clears the group's other checked
+// alternatives either way.
+export function pinInGroup(course, groupKey, sectionId, sectionsById) {
+  if (groupKey === UNKNOWN_KEY) {
+    return {
+      ...course,
+      locked: [...course.locked, sectionId],
+      considering: { ...course.considering, [groupKey]: [] },
+    };
+  }
+  const replaced = course.locked.filter((id) => sectionsById[id] && classifyComponent(sectionsById[id]) === groupKey);
+  return {
+    ...course,
+    locked: [...course.locked.filter((id) => !replaced.includes(id)), sectionId],
+    considering: { ...course.considering, [groupKey]: replaced },
+  };
 }
 
 // When generateSchedules comes back empty, this points at which course(s)

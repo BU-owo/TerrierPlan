@@ -50,3 +50,9 @@ test('with a filter, only sections that pass count (checked ones and select-all 
   // A group with nothing left that passes makes the course incomplete: it adds nothing.
   assert.equal(combinationProduct(checked, sectionsByCourse, null, () => false), 1);
 });
+
+test('several pins in one component count as a pick-one slot; "Other" pins count once', () => {
+  const sectionsByCourse = { A: [...many('a', 'LEC', 3), ...many('ad', 'DIS', 4), ...many('o', '', 3)] };
+  const draft = [{ courseKey: 'A', considering: { DIS: ['ad0', 'ad1'] }, locked: ['a0', 'a2', 'o0', 'o1'] }];
+  assert.equal(combinationProduct(draft, sectionsByCourse), 2 * 2);
+});
