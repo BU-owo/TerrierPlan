@@ -975,6 +975,29 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     return hints;
   }, [manualSectionIds, draftCourses, sectionsByCourse, sectionsById]);
 
+  // Manual: the same shape as incompleteInfo, for the banner above the grid —
+  // every drafted course's components with no placed section. Courses still
+  // loading or with no sections are skipped.
+  const manualIncompleteInfo = useMemo(() => {
+    if (scheduleMode !== 'manual') return [];
+    const placed = manualSectionIds.map((id) => sectionsById[id]).filter(Boolean);
+    return draftCourses.flatMap((course) => {
+      const sections = sectionsByCourse[course.courseKey];
+      if (!sections || sections.length === 0 || loadingSectionsFor.has(course.courseKey)) return [];
+      const missing = groupSectionsByComponent(sections)
+        .filter((g) => !placed.some((s) => s.courseKey === course.courseKey && classifyComponent(s) === g.key));
+      if (missing.length === 0) return [];
+      return [{
+        courseKey: course.courseKey,
+        label: courseMap[course.courseKey]?.courseNumber ?? course.courseKey,
+        missing: missing.map((g) => ({
+          key: g.key,
+          label: g.label === 'Other' ? 'Other sections' : g.label.replace('Discussion Section', 'Discussion'),
+        })),
+      }];
+    });
+  }, [scheduleMode, manualSectionIds, draftCourses, sectionsByCourse, sectionsById, courseMap, loadingSectionsFor]);
+
   const manualPlacedSet = useMemo(() => new Set(manualSectionIds), [manualSectionIds]);
   // Manual: every pair of placed sections that overlap, [idA, idB] each.
   const manualOverlapPairs = useMemo(() => {
@@ -2343,6 +2366,9 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
               )}
               {scheduleMode === 'auto' && previewHold !== 'foreign' && (
                 <IncompleteBanner info={incompleteInfo} onFocusGroup={handleFocusGroup} />
+              )}
+              {scheduleMode === 'manual' && previewHold !== 'foreign' && (
+                <IncompleteBanner info={manualIncompleteInfo} onFocusGroup={handleFocusGroup} />
               )}
               <WeeklyGrid
                 sectionIds={previewSectionIds}
