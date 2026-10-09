@@ -663,7 +663,7 @@ export default function WeeklyGrid({
         <ul className="sched-block-key">
           <li className="sched-block-key-item">
             <span className="sched-block-key-icon" aria-hidden="true"><SwapIcon /></span>
-            Overlay other sections on your schedule
+            Ghost: see other times for this class
           </li>
           <li className="sched-block-key-item">
             <span className="sched-block-key-icon sched-block-key-icon-x" aria-hidden="true">×</span>
@@ -675,18 +675,15 @@ export default function WeeklyGrid({
         <ul className="sched-block-key">
           <li className="sched-block-key-item">
             <span className="sched-block-key-icon" aria-hidden="true"><PinIcon /></span>
-            Lock this section into every schedule
+            Pin: keep this section in every schedule
           </li>
           <li className="sched-block-key-item">
             <span className="sched-block-key-icon" aria-hidden="true"><SwapIcon /></span>
-            {/* Mobile gets SectionSwapSheet's list instead of ghosts (see
-                scheduler.css's 860px breakpoint), so the wording follows. */}
-            <span className="sched-block-key-desktop">Overlay other sections on your schedule</span>
-            <span className="sched-block-key-mobile">See other sections for this class</span>
+            Ghost: see other times for this class
           </li>
           <li className="sched-block-key-item">
             <span className="sched-block-key-icon sched-block-key-icon-x" aria-hidden="true">×</span>
-            Remove from consideration
+            Exclude: drop this section from your options
           </li>
         </ul>
       )}
@@ -854,8 +851,8 @@ export default function WeeklyGrid({
                               e.stopPropagation();
                               onOpenSwap(section.courseKey, classifyComponent(section), section.id);
                             }}
-                            aria-label={`Overlay other sections for ${courseCode}'s ${section.componentLabel || 'section'} as ghosts on your schedule`}
-                            title="Overlay other sections as ghosts. Click one to swap it in (overlaps are allowed)"
+                            aria-label={`Ghost: see other times for ${courseCode}'s ${section.componentLabel || 'section'}`}
+                            title="Ghost: see other times for this class. Click one to swap it in (overlaps are allowed)"
                           >
                             <SwapIcon />
                           </button>
@@ -877,8 +874,8 @@ export default function WeeklyGrid({
                           className={`sched-grid-block-action-btn${isLocked ? ' is-locked' : ''}`}
                           disabled={Boolean(frozenTermLabel)}
                           onClick={(e) => { e.stopPropagation(); onToggleLock(section.id); }}
-                          aria-label={isLocked ? `Unlock ${courseCode} section ${section.classSection}` : `Lock ${courseCode} section ${section.classSection} into every generated schedule`}
-                          title={isLocked ? 'Locked into every generated schedule — click to unlock' : 'Lock this section into every generated schedule'}
+                          aria-label={isLocked ? `Unpin ${courseCode} section ${section.classSection}` : `Pin ${courseCode} section ${section.classSection}: keep it in every schedule`}
+                          title={isLocked ? 'Pinned in every schedule — click to unpin' : 'Pin: keep this section in every schedule'}
                         >
                           <PinIcon filled={isLocked} />
                         </button>
@@ -890,8 +887,8 @@ export default function WeeklyGrid({
                             e.stopPropagation();
                             onOpenSwap(section.courseKey, classifyComponent(section), section.id);
                           }}
-                          aria-label={`Overlay other sections for ${courseCode}'s ${section.componentLabel || 'section'} as ghosts on your schedule`}
-                          title={frozenTermLabel ? `This schedule is from ${frozenTermLabel}` : 'Overlay other sections as ghosts on your schedule. Click one to swap it in'}
+                          aria-label={`Ghost: see other times for ${courseCode}'s ${section.componentLabel || 'section'}`}
+                          title={frozenTermLabel ? `This schedule is from ${frozenTermLabel}` : 'Ghost: see other times for this class. Click one to swap it in'}
                         >
                           <SwapIcon />
                         </button>
@@ -900,8 +897,8 @@ export default function WeeklyGrid({
                           className="sched-grid-block-action-btn sched-grid-block-eliminate-btn"
                           disabled={Boolean(frozenTermLabel)}
                           onClick={(e) => { e.stopPropagation(); onEliminate(section.id); }}
-                          aria-label={`Remove ${courseCode} section ${section.classSection} from consideration`}
-                          title="Remove from consideration — won't appear in any future generated schedule"
+                          aria-label={`Exclude ${courseCode} section ${section.classSection}: drop it from your options`}
+                          title="Exclude: drop this section from your options — it won't appear in any future generated schedule"
                         >
                           ×
                         </button>

@@ -40,14 +40,7 @@ function AppRoutes({ theme, onToggleTheme }) {
 export default function App() {
   const { loading } = useAuth();
 
-  const [showBeta, setShowBeta] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) || 'light');
-
-  useEffect(() => {
-    if (!localStorage.getItem('terrierplan_beta_seen')) {
-      setShowBeta(true);
-    }
-  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -62,11 +55,6 @@ export default function App() {
 
   function toggleTheme() {
     setTheme((current) => current === 'dark' ? 'light' : 'dark');
-  }
-
-  function dismissBeta() {
-    localStorage.setItem('terrierplan_beta_seen', 'true');
-    setShowBeta(false);
   }
 
   if (loading) {
@@ -86,28 +74,6 @@ export default function App() {
 
   return (
     <>
-      {showBeta && (
-        <div className="beta-overlay">
-          <div className="beta-modal">
-            <img
-              className="beta-modal-paw"
-              src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
-              alt="TerrierPlan"
-              width={48}
-              height={48}
-            />
-            <h2>Welcome to TerrierPlan!</h2>
-            <p>
-              This project is currently in beta — things may be incomplete,
-              broken, or change without warning. If you find bugs or have
-              ideas, you know where to find me!
-            </p>
-            <button className="beta-dismiss-btn" onClick={dismissBeta}>
-              Got it, let me in!!!!!!
-            </button>
-          </div>
-        </div>
-      )}
       <BrowserRouter>
         <AppRoutes theme={theme} onToggleTheme={toggleTheme} />
       </BrowserRouter>

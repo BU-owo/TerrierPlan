@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { describeRequirementLabels, HUB_COLOR_FOR } from '../../utils/hubConstants';
+import { describeRequirementLabels, HUB_COLOR_FOR, HUB_LABELS } from '../../utils/hubConstants';
 import { useHubProgress, contributorsForRequirement, satisfiedCountForRequirement } from '../../hooks/useHubProgress';
 import { loadAllCourses, queryCourses, collectDepartmentPrefixes, HUB_MATCH_MODES, isProfessionalCareer } from '../../utils/courseQuery';
 import { normalizeCourseKey } from '../../utils/courseKey';
 import { entryCourseKey } from '../../utils/courseEntry';
 import { formatCourseLabel } from '../requirements/treeHelpers';
 import HubYearToggle from './HubYearToggle';
+import OneTimeHint from '../OneTimeHint';
+import useOneTimeHint from '../../hooks/useOneTimeHint';
 import CourseChip from '../requirements/CourseChip';
 import { PawIcon } from './CourseSearch';
 
@@ -348,8 +350,8 @@ function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash
         type="button"
         className={`search-result-stash-btn${isStashed ? ' is-stashed' : ''}`}
         onClick={() => (isStashed ? onRemoveFromStash(course.id) : onAddToStash(course.id))}
-        aria-label={isStashed ? `Remove ${label} from Paw-tential Courses` : `Add ${label} to Paw-tential Courses`}
-        title={isStashed ? 'Remove from Paw-tential Courses' : 'Add to Paw-tential Courses'}
+        aria-label={isStashed ? `Remove ${label} from Paw-tential Courses` : `Save ${label} to Paw-tential Courses (saved for later, not on your plan)`}
+        title={isStashed ? 'Remove from Paw-tential Courses' : 'Save to Paw-tential Courses (saved for later, not on your plan)'}
       >
         <PawIcon filled={isStashed} />
       </button>
@@ -418,7 +420,16 @@ export default function HubFullView({
   onAddToStash,
   onRemoveFromStash,
   onClose,
+  // Closes this view and opens the planner's Paw-tential Courses tab.
+  onShowStash,
 }) {
+  // One-time hints for this view (they outrank the planner's behind it).
+  const [finderHintVisible, dismissFinderHint, markFinderSeen] = useOneTimeHint('hub_finder', { priority: 1 });
+  const [potentialHintVisible, dismissPotentialHint, markPotentialSeen] = useOneTimeHint('hub_potential', {
+    priority: 2,
+    when: stash.length > 0,
+  });
+
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.key === 'Escape') onClose();
@@ -772,6 +783,12 @@ export default function HubFullView({
               ever end up rendered underneath it (a fixed-position mobile
               rail previously could, when its height didn't match the
               actual scrollable content beneath it). */}
+          {finderHintVisible && (
+            <OneTimeHint onDismiss={dismissFinderHint} onSeen={markFinderSeen}>
+              Pick the HUB units you need. We&apos;ll list courses that cover them.
+            </OneTimeHint>
+          )}
+
           <div className="hub-search-row">
 
           {/* Search Classes — ONE search over the shared course list: a
@@ -809,7 +826,7 @@ export default function HubFullView({
                 onClick={() => setHubSearchMode(HUB_MATCH_MODES.OR)}
                 title="Match courses carrying ANY of the included codes"
               >
-                OR (any)
+                Any of these
               </button>
               <button
                 type="button"
@@ -817,9 +834,17 @@ export default function HubFullView({
                 onClick={() => setHubSearchMode(HUB_MATCH_MODES.AND)}
                 title="Match courses carrying ALL of the included codes"
               >
-                AND (all)
+                All of these (one course, both units)
               </button>
             </div>
+            {hubSearchInclude.length >= 2 && (
+              <p className="search-hint">
+                {hubSearchMode === HUB_MATCH_MODES.AND
+                  ? 'Courses that cover every one of: '
+                  : 'Courses that cover at least one of: '}
+                {hubSearchInclude.map((code) => HUB_LABELS[code] ?? code).join(', ')}
+              </p>
+            )}
 
             <div className="hub-browse-code-row">
               <span className="hub-full-overview-heading">Include</span>
@@ -848,13 +873,17 @@ export default function HubFullView({
               </div>
             </div>
 
+            <p className="search-hint">Paw = save to Paw-tential Courses (maybe-later list).</p>
+
             {searchActive && (
               <div className="hub-browse-results">
                 {!coursesLoaded ? (
                   <div className="search-loading" role="status">Loading courses…</div>
                 ) : searchResults.length === 0 ? (
                   <div className="search-empty">
-                    No courses match those filters (already-planned courses are left out)
+                    {hubSearchMode === HUB_MATCH_MODES.AND && hubSearchInclude.length >= 2
+                      ? "No single course covers all of these. Try 'Any of these'."
+                      : 'No courses match those filters (already-planned courses are left out)'}
                   </div>
                 ) : (
                   searchResults.map((course) => {
@@ -883,6 +912,14 @@ export default function HubFullView({
               <div className="hub-staging-rail-header">
                 Your Paw-tential HUB Courses ({stashedHubCourses.length})
               </div>
+              <p className="hub-staging-rail-note">
+                Saved in your planner&apos;s Paw-tential Courses tab. Not on your plan yet.
+              </p>
+              {onShowStash && (
+                <button type="button" className="hub-stash-link hub-staging-rail-link" onClick={onShowStash}>
+                  View in planner →
+                </button>
+              )}
               <div className="hub-staging-rail-body">
                 {stashedHubCourses.map((course) => (
                   <HubSearchResultRow
@@ -911,6 +948,12 @@ export default function HubFullView({
               the category's own card uses (not a separate "jump" flag) —
               toggles in place, no scrolling. Wraps to more rows on narrow
               viewports rather than scrolling horizontally. */}
+          {potentialHintVisible && (
+            <OneTimeHint onDismiss={dismissPotentialHint} onSeen={markPotentialSeen}>
+              Dashed = what your Paw-tential Courses would add to HUB.
+            </OneTimeHint>
+          )}
+
           <div className="hub-full-overview">
             {groupSummaries.map((groupSummary) => {
               const { group, percent, fulfilled, total } = groupSummary;

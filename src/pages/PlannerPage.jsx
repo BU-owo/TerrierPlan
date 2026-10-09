@@ -33,9 +33,12 @@ import CourseCard from '../components/planner/CourseCard';
 import SidePanelTabs from '../components/planner/SidePanelTabs';
 import { PanelCollapseButton, PanelRail } from '../components/planner/PanelCollapseControls';
 import usePanelCollapse from '../hooks/usePanelCollapse';
+import useOneTimeHint from '../hooks/useOneTimeHint';
 import RequirementsFullView from '../components/planner/RequirementsFullView';
 import HubFullView from '../components/planner/HubFullView';
 import ImportTranscriptModal from '../components/planner/ImportTranscriptModal';
+import PickYourPath from '../components/planner/PickYourPath';
+import OneTimeHint from '../components/OneTimeHint';
 import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
 import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
 import CourseInfoPanel from '../components/planner/CourseInfoPanel';
@@ -67,6 +70,10 @@ const EMPTY_SEMESTERS = () => Array.from({ length: 8 }, () => []);
 // "+ Add Year" stops here (see handleAddYear/SemesterBoard).
 const MAX_PLAN_YEARS = 8;
 const LOCAL_STORAGE_KEY = 'terrierplan_session';
+// Set once the first-visit card has been answered or closed.
+const BETA_SEEN_KEY = 'terrierplan_beta_seen';
+// Also set by the card: tells firstTimer.js this browser went through it.
+const ONBOARDED_KEY = 'terrierplan_onboarded_v2';
 // Per-browser display preference ('detailed' | 'overview'); not part of any plan.
 const PLANNER_VIEW_KEY = 'terrierplan_planner_view';
 // Overview needs the desktop 3-column layout; below this the mobile layout stays.
@@ -318,6 +325,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverlay, setDragOverlay] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  // Left panel tab ('search' | 'stash'); lifted here so the HUB tracker can open the stash tab.
+  const [leftTab, setLeftTab] = useState('search');
+  // First-visit "how do you want to start?" card; opened at most once per page
+  // load, by the effect after hasAppliedInitialView below.
+  const [showPathCard, setShowPathCard] = useState(false);
+  const pathCardChecked = useRef(false);
   // Which header button opened the import modal; only changes its copy.
   const [importVariant, setImportVariant] = useState('transcript');
   // 'idle' | 'busy' | 'error' — "Download plan PDF" button.
@@ -535,6 +548,21 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user, activePlanId, hasAppliedInitialView]);
 
+  // Offer the "pick your path" card once the plan has actually loaded (same
+  // signal as above), only if it's empty and the card hasn't been seen.
+  useEffect(() => {
+    if (!hasAppliedInitialView || pathCardChecked.current) return;
+    pathCardChecked.current = true;
+    try {
+      if (localStorage.getItem(BETA_SEEN_KEY)) return;
+    } catch {
+      return; // storage blocked: can't remember a dismissal, so don't nag
+    }
+    const empty = semesters.every((sem) => sem.length === 0)
+      && Object.values(gridSummerTerms).every((entries) => entries.length === 0);
+    if (empty) setShowPathCard(true);
+  }, [hasAppliedInitialView, semesters, gridSummerTerms]);
+
   function openRequirementsFullView() {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -565,6 +593,16 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       next.delete('view');
       return next;
     });
+  }
+
+  // "View in planner" (HUB tracker rail) and the HUB tab's Paw-tential link:
+  // close the HUB view if it's open, bring the left panel into view (Search
+  // tab on mobile, expanded on desktop), and show the Paw-tential Courses tab.
+  function showStashTab() {
+    if (hubFullView) closeHubFullView();
+    if (!isDesktopLayout) setMobileView('search');
+    else if (leftCollapsed) setLeftCollapsed(false);
+    setLeftTab('stash');
   }
 
   // "Browse eligible courses" from within the full-screen view — same as the
@@ -2239,9 +2277,49 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const planIsEmpty = semesters.every((sem) => sem.length === 0)
     && Object.values(gridSummerTerms).every((entries) => entries.length === 0);
 
+  // At least one real course (not just a placeholder note) — i.e. a lock icon exists.
+  const hasPlacedCourse = semesters.some((entries) => entriesCourseKeys(entries).length > 0)
+    || Object.values(gridSummerTerms).some((entries) => entriesCourseKeys(entries).length > 0);
+
+  // One-time hints, in queue order (lowest priority number first; see
+  // hintQueue.js): HUB progress, "I am currently in", the right panel's
+  // HUB/Credits hints (SidePanelTabs), the transfer-credit hint, then the
+  // per-card lock hint last. None while the first-visit card or a full-screen
+  // view is open.
+  const hintsEnabled = !showPathCard && !requirementsFullView && !hubFullView;
+  // On the narrow layout only one tab shows at a time; a hint in a hidden tab
+  // doesn't count as wanted, so it can't hold up the visible ones.
+  const boardVisible = isDesktopLayout || mobileView === 'board';
+  const hubTabVisible = isDesktopLayout || mobileView === 'hub';
+  const [hubProgressHintVisible, dismissHubProgressHint, markHubProgressSeen] = useOneTimeHint('hub_progress', {
+    priority: 10,
+    when: hintsEnabled && boardVisible && hasPlacedCourse,
+  });
+  const [currentSemHintVisible, dismissCurrentSemHint, markCurrentSemSeen] = useOneTimeHint('current_sem', {
+    priority: 11,
+    when: hintsEnabled && boardVisible && hasPlacedCourse && currentSemesterTarget == null,
+  });
+  const [lockHintVisible, dismissLockHint, markLockSeen] = useOneTimeHint('lock', { priority: 15, when: hintsEnabled && boardVisible && hasPlacedCourse });
   // Signed in but no plan loaded yet (same signal as the `?view=` effect
   // above) — either still loading or planLoadError. Guests never hit this.
   const plansPending = Boolean(user) && !activePlanId;
+
+  // Last in the queue. Guests get a sign-in nudge, signed-in users a pointer to
+  // the plan switcher (not rendered while plans are pending).
+  const [plansHintVisible, dismissPlansHint, markPlansSeen] = useOneTimeHint('plans', {
+    priority: 16,
+    when: !authLoading && !plansPending && hintsEnabled && boardVisible && hasPlacedCourse,
+  });
+
+  // Header "Sign in" and the sign-in hint's link both run this.
+  function handleSignIn() {
+    requestLeave(() => {
+      // Only a guest who actually edited has anything to migrate; a
+      // blank default plan would otherwise become an account plan.
+      if (isDirty) saveLocalPlan();
+      window.location.href = '/login';
+    });
+  }
 
   const planImportBlockedReason = plansPending
     ? 'Your plans are still loading. Close this and try again in a moment.'
@@ -2252,6 +2330,28 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // Toolbar menu items (see HeaderMenu): shared by the wide "Import" menu
   // and the narrow "PDF" menu.
   const openImportModal = (variant) => { setImportVariant(variant); setShowImportModal(true); };
+
+  function dismissPathCard() {
+    try {
+      localStorage.setItem(BETA_SEEN_KEY, 'true');
+      localStorage.setItem(ONBOARDED_KEY, 'true');
+    } catch {
+      // storage blocked: the card just won't reappear this visit
+    }
+    setShowPathCard(false);
+  }
+
+  function handlePathChoice(choice) {
+    dismissPathCard();
+    if (choice === 'transcript' || choice === 'plan') {
+      openImportModal(choice);
+    } else if (choice === 'scratch') {
+      if (!isDesktopLayout) setMobileView('search');
+      else if (leftCollapsed) setLeftCollapsed(false);
+      // After the tab/panel switch has rendered.
+      setTimeout(() => document.getElementById('course-search-input')?.focus(), 60);
+    }
+  }
   const downloadPdfDisabled = plansPending || planIsEmpty || planPdfStatus === 'busy';
   const importMenuItems = [
     { key: 'plan', label: 'Import plan PDF', onSelect: () => openImportModal('plan') },
@@ -2300,14 +2400,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         onToggleTheme={onToggleTheme}
         onOpenHelp={() => setShowHelpModal(true)}
         onSignOut={() => requestLeave(handleSignOut)}
-        onSignIn={() =>
-          requestLeave(() => {
-            // Only a guest who actually edited has anything to migrate; a
-            // blank default plan would otherwise become an account plan.
-            if (isDirty) saveLocalPlan();
-            window.location.href = '/login';
-          })
-        }
+        onSignIn={handleSignIn}
       >
         {/* Plan switcher / new / delete hidden until a plan has loaded, so
             nothing runs against the half-loaded default state. */}
@@ -2395,6 +2488,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               onRemoveFromStash={handleRemoveFromStash}
               onShowCourseInfo={setInfoCourseKey}
               onOpenHubFullView={openHubFullView}
+              activeTab={leftTab}
+              onActiveTabChange={setLeftTab}
             />
           </aside>
 
@@ -2419,7 +2514,37 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               )
             ) : (
               <>
+                {lockHintVisible && (
+                  <OneTimeHint onDismiss={dismissLockHint} onSeen={markLockSeen}>🔓 Tap to mark as completed.</OneTimeHint>
+                )}
+                {plansHintVisible && (
+                  <OneTimeHint
+                    onDismiss={dismissPlansHint}
+                    onSeen={markPlansSeen}
+                    action={user ? null : { label: 'Sign in →', onClick: () => { dismissPlansHint(); handleSignIn(); } }}
+                  >
+                    {user
+                      ? 'You can make multiple plans. Tap + by your plan name to add one, then switch between them there.'
+                      : 'Sign in to make multiple plans and keep them on every device.'}
+                  </OneTimeHint>
+                )}
                 <SemesterBoard
+                  isEmpty={planIsEmpty}
+                  controlsHint={hubProgressHintVisible ? (
+                    <div className="hint-end">
+                      <OneTimeHint
+                        onDismiss={dismissHubProgressHint}
+                        onSeen={markHubProgressSeen}
+                        action={{ label: 'Open HUB →', onClick: () => { dismissHubProgressHint(); openHubFullView(); } }}
+                      >
+                        Your HUB progress fills in as you add courses.
+                      </OneTimeHint>
+                    </div>
+                  ) : currentSemHintVisible ? (
+                    <OneTimeHint onDismiss={dismissCurrentSemHint} onSeen={markCurrentSemSeen}>
+                      Pick your current semester. Earlier ones get marked as completed.
+                    </OneTimeHint>
+                  ) : null}
                   semesters={semesters}
                   gridSummerTerms={gridSummerTerms}
                   courseMap={courseMap}
@@ -2427,7 +2552,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                   activeTarget={activeSemIndex}
                   onSemesterClick={setActiveSemIndex}
                   onRemoveCourse={handleRemoveCourse}
-                  onToggleLock={handleToggleLock}
+                  onToggleLock={(...args) => { dismissLockHint(); return handleToggleLock(...args); }}
                   onToggleSemesterLock={handleToggleSemesterLock}
                   onToggleSummerYear={handleToggleSummerYear}
                   onAddYear={handleAddYear}
@@ -2456,6 +2581,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                   onShowCourseInfo={setInfoCourseKey}
                 />
                 <ExternalCreditsPanel
+                  hintsEnabled={hintsEnabled && boardVisible}
                   externalCredits={externalCredits}
                   coursesInPlan={coursesInPlan}
                   onRemove={handleRemoveExternalCredit}
@@ -2469,6 +2595,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           {/* Right: HUB / Requirements / Credits status tabs */}
           <aside className="planner-right">
             <SidePanelTabs
+              hintsEnabled={hintsEnabled && hubTabVisible}
+              stash={stash}
               semesters={semesters}
               extraCourseKeys={extraCourseKeys}
               externalCredits={externalCredits}
@@ -2491,6 +2619,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               onRemoveRequirementOverride={handleRemoveRequirementOverride}
               onOpenFullView={openRequirementsFullView}
               onOpenHubFullView={openHubFullView}
+              onShowStash={showStashTab}
             />
           </aside>
         </div>
@@ -2532,6 +2661,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
            hubFullView above) ── */}
       {hubFullView && (
         <HubFullView
+          onShowStash={showStashTab}
           semesters={semesters}
           extraCourseKeys={extraCourseKeys}
           externalCredits={externalCredits}
@@ -2558,6 +2688,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         planImportBlockedReason={planImportBlockedReason}
         variant={importVariant}
       />
+
+      {showPathCard && <PickYourPath onChoose={handlePathChoice} onDismiss={dismissPathCard} />}
 
       <HelpSupportModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
 

@@ -170,7 +170,7 @@ export default function ImportTranscriptModal({
   async function handleFile(file) {
     if (!file) return;
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      setError('Please upload a PDF transcript.');
+      setError(variant === 'plan' ? 'Please upload a plan PDF.' : 'Please upload a PDF transcript.');
       return;
     }
     resetReview();
@@ -386,7 +386,7 @@ export default function ImportTranscriptModal({
                   onChange={(e) => handleFile(e.target.files?.[0])}
                 />
                 {parsing ? (
-                  <p>Parsing transcript…</p>
+                  <p>{variant === 'plan' ? 'Reading your plan…' : 'Parsing transcript…'}</p>
                 ) : (
                   <>
                     <svg className="import-dropzone-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -417,7 +417,9 @@ export default function ImportTranscriptModal({
                   <path d="M8 11V7a4 4 0 0 1 8 0v4" />
                 </svg>
                 <span>
-                  Your transcript is read in your browser and never uploaded. Only the courses, test/transfer credits, and GPA totals you confirm are saved.
+                  {variant === 'plan'
+                    ? 'Your file is read in your browser and never uploaded.'
+                    : 'Your transcript is read in your browser and never uploaded. Only the courses, test/transfer credits, and GPA totals you confirm are saved.'}
                 </span>
               </p>
             </>

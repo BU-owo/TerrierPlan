@@ -32,8 +32,11 @@ export default function SearchPanelTabs({
   // Opens the full HUB tracker & course finder (shown as a hint in the search
   // panel's filter row).
   onOpenHubFullView,
+  // Which tab is showing ('search' | 'stash'), owned by PlannerPage so other
+  // views (the HUB tracker) can switch it.
+  activeTab,
+  onActiveTabChange: setActiveTab,
 }) {
-  const [activeTab, setActiveTab] = useState('search');
   // Starring a course from Search doesn't switch tabs (so the student can
   // keep browsing), so this is the only signal that something landed in the
   // stash — a quick flash on the tab itself instead of a toast/notification.

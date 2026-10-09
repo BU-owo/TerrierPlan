@@ -2530,3 +2530,10 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
 /* Dark mode: --scarlet on the navy surfaces is too dark to read, so use the lighter text token. */
 html[data-theme='dark'] .sched-draft-card-code,
 html[data-theme='dark'] .sched-global-filter-label { color: var(--scarlet-text); }
+
+/* Empty-draft line: the "Search tab" pointer only makes sense on the narrow
+   layout, where search is a bottom tab instead of a left panel. */
+.sched-draft-empty-mobile { display: none; }
+@media (max-width: 860px) {
+  .sched-draft-empty-mobile { display: inline; }
+}

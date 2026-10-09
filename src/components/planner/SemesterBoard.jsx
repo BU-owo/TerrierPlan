@@ -11,6 +11,10 @@ function summerTarget(year) {
 }
 
 export default function SemesterBoard({
+  // True for a plan with no courses: shows the one-line "search, then drag" cue.
+  isEmpty = false,
+  // Optional one-time hint shown right under the "I am currently in" / HUB row.
+  controlsHint = null,
   semesters,
   gridSummerTerms = {},
   courseMap,
@@ -152,6 +156,21 @@ export default function SemesterBoard({
           </button>
         )}
       </div>
+
+      {controlsHint}
+
+      {isEmpty && (
+        <div className="search-empty board-empty-hint">
+          <span className="board-empty-wide">
+            <span className="board-empty-arrow" aria-hidden="true">←</span>
+            Search a course, then drag it into a semester.
+          </span>
+          <span className="board-empty-narrow">
+            <span className="board-empty-arrow" aria-hidden="true">↓</span>
+            Search a course, then add it to a semester.
+          </span>
+        </div>
+      )}
 
       <div className={overview ? 'overview-grid' : 'board-years'}>
       {years.map((year) => {

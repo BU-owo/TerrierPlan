@@ -30,7 +30,7 @@ import BookmarkedSchedulesPanel from '../components/scheduler/BookmarkedSchedule
 import SavedSchedulesPanel from '../components/scheduler/SavedSchedulesPanel';
 import IncompleteBanner from '../components/scheduler/IncompleteBanner';
 import { CURRENT_TERM, CURRENT_TERM_LABEL, scheduleTerm, termLabel } from '../utils/term';
-import { sectionsConflict, describeSectionTime } from '../utils/sectionTime';
+import { sectionsConflict, describeSectionTime, examMeetings } from '../utils/sectionTime';
 import { withMockMeetings } from '../utils/mockMeetings';
 import { describeSectionName } from '../utils/sectionType';
 import { classifyComponent, groupSectionsByComponent } from '../utils/sectionComponents';
@@ -45,6 +45,9 @@ import { EMPTY_GLOBAL_FILTERS, filterBlockDetail, matchesFilters, isGlobalFilter
 import { combinationProduct, SLOW_GENERATION_PRODUCT } from '../utils/selectionEstimate';
 import { applyFilterToPicks } from '../utils/filterAutoUncheck';
 import LargeSelectionBanner from '../components/scheduler/LargeSelectionBanner';
+import OneTimeHint from '../components/OneTimeHint';
+import useOneTimeHint from '../hooks/useOneTimeHint';
+import useDesktopLayout from '../hooks/useDesktopLayout';
 import './planner.css';
 import './scheduler.css';
 import '../App.css';
@@ -2114,6 +2117,26 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   const previewCreditsLabel = previewSectionIds.length > 0 ? `${totalCredits(previewSectionIds, sectionsById)} cr` : '';
 
+  // One-time hints (stored per browser in localStorage, like bookmarks), shown
+  // one at a time in this order (see hintQueue.js). All render in the page
+  // flow: the swap/exam ones sit just above the grid, not on the grid itself.
+  // Narrow layout: Build and Preview are separate tabs; a hint in the hidden one
+  // doesn't count as wanted (so it can't hold up the visible tab's hints).
+  const isDesktop = useDesktopLayout();
+  const buildVisible = isDesktop || mobileView === 'build';
+  const previewVisible = isDesktop || mobileView === 'preview';
+  const hasDraft = draftCourses.length > 0;
+  const hasGenerated = scheduleMode === 'auto' && (generated?.schedules?.length ?? 0) > 0;
+  const hasPlacedSections = previewSectionIds.length > 0 && previewHold !== 'foreign';
+  const previewHasExam = hasPlacedSections && previewSectionIds.some((id) => sectionsById[id] && examMeetings(sectionsById[id]).length > 0);
+  const [sectionsHintShow, dismissSectionsHint, markSectionsSeen] = useOneTimeHint('sched_sections', { priority: 10, when: buildVisible && scheduleMode === 'auto' && hasDraft });
+  const [modeHintShow, dismissModeHint, markModeSeen] = useOneTimeHint('sched_mode', { priority: 11, when: buildVisible && hasDraft });
+  const [timeFilterHintShow, dismissTimeFilterHint, markTimeFilterSeen] = useOneTimeHint('sched_timefilter', { priority: 12, when: false });
+  const [stepperHintShow, dismissStepperHint, markStepperSeen] = useOneTimeHint('sched_stepper', { priority: 13, when: previewVisible && hasGenerated });
+  const [pinHintShow, dismissPinHint, markPinSeen] = useOneTimeHint('sched_pin', { priority: 14, when: previewVisible && scheduleMode === 'auto' && hasPlacedSections });
+  const [swapHintShow, dismissSwapHint, markSwapSeen] = useOneTimeHint('sched_swap', { priority: 15, when: previewVisible && hasPlacedSections });
+  const [examHintShow, dismissExamHint, markExamSeen] = useOneTimeHint('sched_exam', { priority: 16, when: previewVisible && previewHasExam });
+
   if (authLoading) {
     return (
       <div className="auth-loading">
@@ -2212,9 +2235,16 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             </div>
           </div>
 
+          {modeHintShow && (
+            <OneTimeHint onDismiss={dismissModeHint} onSeen={markModeSeen}>
+              Auto finds combos from the sections you check. Manual: you pick each section yourself, overlaps allowed.
+            </OneTimeHint>
+          )}
+
           {draftCourses.length === 0 && (
             <div className="search-empty sched-draft-empty">
-              Search for a course on the left to start building your {CURRENT_TERM_LABEL} schedule.
+              Search a course to start building your schedule.
+              <span className="sched-draft-empty-mobile"> Tap the Search tab below.</span>
             </div>
           )}
 
@@ -2225,6 +2255,12 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             />
           )}
 
+          {sectionsHintShow && (
+            <OneTimeHint onDismiss={dismissSectionsHint} onSeen={markSectionsSeen}>
+              Check the sections you&apos;d take. We&apos;ll find the combos.
+            </OneTimeHint>
+          )}
+
           {draftCourses.length > 0 && (
             <GlobalTimeFilter
               value={globalTimeFilter}
@@ -2232,6 +2268,12 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
               onClear={() => handleChangeTimeFilter(EMPTY_GLOBAL_FILTERS)}
               openSignal={filterOpenSignal}
             />
+          )}
+
+          {timeFilterHintShow && (
+            <OneTimeHint onDismiss={dismissTimeFilterHint} onSeen={markTimeFilterSeen}>
+              The time filter dims sections outside the hours you choose.
+            </OneTimeHint>
           )}
 
           {draftCourses.map(({ courseKey, considering, locked }) => (
@@ -2247,7 +2289,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
               sortMode={sectionSortMode}
               globalTimeFilter={globalTimeFilter}
               collapseSignal={collapseSignal}
-              onToggleSection={(groupKey, sectionId) => handleToggleSection(courseKey, groupKey, sectionId)}
+              onToggleSection={(groupKey, sectionId) => { dismissSectionsHint(); handleToggleSection(courseKey, groupKey, sectionId); }}
               onToggleLock={(groupKey, sectionId) => handleToggleLock(courseKey, groupKey, sectionId)}
               onSelectAll={(groupKey, sectionIds) => handleSelectAllSections(courseKey, groupKey, sectionIds)}
               onDeselectAll={(groupKey) => handleDeselectAllSections(courseKey, groupKey)}
@@ -2352,6 +2394,12 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                   onClear={handleClearManual}
                 />
               ) : (
+                <>
+                {stepperHintShow && (
+                  <OneTimeHint onDismiss={dismissStepperHint} onSeen={markStepperSeen}>
+                    Flip through your options here. Bookmark the ones you like.
+                  </OneTimeHint>
+                )}
                 <ScheduleStepper
                   generated={generated}
                   previewIndex={previewIndex}
@@ -2363,12 +2411,30 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                   updating={generating}
                   onEditManually={scheduleMode === 'auto' && previewSectionIds.length > 0 ? handleEditManually : undefined}
                 />
+                </>
               )}
               {scheduleMode === 'auto' && previewHold !== 'foreign' && (
                 <IncompleteBanner info={incompleteInfo} onFocusGroup={handleFocusGroup} />
               )}
               {scheduleMode === 'manual' && previewHold !== 'foreign' && (
                 <IncompleteBanner info={manualIncompleteInfo} onFocusGroup={handleFocusGroup} />
+              )}
+              {pinHintShow && (
+                <OneTimeHint onDismiss={dismissPinHint} onSeen={markPinSeen}>
+                  Pin keeps a section in every schedule we make. Exclude drops it from your options, so it won&apos;t show up in any.
+                </OneTimeHint>
+              )}
+              {swapHintShow && (
+                <OneTimeHint onDismiss={dismissSwapHint} onSeen={markSwapSeen}>
+                  Tap the ghost icon on a class to see its other times
+                  <span className="sched-block-key-desktop"> as dashed blocks</span>
+                  <span className="sched-block-key-mobile"> in a list</span>. Tap one to switch.
+                </OneTimeHint>
+              )}
+              {examHintShow && (
+                <OneTimeHint onDismiss={dismissExamHint} onSeen={markExamSeen}>
+                  Dashed = exam time. It won&apos;t count as a conflict.
+                </OneTimeHint>
               )}
               <WeeklyGrid
                 sectionIds={previewSectionIds}

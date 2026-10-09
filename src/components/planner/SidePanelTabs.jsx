@@ -4,6 +4,9 @@ import RequirementsBulletinTab from './RequirementsBulletinTab';
 import CreditsPanel from './CreditsPanel';
 import { PanelCollapseButton, PanelRail } from './PanelCollapseControls';
 import usePanelCollapse from '../../hooks/usePanelCollapse';
+import useOneTimeHint from '../../hooks/useOneTimeHint';
+import { isReturningUser } from '../../utils/firstTimer';
+import OneTimeHint from '../OneTimeHint';
 
 const TABS = [
   { id: 'hub', label: 'HUB' },
@@ -16,6 +19,10 @@ const TABS = [
 // active, not per-panel, so there's a single collapse state here rather than
 // one inside each panel.
 export default function SidePanelTabs({
+  // False while a first-visit card or full-screen view is up (no hints behind it).
+  hintsEnabled = true,
+  // courseKey[] saved in the Paw-tential Courses tab (for the HUB tab's note).
+  stash = [],
   semesters,
   extraCourseKeys,
   externalCredits,
@@ -28,10 +35,14 @@ export default function SidePanelTabs({
   majorBulletinUrl,
   onMajorSelect,
   onOpenHubFullView,
+  // Switches the planner's left panel to the Paw-tential Courses tab.
+  onShowStash,
 }) {
   const [activeTab, setActiveTab] = useState('hub');
-  const { collapsed: isCollapsed, desktop, setCollapsed } = usePanelCollapse('terrierplan_planner_right_collapsed');
+  const { collapsed: isCollapsed, desktop, setCollapsed } = usePanelCollapse('terrierplan_planner_right_collapsed', !isReturningUser());
   const [summaries, setSummaries] = useState({});
+  const [hubHintShow, dismissHubHint, markHubSeen] = useOneTimeHint('hub', { priority: 12, when: hintsEnabled && activeTab === 'hub' && !isCollapsed });
+  const [creditsHintShow, dismissCreditsHint, markCreditsSeen] = useOneTimeHint('credits', { priority: 13, when: hintsEnabled && activeTab === 'credits' && !isCollapsed });
 
   function makeSummaryHandler(tabId) {
     return (summary) => {
@@ -100,6 +111,16 @@ export default function SidePanelTabs({
       </div>
 
       <div className="side-panel-content">
+        {hubHintShow && (
+          <OneTimeHint onDismiss={dismissHubHint} onSeen={markHubSeen}>
+            ✓ means your plan covers that HUB unit, ○ means it still needs a course.
+          </OneTimeHint>
+        )}
+        {creditsHintShow && (
+          <OneTimeHint onDismiss={dismissCreditsHint} onSeen={markCreditsSeen}>
+            Completed is courses in past or locked semesters; planned is everything still ahead.
+          </OneTimeHint>
+        )}
         <div className={activeTab === 'hub' ? '' : 'side-panel-hidden'}>
           <HubSidebar
             semesters={semesters}
@@ -108,6 +129,8 @@ export default function SidePanelTabs({
             courseMap={courseMap}
             isTransfer={isTransfer}
             onToggleTransfer={onToggleTransfer}
+            stash={stash}
+            onShowStash={onShowStash}
             onSummaryChange={makeSummaryHandler('hub')}
             onOpenFullView={onOpenHubFullView}
           />

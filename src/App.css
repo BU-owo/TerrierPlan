@@ -147,3 +147,60 @@ html[data-theme='dark'] .guest-signin-btn { background: var(--text); }
 .guest-signin-btn:disabled { opacity: 0.6; cursor: default; }
 .guest-notice-text { font-size: 13px; font-weight: 400; line-height: 1.35; }
 .guest-notice-text strong { font-weight: 700; }
+
+/* One-time hints (OneTimeHint.jsx): in-flow, one line, dismissible. */
+.one-time-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 6px 8px 6px 10px;
+  background: var(--scarlet-pale);
+  border: 1px solid var(--scarlet-light);
+  border-left: 3px solid var(--scarlet);
+  border-radius: var(--radius-xs, 3px);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.one-time-hint-text { flex: 1; min-width: 0; }
+.one-time-hint-dismiss {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.one-time-hint-dismiss:hover { color: var(--text); }
+html[data-theme='dark'] .one-time-hint {
+  background: var(--cream-dark);
+  border-color: var(--border);
+  border-left-color: var(--scarlet);
+}
+/* The planner's lock hint sits straight in the narrow layout's full-width
+   column, so give it the same side gutter as the board's controls. */
+@media (max-width: 860px) {
+  .planner-center > .one-time-hint { margin-left: 16px; margin-right: 16px; }
+}
+/* Planner HUB-progress hint: sits under the toolbar row, right-aligned toward
+   the "HUB x/26" button on wide screens; full width on narrow ones. */
+@media (min-width: 861px) {
+  .hint-end { display: flex; justify-content: flex-end; }
+  .hint-end .one-time-hint { max-width: 460px; }
+}
+/* Link-style action inside a hint (OneTimeHint `action`). */
+.one-time-hint-action {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--scarlet);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.one-time-hint-action:hover { color: var(--scarlet-dark); }

@@ -842,23 +842,24 @@ html[data-theme='dark'] .hub-tracker-pill:not(.is-incomplete):hover { background
   .hub-tracker-pill { padding: 0 14px; gap: 8px; }
   .hub-tracker-pill-find-more { display: none; }
 }
-.search-hub-finder-link {
+/* Secondary button under the Search box: the way into the HUB course finder. */
+.search-hub-finder-btn {
   display: block;
   width: 100%;
-  margin: 2px 0 6px;
-  padding: 0;
-  background: none;
-  border: none;
-  text-align: left;
-  font-size: 11px;
-  line-height: 1.35;
+  margin: 8px 0 4px;
+  padding: 8px 12px;
+  background: var(--cream);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs, 3px);
   color: var(--scarlet);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
   cursor: pointer;
 }
-.search-hub-finder-link:hover { color: var(--scarlet-dark); }
-html[data-theme='dark'] .search-hub-finder-link { color: var(--warning-border); }
+.search-hub-finder-btn:hover,
+.search-hub-finder-btn:focus-visible { border-color: var(--scarlet); background: var(--scarlet-pale); outline: none; }
+html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
 
 .semester-status-badge {
   font-size: 10px;
@@ -2321,6 +2322,27 @@ html[data-theme='dark'] .search-hub-finder-link { color: var(--warning-border); 
   color: var(--text-muted);
   flex-shrink: 0;
 }
+.hub-staging-rail-note {
+  margin: 0;
+  padding: 0 12px 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.hub-stash-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--scarlet);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.hub-stash-link:hover { color: var(--scarlet-dark); }
+html[data-theme='dark'] .hub-stash-link { color: var(--warning-border); }
+.hub-staging-rail-link { display: block; margin: 0 12px 8px; font-size: 11px; text-align: left; }
 .hub-staging-rail-body {
   flex: 1;
   min-height: 0;
@@ -2757,6 +2779,118 @@ html[data-theme='dark'] .search-hub-finder-link { color: var(--warning-border); 
   transition: opacity 0.15s;
 }
 .beta-dismiss-btn:hover { opacity: 0.88; }
+
+/* "How do you want to start?" first-visit card (PickYourPath.jsx). Reuses
+   the beta overlay as its scrim. Buttons stack on narrow screens. */
+.path-card {
+  position: relative;
+  background: var(--white);
+  border-radius: 16px;
+  padding: 24px 22px 18px;
+  width: 90%;
+  max-width: 440px;
+  max-height: 92dvh;
+  overflow-y: auto;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+html[data-theme='dark'] .path-card { background: var(--white); }
+.path-card h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--scarlet);
+  margin: 0;
+}
+.path-card-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.path-card-close:hover { color: var(--text); }
+.path-card-mascot {
+  display: block;
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+}
+.path-card-choices {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  width: 100%;
+}
+@media (min-width: 561px) {
+  .path-card-choices { grid-template-columns: 1fr 1fr; }
+}
+.path-card-btn {
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--cream);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  text-align: center;
+}
+.path-card-btn-label { font-size: 15px; font-weight: 600; }
+.path-card-btn-caption {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+.path-card-btn:hover,
+.path-card-btn:focus-visible {
+  border-color: var(--scarlet);
+  background: var(--scarlet-pale);
+  outline: none;
+}
+.path-card-btn:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.path-card-skip {
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.path-card-skip:hover { color: var(--scarlet); }
+.path-card-beta {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Empty-board line (SemesterBoard): points toward Search — left on wide
+   screens, down to the tab bar on narrow ones. */
+.board-empty-hint { padding: 12px; margin: 0 0 8px; border: 1.5px dashed var(--border); border-radius: var(--radius-md); }
+.board-empty-arrow { font-size: 16px; margin: 0 4px; color: var(--scarlet); }
+.board-empty-narrow { display: none; }
+@media (max-width: 860px) {
+  .board-empty-wide { display: none; }
+  .board-empty-narrow { display: inline; }
+}
 
 /* Unsaved-changes leave modal (reuses beta overlay/modal) */
 .unsaved-modal-actions {

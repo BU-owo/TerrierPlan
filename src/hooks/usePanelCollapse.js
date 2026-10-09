@@ -6,16 +6,19 @@ import { useState, useEffect, useCallback } from 'react';
 // (whatever was stored) and `desktop` tells callers whether to show controls.
 const DESKTOP_QUERY = '(min-width: 861px)';
 
-function readStored(storageKey) {
+// `defaultCollapsed` only applies while nothing is stored under `storageKey`
+// (a first visit); any stored value wins.
+function readStored(storageKey, defaultCollapsed) {
   try {
-    return localStorage.getItem(storageKey) === '1';
+    const value = localStorage.getItem(storageKey);
+    return value === null ? defaultCollapsed : value === '1';
   } catch {
     return false; // storage blocked/unavailable: just start expanded
   }
 }
 
-export default function usePanelCollapse(storageKey) {
-  const [stored, setStored] = useState(() => readStored(storageKey));
+export default function usePanelCollapse(storageKey, defaultCollapsed = false) {
+  const [stored, setStored] = useState(() => readStored(storageKey, defaultCollapsed));
   const [desktop, setDesktop] = useState(() => window.matchMedia(DESKTOP_QUERY).matches);
 
   useEffect(() => {

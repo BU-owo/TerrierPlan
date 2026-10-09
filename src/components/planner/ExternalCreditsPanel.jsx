@@ -1,4 +1,6 @@
 import { memo, useEffect, useId, useMemo, useRef, useState } from 'react';
+import OneTimeHint from '../OneTimeHint';
+import useOneTimeHint from '../../hooks/useOneTimeHint';
 import {
   AP_EXAM_SUBJECTS,
   AP_HUB_CREDIT,
@@ -1184,7 +1186,7 @@ const CourseMappingOverrideEditor = memo(function CourseMappingOverrideEditor({ 
   );
 });
 
-export default function ExternalCreditsPanel({ externalCredits, coursesInPlan, onRemove, onUpdate, onAdd }) {
+export default function ExternalCreditsPanel({ externalCredits, coursesInPlan, onRemove, onUpdate, onAdd, hintsEnabled = true }) {
   const [collapsed, setCollapsed] = useState(false);
   const [editingScoreCreditId, setEditingScoreCreditId] = useState(null);
   const [editingOverrideCreditId, setEditingOverrideCreditId] = useState(null);
@@ -1192,6 +1194,11 @@ export default function ExternalCreditsPanel({ externalCredits, coursesInPlan, o
   const [addType, setAddType] = useState('apib');
   const [editingTransferId, setEditingTransferId] = useState(null);
   const credits = Array.isArray(externalCredits) ? externalCredits : [];
+  const hasTransfer = credits.some((c) => normalizeExternalCredit(c)?.type === 'transfer');
+  const [transferHintVisible, dismissTransferHint, markTransferSeen] = useOneTimeHint('ec_transfer', {
+    priority: 14,
+    when: hintsEnabled && !collapsed && hasTransfer,
+  });
   debugExternalCredits('render-props', {
     collapsed,
     count: credits.length,
@@ -1287,6 +1294,12 @@ export default function ExternalCreditsPanel({ externalCredits, coursesInPlan, o
         <p className="plan-side-panel-sub external-credit-empty">
           No AP, IB, or transfer credit added yet — self-report it above, no transcript needed.
         </p>
+      )}
+
+      {transferHintVisible && (
+        <OneTimeHint onDismiss={dismissTransferHint} onSeen={markTransferSeen}>
+          Transfer credit counts toward total credits, not HUB units.
+        </OneTimeHint>
       )}
 
       <ul className="external-credits-list">

@@ -141,8 +141,8 @@ export default function StashPanel({
               width={28}
               height={28}
             />
-            Nothing saved yet — use the paw button on a search result
-            to stash it here for later.
+            Courses you might take. Tap the paw on any course to save it here.
+            They don&apos;t count toward anything until you place them.
           </div>
         )}
 

@@ -11,153 +11,6 @@ import { getOfferingBadge } from '../../utils/offeringPattern';
 import { aliasFor } from '../../utils/grsAlias';
 import SemesterPickerModal from './SemesterPickerModal';
 
-const HUB_FILTER_CODES = [
-  'PLM',
-  'AEX',
-  'HCO',
-  'SI1',
-  'SO1',
-  'SI2',
-  'SO2',
-  'QR1',
-  'QR2',
-  'IIC',
-  'GCI',
-  'ETR',
-  'FYW',
-  'WRI',
-  'WIN',
-  'OSC',
-  'DME',
-  'CRT',
-  'RIL',
-  'TWC',
-  'CRI',
-];
-
-function HubFilterSelect({ selected, onChange }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef(null);
-
-  useEffect(() => {
-    function handlePointerDown(e) {
-      if (rootRef.current && !rootRef.current.contains(e.target)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, []);
-
-  const displayLabel =
-    selected.length === 0
-      ? 'All'
-      : selected.length <= 3
-        ? selected.join(', ')
-        : `${selected.slice(0, 2).join(', ')} +${selected.length - 2}`;
-
-  function toggleCode(code) {
-    if (selected.includes(code)) {
-      onChange(selected.filter((c) => c !== code));
-    } else {
-      onChange([...selected, code]);
-    }
-  }
-
-  return (
-    <div
-      className="search-sem-target"
-      ref={rootRef}
-      style={{ position: 'relative', alignItems: 'flex-start' }}
-    >
-      <label htmlFor="hub-filter-trigger">Filter by HUB unit</label>
-      <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-        <button
-          type="button"
-          id="hub-filter-trigger"
-          className="search-sem-select"
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-          style={{
-            width: '100%',
-            textAlign: 'left',
-            cursor: 'pointer',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {displayLabel}
-        </button>
-
-        {open && (
-          <div
-            role="listbox"
-            aria-multiselectable="true"
-            style={{
-              position: 'absolute',
-              zIndex: 40,
-              top: 'calc(100% + 4px)',
-              left: 0,
-              right: 0,
-              maxHeight: 220,
-              overflowY: 'auto',
-              background: 'var(--cream)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-xs)',
-              padding: 4,
-              boxShadow: 'var(--shadow-sm, 0 2px 8px rgba(0,0,0,.12))',
-            }}
-          >
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '4px 6px',
-                fontSize: 12,
-                color: 'var(--text)',
-                cursor: 'pointer',
-                borderRadius: 3,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={selected.length === 0}
-                onChange={() => onChange([])}
-              />
-              All
-            </label>
-            {HUB_FILTER_CODES.map((code) => (
-              <label
-                key={code}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '4px 6px',
-                  fontSize: 12,
-                  color: 'var(--text)',
-                  cursor: 'pointer',
-                  borderRadius: 3,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.includes(code)}
-                  onChange={() => toggleCode(code)}
-                />
-                {code}
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // Stash toggle glyph — filled paw = stashed, outline paw = not. `currentColor`
 // so it inherits the button's own color (scarlet / stashed-amber / hover
 // white — see .search-result-stash-btn in planner.css), same as the star
@@ -277,8 +130,8 @@ function SearchResultCard({
             if (isStashed) onRemoveFromStash(course.id);
             else onAddToStash(course.id);
           }}
-          aria-label={isStashed ? `Remove ${courseLabel} from Paw-tential Courses` : `Add ${courseLabel} to Paw-tential Courses`}
-          title={isStashed ? 'Remove from Paw-tential Courses' : 'Add to Paw-tential Courses'}
+          aria-label={isStashed ? `Remove ${courseLabel} from Paw-tential Courses` : `Save ${courseLabel} to Paw-tential Courses (saved for later, not on your plan)`}
+          title={isStashed ? 'Remove from Paw-tential Courses' : 'Save to Paw-tential Courses (saved for later, not on your plan)'}
         >
           <PawIcon filled={isStashed} />
         </button>
@@ -317,7 +170,6 @@ export default function CourseSearch({
   onOpenHubFullView,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [hubFilters, setHubFilters] = useState([]);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCourseForPicker, setSelectedCourseForPicker] = useState(null);
@@ -349,12 +201,9 @@ export default function CourseSearch({
 
   // A fresh range filter (e.g. from "Browse eligible courses" in the
   // Requirements panel) replaces whatever the user was searching for, rather
-  // than ANDing against stale text/HUB filters that would just hide it.
+  // than ANDing against stale text that would just hide it.
   useEffect(() => {
-    if (rangeFilter) {
-      setSearchQuery('');
-      setHubFilters([]);
-    }
+    if (rangeFilter) setSearchQuery('');
   }, [rangeFilter]);
 
   // Load all courses once — shared cache (see courseQuery.js) so this and
@@ -379,14 +228,13 @@ export default function CourseSearch({
     };
   }, []);
 
-  // Filter courses client-side on keystroke / HUB filter / range filter change
+  // Filter courses client-side on keystroke / range filter change
   useEffect(() => {
     clearTimeout(debounceRef.current);
     const term = searchQuery.trim();
-    const hasHubFilter = hubFilters.length > 0;
     const hasRangeFilter = Boolean(rangeFilter);
 
-    if (!term && !hasHubFilter && !hasRangeFilter) {
+    if (!term && !hasRangeFilter) {
       setResults([]);
       setSubjectModeInfo(null);
       setLoading(false);
@@ -423,12 +271,6 @@ export default function CourseSearch({
           .filter((course) => {
             if (!course.id.startsWith(normalizedQuery)) return false;
 
-            let hubMatch = true;
-            if (hasHubFilter) {
-              const units = course.hubUnits ?? [];
-              hubMatch = hubFilters.some((code) => units.includes(code));
-            }
-
             let rangeMatch = true;
             if (hasRangeFilter) {
               const parsed = parseCourseKey(course.id);
@@ -440,7 +282,7 @@ export default function CourseSearch({
                 !excludeSet.has(course.id);
             }
 
-            return hubMatch && rangeMatch;
+            return rangeMatch;
           })
           .sort(compareByCatalogNumber);
       } else {
@@ -454,13 +296,6 @@ export default function CourseSearch({
               normalizedCourseName.includes(normalizedQuery);
           }
 
-          let hubMatch = true;
-          if (hasHubFilter) {
-            const units = course.hubUnits ?? [];
-            // OR: course matches if it has ANY of the selected HUB codes
-            hubMatch = hubFilters.some((code) => units.includes(code));
-          }
-
           let rangeMatch = true;
           if (hasRangeFilter) {
             const parsed = parseCourseKey(course.id);
@@ -472,7 +307,7 @@ export default function CourseSearch({
               !excludeSet.has(course.id);
           }
 
-          return textMatch && hubMatch && rangeMatch;
+          return textMatch && rangeMatch;
         });
       }
       // Law/Dental/Medical courses (not open to undergrads) go after
@@ -496,9 +331,9 @@ export default function CourseSearch({
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [searchQuery, hubFilters, rangeFilter, coursesLoaded, searchableCourses, subjectPrefixes]);
+  }, [searchQuery, rangeFilter, coursesLoaded, searchableCourses, subjectPrefixes]);
 
-  const hasActiveQuery = Boolean(searchQuery.trim()) || hubFilters.length > 0 || Boolean(rangeFilter);
+  const hasActiveQuery = Boolean(searchQuery.trim()) || Boolean(rangeFilter);
   const stashSet = useMemo(() => new Set(stash), [stash]);
 
   // A search started some other way than the search box (HUB filter, or
@@ -513,6 +348,7 @@ export default function CourseSearch({
         <h2>Add Course</h2>
         <div className="search-input-wrap">
           <input
+            id="course-search-input"
             className="search-input"
             type="text"
             placeholder="e.g. CAS CS 111 or Calculus"
@@ -528,6 +364,11 @@ export default function CourseSearch({
             spellCheck={false}
           />
         </div>
+        {onOpenHubFullView && (
+          <button type="button" className="search-hub-finder-btn" onClick={onOpenHubFullView}>
+            Find courses by HUB unit →
+          </button>
+        )}
         {rangeFilter && (
           <div className="search-active-filter">
             <span>
@@ -543,12 +384,6 @@ export default function CourseSearch({
               ×
             </button>
           </div>
-        )}
-        <HubFilterSelect selected={hubFilters} onChange={setHubFilters} />
-        {onOpenHubFullView && (
-          <button type="button" className="search-hub-finder-link" onClick={onOpenHubFullView}>
-            Missing a HUB unit? Open the course finder
-          </button>
         )}
         <div className="search-sem-target">
           <label htmlFor="sem-target">Add to</label>
@@ -592,10 +427,10 @@ export default function CourseSearch({
             />
             {searchQuery.trim()
               ? <>No courses found for &ldquo;{searchQuery.trim()}&rdquo;</>
-              : 'No courses found for the current filters'}
+              : 'No courses found for that range'}
             <div className="search-hint">
-              Try a course code like &ldquo;CAS CS 111&rdquo;, a name prefix
-              like &ldquo;Calculus&rdquo;, or a different HUB/range filter
+              Try a course code like &ldquo;CAS CS 111&rdquo; or a name prefix
+              like &ldquo;Calculus&rdquo;
             </div>
           </div>
         )}

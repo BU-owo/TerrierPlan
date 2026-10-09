@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { HUB_GROUPS, describeRequirementLabels } from '../../utils/hubConstants';
 import { useHubProgress, satisfiedCountForRequirement } from '../../hooks/useHubProgress';
 import HubYearToggle from './HubYearToggle';
@@ -12,6 +12,11 @@ export default function HubSidebar({
   onToggleTransfer,
   onSummaryChange,
   onOpenFullView,
+  // courseKey[] from the Paw-tential Courses tab; only used for the one-line
+  // "could add" note (same counts HubFullView shows).
+  stash = [],
+  // Switches the planner's left panel to the Paw-tential Courses tab.
+  onShowStash,
 }) {
   // Groups the student has already finished collapse to a one-line summary
   // by default so the groups that still need attention stand out; explicit
@@ -29,6 +34,19 @@ export default function HubSidebar({
     courseMap,
     isTransfer,
   });
+
+  // "What if I added everything in my stash" — the same second useHubProgress
+  // call HubFullView makes for its dashed rings.
+  const extraCourseKeysWithStash = useMemo(() => [...extraCourseKeys, ...stash], [extraCourseKeys, stash]);
+  const { fulfilled: potentialFulfilled } = useHubProgress({
+    semesters,
+    extraCourseKeys: extraCourseKeysWithStash,
+    externalCredits,
+    courseMap,
+    isTransfer,
+  });
+  const stashedHubCount = stash.filter((key) => (courseMap[key]?.hubUnits?.length ?? 0) > 0).length;
+  const couldAddUnits = Math.max(0, potentialFulfilled - fulfilled);
 
   useEffect(() => {
     onSummaryChange?.({ badge: `${fulfilled}/${totalRequired}` });
@@ -67,6 +85,19 @@ export default function HubSidebar({
       <p className="panel-summary-line">
         {fulfilled} of {totalRequired} HUB units complete
       </p>
+      {stashedHubCount > 0 && (
+        <p className="hub-full-view-hint">
+          {stashedHubCount} Paw-tential course{stashedHubCount === 1 ? '' : 's'} could add {couldAddUnits} HUB
+          unit{couldAddUnits === 1 ? '' : 's'}.{' '}
+          {onShowStash ? (
+            <button type="button" className="hub-stash-link" onClick={onShowStash}>
+              See the Paw-tential Courses tab →
+            </button>
+          ) : (
+            'See the Paw-tential Courses tab on the left.'
+          )}
+        </p>
+      )}
 
       <HubYearToggle isTransfer={isTransfer} onToggleTransfer={onToggleTransfer} />
 
