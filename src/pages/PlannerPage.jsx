@@ -59,6 +59,7 @@ import {
 import { semesterLabel } from '../utils/hubConstants';
 import { useHubProgress } from '../hooks/useHubProgress';
 import { CURRENT_TERM } from '../utils/term';
+import { aliasFor } from '../utils/grsAlias';
 import './planner.css';
 import '../App.css';
 
@@ -1469,6 +1470,43 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     for (const k of missing) {
       const own = courseDocs[k]?.credits;
       if (!(k in newCredits) && typeof own === 'number' && own > 0) newCredits[k] = own;
+    }
+    // Last resort, for a GRS course renumbered into CAS: the CAS course's own
+    // section credits, then its courses.credits (src/data/grsAliases.js).
+    const aliasedKeys = missing.filter((k) => !(k in newCredits) && aliasFor(k));
+    if (aliasedKeys.length > 0) {
+      const aliasKeys = [...new Set(aliasedKeys.map(aliasFor))];
+      const aliasSectionCredits = {};
+      const aliasDocCredits = {};
+      for (let i = 0; i < aliasKeys.length; i += 30) {
+        const batch = aliasKeys.slice(i, i + 30);
+        const [secSnap, docSnap] = await Promise.all([
+          getDocs(query(collection(db, 'sections'), where('courseKey', 'in', batch))),
+          getDocs(query(collection(db, 'courses'), where(documentId(), 'in', batch))),
+        ]);
+        const fallback = {};
+        secSnap.docs.forEach((d) => {
+          const { courseKey, credits, term } = d.data();
+          if (credits == null) return;
+          if (term === CURRENT_TERM) {
+            if (!(courseKey in aliasSectionCredits)) aliasSectionCredits[courseKey] = credits;
+          } else if (!(courseKey in fallback)) {
+            fallback[courseKey] = credits;
+          }
+        });
+        for (const [k, v] of Object.entries(fallback)) {
+          if (!(k in aliasSectionCredits)) aliasSectionCredits[k] = v;
+        }
+        docSnap.docs.forEach((d) => {
+          const own = d.data().credits;
+          if (typeof own === 'number' && own > 0) aliasDocCredits[d.id] = own;
+        });
+      }
+      for (const k of aliasedKeys) {
+        const alias = aliasFor(k);
+        const value = alias in aliasSectionCredits ? aliasSectionCredits[alias] : aliasDocCredits[alias];
+        if (value != null) newCredits[k] = value;
+      }
     }
     setCreditsMap((prev) => ({ ...prev, ...newCredits }));
   }

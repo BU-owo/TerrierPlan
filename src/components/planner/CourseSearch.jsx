@@ -8,6 +8,7 @@ import {
   isProfessionalCareer,
 } from '../../utils/courseQuery';
 import { getOfferingBadge } from '../../utils/offeringPattern';
+import { aliasFor } from '../../utils/grsAlias';
 import SemesterPickerModal from './SemesterPickerModal';
 
 const HUB_FILTER_CODES = [
@@ -332,14 +333,19 @@ export default function CourseSearch({
   // "ENGEK", "QSTMF") — derived from courseKey, not hardcoded, so it can't
   // drift from actual data. Used to decide whether a query "looks like" a
   // subject code rather than treating every short alpha query as one.
+  // A GRS course that was renumbered into CAS is hidden here so only its CAS
+  // twin shows (src/data/grsAliases.js). Plans and the info panel still open
+  // the GRS key; searching the old GRS code finds the CAS course instead.
+  const searchableCourses = useMemo(() => allCourses.filter((course) => !aliasFor(course.id)), [allCourses]);
+
   const subjectPrefixes = useMemo(() => {
     const set = new Set();
-    for (const course of allCourses) {
+    for (const course of searchableCourses) {
       const parsed = parseCourseKey(course.id);
       if (parsed) set.add(parsed.subject);
     }
     return set;
-  }, [allCourses]);
+  }, [searchableCourses]);
 
   // A fresh range filter (e.g. from "Browse eligible courses" in the
   // Requirements panel) replaces whatever the user was searching for, rather
@@ -398,7 +404,8 @@ export default function CourseSearch({
       // Normalize the same way courseKey itself is normalized (strip
       // spaces, uppercase) — reused here so "CAS CS", "cascs", and "CASCS"
       // all resolve identically.
-      const normalizedQuery = term ? normalizeCourseKey(term) : '';
+      const typedQuery = term ? normalizeCourseKey(term) : '';
+      const normalizedQuery = aliasFor(typedQuery) ?? typedQuery;
       const excludeSet = new Set(rangeFilter?.exclude ?? []);
 
       // Subject-prefix mode: the query, once normalized, IS a real subject
@@ -412,7 +419,7 @@ export default function CourseSearch({
 
       let matches;
       if (isSubjectMode) {
-        matches = allCourses
+        matches = searchableCourses
           .filter((course) => {
             if (!course.id.startsWith(normalizedQuery)) return false;
 
@@ -437,7 +444,7 @@ export default function CourseSearch({
           })
           .sort(compareByCatalogNumber);
       } else {
-        matches = allCourses.filter((course) => {
+        matches = searchableCourses.filter((course) => {
           let textMatch = true;
           if (normalizedQuery) {
             const normalizedCourseNum = normalizeCourseKey(course.courseNumber || '');
@@ -489,7 +496,7 @@ export default function CourseSearch({
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [searchQuery, hubFilters, rangeFilter, coursesLoaded, allCourses, subjectPrefixes]);
+  }, [searchQuery, hubFilters, rangeFilter, coursesLoaded, searchableCourses, subjectPrefixes]);
 
   const hasActiveQuery = Boolean(searchQuery.trim()) || hubFilters.length > 0 || Boolean(rangeFilter);
   const stashSet = useMemo(() => new Set(stash), [stash]);

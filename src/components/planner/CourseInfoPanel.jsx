@@ -6,6 +6,7 @@ import { getOfferingBadge } from '../../utils/offeringPattern';
 import useUpcomingSeasons from '../../hooks/useUpcomingSeasons';
 import { isProfessionalCareer } from '../../utils/courseQuery';
 import { CURRENT_TERM, CURRENT_TERM_LABEL } from '../../utils/term';
+import { aliasFor, formerKeysFor, formatCourseKey } from '../../utils/grsAlias';
 import { describeSectionTime, describeExamTime, describeSeatStatus } from '../../utils/sectionTime';
 import { withMockMeetings } from '../../utils/mockMeetings';
 import { sectionTypeLabel } from '../../utils/sectionType';
@@ -80,6 +81,34 @@ async function fetchFall2026(courseKey) {
   return { sections, credits };
 }
 
+// Offering histories of several keys at once (the GRS keys a CAS course used
+// to be). Shares offeringHistoryCache with the single-key fetch above, so each
+// key is read at most once per session; a missing doc or a failed read is
+// simply left out and retried next time. Does nothing for an empty list.
+function useFormerHistories(keys) {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    const todo = keys.filter((k) => !offeringHistoryCache.has(k));
+    if (todo.length === 0) return undefined;
+    let cancelled = false;
+    Promise.all(
+      todo.map((k) =>
+        fetchOfferingHistory(k)
+          .then((data) => {
+            if (data) offeringHistoryCache.set(k, data);
+          })
+          .catch((err) => console.error('Failed to load course info:', err)),
+      ),
+    ).then(() => {
+      if (!cancelled) bump((n) => n + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [keys]);
+  return keys.map((k) => offeringHistoryCache.get(k)).filter(Boolean);
+}
+
 // Fetches `fetcher(key)` once per key, caching successes in `cache`. A
 // fetcher resolves to null for "doesn't exist". Results are tagged with the
 // key they belong to, so a late or stale one is never shown against a
@@ -139,6 +168,13 @@ function DetailText({ value, emptyLabel }) {
   return (
     <p className="course-info-empty">{state === 'missing' ? 'Details not available yet' : emptyLabel}</p>
   );
+}
+
+// A course doc's own `credits` (see scripts/import-credits.cjs) as {min, max},
+// or null when it has none.
+function creditsFromDoc(courseDoc) {
+  const value = courseDoc?.credits;
+  return typeof value === 'number' && value > 0 ? { min: value, max: value } : null;
 }
 
 function formatCredits(credits) {
@@ -423,6 +459,28 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
   const termFetch = useCachedFetch(fall2026Cache, courseKey, fetchFall2026);
   const upcomingSeasons = useUpcomingSeasons(courseKey);
 
+  // A GRS course renumbered into CAS borrows what it lacks from the CAS
+  // course (src/data/grsAliases.js). Read-only; the GRS key is never replaced.
+  // The CAS sections are only fetched when the GRS course has no credits.
+  // Credits order: own sections, own courses.credits, aliased sections,
+  // aliased courses.credits.
+  const aliasKey = courseKey ? aliasFor(courseKey) : null;
+  // The reverse: a CAS course that used to be one or more GRS keys gets their
+  // past offerings merged in (history only — name, credits and description
+  // stay the CAS course's own).
+  const formerKeys = formerKeysFor(courseKey);
+  const formerHistories = useFormerHistories(formerKeys);
+  const aliasCourseFetch = useCachedFetch(courseDocCache, aliasKey, fetchCourseDoc);
+  const aliasHistoryFetch = useCachedFetch(offeringHistoryCache, aliasKey, fetchOfferingHistory);
+  const sectionCredits = termFetch.status === 'ready' ? termFetch.data.credits : null;
+  const docCredits = courseFetch.status === 'ready' ? creditsFromDoc(courseFetch.data) : null;
+  const ownCredits = sectionCredits ?? docCredits;
+  const aliasTermFetch = useCachedFetch(
+    fall2026Cache,
+    aliasKey && termFetch.status === 'ready' && courseFetch.status === 'ready' && !ownCredits ? aliasKey : null,
+    fetchFall2026,
+  );
+
   useEffect(() => {
     if (!courseKey) return undefined;
     function onKeyDown(e) {
@@ -438,6 +496,33 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
   const courseNumber = course?.courseNumber ?? courseKey;
   const offeringBadge = course ? getOfferingBadge(course.offeringPattern, upcomingSeasons) : null;
   const hubUnits = course?.hubUnits ?? [];
+
+  const aliasCourse = aliasCourseFetch.status === 'ready' ? aliasCourseFetch.data : null;
+  const description = textState(course?.description) !== 'text' && textState(aliasCourse?.description) === 'text'
+    ? aliasCourse.description
+    : course?.description;
+  const prerequisites = textState(course?.prerequisites) !== 'text' && textState(aliasCourse?.prerequisites) === 'text'
+    ? aliasCourse.prerequisites
+    : course?.prerequisites;
+  let credits = ownCredits;
+  if (!credits && aliasTermFetch.status === 'ready') credits = aliasTermFetch.data.credits;
+  if (!credits) credits = creditsFromDoc(aliasCourse);
+  // Own past offerings plus the CAS course's (for a GRS key) or the former
+  // GRS keys' (for a CAS key), once both have loaded.
+  let pastStatus = historyFetch.status;
+  let pastData = historyFetch.data;
+  const aliasHistoryReady = aliasHistoryFetch.status === 'ready';
+  if ((aliasHistoryReady || formerHistories.length > 0) && (pastStatus === 'ready' || pastStatus === 'missing')) {
+    pastStatus = 'ready';
+    pastData = {
+      ...pastData,
+      history: [
+        ...(pastData?.history ?? []),
+        ...(aliasHistoryReady ? aliasHistoryFetch.data.history ?? [] : []),
+        ...formerHistories.flatMap((h) => h.history ?? []),
+      ],
+    };
+  }
 
   return (
     <div
@@ -463,11 +548,17 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
             {status === 'ready' && course.nameIsAbbreviated === true && (
               <p className="course-info-name-note">Name may be shortened</p>
             )}
+            {status === 'ready' && aliasKey && (
+              <p className="course-info-name-note">Now offered as {formatCourseKey(aliasKey)}</p>
+            )}
+            {status === 'ready' && formerKeys.length > 0 && (
+              <p className="course-info-name-note">Formerly {formerKeys.map(formatCourseKey).join(', ')}</p>
+            )}
             {/* Credits come from the sections fetch, not the course doc, so
                 they appear when that resolves; nothing is shown while it loads. */}
             {termFetch.status !== 'loading' && (
               <p className="course-info-credits">
-                Credits: {termFetch.status === 'ready' ? formatCredits(termFetch.data.credits) : '—'}
+                Credits: {termFetch.status === 'ready' ? formatCredits(credits) : '—'}
               </p>
             )}
           </div>
@@ -523,17 +614,17 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
 
               <section className="course-info-section">
                 <h4 className="course-info-section-title">Description</h4>
-                <DetailText value={course.description} emptyLabel="No description available" />
+                <DetailText value={description} emptyLabel="No description available" />
               </section>
 
               <section className="course-info-section">
                 <h4 className="course-info-section-title">Prerequisites</h4>
-                <DetailText value={course.prerequisites} emptyLabel="None listed" />
+                <DetailText value={prerequisites} emptyLabel="None listed" />
               </section>
 
               <PastOfferings
-                status={historyFetch.status}
-                data={historyFetch.data}
+                status={pastStatus}
+                data={pastData}
                 currentSections={termFetch.status === 'ready' ? termFetch.data.sections : null}
                 onRetry={historyFetch.retry}
               />
