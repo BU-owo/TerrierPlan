@@ -1079,6 +1079,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   }, [generated, bookmarks]);
 
   function handleToggleBookmark(index) {
+    actionDismissStepperHint();
     if (!generated) return;
     const ids = generated.schedules[index];
     const key = scheduleKey(ids);
@@ -1216,6 +1217,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // shows the current batch right away (the debounced regenerate follows).
   function handleSetMode(mode) {
     if (mode === scheduleMode) return;
+    actionDismissModeHint();
     setScheduleMode(mode);
     setGhostGroups(new Set());
     setSectionSwapSlot(null);
@@ -1597,7 +1599,11 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     };
   }, [flushDraft]);
 
+  // The stepper hint clears on the 2nd navigation, not the first.
+  const stepperNavCountRef = useRef(0);
   function handlePreview(index) {
+    stepperNavCountRef.current += 1;
+    if (stepperNavCountRef.current >= 2) actionDismissStepperHint();
     if (!generated) return;
     setPreviewIndex(index);
     setPreviewSectionIds(generated.schedules[index]);
@@ -1710,6 +1716,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // regenerate so the stepper reflects the new combination count right
   // away instead of showing a stale count until the next manual Generate.
   function handlePreviewToggleLock(sectionId) {
+    actionDismissPinHint();
     const section = sectionsById[sectionId];
     if (!section) return;
     markHandTouched([sectionId]);
@@ -1726,6 +1733,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   }
 
   function handlePreviewEliminate(sectionId) {
+    actionDismissPinHint();
     const section = sectionsById[sectionId];
     if (!section) return;
     markHandTouched([sectionId]);
@@ -1739,6 +1747,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // Starting swap mode clears every "Show all" ghost first; asking for the slot
   // that's already open closes it (one ghost layer at a time).
   function handleOpenSectionSwap(courseKey, component, currentSectionId) {
+    actionDismissSwapHint();
     if (displaceFlow) return; // finish or cancel the displace flow first
     if (sectionSwapSlot && sectionSwapSlot.courseKey === courseKey
       && sectionSwapSlot.component === component && sectionSwapSlot.currentSectionId === currentSectionId) {
@@ -2130,11 +2139,11 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const hasPlacedSections = previewSectionIds.length > 0 && previewHold !== 'foreign';
   const previewHasExam = hasPlacedSections && previewSectionIds.some((id) => sectionsById[id] && examMeetings(sectionsById[id]).length > 0);
   const [sectionsHintShow, dismissSectionsHint, markSectionsSeen] = useOneTimeHint('sched_sections', { priority: 10, when: buildVisible && scheduleMode === 'auto' && hasDraft });
-  const [modeHintShow, dismissModeHint, markModeSeen] = useOneTimeHint('sched_mode', { priority: 11, when: buildVisible && hasDraft });
+  const [modeHintShow, dismissModeHint, markModeSeen, actionDismissModeHint] = useOneTimeHint('sched_mode', { priority: 11, when: buildVisible && hasDraft });
   const [timeFilterHintShow, dismissTimeFilterHint, markTimeFilterSeen] = useOneTimeHint('sched_timefilter', { priority: 12, when: false });
-  const [stepperHintShow, dismissStepperHint, markStepperSeen] = useOneTimeHint('sched_stepper', { priority: 13, when: previewVisible && hasGenerated });
-  const [pinHintShow, dismissPinHint, markPinSeen] = useOneTimeHint('sched_pin', { priority: 14, when: previewVisible && scheduleMode === 'auto' && hasPlacedSections });
-  const [swapHintShow, dismissSwapHint, markSwapSeen] = useOneTimeHint('sched_swap', { priority: 15, when: previewVisible && hasPlacedSections });
+  const [stepperHintShow, dismissStepperHint, markStepperSeen, actionDismissStepperHint] = useOneTimeHint('sched_stepper', { priority: 13, when: previewVisible && hasGenerated });
+  const [pinHintShow, dismissPinHint, markPinSeen, actionDismissPinHint] = useOneTimeHint('sched_pin', { priority: 14, when: previewVisible && scheduleMode === 'auto' && hasPlacedSections });
+  const [swapHintShow, dismissSwapHint, markSwapSeen, actionDismissSwapHint] = useOneTimeHint('sched_swap', { priority: 15, when: previewVisible && hasPlacedSections });
   const [examHintShow, dismissExamHint, markExamSeen] = useOneTimeHint('sched_exam', { priority: 16, when: previewVisible && previewHasExam });
 
   if (authLoading) {
@@ -2237,7 +2246,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
           {modeHintShow && (
             <OneTimeHint onDismiss={dismissModeHint} onSeen={markModeSeen}>
-              Auto finds combos from the sections you check. Manual: you pick each section yourself, overlaps allowed.
+              Auto builds schedules from the sections you check. Manual lets you place sections yourself, overlaps allowed.
             </OneTimeHint>
           )}
 
@@ -2421,18 +2430,17 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
               )}
               {pinHintShow && (
                 <OneTimeHint onDismiss={dismissPinHint} onSeen={markPinSeen}>
-                  Pin keeps a section in every schedule we make. Exclude drops it from your options, so it won&apos;t show up in any.
+                  Pin a section to keep it in every schedule. Exclude it to drop it from all of them.
                 </OneTimeHint>
               )}
               {swapHintShow && (
                 <OneTimeHint onDismiss={dismissSwapHint} onSeen={markSwapSeen}>
-                  Tap the ghost icon on a class to see its other times
-                  <span className="sched-block-key-desktop"> as dashed blocks</span>
-                  <span className="sched-block-key-mobile"> in a list</span>. Tap one to switch.
+                  Tap the ghost icon on a class to see its other sections
+                  <span className="sched-block-key-mobile"> in a list</span>. Tap one to swap it in.
                 </OneTimeHint>
               )}
               {examHintShow && (
-                <OneTimeHint onDismiss={dismissExamHint} onSeen={markExamSeen}>
+                <OneTimeHint onDismiss={dismissExamHint} onSeen={markExamSeen} autoDismissMs={15000}>
                   Dashed = exam time. It won&apos;t count as a conflict.
                 </OneTimeHint>
               )}

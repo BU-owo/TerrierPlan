@@ -1,10 +1,13 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { isReturningUser } from '../utils/firstTimer';
-import { setHintWanted, useActiveHint } from '../utils/hintQueue';
+import { noteHintDismissed, setHintWanted, useActiveHint } from '../utils/hintQueue';
 
 // "Show this hint once" state, remembered in localStorage as
-// terrierplan_hint_<key>. Returns [visible, dismiss, markSeen].
+// terrierplan_hint_<key>. Returns [visible, dismiss, markSeen, dismissOnAction].
 //  - `dismiss` hides the hint now and for good.
+//  - `dismissOnAction` is `dismiss` for "the person did the thing": ignored for
+//    the first few seconds after the hint comes on screen (so it can be read),
+//    but still dismisses a hint that hasn't shown yet.
 //  - `markSeen` records it as seen without hiding it: pass it to OneTimeHint as
 //    onSeen, which calls it when the hint is first actually on screen — so it
 //    stays up for that visit but never comes back after a reload.
@@ -15,6 +18,7 @@ import { setHintWanted, useActiveHint } from '../utils/hintQueue';
 // Returning users (see firstTimer.js) start with every hint already seen. With
 // storage blocked the hint just shows again next visit.
 const PREFIX = 'terrierplan_hint_';
+const READ_GRACE_MS = 3000;
 
 function readSeen(key) {
   try {
@@ -44,13 +48,23 @@ export default function useOneTimeHint(key, { priority, when = true } = {}) {
   }, [key, priority, queued, wanted]);
 
   const active = useActiveHint();
+  const seenAtRef = useRef(null);
 
   const dismiss = useCallback(() => {
+    noteHintDismissed(key);
     setSeen(true);
     writeSeen(key);
   }, [key]);
 
-  const markSeen = useCallback(() => writeSeen(key), [key]);
+  const markSeen = useCallback(() => {
+    seenAtRef.current = Date.now();
+    writeSeen(key);
+  }, [key]);
 
-  return [queued ? wanted && active === key : !seen, dismiss, markSeen];
+  const dismissOnAction = useCallback(() => {
+    if (seenAtRef.current !== null && Date.now() - seenAtRef.current < READ_GRACE_MS) return;
+    dismiss();
+  }, [dismiss]);
+
+  return [queued ? wanted && active === key : !seen, dismiss, markSeen, dismissOnAction];
 }
