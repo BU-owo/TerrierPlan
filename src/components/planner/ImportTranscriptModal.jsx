@@ -3,7 +3,10 @@ import { parseTranscriptPdf } from '../../utils/transcriptParser';
 import { buildImportPreview, applyImport } from '../../utils/transcriptMapping';
 import { resolveApHubFromScore } from '../../utils/apScoreResolution';
 import { getApHub, isApScoreDependent } from '../../data/apIbHubCredit';
-import { resolveCourseKeys } from '../../utils/courseQuery';
+import { resolveCourseKeys, loadAllCourses } from '../../utils/courseQuery';
+import { readPlanAttachment, sanitizePlanBlob } from '../../utils/planImport';
+import { BU_SCHOOLS, findProgramByUrl } from '../../data/bu-programs';
+import { REQUIREMENT_PROGRAMS } from '../requirements/programs';
 import { BuEquivalentField } from './ExternalCreditsPanel';
 import { isValidCourseKeyFormat } from '../../utils/courseKey';
 
@@ -37,6 +40,14 @@ async function resolveParsedCourseKeys(parsed) {
     }
   }
 }
+
+// What sanitizePlanBlob needs to know about programs: every bu-programs url,
+// plus the requirement JSONs (for requirement-exception node ids).
+const PLAN_IMPORT_PROGRAMS = {
+  urls: new Set(BU_SCHOOLS.flatMap((school) => school.programs.map((p) => p.url))),
+  requirements: REQUIREMENT_PROGRAMS,
+};
+const MAX_DROPPED_SHOWN = 40;
 
 const TransferCreditReviewRow = memo(function TransferCreditReviewRow({ transferCredit, onUpdate }) {
   const [creditsDraft, setCreditsDraft] = useState(String(transferCredit.creditsEdit ?? transferCredit.credits ?? ''));
@@ -110,6 +121,12 @@ export default function ImportTranscriptModal({
   extraTerms,
   externalCredits,
   onImport,
+  onImportPlan,
+  currentUid = null,
+  planImportBlockedReason = null,
+  // Copy only: 'plan' (the "Import plan" button) or 'transcript'. Both accept
+  // either file type and detect it automatically.
+  variant = 'transcript',
 }) {
   const [step, setStep] = useState(0);
   const [parsing, setParsing] = useState(false);
@@ -120,11 +137,18 @@ export default function ImportTranscriptModal({
   const [summary, setSummary] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const [showIncompleteTransferWarning, setShowIncompleteTransferWarning] = useState(false);
+  // Plan PDF branch: sanitizePlanBlob's result, who was signed in (null =
+  // guest) when its Review step opened, and the created plan's name.
+  const [planPreview, setPlanPreview] = useState(null);
+  const [planReviewUid, setPlanReviewUid] = useState(null);
+  const [planResult, setPlanResult] = useState(null);
   const inputRef = useRef(null);
 
   const resetReview = useCallback(() => {
     setPreview(null);
     setSummary(null);
+    setPlanPreview(null);
+    setPlanResult(null);
     setError('');
   }, []);
 
@@ -134,6 +158,8 @@ export default function ImportTranscriptModal({
     setError('');
     setFileName('');
     setPreview(null);
+    setPlanPreview(null);
+    setPlanResult(null);
     setImporting(false);
     setSummary(null);
     setDragOver(false);
@@ -152,6 +178,32 @@ export default function ImportTranscriptModal({
     setParsing(true);
     setError('');
     try {
+      // A TerrierPlan plan PDF carries its plan as an attachment; anything
+      // else (null) is treated as a BU transcript, exactly as before.
+      const planRead = await readPlanAttachment(file);
+      if (planRead) {
+        if (planRead.error) {
+          setError(planRead.error.message);
+          return;
+        }
+        let catalogIds;
+        try {
+          catalogIds = new Set((await loadAllCourses()).map((c) => c.id));
+        } catch (err) {
+          console.error(err);
+          setError("Couldn't load the course list to check that plan. Try again.");
+          return;
+        }
+        const result = sanitizePlanBlob(planRead.blob, { catalogIds, programs: PLAN_IMPORT_PROGRAMS });
+        if (!result.summary) {
+          setError(result.errors[0]?.message || 'Could not read that plan PDF.');
+          return;
+        }
+        setPlanReviewUid(currentUid ?? null);
+        setPlanPreview(result);
+        setStep(1);
+        return;
+      }
       const parsed = await parseTranscriptPdf(file);
       debugImportModal('handleFile-parsed', {
         apCredits: parsed?.apCredits || [],
@@ -167,7 +219,7 @@ export default function ImportTranscriptModal({
       setStep(1);
     } catch (err) {
       console.error(err);
-      setError('Could not parse that PDF. Make sure it is an unofficial BU transcript.');
+      setError('Could not parse that PDF. Make sure it is an unofficial BU transcript or a TerrierPlan plan PDF.');
       setPreview(null);
     } finally {
       setParsing(false);
@@ -263,7 +315,28 @@ export default function ImportTranscriptModal({
     }
   }
 
+  async function handleConfirmPlanImport() {
+    if (!planPreview?.plan || planImportBlockedReason || importing) return;
+    setImporting(true);
+    setError('');
+    try {
+      setPlanResult(await onImportPlan(planPreview.plan, planReviewUid));
+      setStep(2);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || 'Import failed. Please try again.');
+    } finally {
+      setImporting(false);
+    }
+  }
+
   if (!open) return null;
+
+  const planSignInChanged = planPreview != null && (currentUid ?? null) !== planReviewUid;
+  const planBlockReason = planSignInChanged
+    ? 'Your sign-in changed, so nothing can be imported. Close this and try again.'
+    : planImportBlockedReason;
+  const planMajor = findProgramByUrl(planPreview?.summary?.majorBulletinUrl);
 
   const regularCount = (preview?.slotAssignments || []).reduce(
     (n, a) => n + a.courses.length,
@@ -278,7 +351,7 @@ export default function ImportTranscriptModal({
     <div className="import-overlay" role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
       <div className="import-modal">
         <div className="import-modal-header">
-          <h2 id="import-modal-title">Import Transcript</h2>
+          <h2 id="import-modal-title">{variant === 'plan' ? 'Import Plan PDF' : 'Import Transcript or Plan PDF'}</h2>
           <button type="button" className="import-close-btn" onClick={handleClose} aria-label="Close">
             ×
           </button>
@@ -322,13 +395,17 @@ export default function ImportTranscriptModal({
                       <path d="M12 17v-6" />
                       <path d="M9.5 13.5 12 11l2.5 2.5" />
                     </svg>
-                    <p className="import-dropzone-title">Drop your unofficial transcript PDF here</p>
+                    <p className="import-dropzone-title">
+                      {variant === 'plan' ? 'Drop a TerrierPlan PDF here, or click to choose' : 'Drop your unofficial transcript or plan PDF here'}
+                    </p>
                     {/* No handler of its own: the click bubbles to the dropzone, which opens the picker. */}
                     <button type="button" className="import-secondary-btn import-dropzone-btn">
                       Choose file
                     </button>
                     <p className="import-dropzone-hint">
-                      Get it from MyBU → Academics → View Unofficial Transcript → View PDF, then download it.
+                      {variant === 'plan'
+                        ? 'Made with Download plan PDF. It imports as a new plan.'
+                        : 'Get it from MyBU → Academics → View Unofficial Transcript → View PDF, then download it.'}
                     </p>
                     {fileName && <p className="import-filename">{fileName}</p>}
                   </>
@@ -528,6 +605,71 @@ export default function ImportTranscriptModal({
             </div>
           )}
 
+          {step === 1 && planPreview && (
+            <div className="import-review">
+              <div className="import-review-toolbar">
+                <button
+                  type="button"
+                  className="import-secondary-btn"
+                  onClick={() => { resetReview(); setStep(0); setFileName(''); }}
+                >
+                  ← Re-upload
+                </button>
+                <span className="import-review-counts">TerrierPlan plan PDF</span>
+              </div>
+
+              <section className="import-section">
+                <h3>{planPreview.summary.name}</h3>
+                {planMajor && <p className="import-muted">{planMajor.name} {planMajor.degree}</p>}
+                <ul className="import-list compact">
+                  <li>{planPreview.summary.years} year{planPreview.summary.years === 1 ? '' : 's'}</li>
+                  <li>{planPreview.summary.courseCount} course{planPreview.summary.courseCount === 1 ? '' : 's'}</li>
+                  <li>{planPreview.summary.placeholderCount} placeholder{planPreview.summary.placeholderCount === 1 ? '' : 's'}</li>
+                  {planPreview.summary.stashCount > 0 && <li>{planPreview.summary.stashCount} saved for later</li>}
+                  {planPreview.summary.extraTermCount > 0 && <li>{planPreview.summary.extraTermCount} Summer/Winter term{planPreview.summary.extraTermCount === 1 ? '' : 's'}</li>}
+                  {planPreview.summary.overrideCount > 0 && <li>{planPreview.summary.overrideCount} requirement exception{planPreview.summary.overrideCount === 1 ? '' : 's'}</li>}
+                </ul>
+                <p className="import-section-note">
+                  This becomes a new plan; your other plans aren&apos;t touched. Credits fill in after import.
+                  Completed, AP and transfer credit isn&apos;t imported.
+                </p>
+              </section>
+
+              {planPreview.errors.length > 0 && (
+                <p className="import-error">{planPreview.errors[0].message}</p>
+              )}
+              {planBlockReason && <p className="import-error">{planBlockReason}</p>}
+
+              {planPreview.dropped.length > 0 && (
+                <section className="import-section">
+                  <h3>Left out ({planPreview.dropped.length})</h3>
+                  <p className="import-section-note">These weren&apos;t valid or aren&apos;t in the course catalog, so they won&apos;t be imported.</p>
+                  <ul className="import-list compact">
+                    {planPreview.dropped.slice(0, MAX_DROPPED_SHOWN).map((d, i) => (
+                      <li key={`${d.where}-${d.what}-${i}`}>
+                        <strong>{d.what}</strong>
+                        <span className="import-muted">{d.where} · {d.reason}</span>
+                      </li>
+                    ))}
+                    {planPreview.dropped.length > MAX_DROPPED_SHOWN && (
+                      <li className="import-muted">and {planPreview.dropped.length - MAX_DROPPED_SHOWN} more</li>
+                    )}
+                  </ul>
+                </section>
+              )}
+            </div>
+          )}
+
+          {step === 2 && planResult && (
+            <div className="import-success">
+              <p className="import-success-title">Plan imported</p>
+              <ul className="import-list compact">
+                <li>&ldquo;{planResult.name}&rdquo; is now open.</li>
+                <li>Course names and credits load in a moment.</li>
+              </ul>
+            </div>
+          )}
+
           {step === 2 && summary && (
             <div className="import-success">
               <p className="import-success-title">Import complete</p>
@@ -553,7 +695,17 @@ export default function ImportTranscriptModal({
           <button type="button" className="import-secondary-btn" onClick={handleClose}>
             {step === 2 ? 'Close' : 'Cancel'}
           </button>
-          {step === 1 && (
+          {step === 1 && planPreview?.plan && !planBlockReason && (
+            <button
+              type="button"
+              className="import-primary-btn"
+              onClick={handleConfirmPlanImport}
+              disabled={importing}
+            >
+              {importing ? 'Importing…' : 'Create new plan'}
+            </button>
+          )}
+          {step === 1 && preview && (
             <button
               type="button"
               className="import-primary-btn"

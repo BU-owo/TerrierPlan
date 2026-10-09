@@ -26,6 +26,7 @@ import {
 import { auth, db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
 import PlanSelector from '../components/planner/PlanSelector';
+import HeaderMenu from '../components/planner/HeaderMenu';
 import SearchPanelTabs from '../components/planner/SearchPanelTabs';
 import SemesterBoard from '../components/planner/SemesterBoard';
 import CourseCard from '../components/planner/CourseCard';
@@ -316,6 +317,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverlay, setDragOverlay] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  // Which header button opened the import modal; only changes its copy.
+  const [importVariant, setImportVariant] = useState('transcript');
   // 'idle' | 'busy' | 'error' — "Download plan PDF" button.
   const [planPdfStatus, setPlanPdfStatus] = useState('idle');
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -1235,24 +1238,36 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // builds it from the currently-open plan's already-locked courses. Every
   // other call site (first plan on a brand-new account, guest-plan
   // migration) omits it and gets the original blank-grid behavior.
+  // handleImportPlan (plan PDF import) also passes the optional name,
+  // majorBulletinUrl, isTransfer, extraTerms, stash and requirementOverrides
+  // (each defaulting to the blank-plan value), plus expectedUid: the account
+  // it was confirmed under, re-checked right before the write.
   async function createDefaultPlan(uid, seed = null) {
     isInitialLoad.current = true;
-    const name = await uniquePlanName(uid, 'My Plan');
+    const name = await uniquePlanName(uid, seed?.name ?? 'My Plan');
     const seedSemesters = seed?.semesters ?? EMPTY_SEMESTERS();
     const seedGridSummerTerms = seed?.gridSummerTerms ?? {};
+    const seedMajorBulletinUrl = seed?.majorBulletinUrl ?? null;
+    const seedIsTransfer = seed?.isTransfer ?? false;
+    const seedExtraTerms = seed?.extraTerms ?? [];
+    const seedStash = seed?.stash ?? [];
+    const seedRequirementOverrides = seed?.requirementOverrides ?? {};
+    if (seed?.expectedUid && auth.currentUser?.uid !== seed.expectedUid) {
+      throw new Error('Your sign-in changed, so nothing was imported. Close this and try again.');
+    }
     const ref = await addDoc(collection(db, 'users', uid, 'plans'), {
       name,
       major: '',
-      majorBulletinUrl: null,
+      majorBulletinUrl: seedMajorBulletinUrl,
       semesters: semestersToFirestore(seedSemesters),
       gridSummerTerms: seedGridSummerTerms,
-      isTransfer: false,
-      extraTerms: [],
+      isTransfer: seedIsTransfer,
+      extraTerms: seedExtraTerms,
       cumulativeGpa: null,
       earnedCredits: null,
       gradePoints: null,
-      requirementOverrides: {},
-      stash: [],
+      requirementOverrides: seedRequirementOverrides,
+      stash: seedStash,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -1260,14 +1275,14 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setPlanName(name);
     setSemesters(seedSemesters);
     setGridSummerTerms(seedGridSummerTerms);
-    setIsTransfer(false);
-    setMajorBulletinUrl(null);
-    setExtraTerms([]);
+    setIsTransfer(seedIsTransfer);
+    setMajorBulletinUrl(seedMajorBulletinUrl);
+    setExtraTerms(seedExtraTerms);
     setCumulativeGpa(null);
     setEarnedCredits(null);
     setGradePoints(null);
-    setRequirementOverrides({});
-    setStash([]);
+    setRequirementOverrides(seedRequirementOverrides);
+    setStash(seedStash);
     // currentSemesterTarget/completedCourseKeys/externalCredits deliberately
     // untouched — see their declaration above; a new plan starts empty
     // (aside from any seeded locked courses) but still carries the
@@ -1276,6 +1291,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setPlans([{ id: ref.id, name }]);
     setIsDirty(false);
     isInitialLoad.current = false;
+    return name;
   }
 
   // Sends the latest unsent plan edit (see pendingPlanWriteRef), with the
@@ -1819,6 +1835,87 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     }
   }
 
+  // Plan PDF import (ImportTranscriptModal's plan branch). `plan` is the
+  // already-sanitized result of sanitizePlanBlob; `reviewUid` is who was
+  // signed in (null = guest) when its Review step opened. Signed in: always a
+  // NEW plan via createDefaultPlan, never an overwrite. Guest: only into a
+  // blank plan. Throws a user-facing Error on any refusal, having changed
+  // nothing. Resolves { name }.
+  async function handleImportPlan(plan, reviewUid) {
+    const importedKeys = [
+      ...plan.semesters.flatMap((entries) => entriesCourseKeys(entries)),
+      ...Object.values(plan.gridSummerTerms).flatMap((entries) => entriesCourseKeys(entries)),
+      ...plan.extraTerms.flatMap((term) => term.courseKeys || []),
+      ...plan.stash,
+    ];
+
+    if (!user) {
+      if (reviewUid) throw new Error('Your sign-in changed, so nothing was imported. Close this and try again.');
+      if (!guestPlanIsBlank) throw new Error('Sign in to import as a new plan.');
+      const next = {
+        name: plan.name,
+        majorBulletinUrl: plan.majorBulletinUrl,
+        semesters: plan.semesters,
+        gridSummerTerms: plan.gridSummerTerms,
+        isTransfer: plan.isTransfer,
+        extraTerms: plan.extraTerms,
+        requirementOverrides: plan.requirementOverrides,
+        stash: plan.stash,
+      };
+      // localStorage first: if it fails, nothing on screen has changed.
+      saveLocalPlan(next);
+      setPlanName(next.name);
+      setSemesters(next.semesters);
+      setGridSummerTerms(next.gridSummerTerms);
+      setIsTransfer(next.isTransfer);
+      setMajorBulletinUrl(next.majorBulletinUrl);
+      setExtraTerms(next.extraTerms);
+      setRequirementOverrides(next.requirementOverrides);
+      setStash(next.stash);
+      setIsDirty(true);
+      if (importedKeys.length > 0) {
+        fetchCourseData(importedKeys).catch((err) => console.error('Could not load imported course data:', err));
+      }
+      return { name: next.name };
+    }
+
+    if (auth.currentUser?.uid !== user.uid || reviewUid !== user.uid) {
+      throw new Error('Your sign-in changed, so nothing was imported. Close this and try again.');
+    }
+    // Same as handleNewPlan: save the open plan's last edits first, and
+    // stay put if that fails.
+    if (!(await flushPendingPlanWrite())) {
+      throw new Error("Couldn't save your open plan first, so nothing was imported. Try again.");
+    }
+    let createdName;
+    try {
+      createdName = await createDefaultPlan(reviewUid, {
+        semesters: plan.semesters,
+        gridSummerTerms: plan.gridSummerTerms,
+        name: plan.name,
+        majorBulletinUrl: plan.majorBulletinUrl,
+        isTransfer: plan.isTransfer,
+        extraTerms: plan.extraTerms,
+        stash: plan.stash,
+        requirementOverrides: plan.requirementOverrides,
+        expectedUid: reviewUid,
+      });
+    } catch (err) {
+      // createDefaultPlan holds autosave off while it runs; a refusal or
+      // failed write means the open plan was never replaced, so release it.
+      isInitialLoad.current = false;
+      console.error('Plan import failed:', err);
+      throw err instanceof Error && err.message.startsWith('Your sign-in changed')
+        ? err
+        : new Error("Couldn't create the plan. Check your connection and try again.");
+    }
+    if (importedKeys.length > 0) {
+      fetchCourseData(importedKeys).catch((err) => console.error('Could not load imported course data:', err));
+    }
+    loadPlans(reviewUid);
+    return { name: createdName };
+  }
+
   async function handleTranscriptImport(result) {
     const normalizedExternalCredits = normalizeExternalCredits(result.externalCredits);
     debugPlanner('handleTranscriptImport-result', {
@@ -2081,12 +2178,55 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   const totalCredits = planCourseCredits + externalCreditTotal;
 
+  // Mirrors isBlankGuestPlan, from live state: nothing in the guest plan
+  // worth protecting, so a plan PDF may be imported into it.
+  const guestPlanIsBlank = semesters.every((sem) => sem.length === 0)
+    && Object.values(gridSummerTerms).every((entries) => entries.length === 0)
+    && extraTerms.length === 0
+    && stash.length === 0
+    && Object.keys(requirementOverrides).length === 0
+    && !majorBulletinUrl
+    && cumulativeGpa == null
+    && earnedCredits == null
+    && gradePoints == null
+    && !isTransfer
+    && planName === 'My Plan';
+
   const planIsEmpty = semesters.every((sem) => sem.length === 0)
     && Object.values(gridSummerTerms).every((entries) => entries.length === 0);
 
   // Signed in but no plan loaded yet (same signal as the `?view=` effect
   // above) — either still loading or planLoadError. Guests never hit this.
   const plansPending = Boolean(user) && !activePlanId;
+
+  const planImportBlockedReason = plansPending
+    ? 'Your plans are still loading. Close this and try again in a moment.'
+    : !user && !guestPlanIsBlank
+      ? 'Sign in to import as a new plan.'
+      : null;
+
+  // Toolbar menu items (see HeaderMenu): shared by the wide "Import" menu
+  // and the narrow "PDF" menu.
+  const openImportModal = (variant) => { setImportVariant(variant); setShowImportModal(true); };
+  const downloadPdfDisabled = plansPending || planIsEmpty || planPdfStatus === 'busy';
+  const importMenuItems = [
+    { key: 'plan', label: 'Import plan PDF', onSelect: () => openImportModal('plan') },
+    { key: 'transcript', label: 'Import transcript', onSelect: () => openImportModal('transcript') },
+  ];
+  const pdfMenuItems = [
+    ...importMenuItems,
+    {
+      key: 'download',
+      label: 'Download plan PDF',
+      dividerBefore: true,
+      disabled: downloadPdfDisabled,
+      hint: planPdfStatus === 'busy' ? 'Making PDF…'
+        : planPdfStatus === 'error' ? "Couldn't make PDF, try again"
+          : planIsEmpty ? 'Add a course first'
+            : null,
+      onSelect: handleDownloadPlanPdf,
+    },
+  ];
 
   // Offline with something still unsent: show that instead of a "Saving…"
   // that can't finish until the connection is back.
@@ -2161,27 +2301,20 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
             </GuestSignInButton>
           </>
         )}
+        {/* Wide: "Import" menu + a separate Download button. Narrow: one "PDF"
+            menu holding all three. CSS (planner.css) picks which shows; both
+            use the same items and handlers. */}
+        <HeaderMenu className="pdf-menu-wide" label="Import" items={importMenuItems} />
         <button
           type="button"
-          className="btn-import-transcript"
-          onClick={() => setShowImportModal(true)}
-          title="Import Transcript"
-        >
-          <span className="btn-import-transcript-icon" aria-hidden="true">Import</span>
-          <span className="btn-import-transcript-label">Import Transcript</span>
-        </button>
-        <button
-          type="button"
-          className="btn-import-transcript"
+          className="pdf-menu-btn pdf-download-btn"
           onClick={handleDownloadPlanPdf}
-          disabled={plansPending || planIsEmpty || planPdfStatus === 'busy'}
+          disabled={downloadPdfDisabled}
           title={planIsEmpty ? 'Add a course first' : 'Download plan PDF'}
         >
-          <span className="btn-import-transcript-icon" aria-hidden="true">PDF</span>
-          <span className="btn-import-transcript-label">
-            {planPdfStatus === 'busy' ? 'Making PDF…' : planPdfStatus === 'error' ? "Couldn't make PDF, try again" : 'Download plan PDF'}
-          </span>
+          {planPdfStatus === 'busy' ? 'Making PDF…' : planPdfStatus === 'error' ? "Couldn't make PDF, try again" : 'Download plan PDF'}
         </button>
+        <HeaderMenu className="pdf-menu-narrow" label="PDF" items={pdfMenuItems} />
       </AppHeader>
 
       {/* ── Body ── */}
@@ -2376,6 +2509,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         extraTerms={extraTerms}
         externalCredits={externalCredits}
         onImport={handleTranscriptImport}
+        onImportPlan={handleImportPlan}
+        currentUid={user?.uid ?? null}
+        planImportBlockedReason={planImportBlockedReason}
+        variant={importVariant}
       />
 
       <HelpSupportModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />

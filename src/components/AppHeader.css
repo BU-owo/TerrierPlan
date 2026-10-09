@@ -5,7 +5,7 @@
    so it uses raw white-based rgba, not the --white token (which flips dark).
 
    Row 2's children keep their own classes (.plan-selector,
-   .planner-credits-badge, .btn-import-transcript, ...) and responsive rules
+   .planner-credits-badge, .pdf-menu-btn, ...) and responsive rules
    from planner.css — this file only lays the row out. */
 .tp-header {
   /* Positioned so z-index applies and the user dropdown (inside this

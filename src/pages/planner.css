@@ -2808,8 +2808,13 @@ html[data-theme='dark'] .search-hub-finder-link { color: var(--warning-border); 
 }
 .header-help-btn:hover { background: #fff; }
 
-/* Transcript import and imported-credit panels */
-.btn-import-transcript {
+/* Header "PDF" menu (PlanPdfMenu.jsx). The dropdown itself reuses
+   .tp-user-dropdown / .tp-user-dropdown-item from AppHeader.css. */
+.pdf-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+.pdf-menu-btn {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -2823,10 +2828,29 @@ html[data-theme='dark'] .search-hub-finder-link { color: var(--warning-border); 
   font-weight: 600;
   padding: 7px 10px;
   white-space: nowrap;
-  flex-shrink: 0;
 }
-.btn-import-transcript:hover { background: rgba(255, 255, 255, 0.22); }
-.btn-import-transcript:disabled { opacity: 0.5; cursor: not-allowed; background: rgba(255, 255, 255, 0.12); }
+.pdf-menu-btn:hover,
+.pdf-menu-btn[aria-expanded='true'] { background: rgba(255, 255, 255, 0.22); }
+.pdf-menu-btn:disabled { opacity: 0.5; cursor: not-allowed; background: rgba(255, 255, 255, 0.12); }
+.pdf-menu-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.pdf-menu .tp-user-dropdown { min-width: 210px; z-index: 1; }
+.pdf-menu-divider { height: 1px; margin: 4px 2px; background: var(--border); }
+.pdf-menu .tp-user-dropdown-item:disabled { opacity: 0.55; cursor: not-allowed; background: none; }
+.pdf-menu-hint {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+/* Wide (>= 860px): Import menu + Download button. Narrow: one PDF menu. */
+.pdf-menu-narrow { display: none; }
+@media (max-width: 859px) {
+  .pdf-menu-wide,
+  .pdf-download-btn { display: none; }
+  .pdf-menu-narrow { display: block; }
+}
+/* Transcript import and imported-credit panels */
 .btn-import-transcript-icon { display: none; }
 .plan-side-panel { margin-top: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--white); padding: 14px; }
 .plan-side-panel-header { display: flex; justify-content: space-between; gap: 12px; }
@@ -3022,12 +3046,11 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
     display: none;
   }
 }
-/* Below this, collapse "Import Transcript" to an icon-only button so its
-   fixed-width label stops competing with the plan controls for space. */
+/* Below this, collapse the guest "Sign in with Google" button to its short
+   label so it stops competing with the plan controls for space. */
 @media (max-width: 860px) {
   .btn-import-transcript-icon { display: inline; }
   .btn-import-transcript-label { display: none; }
-  .btn-import-transcript { padding: 7px; }
 
   .mobile-tab-bar { display: flex; }
 
