@@ -14,100 +14,123 @@ export const MAX_RESULTS = 2_000;
 // slots: [{ options: sectionId[] }] — a generic "pick exactly one from each
 // slot, with no time conflict against anything else picked" combinatorics
 // core. It has no notion of "course" or "component"; see
-// buildGenerationSlots below for how draftCourses become slots. Backtracks
-// slot-by-slot (rather than building the full cartesian product then
-// filtering) so a conflict prunes an entire branch early instead of being
-// discovered after the fact.
+// buildGenerationSlots below for how draftCourses become slots.
+//
+// The strict search (strictSearch below) fills slots fewest-options-first,
+// and after each pick drops every option in the still-unfilled slots that
+// conflicts with it, backtracking as soon as one of them runs out. Each
+// schedule is one section id per non-empty slot, in the slots' original
+// order, and the batch is sorted by that id tuple, so what's shown never
+// depends on the order the search happened to visit things in.
+//
+// Not truncated, this is exactly the set of schedules a plain slot-by-slot
+// backtrack finds. Truncated (MAX_RESULTS or MAX_EXPLORED hit), it's a
+// different partial set than that search would stop at: just the first
+// ones this search reached, then sorted.
 //
 // `allowOverlaps`: time conflicts stop being failures — see
 // generateRankedByOverlap below. Off, this is unchanged.
 export function generateSchedules(slots, sectionsById, { limit = MAX_RESULTS, allowOverlaps = false } = {}) {
   if (allowOverlaps) return generateRankedByOverlap(slots, sectionsById, limit);
-  const lists = slots.filter((s) => s.options.length > 0).map((s) => s.options);
-
-  const schedules = [];
-  let explored = 0;
-  let truncated = false;
-
-  function backtrack(i, chosen) {
-    if (i === lists.length) {
-      schedules.push([...chosen]);
-      if (schedules.length >= limit) truncated = true;
-      return;
-    }
-    for (const sectionId of lists[i]) {
-      if (truncated) return;
-      explored++;
-      if (explored > MAX_EXPLORED) {
-        truncated = true;
-        return;
-      }
-      const candidate = sectionsById[sectionId];
-      if (!candidate) continue;
-      const conflicts = chosen.some((id) => sectionsConflict(sectionsById[id], candidate));
-      if (conflicts) continue;
-      chosen.push(sectionId);
-      backtrack(i + 1, chosen);
-      chosen.pop();
-    }
-  }
-
-  if (lists.length > 0) backtrack(0, []);
-
-  return { schedules, truncated };
+  const search = strictSearch(slots, sectionsById, limit);
+  let step = search.next();
+  while (!step.done) step = search.next();
+  return step.value;
 }
 
 // Same search and same results (same order, same caps) as generateSchedules'
-// strict path, but iterative so it can hand control back to the browser
-// every `yieldEvery` candidates — the Scheduler runs it automatically on
-// every draft edit, and a big draft must not freeze typing or checkboxes.
-// `isCancelled()` is checked at each yield; a cancelled run resolves to null.
+// strict path, but hands control back to the browser every `yieldEvery`
+// nodes — the Scheduler runs it automatically on every draft edit, and a
+// big draft must not freeze typing or checkboxes. `isCancelled()` is
+// checked at each yield; a cancelled run resolves to null.
 export async function generateSchedulesAsync(slots, sectionsById, { limit = MAX_RESULTS, yieldEvery = 2000, isCancelled = () => false } = {}) {
-  const lists = slots.filter((s) => s.options.length > 0).map((s) => s.options);
-  const schedules = [];
-  let explored = 0;
-  let truncated = false;
-  if (lists.length === 0) return { schedules, truncated };
-
-  const chosen = [];
-  const next = new Array(lists.length).fill(0); // next option to try per level
-  let i = 0;
+  const search = strictSearch(slots, sectionsById, limit);
   let sinceYield = 0;
-  while (i >= 0) {
-    if (i === lists.length) {
-      schedules.push([...chosen]);
-      if (schedules.length >= limit) {
-        truncated = true;
-        break;
-      }
-      i--;
-      chosen.pop();
-      continue;
-    }
-    if (next[i] >= lists[i].length) {
-      next[i] = 0;
-      i--;
-      if (i >= 0) chosen.pop();
-      continue;
-    }
-    const sectionId = lists[i][next[i]++];
-    explored++;
-    if (explored > MAX_EXPLORED) {
-      truncated = true;
-      break;
-    }
+  for (;;) {
+    const step = search.next();
+    if (step.done) return step.value;
     if (++sinceYield >= yieldEvery) {
       sinceYield = 0;
       await new Promise((resolve) => setTimeout(resolve, 0));
       if (isCancelled()) return null;
     }
-    const candidate = sectionsById[sectionId];
-    if (!candidate) continue;
-    if (chosen.some((id) => sectionsConflict(sectionsById[id], candidate))) continue;
-    chosen.push(sectionId);
-    i++;
   }
-  return { schedules, truncated };
+}
+
+// The strict search shared by both entry points: a generator that yields
+// once per node visited (an option tried in a slot, counted against
+// MAX_EXPLORED) and returns { schedules, truncated, explored }.
+function* strictSearch(slots, sectionsById, limit) {
+  const lists = slots.filter((s) => s.options.length > 0).map((s) => s.options);
+  const schedules = [];
+  let explored = 0;
+  let truncated = false;
+  if (lists.length === 0) return { schedules, truncated, explored };
+
+  // order[k]: the original slot filled at depth k. A section with no data
+  // can't be in a schedule, so it never enters a domain.
+  const initial = lists.map((options) => options.filter((id) => sectionsById[id]));
+  const order = lists.map((_, i) => i).sort((a, b) => initial[a].length - initial[b].length || a - b);
+  const n = order.length;
+  // domains[d][k] (k >= d): what's still open for depth k given the picks at
+  // depths < d. Each depth keeps its own copy so backtracking just steps back.
+  const domains = [order.map((i) => initial[i])];
+  const next = new Array(n).fill(0); // next option to try per depth
+  const chosen = new Array(n);
+  let d = 0;
+  while (d >= 0) {
+    if (d === n) {
+      const schedule = new Array(n);
+      for (let k = 0; k < n; k++) schedule[order[k]] = chosen[k];
+      schedules.push(schedule);
+      if (schedules.length >= limit) {
+        truncated = true;
+        break;
+      }
+      d--;
+      continue;
+    }
+    const options = domains[d][d];
+    if (next[d] >= options.length) {
+      next[d] = 0;
+      d--;
+      continue;
+    }
+    const sectionId = options[next[d]++];
+    explored++;
+    if (explored > MAX_EXPLORED) {
+      truncated = true;
+      break;
+    }
+    yield;
+    // Forward check: everything left in domains[d] already fits the earlier
+    // picks, so only conflicts with this one need removing.
+    const section = sectionsById[sectionId];
+    const pruned = domains[d].slice();
+    let deadEnd = false;
+    for (let k = d + 1; k < n; k++) {
+      const kept = domains[d][k].filter((id) => !sectionsConflict(section, sectionsById[id]));
+      if (kept.length === 0) {
+        deadEnd = true;
+        break;
+      }
+      pruned[k] = kept;
+    }
+    if (deadEnd) continue;
+    chosen[d] = sectionId;
+    domains[d + 1] = pruned;
+    d++;
+  }
+
+  schedules.sort(compareIdTuples);
+  return { schedules, truncated, explored };
+}
+
+function compareIdTuples(a, b) {
+  for (let k = 0; k < a.length; k++) {
+    if (a[k] !== b[k]) return a[k] < b[k] ? -1 : 1;
+  }
+  return 0;
 }
 
 // Minutes two sections overlap in a week, summed over every pair of their
@@ -290,8 +313,10 @@ export function buildGenerationSlots(draftCourses, sectionsByCourse, sectionsByI
       const key = classifyComponent(sectionsById[id]);
       (lockedByGroup[key] ??= []).push(id);
     }
+    // Options (and the "Other" group's one-pin slots) go in section id order,
+    // not click order, so the same picks always give the same ordered results.
     for (const group of groups) {
-      const locked = lockedByGroup[group.key] || [];
+      const locked = [...(lockedByGroup[group.key] || [])].sort();
       if (locked.length > 1 && group.key !== UNKNOWN_KEY) {
         // Several pins in one real component (an old draft): pick one of them.
         slots.push({ options: locked });
@@ -299,7 +324,7 @@ export function buildGenerationSlots(draftCourses, sectionsByCourse, sectionsByI
         locked.forEach((id) => slots.push({ options: [id] }));
       } else {
         const considering = course.considering[group.key] || [];
-        if (considering.length > 0) slots.push({ options: considering });
+        if (considering.length > 0) slots.push({ options: [...considering].sort() });
       }
     }
   }
