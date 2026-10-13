@@ -70,7 +70,7 @@ export function isGlobalFilterActive(globalFilter) {
 export function passesGlobalFilter(section, globalFilter) {
   if (!isGlobalFilterActive(globalFilter)) return true;
   const meetings = classMeetings(section);
-  if (meetings.length === 0) return false; // no determinable time — can't match a time bound
+  if (meetings.length === 0) return true; // no class meetings (TBA, async, exam-only) — no time to violate
   // Every class meeting has to satisfy the bound(s) that govern the day(s) it
   // actually meets on — a day with nothing configured (and no same-every-
   // day fallback) never blocks it.

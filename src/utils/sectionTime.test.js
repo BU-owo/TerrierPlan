@@ -164,7 +164,8 @@ test('no `meetings` field: identical to the old single-meeting functions', () =>
     },
   ];
   for (const f of filters) {
-    for (const s of sections) assert.equal(passesGlobalFilter(s, f), oldPassesGlobalFilter(s, f));
+    // No class meeting passes every filter (new rule).
+    for (const s of sections) assert.equal(passesGlobalFilter(s, f), oldSectionMeeting(s) ? oldPassesGlobalFilter(s, f) : true);
   }
 });
 
@@ -250,8 +251,10 @@ test('passesGlobalFilter needs every class meeting to pass; exams are ignored', 
   };
   assert.equal(passesGlobalFilter(ga, custom), false); // Friday 8am fails the Friday bound
   assert.equal(passesGlobalFilter(section('T', [meeting('Tue Thu', '08:00AM', '09:15AM'), meeting('Fri', '12:20PM', '01:10PM')]), custom), true);
-  // No class meeting: fails an active filter, passes an inactive one.
-  assert.equal(passesGlobalFilter({ id: 'n' }, noMornings), false);
+  // No class meeting (or exam-only): passes active and inactive filters alike.
+  assert.equal(passesGlobalFilter({ id: 'n' }, noMornings), true);
+  assert.equal(passesGlobalFilter(section('X', [meeting('Mon', '08:00AM', '09:00AM', 'exam')]), noMornings), true);
+  assert.equal(passesGlobalFilter(section('X', [meeting('Mon', '08:00AM', '09:00AM', 'exam')]), custom), true);
   assert.equal(passesGlobalFilter({ id: 'n' }, EMPTY_GLOBAL_FILTERS), true);
 });
 
