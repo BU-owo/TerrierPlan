@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { HUB_GROUPS, describeRequirementLabels } from '../../utils/hubConstants';
 import { useHubProgress, satisfiedCountForRequirement } from '../../hooks/useHubProgress';
 import HubYearToggle from './HubYearToggle';
+import EstimateNote from '../EstimateNote';
+import { BU_LINKS } from '../../data/officialLinks';
 
 export default function HubSidebar({
   semesters,
@@ -68,36 +70,35 @@ export default function HubSidebar({
           this one prominent doesn't balloon those other, genuinely
           secondary controls. */}
       {onOpenFullView && (
-        <>
-          <button
-            type="button"
-            className="hub-full-view-banner"
-            onClick={onOpenFullView}
-            title="Open full-screen HUB tracker & course finder"
-          >
-            <span className="hub-full-view-banner-icon" aria-hidden="true">⤢</span>
-            HUB Tracker &amp; Course Finder
-          </button>
-          <p className="hub-full-view-hint">Find courses for missing units and save them.</p>
-        </>
+        <button
+          type="button"
+          className="hub-full-view-banner"
+          onClick={onOpenFullView}
+          title="Open full-screen HUB tracker & course finder"
+        >
+          <span className="hub-full-view-banner-icon" aria-hidden="true">⤢</span>
+          HUB Tracker &amp; Course Finder
+        </button>
       )}
 
-      <p className="panel-summary-line">
-        {fulfilled} of {totalRequired} HUB units complete
-      </p>
       {stashedHubCount > 0 && (
         <p className="hub-full-view-hint">
           {stashedHubCount} Paw-tential course{stashedHubCount === 1 ? '' : 's'} could add {couldAddUnits} HUB
           unit{couldAddUnits === 1 ? '' : 's'}.{' '}
           {onShowStash ? (
             <button type="button" className="hub-stash-link" onClick={onShowStash}>
-              See the Paw-tential Courses tab →
+              See the Paw-tential Courses tab
             </button>
           ) : (
             'See the Paw-tential Courses tab on the left.'
           )}
         </p>
       )}
+
+      <p className="panel-summary-line">
+        {fulfilled} of {totalRequired} HUB units complete
+      </p>
+      <EstimateNote link={BU_LINKS.myBU} lead="For planning only. Confirm on" label="MyBU" />
 
       <HubYearToggle isTransfer={isTransfer} onToggleTransfer={onToggleTransfer} />
 

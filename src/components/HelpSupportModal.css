@@ -58,6 +58,15 @@
   line-height: 1.55;
 }
 
+.help-disclaimer {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.help-disclaimer a { color: inherit; font-weight: 600; text-underline-offset: 2px; }
+.help-disclaimer a:hover { color: var(--scarlet); }
+
 .help-section { display: flex; flex-direction: column; gap: 8px; }
 .help-section-label {
   margin: 0;

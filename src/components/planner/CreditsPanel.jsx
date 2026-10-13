@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { entriesCourseKeys } from '../../utils/courseEntry';
 import { describeLockStatus } from '../requirements/treeHelpers';
+import EstimateNote from '../EstimateNote';
+import { BU_LINKS } from '../../data/officialLinks';
 
 export default function CreditsPanel({
   semesters,
@@ -102,6 +104,8 @@ export default function CreditsPanel({
           <p>Add courses to your plan to see your credit total here.</p>
         </div>
       )}
+
+      <EstimateNote link={BU_LINKS.bulletin} />
     </div>
   );
 }

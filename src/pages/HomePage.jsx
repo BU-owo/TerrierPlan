@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import HelpSupportModal from '../components/HelpSupportModal';
+import Disclaimer from '../components/Disclaimer';
 import './home.css';
 
 // Duplicated from HelpSupportModal.jsx / GlobalFooter.jsx, which each keep
@@ -163,6 +164,17 @@ function AppButtons() {
   );
 }
 
+// Smooth-scrolls to the disclaimer. The page scrolls inside the app shell, not
+// the window, so the href alone is only a fallback; reduced-motion users get
+// an instant jump.
+function scrollToDisclaimer(e) {
+  const target = document.getElementById('disclaimer');
+  if (!target) return;
+  e.preventDefault();
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+}
+
 export default function HomePage({ theme = 'light', onToggleTheme }) {
   const { user, loading } = useAuth();
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -227,6 +239,10 @@ export default function HomePage({ theme = 'light', onToggleTheme }) {
           <p className="home-hero-tagline">
             An academic planning tool for BU students, built to replace your spreadsheet, bulletin, and MyBU juggling!
           </p>
+          <p className="home-hero-note">
+            Not affiliated with or endorsed by Boston University.{' '}
+            <a href="#disclaimer" onClick={scrollToDisclaimer}>Read more</a>
+          </p>
           <AppButtons />
           {!signedIn && (
             <Link to="/login" className="home-signin-link" style={authPending} {...pendingProps}>
@@ -266,12 +282,14 @@ export default function HomePage({ theme = 'light', onToggleTheme }) {
           </section>
         ))}
 
+        <Disclaimer />
+
         {/* Heading, intro and both contact actions copied from
             HelpSupportModal.jsx. */}
         <section className="home-closing" aria-labelledby="home-closing-title">
           <h2 id="home-closing-title" className="home-closing-title">Need a paw?</h2>
           <p className="home-closing-intro">
-            TerrierPlan is built and maintained by a BUowo and friends, and we want this to be a tool that
+            TerrierPlan is built and maintained by BUowo and friends, and we want this to be a tool that
             works for YOU. Tell us what's wrong, ask a question, make a suggestion, or just say hi!
           </p>
           <div className="home-closing-contact">

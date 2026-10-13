@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import HelpSupportModal from './HelpSupportModal';
 import useSiteStats from '../hooks/useSiteStats';
+import { BU_LINKS } from '../data/officialLinks';
 
 const SUPPORT_EMAIL = 'terrierplan@gmail.com';
 const DISCORD_URL = 'https://discord.gg/bostonuniversity';
@@ -43,8 +44,11 @@ export default function GlobalFooter() {
       </div>
 
       <p className="app-footer-disclaimer">
-        Not affiliated with or endorsed by Boston University. This is an independent, community-made,
-        mostly vibe-coded tool. Use at your own discretion.
+        Not affiliated with or endorsed by Boston University. Independent, community-made, and mostly
+        vibe-coded. Confirm everything with{' '}
+        <a href={BU_LINKS.myBU.url} target="_blank" rel="noopener noreferrer">MyBU</a>, the{' '}
+        <a href={BU_LINKS.bulletin.url} target="_blank" rel="noopener noreferrer">Bulletin</a>, and your
+        advisor.
       </p>
 
       <HelpSupportModal open={showHelp} onClose={() => setShowHelp(false)} />

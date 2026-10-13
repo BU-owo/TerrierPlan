@@ -129,7 +129,19 @@ html[data-theme='dark'] .home-page {
   line-height: 1.55;
   color: var(--text-secondary);
   max-width: 560px;
+  margin: 0 auto 10px;
+}
+.home-hero-note {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  max-width: 560px;
   margin: 0 auto 28px;
+}
+.home-hero-note a {
+  color: var(--scarlet);
+  font-weight: 600;
+  text-underline-offset: 2px;
 }
 .home-app-buttons {
   display: flex;
@@ -317,6 +329,45 @@ html[data-theme='dark'] .home-page {
   background: var(--scarlet);
 }
 
+/* ── Disclaimer: permanent, below the feature cards ── */
+.home-disclaimer {
+  border-top: 1px solid var(--border-light);
+  background: var(--cream);
+  padding: 48px 24px;
+  scroll-margin-top: 52px; /* clears the sticky top bar */
+}
+.home-disclaimer-inner {
+  max-width: 680px;
+  margin: 0 auto;
+  text-align: left;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.home-disclaimer-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -.3px;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.home-disclaimer-inner p { margin: 0 0 10px; }
+.home-disclaimer-subtitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 18px 0 8px;
+}
+.home-disclaimer-list { list-style: disc; margin: 0; padding-left: 24px; }
+.home-disclaimer-list li { padding: 2px 0; }
+.home-disclaimer-list a {
+  color: var(--scarlet);
+  font-weight: 600;
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+.home-disclaimer-list a:hover { text-decoration: underline; }
+
 /* ── Closing section: help wording + the same two big buttons ── */
 .home-closing {
   border-top: 1px solid var(--border-light);
@@ -388,6 +439,8 @@ html[data-theme='dark'] .home-page {
   .home-app-buttons { flex-direction: column; align-items: stretch; }
   .home-btn { min-width: 0; }
   .home-closing { padding: 40px 16px 48px; }
+  .home-disclaimer { padding: 32px 16px; }
+  .home-disclaimer-title { font-size: 20px; }
   .home-closing-title { font-size: 24px; }
   .home-closing-contact { flex-direction: column; align-items: stretch; }
   .home-contact-btn { justify-content: center; }

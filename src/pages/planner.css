@@ -1319,7 +1319,7 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   justify-content: center;
   gap: 8px;
   width: 100%;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
   padding: 10px 12px;
   border: none;
   border-radius: var(--radius-md);
@@ -2641,6 +2641,24 @@ html[data-theme='dark'] .hub-stash-link { color: var(--warning-border); }
   font-weight: 700;
   color: var(--text);
 }
+
+.estimate-note {
+  margin: 10px 0 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.estimate-note a { color: inherit; font-weight: 600; text-underline-offset: 2px; }
+.estimate-note a:hover { color: var(--scarlet); }
+/* Tucked right under a panel's summary line (HUB sidebar). */
+.panel-summary-line + .estimate-note { margin: -6px 0 10px; }
+.estimate-note.is-prominent {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.hub-search-row + .estimate-note.is-prominent { margin: 10px 0 14px; }
 
 .credits-hint {
   font-size: 10px;

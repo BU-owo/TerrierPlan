@@ -2718,7 +2718,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           className={`mobile-tab-btn${mobileView === 'hub' ? ' active' : ''}`}
           onClick={() => setMobileView('hub')}
         >
-          Status
+          Tracker
         </button>
       </nav>
 

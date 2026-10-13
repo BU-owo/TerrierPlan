@@ -205,6 +205,15 @@ html[data-theme='dark'] {
   padding: 32px 16px;
 }
 
+.sched-seat-note {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.sched-seat-note a { color: inherit; font-weight: 600; text-underline-offset: 2px; }
+.sched-seat-note a:hover { color: var(--scarlet); }
+
 .sched-draft-card {
   background: var(--white);
   border: 1px solid var(--border);

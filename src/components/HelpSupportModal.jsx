@@ -1,3 +1,4 @@
+import { BU_LINKS } from '../data/officialLinks';
 import './HelpSupportModal.css';
 
 const SUPPORT_EMAIL = 'terrierplan@gmail.com';
@@ -18,7 +19,7 @@ export default function HelpSupportModal({ open, onClose }) {
 
         <div className="help-modal-body">
           <p className="help-intro">
-            TerrierPlan is built and maintained by a BUowo and friends, and we want this to be a tool that
+            TerrierPlan is built and maintained by BUowo and friends, and we want this to be a tool that
             works for YOU. Tell us what's wrong, ask a question, make a suggestion, or just say hi!
           </p>
 
@@ -40,6 +41,13 @@ export default function HelpSupportModal({ open, onClose }) {
               Join the Terrier Hub Discord
             </a>
           </section>
+
+          <p className="help-disclaimer">
+            Independent, not affiliated with BU. Confirm everything with{' '}
+            <a href={BU_LINKS.myBU.url} target="_blank" rel="noopener noreferrer">MyBU</a>, the{' '}
+            <a href={BU_LINKS.bulletin.url} target="_blank" rel="noopener noreferrer">Bulletin</a>, and your
+            advisor.
+          </p>
         </div>
       </div>
     </div>

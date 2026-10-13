@@ -6,6 +6,8 @@ import { normalizeCourseKey } from '../../utils/courseKey';
 import { entryCourseKey } from '../../utils/courseEntry';
 import { formatCourseLabel } from '../requirements/treeHelpers';
 import HubYearToggle from './HubYearToggle';
+import EstimateNote from '../EstimateNote';
+import { BU_LINKS } from '../../data/officialLinks';
 import OneTimeHint from '../OneTimeHint';
 import useOneTimeHint from '../../hooks/useOneTimeHint';
 import CourseChip from '../requirements/CourseChip';
@@ -935,6 +937,13 @@ export default function HubFullView({
           )}
 
           </div>
+
+          <EstimateNote
+            prominent
+            link={BU_LINKS.myBU}
+            lead="This is a guide for your planning purposes. Please confirm HUB requirement completion on"
+            label="MyBU"
+          />
 
           <div className="hub-full-overview-toolbar">
             <span className="hub-full-overview-heading">HUB Categories</span>
