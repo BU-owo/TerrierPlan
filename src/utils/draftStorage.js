@@ -1,5 +1,6 @@
 import { CURRENT_TERM } from './term';
 import { EMPTY_GLOBAL_FILTERS } from './sectionFilters';
+import { SCHEDULE_SORT_OPTIONS } from './scheduleCombos';
 
 // The Scheduler's in-progress work — draft courses (checked/locked sections),
 // the time filter, the section sort mode, Auto/Manual mode and the manually
@@ -68,6 +69,8 @@ export function readStoredDraft(uid) {
       // Absent in drafts saved before Manual mode existed: Auto, nothing placed.
       scheduleMode: parsed.draft?.scheduleMode === 'manual' ? 'manual' : 'auto',
       manualSectionIds: strings(parsed.draft?.manualSectionIds),
+      // Absent in drafts saved before the schedule sort existed: 'default' order.
+      scheduleSort: SCHEDULE_SORT_OPTIONS.some((o) => o.value === parsed.draft?.scheduleSort) ? parsed.draft.scheduleSort : 'default',
       bookmarks, // string[][] — each a bookmarked combination's section ids
       // The combination on screen and its stepper position, or null.
       preview: strings(parsed.preview?.sectionIds).length > 0
@@ -87,7 +90,7 @@ export function readStoredDraft(uid) {
 // load). With nothing to keep — no courses and no bookmarks — the key is
 // removed instead of storing an empty shell. Returns true when the write (or
 // removal) went through, false when it didn't.
-export function writeStoredDraft({ draftCourses, globalTimeFilter, sectionSortMode, scheduleMode, manualSectionIds = [], bookmarks, previewSectionIds, previewIndex }, uid) {
+export function writeStoredDraft({ draftCourses, globalTimeFilter, sectionSortMode, scheduleMode, scheduleSort = 'default', manualSectionIds = [], bookmarks, previewSectionIds, previewIndex }, uid) {
   try {
     // Only a current-term combination is worth keeping (section ids start
     // with their term, "2271_1234"); a previewed other-term schedule isn't.
@@ -107,6 +110,7 @@ export function writeStoredDraft({ draftCourses, globalTimeFilter, sectionSortMo
           globalTimeFilter,
           sortMode: sectionSortMode,
           scheduleMode: scheduleMode === 'manual' ? 'manual' : 'auto',
+          scheduleSort,
           manualSectionIds,
         },
         bookmarks: Array.from(bookmarks.values()),

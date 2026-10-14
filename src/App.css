@@ -8,6 +8,12 @@
   animation: paw-bounce 0.9s ease-in-out infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .auth-loading-paw {
+    animation: none;
+  }
+}
+
 @keyframes paw-bounce {
   0%,
   100% {

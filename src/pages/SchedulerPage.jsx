@@ -14,19 +14,21 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
+import PawLoader from '../components/PawLoader';
+import useDelayedBusy from '../hooks/useDelayedBusy';
 import AppHeader from '../components/AppHeader';
 import GuestSignInButton from '../components/GuestSignInButton';
 import HelpSupportModal from '../components/HelpSupportModal';
 import SchedulerSearch from '../components/scheduler/SchedulerSearch';
 import DraftCourseCard from '../components/scheduler/DraftCourseCard';
 import GlobalTimeFilter from '../components/scheduler/GlobalTimeFilter';
-import ScheduleStepper, { ManualScheduleHeader } from '../components/scheduler/ScheduleStepper';
+import ScheduleStepper, { ManualScheduleHeader, SwapDoneBar } from '../components/scheduler/ScheduleStepper';
 import WeeklyGrid from '../components/scheduler/WeeklyGrid';
 import SectionSwapSheet from '../components/scheduler/SectionSwapSheet';
 import { nextAutoColors } from '../utils/scheduleColors';
 import { readStoredDraft, writeStoredDraft, clearStoredDraft } from '../utils/draftStorage';
 import { loadAllCourses } from '../utils/courseQuery';
-import BookmarkedSchedulesPanel from '../components/scheduler/BookmarkedSchedulesPanel';
+import BookmarkedSchedulesPanel, { BookmarkChipStrip } from '../components/scheduler/BookmarkedSchedulesPanel';
 import SavedSchedulesPanel from '../components/scheduler/SavedSchedulesPanel';
 import IncompleteBanner from '../components/scheduler/IncompleteBanner';
 import { CURRENT_TERM, CURRENT_TERM_LABEL, scheduleTerm, termLabel } from '../utils/term';
@@ -39,9 +41,11 @@ import {
   generateSchedulesAsync,
   buildGenerationSlots,
   scheduleKey,
+  bookmarkChipStates,
   missingGroupsForCourse,
   totalCredits,
   pinInGroup,
+  sortSchedules,
 } from '../utils/scheduleCombos';
 import { EMPTY_GLOBAL_FILTERS, filterBlockDetail, matchesFilters, isGlobalFilterActive } from '../utils/sectionFilters';
 import { combinationProduct, SLOW_GENERATION_PRODUCT } from '../utils/selectionEstimate';
@@ -69,6 +73,8 @@ const COURSE_COLORS_LOCAL_KEY = 'terrierplan_scheduler_course_colors';
 // browser session (sessionStorage), and comes back on the next visit.
 const GUEST_BANNER_DISMISSED_KEY = 'terrierplan_scheduler_guest_banner_dismissed';
 const EMPTY_OBJ = {};
+// The restore loader gives up after this long (the page then shows what it has).
+const RESTORE_LOADER_MAX_MS = 15_000;
 // Shared empty Set for props, so a card's prop doesn't change every render.
 const EMPTY_SET = new Set();
 // Mirrors scheduler.css's .scheduler-right min-width — the drag can widen
@@ -340,6 +346,9 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // ── Generated combinations + preview ───────────────────────────────────────
   const [generated, setGenerated] = useState(null); // { schedules: sectionId[][], truncated } | null
   const [previewIndex, setPreviewIndex] = useState(null); // index into generated.schedules, or null
+  // How generated.schedules is ordered (see SCHEDULE_SORT_OPTIONS). The batch
+  // itself is kept sorted, so every reader of it sees the same order.
+  const [scheduleSort, setScheduleSort] = useState('default');
   const [previewSectionIds, setPreviewSectionIds] = useState([]); // what the grid is currently showing
 
   // Unsaved shortlist while browsing generated combinations — "maybe this
@@ -1084,20 +1093,22 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     [bookmarks],
   );
 
-  // Indices (into the CURRENT generated.schedules) where a bookmark
-  // happens to overlap this batch — recomputed from the content-keyed map
-  // so a bookmark automatically "follows" its schedule if regeneration
-  // reorders it, and just as automatically stops applying to the stepper
-  // once that exact combination isn't reachable in THIS batch (it's still
-  // in the bookmark list either way).
-  const bookmarkedIndices = useMemo(() => {
-    if (!generated) return [];
-    const indices = [];
-    generated.schedules.forEach((ids, i) => {
-      if (bookmarks.has(scheduleKey(ids))) indices.push(i);
-    });
-    return indices;
-  }, [generated, bookmarks]);
+  // Keys of the current results, and each bookmark chip's state (not in the
+  // results, or stale). The strip keeps the bookmarks' own order, so chip numbers
+  // never change with the sort. Manual has no results to be "in", so only stale shows there.
+  const batchKeys = useMemo(
+    () => (generated ? new Set(generated.schedules.map(scheduleKey)) : new Set()),
+    [generated],
+  );
+  const chipStates = useMemo(
+    () => bookmarkChipStates(
+      bookmarkList,
+      scheduleMode === 'auto' ? batchKeys : null,
+      sectionsById,
+      new Set(draftCourses.map((c) => c.courseKey)),
+    ),
+    [bookmarkList, batchKeys, scheduleMode, sectionsById, draftCourses],
+  );
 
   function handleToggleBookmark(index) {
     actionDismissStepperHint();
@@ -1145,6 +1156,28 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     const idx = generated ? generated.schedules.findIndex((ids) => scheduleKey(ids) === key) : -1;
     setPreviewIndex(idx >= 0 ? idx : null);
     setPreviewHold(idx >= 0 ? null : 'bookmark');
+  }
+
+  // Manual chip click: loading a bookmark replaces the placements, so ask first
+  // unless they're empty or already bookmarked / saved.
+  function handlePreviewBookmarkManual(sectionIds) {
+    if (manualSectionIds.length > 0) {
+      const key = scheduleKey(manualSectionIds);
+      const kept = bookmarks.has(key) || savedSchedules.some((s) => scheduleKey(s.selectedSectionIds || []) === key);
+      if (!kept && !window.confirm('Leave without saving? This schedule will be lost.')) return;
+    }
+    handlePreviewBookmark(sectionIds);
+  }
+
+  // Auto chip / Prev / Next bookmark: a finished swap that isn't in the results and
+  // isn't bookmarked or saved would be lost, so ask first.
+  function handlePreviewBookmarkAuto(sectionIds) {
+    if (previewHold === 'swap' && previewSectionIds.length > 0) {
+      const key = scheduleKey(previewSectionIds);
+      const kept = batchKeys.has(key) || bookmarks.has(key) || savedSchedules.some((s) => scheduleKey(s.selectedSectionIds || []) === key);
+      if (!kept && !window.confirm('Leave without saving? This schedule will be lost.')) return;
+    }
+    handlePreviewBookmark(sectionIds);
   }
 
   // Manual header: bookmark / save the placed sections.
@@ -1275,6 +1308,120 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     const first = generated?.schedules?.[0];
     setPreviewIndex(first ? 0 : null);
     setPreviewSectionIds(first || []);
+  }
+
+  // A finished swap (the displace queue is empty or a plain swap ended): the
+  // swapped schedule is held on screen, not in the generated batch, so the
+  // "Swap done" bar offers to keep it. Derived, no flag of its own.
+  const swapDone = previewHold === 'swap' && !sectionSwapSlot && !displaceFlow
+    && previewIndex === null && previewSectionIds.length > 0;
+  const swapDoneKey = swapDone ? scheduleKey(previewSectionIds) : null;
+  // The on-screen bookmark's chip number (0 when it isn't a bookmark), for the hold line.
+  const holdBookmarkN = previewHold === 'bookmark' ? bookmarkList.findIndex((b) => b.key === scheduleKey(previewSectionIds)) + 1 : 0;
+  // The bookmark on screen while the stepper is hidden (a bookmark hold or a finished
+  // swap), so the header can offer to remove it.
+  const heldBookmark = (previewHold === 'bookmark' || swapDone) && previewIndex === null && scheduleMode === 'auto' && previewSectionIds.length > 0
+    ? bookmarkList.find((b) => b.key === scheduleKey(previewSectionIds))
+    : null;
+  // A bookmark hold that isn't one of the results: the stepper row stays, held (see ScheduleStepper).
+  const bookmarkSlot = previewHold === 'bookmark' && previewIndex === null && scheduleMode === 'auto'
+    && !sectionSwapSlot && !displaceFlow && Boolean(generated && generated.schedules.length > 0);
+  const holdControls = (
+    <>
+    {previewHold === 'bookmark' && previewIndex === null && scheduleMode === 'auto' && !sectionSwapSlot && !displaceFlow && (
+      <span
+        className="sched-hold-note"
+        title="This bookmark can't be stepped through here. Changing or narrowing your sections may bring it back."
+      >
+        {holdBookmarkN > 0 ? `Bookmark ${holdBookmarkN} · not in current results` : 'Not in your current results.'}
+      </span>
+    )}
+    {heldBookmark && !sectionSwapSlot && !displaceFlow && (
+      <button
+        type="button"
+        className="sched-remove-bookmark-btn"
+        onClick={() => handleRemoveBookmark(heldBookmark.key)}
+        title="Take this off your bookmarks. The schedule stays on screen."
+      >
+        Remove bookmark
+      </button>
+    )}
+    {previewHold && (scheduleMode === 'auto' || previewHold === 'foreign') && !sectionSwapSlot && !displaceFlow && !swapDone && (
+      <button
+        type="button"
+        className="sched-update-from-draft-btn"
+        onClick={handleUpdateFromDraft}
+        title={scheduleMode === 'manual' ? 'Back to your manual schedule' : "Back to the schedules from your draft. This one is dropped unless it's saved or bookmarked."}
+      >
+        Back to all schedules
+      </button>
+    )}
+    </>
+  );
+  const renderStepper = (index, held = false) => (
+    <ScheduleStepper
+      generated={generated}
+      previewIndex={index}
+      onJump={handlePreview}
+      isBookmarked={previewSectionIds.length > 0 && bookmarks.has(scheduleKey(previewSectionIds))}
+      // A held bookmark has no batch index, so its toggle goes by content key.
+      onToggleBookmark={held ? handleToggleSwapDoneBookmark : handleToggleBookmark}
+      sectionIds={previewSectionIds}
+      sectionsById={sectionsById}
+      updating={generating}
+      onEditManually={scheduleMode === 'auto' && previewSectionIds.length > 0 ? handleEditManually : undefined}
+      sortValue={scheduleSort}
+      onSortChange={handleScheduleSortChange}
+      held={held}
+      heldLabel={holdBookmarkN > 0 ? `Bookmark ${holdBookmarkN} · not in current results` : 'Not in your current results.'}
+      onBack={handleUpdateFromDraft}
+    />
+  );
+  // Bookmarks that are out of date (course removed or section changed), for "Remove out-of-date".
+  const staleBookmarkKeys = bookmarkList.filter((b) => chipStates[b.key]?.stale).map((b) => b.key);
+
+  function handleRemoveStaleBookmarks() {
+    const gone = new Set(staleBookmarkKeys);
+    setBookmarks((prev) => new Map([...prev].filter(([key]) => !gone.has(key))));
+  }
+  const swapDoneBookmarked = swapDone && bookmarks.has(swapDoneKey);
+  const swapDoneSaved = swapDone && savedSchedules.some((s) => scheduleKey(s.selectedSectionIds || []) === swapDoneKey);
+
+  // The Swap done bar is sticky, so the weekday header has to stick below it: its
+  // measured height goes into --preview-sticky-top on the panel (the bar wraps at
+  // narrow widths, so it isn't a fixed number).
+  useEffect(() => {
+    const panel = rightPanelRef.current;
+    const bar = swapDone ? panel?.querySelector('.sched-swap-done') : null;
+    if (!panel || !bar) return undefined;
+    const set = () => panel.style.setProperty('--preview-sticky-top', `${bar.offsetHeight}px`);
+    set();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(set) : null;
+    ro?.observe(bar);
+    return () => {
+      ro?.disconnect();
+      panel.style.removeProperty('--preview-sticky-top');
+    };
+  }, [swapDone]);
+
+  function handleToggleSwapDoneBookmark() {
+    const ids = previewSectionIds;
+    const key = scheduleKey(ids);
+    setBookmarks((prev) => {
+      const next = new Map(prev);
+      if (next.has(key)) next.delete(key);
+      else next.set(key, ids);
+      return next;
+    });
+  }
+
+  function handleSaveSwapDone() {
+    handleSaveSchedule(`Schedule ${savedSchedules.filter((s) => scheduleTerm(s) === CURRENT_TERM).length + 1}`, previewSectionIds);
+  }
+
+  function handleBackFromSwapDone() {
+    if (!swapDoneBookmarked && !swapDoneSaved && !window.confirm('Leave without saving? This schedule will be lost.')) return;
+    handleUpdateFromDraft();
   }
 
   // ── Draft handlers ──────────────────────────────────────────────────────────
@@ -1425,6 +1572,11 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const draftRestoredRef = useRef(false);
   const draftCoursesRef = useRef(draftCourses);
   const [pendingRegen, setPendingRegen] = useState(false);
+  // Display only: true from the first render until the draft restore below has finished
+  // (or given up), so the page doesn't flash its empty state before the draft is back.
+  // The loader itself only shows if that takes a moment (see useDelayedBusy).
+  const [restoring, setRestoring] = useState(true);
+  const restoreLoaderVisible = useDelayedBusy(restoring);
   // The stored preview to put back once the batch is regenerated, if all its
   // sections still exist: { ids, index } | null.
   const restoredPreviewRef = useRef(null);
@@ -1434,7 +1586,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   }, [draftCourses]);
 
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading) return undefined;
     const uid = user?.uid ?? null;
     // A guest who just signed in on this page (not a sign-out or account switch).
     const fromGuest = draftOwnerRef.current === null && uid !== null;
@@ -1454,6 +1606,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       setBookmarks(new Map());
       setGlobalTimeFilter(EMPTY_GLOBAL_FILTERS);
       setSectionSortMode('time');
+      setScheduleSort('default');
       setScheduleMode('auto');
       setManualSectionIds([]);
       setGhostGroups(new Set());
@@ -1525,6 +1678,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           setDraftCourses(courses);
           setGlobalTimeFilter(stored.globalTimeFilter);
           setSectionSortMode(stored.sortMode);
+          setScheduleSort(stored.scheduleSort);
           setScheduleMode(stored.scheduleMode);
           setManualSectionIds(stored.manualSectionIds.filter((id) => liveSections[id]));
           if (previewIsLive) restoredPreviewRef.current = { ids: previewIds, index: storedPreview.index };
@@ -1559,9 +1713,17 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
         console.warn('Could not restore the saved scheduler draft:', err);
       }
     }
-    restore();
+    // Never leave the loader up for good: it clears when the restore settles, or after
+    // RESTORE_LOADER_MAX_MS if the network never answers.
+    setRestoring(true);
+    const giveUp = setTimeout(() => { if (!cancelled) setRestoring(false); }, RESTORE_LOADER_MAX_MS);
+    restore().finally(() => {
+      clearTimeout(giveUp);
+      if (!cancelled) setRestoring(false);
+    });
     return () => {
       cancelled = true;
+      clearTimeout(giveUp);
     };
     // Keyed on identity only: fetchSectionsForCourse etc. are re-created each
     // render but only read state through setters here.
@@ -1603,11 +1765,11 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   useEffect(() => {
     if (!draftRestoredRef.current) return;
-    latestDraftRef.current = { draftCourses, globalTimeFilter, sectionSortMode, scheduleMode, manualSectionIds, bookmarks, previewSectionIds, previewIndex };
+    latestDraftRef.current = { draftCourses, globalTimeFilter, sectionSortMode, scheduleMode, scheduleSort, manualSectionIds, bookmarks, previewSectionIds, previewIndex };
     draftDirtyRef.current = true;
     clearTimeout(draftTimerRef.current);
     draftTimerRef.current = setTimeout(flushDraft, 500);
-  }, [draftCourses, globalTimeFilter, sectionSortMode, scheduleMode, manualSectionIds, bookmarks, previewSectionIds, previewIndex, flushDraft]);
+  }, [draftCourses, globalTimeFilter, sectionSortMode, scheduleMode, scheduleSort, manualSectionIds, bookmarks, previewSectionIds, previewIndex, flushDraft]);
 
   useEffect(() => {
     function onVisibilityChange() {
@@ -1655,7 +1817,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // batch updates underneath and "Update from draft" shows instead.
   const genRunRef = useRef(0);
   const liveViewRef = useRef({});
-  liveViewRef.current = { previewSectionIds, previewHold, sectionsById };
+  liveViewRef.current = { previewSectionIds, previewHold, sectionsById, scheduleSort };
   useEffect(() => {
     const run = ++genRunRef.current;
     if (!draftRestoredRef.current || scheduleMode !== 'auto' || sectionSwapSlot) {
@@ -1676,8 +1838,9 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       const byId = liveViewRef.current.sectionsById;
       const slots = buildGenerationSlots(completeCourses, sectionsByCourse, byId);
       const cancelled = () => genRunRef.current !== run;
-      const result = await generateSchedulesAsync(slots, byId, { isCancelled: cancelled });
-      if (!result || cancelled()) return;
+      const raw = await generateSchedulesAsync(slots, byId, { isCancelled: cancelled });
+      if (!raw || cancelled()) return;
+      const result = { ...raw, schedules: sortSchedules(raw.schedules, liveViewRef.current.scheduleSort, byId) };
       if (result.schedules.length === 0 && !result.truncated) {
         // Same rule as diagnoseNoSchedule (one course: it's that course;
         // otherwise a course whose removal lets a schedule through), each
@@ -1724,6 +1887,24 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     }, 300);
     return () => clearTimeout(timer);
   }, [scheduleMode, completeCourses, sectionsByCourse, sectionSwapSlot]);
+
+  // Re-orders the current batch in place (no regenerate, so it also works
+  // while a swap slot has generation paused). No hold: back to Schedule 1.
+  // A hold keeps what's on screen and only re-finds its stepper position.
+  function handleScheduleSortChange(value) {
+    setScheduleSort(value);
+    if (!generated) return;
+    const schedules = sortSchedules(generated.schedules, value, sectionsById);
+    setGenerated({ ...generated, schedules });
+    if (previewHold) {
+      const shownKey = scheduleKey(previewSectionIds);
+      const idx = previewSectionIds.length > 0 ? schedules.findIndex((ids) => scheduleKey(ids) === shownKey) : -1;
+      setPreviewIndex(idx >= 0 ? idx : null);
+    } else if (schedules.length > 0) {
+      setPreviewIndex(0);
+      setPreviewSectionIds(schedules[0]);
+    }
+  }
 
   // Manual mode: the grid shows exactly the placed sections (unless another
   // term's schedule is being looked at).
@@ -2172,14 +2353,25 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   if (authLoading) {
     return (
       <div className="auth-loading">
-        <img
-          className="auth-loading-paw"
-          src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
-          alt="TerrierPlan"
-          width={32}
-          height={32}
+        <PawLoader theme={theme} alt="TerrierPlan" />
+      </div>
+    );
+  }
+
+  // Draft restore still running: hold the page back (header stays) instead of showing an
+  // empty draft first. The loader appears only if the wait is noticeable.
+  if (restoring || restoreLoaderVisible) {
+    return (
+      <div className="planner-layout">
+        <AppHeader
+          active="scheduler"
+          theme={theme}
+          onToggleTheme={onToggleTheme}
+          onOpenHelp={() => setShowHelpModal(true)}
         />
-        <p>Loading…</p>
+        <div className="sched-boot" role="status" aria-busy="true" aria-live="polite">
+          {restoreLoaderVisible && <PawLoader theme={theme} label="Loading your schedule…" />}
+        </div>
       </div>
     );
   }
@@ -2372,18 +2564,20 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           <div className="sched-right-header">
             <h2>{activeSavedId && savedSchedules.find((s) => s.id === activeSavedId)?.name || 'Preview'}</h2>
             {generating && previewIndex == null && <span className="sched-stepper-updating" role="status">Updating…</span>}
-            {previewHold && (scheduleMode === 'auto' || previewHold === 'foreign') && (
-              <button
-                type="button"
-                className="sched-update-from-draft-btn"
-                onClick={handleUpdateFromDraft}
-                title={scheduleMode === 'manual' ? 'Back to your manual schedule' : 'Show the schedules generated from your draft'}
-              >
-                Update from draft
-              </button>
-            )}
+            {!bookmarkSlot && holdControls}
             {previewCreditsLabel && <span className="sched-right-credits">{previewCreditsLabel}</span>}
           </div>
+
+          {swapDone && (
+            <SwapDoneBar
+              isBookmarked={swapDoneBookmarked}
+              isSaved={swapDoneSaved}
+              onToggleBookmark={handleToggleSwapDoneBookmark}
+              onSave={handleSaveSwapDone}
+              onBack={handleBackFromSwapDone}
+              leftOut={incompleteLabels}
+            />
+          )}
 
           {scheduleMode === 'auto' && !previewHold && generated && generated.schedules.length === 0 ? (
             <div className="sched-generated-empty">
@@ -2442,6 +2636,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                   onToggleBookmark={handleToggleManualBookmark}
                   onSave={handleSaveManual}
                   onClear={handleClearManual}
+                  onBackToAuto={() => handleSetMode('auto')}
                 />
               ) : (
                 <>
@@ -2450,18 +2645,18 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                     Flip through your options here. Bookmark the ones you like.
                   </OneTimeHint>
                 )}
-                <ScheduleStepper
-                  generated={generated}
-                  previewIndex={previewIndex}
-                  onJump={handlePreview}
-                  bookmarkedIndices={bookmarkedIndices}
-                  onToggleBookmark={handleToggleBookmark}
-                  sectionIds={previewSectionIds}
-                  sectionsById={sectionsById}
-                  updating={generating}
-                  onEditManually={scheduleMode === 'auto' && previewSectionIds.length > 0 ? handleEditManually : undefined}
-                />
+                {renderStepper(previewIndex, bookmarkSlot)}
                 </>
+              )}
+              {bookmarkList.length > 0 && (
+                <BookmarkChipStrip
+                  bookmarks={bookmarkList}
+                  states={chipStates}
+                  sectionsById={sectionsById}
+                  courseMap={courseMap}
+                  activeKey={previewSectionIds.length > 0 ? scheduleKey(previewSectionIds) : null}
+                  onPreview={scheduleMode === 'manual' ? handlePreviewBookmarkManual : handlePreviewBookmarkAuto}
+                />
               )}
               {scheduleMode === 'auto' && previewHold !== 'foreign' && (
                 <IncompleteBanner info={incompleteInfo} onFocusGroup={handleFocusGroup} />
@@ -2486,6 +2681,8 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
                 </OneTimeHint>
               )}
               <WeeklyGrid
+                loading={generating && previewSectionIds.length === 0}
+                theme={theme}
                 sectionIds={previewSectionIds}
                 sectionsById={sectionsById}
                 courseMap={courseMap}
@@ -2532,6 +2729,9 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             onPromote={handlePromoteBookmark}
             onRemove={handleRemoveBookmark}
             onClearAll={handleClearBookmarks}
+            staleCount={staleBookmarkKeys.length}
+            onRemoveStale={handleRemoveStaleBookmarks}
+            collapsible={scheduleMode === 'auto'}
           />
 
           <SavedSchedulesPanel

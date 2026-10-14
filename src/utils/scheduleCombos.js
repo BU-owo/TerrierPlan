@@ -1,4 +1,4 @@
-import { sectionsConflict, classMeetings, describeSectionTime } from './sectionTime.js';
+import { sectionsConflict, classMeetings, describeSectionTime, formatClock, formatClockRange } from './sectionTime.js';
 import { classifyComponent, groupSectionsByComponent, UNKNOWN_KEY } from './sectionComponents.js';
 import { describeSectionName } from './sectionType.js';
 
@@ -131,6 +131,136 @@ function compareIdTuples(a, b) {
     if (a[k] !== b[k]) return a[k] < b[k] ? -1 : 1;
   }
   return 0;
+}
+
+// How the generated batch can be ordered (the stepper's sort dropdown).
+// 'default' is the batch's own id-tuple order.
+export const SCHEDULE_SORT_OPTIONS = [
+  { value: 'default', label: 'Section order' },
+  { value: 'latestFirstStart', label: 'Latest start (no early classes)' },
+  { value: 'earliestLastEnd', label: 'Earliest end (done early)' },
+  { value: 'fewestDays', label: 'Fewest days (more days off)' },
+  { value: 'leastGap', label: 'Shortest gaps (no big breaks)' },
+];
+
+// { firstStart, lastEnd, avgStart, avgFinish, days, gap } (minutes; days is a
+// count) from the class meetings of a set of section ids, or null when none
+// of them has a timed class (exam meetings and no-meeting sections don't
+// count). A meeting counts on each of its days. firstStart / lastEnd are the
+// earliest start and latest end across the whole week. Per weekday: first
+// start, last end, and gap = the sum of max(0, nextStart - latestEndSoFar) in
+// start order, so overlapping meetings never create a false gap; avgStart /
+// avgFinish are the means of the per-day first starts / last ends.
+export function scheduleStats(sectionIds, sectionsById) {
+  const byDay = {};
+  for (const id of sectionIds) {
+    for (const m of classMeetings(sectionsById[id])) {
+      for (const day of m.days) (byDay[day] ??= []).push(m);
+    }
+  }
+  const days = Object.values(byDay);
+  if (days.length === 0) return null;
+  let startSum = 0;
+  let finishSum = 0;
+  let firstStart = Infinity;
+  let lastEnd = -Infinity;
+  let gap = 0;
+  for (const meetings of days) {
+    meetings.sort((a, b) => a.startMin - b.startMin);
+    let latestEnd = meetings[0].endMin;
+    startSum += meetings[0].startMin;
+    firstStart = Math.min(firstStart, meetings[0].startMin);
+    for (let i = 1; i < meetings.length; i++) {
+      gap += Math.max(0, meetings[i].startMin - latestEnd);
+      latestEnd = Math.max(latestEnd, meetings[i].endMin);
+    }
+    finishSum += latestEnd;
+    lastEnd = Math.max(lastEnd, latestEnd);
+  }
+  return { firstStart, lastEnd, avgStart: startSum / days.length, avgFinish: finishSum / days.length, days: days.length, gap };
+}
+
+// "4 days · 10:10am–4:15pm" for a bookmark row, from scheduleStats (class
+// meetings only), or '' when none of the sections has a timed class.
+export function scheduleSummary(sectionIds, sectionsById) {
+  const stats = scheduleStats(sectionIds, sectionsById);
+  if (!stats) return '';
+  return `${stats.days} day${stats.days === 1 ? '' : 's'} · ${formatClock(stats.firstStart)}–${formatClock(stats.lastEnd)}`;
+}
+
+// "3 · 5d · 8:00–9:30pm" for a bookmark chip, n being its position in the strip
+// (the compact form of scheduleSummary; am/pm is dropped from the start when it
+// matches the end), or "3 · No times" when none of the sections has a timed class.
+export function scheduleChipLabel(sectionIds, sectionsById, n) {
+  const stats = scheduleStats(sectionIds, sectionsById);
+  const rest = stats ? `${stats.days}d · ${formatClockRange(stats.firstStart, stats.lastEnd)}` : 'No times';
+  return n == null ? rest : `${n} · ${rest}`;
+}
+
+// Each mode's sort key: numbers compared in order, smallest first (so a
+// descending one is negated). The first is the primary, the rest tie-breaks.
+const SORT_KEYS = {
+  latestFirstStart: (s) => [-s.firstStart, -s.avgStart],
+  earliestLastEnd: (s) => [s.lastEnd, s.avgFinish],
+  fewestDays: (s) => [s.days],
+  leastGap: (s) => [s.gap],
+};
+
+function compareKeys(a, b) {
+  for (let k = 0; k < a.length; k++) {
+    if (a[k] !== b[k]) return a[k] - b[k];
+  }
+  return 0;
+}
+
+// A new array of `schedules` ordered by `mode` (see SCHEDULE_SORT_OPTIONS).
+// Schedules with no timed classes go last in every mode, and ties (and the
+// 'default' mode, or an unknown one) fall back to the id-tuple order, so the
+// result only depends on the set of schedules, not on their incoming order.
+export function sortSchedules(schedules, mode, sectionsById) {
+  const keyOf = SORT_KEYS[mode];
+  if (!keyOf) return [...schedules].sort(compareIdTuples);
+  const decorated = schedules.map((ids) => {
+    const stats = scheduleStats(ids, sectionsById);
+    return { ids, key: stats ? keyOf(stats) : null };
+  });
+  decorated.sort((a, b) => {
+    if (a.key === null || b.key === null) {
+      if (a.key === b.key) return compareIdTuples(a.ids, b.ids);
+      return a.key === null ? 1 : -1;
+    }
+    return compareKeys(a.key, b.key) || compareIdTuples(a.ids, b.ids);
+  });
+  return decorated.map((d) => d.ids);
+}
+
+// Where "Prev bookmark" / "Next bookmark" go from the schedule on screen.
+// `keys` are the bookmarks' keys in chip order. n is the on-screen schedule's
+// 1-based chip number, or 0 when it isn't bookmarked; then Next goes to the first
+// bookmark and Prev to the last. Null means there's nowhere to go (no wrapping).
+export function bookmarkStep(keys, currentKey) {
+  const i = keys.indexOf(currentKey);
+  if (keys.length === 0) return { n: 0, prevKey: null, nextKey: null };
+  if (i === -1) return { n: 0, prevKey: keys[keys.length - 1], nextKey: keys[0] };
+  return { n: i + 1, prevKey: i > 0 ? keys[i - 1] : null, nextKey: i < keys.length - 1 ? keys[i + 1] : null };
+}
+
+// What state each bookmark chip is in, by key: { inBatch, stale, staleReason }.
+// inBatch: its content key is in `batchKeys` (a Set of scheduleKey for the current
+// results; null means "don't care" and counts as in). stale: a section is gone from
+// `sectionsById` or cancelled ("section changed"), or its course is no longer in
+// the draft ("course removed"). A stale or out-of-results bookmark still previews.
+// `bookmarks` is [{ key, sectionIds }].
+export function bookmarkChipStates(bookmarks, batchKeys, sectionsById, draftCourseKeys) {
+  const states = {};
+  for (const { key, sectionIds } of bookmarks) {
+    const sections = sectionIds.map((id) => sectionsById[id]);
+    let staleReason = null;
+    if (sections.some((s) => !s || s.classStat === 'Cancelled')) staleReason = 'section changed';
+    else if (sections.some((s) => !draftCourseKeys.has(s.courseKey))) staleReason = 'course removed';
+    states[key] = { inBatch: batchKeys ? batchKeys.has(key) : true, stale: staleReason !== null, staleReason };
+  }
+  return states;
 }
 
 // Minutes two sections overlap in a week, summed over every pair of their

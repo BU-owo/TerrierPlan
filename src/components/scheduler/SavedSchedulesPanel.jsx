@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CURRENT_TERM, CURRENT_TERM_LABEL, scheduleTerm, termLabel } from '../../utils/term';
 import { describeSectionSet, scheduleKey, overlapSummary } from '../../utils/scheduleCombos';
 import GuestSignInButton from '../GuestSignInButton';
@@ -61,6 +61,21 @@ export default function SavedSchedulesPanel({
   );
   const justSaved = alreadySaved && justSavedKey === previewKey;
   const saveBlocked = !canSave || alreadySaved || saving;
+
+  // The save form is tucked behind a toggle: collapsed by default, collapsed
+  // again once the save goes through, and held open while there's an error to read.
+  const [formOpen, setFormOpen] = useState(false);
+  useEffect(() => {
+    if (justSaved) setFormOpen(false);
+  }, [justSaved]);
+  const formShown = formOpen || Boolean(actionError);
+  const toggleLabel = !canSave
+    ? 'Preview a schedule to save it'
+    : justSaved
+      ? 'Saved ✓'
+      : alreadySaved
+        ? 'Already saved'
+        : `Save this schedule${creditsLabel ? ` · ${creditsLabel}` : ''}`;
 
   async function handleSave(e) {
     e.preventDefault();
@@ -203,6 +218,18 @@ export default function SavedSchedulesPanel({
       {/* Naming is part of the save flow: the optional name goes above the
           Save button (blank falls back to "Schedule N" in handleSave). */}
       <div className="sched-save-section">
+        <button
+          type="button"
+          className="sched-save-toggle"
+          aria-expanded={formShown}
+          aria-controls="sched-save-region"
+          onClick={() => setFormOpen((o) => !o)}
+          disabled={!canSave && !actionError}
+        >
+          <span>{toggleLabel}</span>
+        </button>
+        {formShown && (
+          <div id="sched-save-region" className="sched-save-region">
         <div className="sched-save-heading">Save the schedule you’re previewing as a contender</div>
         <form className="sched-save-form" onSubmit={handleSave}>
           <input
@@ -229,6 +256,8 @@ export default function SavedSchedulesPanel({
             <button type="button" className="sched-saved-error-dismiss" onClick={onDismissError} aria-label="Dismiss">
               ×
             </button>
+          </div>
+        )}
           </div>
         )}
       </div>

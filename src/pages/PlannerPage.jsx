@@ -42,6 +42,7 @@ import OneTimeHint from '../components/OneTimeHint';
 import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
 import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
 import CourseInfoPanel from '../components/planner/CourseInfoPanel';
+import PawLoader from '../components/PawLoader';
 import AppHeader from '../components/AppHeader';
 import GuestSignInButton from '../components/GuestSignInButton';
 import HelpSupportModal from '../components/HelpSupportModal';
@@ -2379,14 +2380,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   if (authLoading) {
     return (
       <div className="auth-loading">
-        <img
-          className="auth-loading-paw"
-          src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
-          alt="TerrierPlan"
-          width={32}
-          height={32}
-        />
-        <p>Loading…</p>
+        <PawLoader theme={theme} alt="TerrierPlan" />
       </div>
     );
   }
@@ -2502,14 +2496,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                 </div>
               ) : (
                 <div className="planner-plans-status" role="status" aria-live="polite">
-                  <img
-                    className="auth-loading-paw"
-                    src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
-                    alt=""
-                    width={32}
-                    height={32}
-                  />
-                  <p>Loading your plans…</p>
+                  <PawLoader theme={theme} label="Loading your plans…" />
                 </div>
               )
             ) : (

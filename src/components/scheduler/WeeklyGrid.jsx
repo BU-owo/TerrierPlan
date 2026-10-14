@@ -18,8 +18,10 @@ import { SCHED_COLOR_COUNT, resolvedCourseColorIndex } from '../../utils/schedul
 import PinIcon from './PinIcon';
 import SwapIcon from './SwapIcon';
 import OverlapPopover from './OverlapPopover';
+import PawLoader from '../PawLoader';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
 
-const PX_PER_MIN = 1.6;
+const PX_PER_MIN = 1.3;
 const DEFAULT_START = 8 * 60; // 8:00am — only used as the empty-schedule fallback range
 const DEFAULT_END = 18 * 60; // 6:00pm
 const RANGE_PAD_MIN = 30; // small buffer above the earliest and below the latest class
@@ -314,6 +316,10 @@ function slotsUsedByOthers(courseKey, courseColors, courseMap) {
 // below — no separate ghost for it). This is a client-side view state
 // owned by SchedulerPage, not persisted anywhere.
 export default function WeeklyGrid({
+  // Generation is running and there's nothing to draw yet: a small loader in the empty
+  // state (only if it lasts), instead of the "check sections" message.
+  loading = false,
+  theme = 'light',
   sectionIds,
   sectionsById,
   courseMap,
@@ -365,6 +371,7 @@ export default function WeeklyGrid({
   hasOtherSections = () => true,
 }) {
   const [openColorFor, setOpenColorFor] = useState(null); // courseKey, or null
+  const [keyOpen, setKeyOpen] = useState(false); // the pin/ghost/exclude key under the legend
   const manual = mode === 'manual';
   // Manual overlap tools: the section whose overlaps are highlighted (hover or
   // keyboard focus), the open overlap popover, and the blocks currently pulsing.
@@ -372,6 +379,7 @@ export default function WeeklyGrid({
   const [popover, setPopover] = useState(null); // { sectionId, anchorEl }
   const [pulseKeys, setPulseKeys] = useState(() => new Set());
   const rootRef = useRef(null);
+  const showLoader = useDelayedBusy(loading);
   const entriesRef = useRef([]);
   useEffect(() => {
     if (!pulse) return undefined;
@@ -396,6 +404,34 @@ export default function WeeklyGrid({
     };
   }, [pulse]);
 
+  // The displace banner is sticky too, so the weekday header sticks below it: the
+  // banner's measured height goes into --preview-sticky-top on the grid wrapper.
+  const flowBannerRef = useRef(null);
+  const flowBannerOpen = Boolean(swapSlot && displaceInfo);
+  useEffect(() => {
+    const wrap = rootRef.current;
+    const banner = flowBannerRef.current;
+    if (!flowBannerOpen || !wrap || !banner) return undefined;
+    const set = () => wrap.style.setProperty('--preview-sticky-top', `${banner.offsetHeight}px`);
+    set();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(set) : null;
+    ro?.observe(banner);
+    return () => {
+      ro?.disconnect();
+      wrap.style.removeProperty('--preview-sticky-top');
+    };
+  }, [flowBannerOpen]);
+
+  // Mid displace flow, bring the first pickable dashed option into view each
+  // time the slot being filled changes.
+  const flowSlotKey = swapSlot && displaceInfo ? `${swapSlot.courseKey}|${swapSlot.component}|${swapSlot.currentSectionId}` : null;
+  useEffect(() => {
+    if (!flowSlotKey) return;
+    rootRef.current
+      ?.querySelector('.sched-grid-ghost-block[data-ghost-section-id]:not([aria-disabled]):not(.is-current)')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [flowSlotKey]);
+
   const sections = sectionIds.map((id) => sectionsById[id]).filter(Boolean);
   const withMeeting = sections.flatMap((section) => toEntries(section));
   entriesRef.current = withMeeting;
@@ -412,8 +448,12 @@ export default function WeeklyGrid({
 
   if (sections.length === 0 && pending.length === 0 && showAllActive.length === 0) {
     return (
-      <div className="sched-grid-empty">
-        {manual
+      <div className="sched-grid-empty" aria-busy={loading || showLoader || undefined}>
+        {loading || showLoader ? (
+          <div className="sched-grid-loading" role="status" aria-live="polite">
+            {showLoader && <PawLoader theme={theme} label="Building your schedules…" />}
+          </div>
+        ) : manual
           ? 'Click sections on the left to place them here.'
           : 'Check sections for your courses, or load a saved schedule, to preview it here.'}
       </div>
@@ -457,6 +497,24 @@ export default function WeeklyGrid({
     ? toEntries(currentSection, { conflict: false, clashes: [], pinned: [], reasons: [], isCurrent: true })
     : [];
   const ghostCandidates = [...alternativeGhosts, ...currentEntries];
+  // The same candidates as the banner's option buttons: one per section (not
+  // per day block), including ones with no meeting time that the grid can't draw.
+  const bannerOptions = swapSlot && displaceInfo
+    ? swapCandidates
+        .filter((s) => s.id !== swapSlot.currentSectionId)
+        .map((section) => {
+          const ghost = alternativeGhosts.find((g) => g.section.id === section.id);
+          const meetings = classMeetings(section);
+          return {
+            section,
+            conflict: Boolean(ghost?.conflict),
+            clashes: ghost?.clashes ?? [],
+            pinned: ghost?.pinned ?? [],
+            reasons: ghost?.reasons ?? swapGhostReasons(section, swapPoolIds, globalTimeFilter),
+            when: meetings.length > 0 ? meetings.map(describeMeetingShort).join(', ') : 'TBA',
+          };
+        })
+    : [];
   const swapCourseCode = swapSlot ? (courseMap[swapSlot.courseKey]?.courseNumber ?? swapSlot.courseKey) : '';
   const swapComponentLabel = swapSlot
     ? (swapCandidates[0]?.componentLabel || swapSlot.component)
@@ -578,6 +636,11 @@ export default function WeeklyGrid({
 
   return (
     <div ref={rootRef} className={`sched-grid-wrap${swapSlot && displaceInfo ? ' is-displacing' : ''}`}>
+      {incompleteLabels.length > 0 && (
+        <div className="sched-grid-incomplete" role="note">
+          Incomplete — left out: {incompleteLabels.join(', ')}
+        </div>
+      )}
       {manual && resolving && swapSlot && (
         <div className="sched-resolve-bar" role="status">
           <span>Resolving: {resolving.text}</span>
@@ -591,9 +654,34 @@ export default function WeeklyGrid({
           SectionSwapSheet takes over instead (a cramped, narrow grid is no
           place to render several overlapping translucent blocks). */}
       {swapSlot && displaceInfo && (
-        <div className="sched-swap-banner is-flow" role="status">
+        <div className="sched-swap-banner is-flow" role="status" ref={flowBannerRef}>
           <div className="sched-swap-flow-step">{displaceInfo.lines[0]}</div>
           <div className="sched-swap-flow-todo">{displaceInfo.lines[1]}</div>
+          {bannerOptions.length > 0 && (
+            <div className="sched-swap-flow-options" role="group" aria-label="Options">
+              {bannerOptions.map(({ section, conflict, clashes, pinned, reasons, when }) => {
+                const blocked = pinned.length > 0;
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    className={`sched-swap-flow-opt${conflict ? ' has-conflict' : ''}`}
+                    disabled={blocked}
+                    onClick={() => onSelectSwapSection(section.id)}
+                    title={[
+                      blocked
+                        ? `Can't place — conflicts with pinned ${pinned.join(', ')}`
+                        : conflict ? `Swap in — replaces ${clashes.join(', ')}` : '',
+                      ...(reasons.length > 0 ? [reasons.map((r) => r.text).join(' · ')] : []),
+                    ].filter(Boolean).join('\n') || undefined}
+                  >
+                    {section.classSection} · {when}
+                    {conflict && <span className="sched-grid-ghost-chip is-conflict">conflict</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div className="sched-swap-flow-actions">
             {displaceInfo.noOptions && (
               <button type="button" className="sched-swap-flow-btn is-primary" onClick={onContinueDisplace}>
@@ -650,6 +738,17 @@ export default function WeeklyGrid({
             )}
           </div>
         ))}
+        {legendCourses.length > 0 && (
+          <button
+            type="button"
+            className="sched-key-toggle"
+            onClick={() => setKeyOpen((o) => !o)}
+            aria-expanded={keyOpen}
+            aria-controls="sched-block-key-list"
+          >
+            Key
+          </button>
+        )}
         {showAllActive.length > 0 && (
           <button type="button" className="sched-clear-ghosts-btn" onClick={onClearGhosts}>
             Clear ghosts
@@ -659,8 +758,8 @@ export default function WeeklyGrid({
       {/* Always-visible key for the block action buttons below — the title
           tooltips are hover-only, so they never reach touch users. Reuses
           the same glyphs so the key can't drift from the buttons. */}
-      {legendCourses.length > 0 && manual && (
-        <ul className="sched-block-key">
+      {keyOpen && legendCourses.length > 0 && manual && (
+        <ul className="sched-block-key" id="sched-block-key-list">
           <li className="sched-block-key-item">
             <span className="sched-block-key-icon" aria-hidden="true"><SwapIcon /></span>
             Ghost: see other times for this class
@@ -671,8 +770,8 @@ export default function WeeklyGrid({
           </li>
         </ul>
       )}
-      {legendCourses.length > 0 && !manual && (
-        <ul className="sched-block-key">
+      {keyOpen && legendCourses.length > 0 && !manual && (
+        <ul className="sched-block-key" id="sched-block-key-list">
           <li className="sched-block-key-item">
             <span className="sched-block-key-icon" aria-hidden="true"><PinIcon /></span>
             Pin: keep this section in every schedule
@@ -989,6 +1088,8 @@ export default function WeeklyGrid({
                 return (
                   <div
                     key={`ghost-${section.id}-${day}-${mi}`}
+                    data-ghost-section-id={section.id}
+                    data-ghost-day={day}
                     role="button"
                     tabIndex={0}
                     aria-disabled={blocked || undefined}
@@ -1112,11 +1213,6 @@ export default function WeeklyGrid({
           onRemove={handleRemoveFromPopover}
           onClose={() => setPopover(null)}
         />
-      )}
-      {incompleteLabels.length > 0 && (
-        <div className="sched-grid-incomplete" role="note">
-          Incomplete — left out: {incompleteLabels.join(', ')}
-        </div>
       )}
       {withoutMeeting.length > 0 && (
         <div className="sched-grid-no-meeting">

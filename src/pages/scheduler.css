@@ -933,6 +933,38 @@ html[data-theme='dark'] {
   font-weight: 600;
   white-space: nowrap;
 }
+.sched-hold-note {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.sched-hold-note + .sched-update-from-draft-btn { margin-left: 8px; }
+/* Held stepper row: the status text stacks over an invisible copy of the normal text. */
+.sched-stepper-count-stack { display: grid; }
+.sched-stepper-count-stack > * { grid-area: 1 / 1; }
+.sched-stepper-count-ghost { visibility: hidden; font-weight: 400; }
+.sched-stepper-sort select:disabled { opacity: .45; cursor: not-allowed; }
+/* "Remove bookmark" sits beside the Back button; same pill look. */
+.sched-remove-bookmark-btn {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sched-remove-bookmark-btn:hover { border-color: var(--text-muted); color: var(--text); }
+.sched-remove-bookmark-btn:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.sched-hold-note + .sched-remove-bookmark-btn,
+.sched-remove-bookmark-btn + .sched-update-from-draft-btn { margin-left: 8px; }
 .sched-update-from-draft-btn:hover { border-color: var(--scarlet); color: var(--scarlet); }
 
 /* "Clear ghosts", at the end of the grid's color legend row. */
@@ -985,12 +1017,6 @@ button.sched-overlap-step-btn:hover { filter: brightness(.95); }
   flex-direction: column;
   gap: 6px;
 }
-.sched-stepper.is-bookmarked-mode {
-  padding: 8px;
-  margin: -8px -8px 0;
-  border-radius: var(--radius-md);
-  background: var(--badge-warm-bg);
-}
 .sched-stepper-top {
   display: flex;
   align-items: center;
@@ -998,42 +1024,113 @@ button.sched-overlap-step-btn:hover { filter: brightness(.95); }
   flex-wrap: wrap;
   gap: 6px 10px;
 }
+/* Sort: label + select. The select is styled like the stepper's buttons
+   (same border, radius, font size, padding); only the label is muted. The
+   chevron is a bordered corner so it follows the text color in dark mode too. */
+.sched-stepper-sort {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.sched-stepper-sort label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.sched-stepper-sort-select {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+.sched-stepper-sort-select::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid var(--text-muted);
+  border-bottom: 1.5px solid var(--text-muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+.sched-stepper-sort select {
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  padding: 5px 24px 5px 9px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+.sched-stepper-sort select:hover { border-color: var(--scarlet); color: var(--scarlet); }
+.sched-stepper-sort select:focus { outline: none; }
+.sched-stepper-sort select:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.sched-stepper-note {
+  margin: 4px 0 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--badge-cool-text);
+  background: var(--badge-cool-bg);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.sched-swap-done {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--success-surface);
+  border: 1px solid var(--success-strong);
+  border-left: 6px solid var(--success-strong);
+  box-shadow: var(--shadow-sm);
+}
+.sched-swap-done .sched-stepper-count { font-weight: 700; }
+/* The stepper's flag button is muted by default; here it sits beside Save, so it uses the normal text color. */
+.sched-swap-done .sched-flag-btn:not(.is-flagged) { color: var(--text); }
+.sched-swap-done-note { font-weight: 400; color: var(--text); }
+.sched-swap-done-left-out {
+  flex: 1 1 100%;
+  margin-top: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--warning-border);
+  background: var(--warning-surface);
+  color: var(--warning-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
 .sched-stepper-count { font-size: 12.5px; font-weight: 600; color: var(--text); }
 .sched-stepper-truncated { font-weight: 400; color: var(--warning-text); }
 
-/* All / Bookmarked (N) — an explicit mode switch rather than a second nav
-   row, so which universe Prev/Next/First/Last is stepping through is never
-   ambiguous while flipping through a shortlist. */
-.sched-stepper-mode-toggle {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: var(--radius-sm);
-  background: var(--cream);
-  flex-shrink: 0;
-}
-.sched-stepper-mode-toggle button {
-  padding: 4px 9px;
-  border-radius: calc(var(--radius-sm) - 2px);
-  border: none;
-  background: none;
-  color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.sched-stepper-mode-toggle button.is-active {
-  background: var(--white);
-  color: var(--badge-warm-text);
-  box-shadow: var(--shadow-sm);
-}
-
 .sched-stepper-controls {
   display: flex;
-  gap: 4px;
+  gap: 6px 16px;
   flex-shrink: 0;
   flex-wrap: wrap;
+  justify-content: flex-start;
 }
+/* Stepper row: navigation first, then actions, left-aligned. The wider gap between
+   the groups is the divider; at narrow widths the actions wrap under the navigation. */
+.sched-stepper-controls-group { display: flex; flex-wrap: wrap; gap: 4px; }
+.sched-stepper-controls-group.is-nav { flex-wrap: nowrap; }
 .sched-stepper-controls button {
   padding: 5px 9px;
   border-radius: var(--radius-sm);
@@ -1055,7 +1152,6 @@ button.sched-overlap-step-btn:hover { filter: brightness(.95); }
   align-items: center;
   gap: 5px;
   color: var(--text-muted);
-  margin-left: auto;
 }
 .sched-stepper-controls .sched-flag-btn:hover { border-color: var(--badge-warm-text); color: var(--badge-warm-text); }
 .sched-stepper-controls .sched-flag-btn.is-flagged {
@@ -1069,7 +1165,8 @@ button.sched-overlap-step-btn:hover { filter: brightness(.95); }
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
 }
 .sched-right-header h2 { font-size: 13px; font-weight: 700; color: var(--text); }
 .sched-right-credits { font-size: 12px; color: var(--text-muted); font-weight: 600; }
@@ -1160,6 +1257,21 @@ button.sched-overlap-step-btn:hover { filter: brightness(.95); }
 }
 .sched-block-key-icon-x { font-size: 12px; }
 .sched-block-key-mobile { display: none; }
+/* "Key" opens the list above; it sits at the end of the colour legend row. */
+.sched-key-toggle {
+  margin-left: auto;
+  padding: 1px 9px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.sched-key-toggle:hover { border-color: var(--scarlet); color: var(--scarlet); }
+.sched-key-toggle[aria-expanded="true"] { border-color: var(--text-secondary); color: var(--text); }
+.sched-key-toggle:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.sched-key-toggle + .sched-clear-ghosts-btn { margin-left: 8px; }
 .sched-color-popover {
   position: absolute;
   top: calc(100% + 6px);
@@ -1219,6 +1331,14 @@ button.sched-overlap-step-btn:hover { filter: brightness(.95); }
 
 .sched-grid-header {
   display: flex;
+  /* The panel is the one scroll container, so the day names stay in view
+     while it scrolls. */
+  position: sticky;
+  /* Sits directly under a sticky bar above it (the Swap done bar or the displace
+     banner), whose height is measured into --preview-sticky-top; 0 otherwise. */
+  top: var(--preview-sticky-top, 0px);
+  z-index: 3;
+  background: var(--white);
 }
 .sched-grid-time-gutter { width: 44px; flex-shrink: 0; }
 .sched-grid-day-label {
@@ -1239,8 +1359,6 @@ button.sched-overlap-step-btn:hover { filter: brightness(.95); }
 .sched-grid-body {
   position: relative;
   display: flex;
-  max-height: 74vh;
-  overflow-y: auto;
 }
 .sched-grid-time-gutter { position: relative; }
 .sched-grid-hour-label {
@@ -1604,7 +1722,7 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
 }
 
 .sched-grid-incomplete {
-  margin-top: 10px;
+  margin-bottom: 10px;
   padding: 6px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--warning-border);
@@ -1666,7 +1784,52 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
   cursor: pointer;
 }
 .sched-swap-flow-btn:hover { border-color: var(--badge-cool-text); }
+/* The options as buttons, one per section: the same picks as the dashed ghosts. */
+.sched-swap-flow-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  max-height: 96px;
+  overflow-y: auto;
+}
+.sched-swap-flow-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1.5px dashed var(--badge-cool-text);
+  background: var(--white);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  max-width: 100%;
+}
+.sched-swap-flow-opt:hover:not(:disabled) { border-style: solid; }
+.sched-swap-flow-opt:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.sched-swap-flow-opt:disabled { opacity: .5; cursor: not-allowed; }
+.sched-swap-flow-opt.has-conflict { border-left: 3px solid var(--warning-border); }
 .sched-swap-flow-btn.is-primary { background: var(--badge-cool-text); color: var(--badge-cool-bg); border-color: var(--badge-cool-text); }
+/* Mid flow the dashed options read as clickable: a thicker dashed border and a
+   small "pick one" cue (only where the ghost is big enough to hold it). */
+.sched-grid-wrap.is-displacing .sched-grid-ghost-block { border-width: 2px; }
+.sched-grid-wrap.is-displacing .sched-grid-ghost-block:not(.is-blocked):hover { border-style: solid; }
+.sched-grid-wrap.is-displacing .sched-grid-ghost-block:not(.is-blocked)::after {
+  content: 'pick one';
+  display: none;
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+@container sched-lane (min-width: 52px) and (min-height: 48px) {
+  .sched-grid-wrap.is-displacing .sched-grid-ghost-block:not(.is-blocked)::after { display: block; }
+}
 /* Mid flow the rest of the schedule steps back: real blocks are dimmed a
    little (still readable), can't be clicked, and hide their small buttons, so
    the dashed options for the class being replaced stand out. The block that
@@ -2211,6 +2374,119 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
   flex-direction: column;
   gap: 8px;
 }
+.sched-bookmarks-region { display: flex; flex-direction: column; gap: 8px; }
+/* Bookmark chips: one row that scrolls sideways inside itself only. When it
+   overflows, a soft fade (the panel's own background) and ‹ › buttons mark the
+   clipped edge(s). The scrollbar is hidden; swipe, shift+wheel and the buttons scroll it. */
+.sched-bookmark-strip-wrap {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+.sched-bookmark-strip-wrap::before,
+.sched-bookmark-strip-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 44px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+}
+.sched-bookmark-strip-wrap::before { left: 0; background: linear-gradient(to right, var(--white) 35%, transparent); }
+.sched-bookmark-strip-wrap::after { right: 0; background: linear-gradient(to left, var(--white) 35%, transparent); }
+.sched-bookmark-strip-wrap.has-left::before,
+.sched-bookmark-strip-wrap.has-right::after { opacity: 1; }
+.sched-bookmark-strip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 2px 0 4px;
+  scrollbar-width: none;
+}
+.sched-bookmark-strip::-webkit-scrollbar { display: none; }
+.sched-bookmark-strip-arrow {
+  position: absolute;
+  top: 2px;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0 2px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: var(--shadow-sm);
+}
+.sched-bookmark-strip-arrow.is-left { left: 0; }
+.sched-bookmark-strip-arrow.is-right { right: 0; }
+.sched-bookmark-strip-arrow:hover { border-color: var(--text-muted); }
+.sched-bookmark-strip-arrow:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.sched-bookmark-browser { display: flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 100%; }
+.sched-bookmark-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.sched-bookmark-nav-count { font-size: 12px; font-weight: 600; color: var(--text); }
+.sched-bookmark-nav-btn {
+  min-height: 32px;
+  padding: 0 10px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sched-bookmark-nav-btn:hover:not(:disabled) { color: var(--text); text-decoration: underline; }
+.sched-bookmark-nav-btn:disabled { opacity: .4; cursor: default; }
+.sched-bookmark-nav-btn:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.sched-bookmark-strip-icon {
+  flex-shrink: 0;
+  display: flex;
+  color: var(--text-secondary);
+}
+.sched-bookmark-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sched-bookmark-chip-tag {
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.sched-bookmark-chip:hover { border-color: var(--text-muted); }
+.sched-bookmark-chip.is-active {
+  border-color: var(--badge-cool-text);
+  background: var(--badge-cool-bg);
+  color: var(--badge-cool-text);
+}
+.sched-bookmark-chip:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 .sched-bookmarks-header {
   display: flex;
   align-items: center;
@@ -2230,10 +2506,11 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
   font-weight: 700;
   color: var(--badge-warm-text);
 }
+.sched-bookmarks-actions { display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .sched-bookmarks-clear-btn {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   border: none;
   background: none;
   padding: 2px 4px;
@@ -2265,6 +2542,26 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
   font-size: 12px;
   font-weight: 600;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Course list, then the time summary: side by side when there's room, else the
+   summary wraps under it. Each truncates on its own, so neither can push the
+   credits, Save schedule or × out of the row. */
+.sched-bookmark-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+}
+.sched-bookmark-row-text .sched-bookmark-row-summary { max-width: 100%; }
+.sched-bookmark-row-meta {
+  max-width: 100%;
+  font-size: 11px;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2307,6 +2604,37 @@ button.sched-grid-block-chip.is-overlap:focus-visible { filter: brightness(.95);
   gap: 8px;
 }
 .sched-save-section { display: flex; flex-direction: column; gap: 6px; }
+.sched-save-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+}
+.sched-save-toggle span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Chevron: a bordered corner, so it follows the text color in dark mode. */
+.sched-save-toggle::after {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--text-muted);
+  border-bottom: 1.5px solid var(--text-muted);
+  transform: translateY(-2px) rotate(45deg);
+}
+.sched-save-toggle[aria-expanded="true"]::after { transform: translateY(1px) rotate(-135deg); }
+.sched-save-toggle:hover:not(:disabled) { border-color: var(--scarlet); }
+.sched-save-toggle:disabled { opacity: .6; cursor: default; }
+.sched-save-toggle:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.sched-save-region { display: flex; flex-direction: column; gap: 6px; }
 .sched-save-heading { font-size: 11.5px; font-weight: 600; color: var(--text-muted); }
 .sched-saved-error {
   display: flex;
@@ -2562,4 +2890,31 @@ html[data-theme='dark'] .sched-global-filter-label { color: var(--scarlet-text);
 @media (max-width: 860px) {
   .sched-draft-empty-mobile { display: inline; }
   .sched-draft-empty-art { width: 90px; }
+}
+
+/* Loading states: the page while the saved draft comes back, and the empty preview while
+   schedules are being built. Both use the shared paw loader (PawLoader). */
+.sched-boot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 240px;
+  padding: 48px 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+  background: var(--cream);
+}
+.sched-grid-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 120px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
 }

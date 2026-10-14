@@ -8,6 +8,7 @@ import NotFoundPage from './pages/NotFoundPage';
 import GlobalFooter from './components/GlobalFooter';
 import { markAppReady } from './startupErrors';
 import { useState, useEffect } from 'react';
+import PawLoader from './components/PawLoader';
 import './App.css';
 
 const THEME_STORAGE_KEY = 'terrierplan_theme';
@@ -61,14 +62,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="auth-loading">
-        <img
-          className="auth-loading-paw"
-          src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
-          alt="TerrierPlan"
-          width={32}
-          height={32}
-        />
-        <p>Loading…</p>
+        <PawLoader theme={theme} alt="TerrierPlan" />
       </div>
     );
   }
