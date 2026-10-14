@@ -79,6 +79,9 @@ const FEATURES = [
       'Flag candidate schedules as you browse options',
       'Save your favorite schedules for later',
       'Design your schedule with customizable colors',
+      'Easily identify schedules that give you a day off',
+      'Sort your potential schedules by start time or end time',
+      'Hate gaps? Find schedule options that have low gaps!',
     ],
   },
 ];
