@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { normalizeCourseKey, parseCourseKey, compareByCatalogNumber } from '../../utils/courseKey';
 import { loadAllCourses, isProfessionalCareer } from '../../utils/courseQuery';
+import { CURRENT_TERM_LABEL } from '../../utils/term';
 
 // Left panel: add a course to the schedule draft. Same normalization/
 // subject-prefix approach as the Planner's CourseSearch (courseKey.js is
@@ -15,6 +16,8 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, theme = 
   const debounceRef = useRef(null);
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  // In-memory only; "Only available" hides courses with no CURRENT_TERM sections.
+  const [onlyAvailable, setOnlyAvailable] = useState(true);
 
   // Shared catalog cache (courseQuery.js) — resolves from the same promise
   // as the planner's search instead of downloading the catalog again.
@@ -32,6 +35,11 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, theme = 
       cancelled = true;
     };
   }, []);
+
+  // Only gate once the catalog carries `inCurrentTerm` (static file
+  // re-exported); an older cached catalog or the Firestore fallback has none,
+  // and gating then would disable every course.
+  const gateByCurrentTerm = useMemo(() => allCourses.some((c) => c.inCurrentTerm), [allCourses]);
 
   const subjectPrefixes = useMemo(() => {
     const set = new Set();
@@ -72,12 +80,23 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, theme = 
       // Law/Dental/Medical last, before the cut to 20 — same rule as the
       // planner's CourseSearch. Stable sort keeps each group's order.
       matches.sort((a, b) => isProfessionalCareer(a.career) - isProfessionalCareer(b.career));
-      setResults(matches.slice(0, 20));
+      setResults(matches);
       setSearching(false);
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
   }, [query, loaded, allCourses, subjectPrefixes]);
+
+  // Filtered and cut to 20 at render time (not in the search effect) so the
+  // toggle and draft changes don't re-run the debounced search, and hidden
+  // courses don't use up the 20 slots. Draft courses always stay visible.
+  const visibleResults = useMemo(() => {
+    const shown =
+      gateByCurrentTerm && onlyAvailable
+        ? results.filter((c) => c.inCurrentTerm || draftCourseKeys.has(c.id))
+        : results;
+    return shown.slice(0, 20);
+  }, [results, gateByCurrentTerm, onlyAvailable, draftCourseKeys]);
 
   return (
     <div className="search-panel">
@@ -99,12 +118,43 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, theme = 
             spellCheck={false}
           />
         </div>
+        {gateByCurrentTerm && (
+          <div className="search-sem-target">
+            <div
+              className="hub-year-toggle-group"
+              role="group"
+              aria-label="Filter courses by term offering"
+              style={{ flex: 1, marginBottom: 0 }}
+            >
+              <button
+                type="button"
+                className={`hub-year-toggle-btn${onlyAvailable ? ' active' : ''}`}
+                aria-pressed={onlyAvailable}
+                style={{ whiteSpace: 'nowrap' }}
+                onClick={() => setOnlyAvailable(true)}
+                title={`Only courses offered ${CURRENT_TERM_LABEL}`}
+              >
+                {CURRENT_TERM_LABEL}
+              </button>
+              <button
+                type="button"
+                className={`hub-year-toggle-btn${onlyAvailable ? '' : ' active'}`}
+                aria-pressed={!onlyAvailable}
+                style={{ whiteSpace: 'nowrap' }}
+                onClick={() => setOnlyAvailable(false)}
+                title="Show every course, including ones with no sections"
+              >
+                All
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="search-results">
         {searching && <div className="search-loading">Searching…</div>}
 
-        {!searching && query.trim() && results.length === 0 && (
+        {!searching && query.trim() && visibleResults.length === 0 && (
           <div className="search-empty">
             No courses found for &ldquo;{query.trim()}&rdquo;
           </div>
@@ -123,16 +173,24 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, theme = 
           </div>
         )}
 
-        {results.map((course) => {
+        {visibleResults.map((course) => {
           const added = draftCourseKeys.has(course.id);
+          const noCurrentTerm = gateByCurrentTerm && !course.inCurrentTerm;
+          const blocked = added || noCurrentTerm;
           return (
             <button
               type="button"
               key={course.id}
               className={`search-result-card sched-search-result${added ? ' already-added' : ''}`}
-              disabled={added}
+              disabled={blocked}
               onClick={() => onAddCourse(course.id)}
-              title={added ? 'Already in your draft' : 'Add to schedule draft'}
+              title={
+                added
+                  ? 'Already in your draft'
+                  : noCurrentTerm
+                    ? `No ${CURRENT_TERM_LABEL} sections`
+                    : 'Add to schedule draft'
+              }
             >
               <div className="search-result-info">
                 <div className="search-result-code">{course.courseNumber ?? course.id}</div>
@@ -145,6 +203,11 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, theme = 
                     <span className="offering-badge offering-badge-career">{course.career}</span>
                   )}
                 </div>
+                {noCurrentTerm && !added && (
+                  <div className="sched-search-no-term">
+                    <span className="offering-badge offering-badge-neutral">No {CURRENT_TERM_LABEL} sections</span>
+                  </div>
+                )}
               </div>
               <span className="sched-search-add-icon" aria-hidden="true">{added ? '✓' : '+'}</span>
             </button>

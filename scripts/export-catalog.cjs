@@ -17,11 +17,15 @@
 // emitted when one of those seasons isn't already a usual season for the
 // course's offeringPattern (see USUAL_SEASONS), to keep the file small.
 //
+// `inCurrentTerm` is true when the course has at least one non-cancelled
+// section in CURRENT_TERM exactly; omitted otherwise. Same snapshot caveat as
+// upcomingSeasons, and independent of offeringPattern.
+//
 // Usage:
 //   GOOGLE_APPLICATION_CREDENTIALS=/path/outside/repo/key.json node scripts/export-catalog.cjs
 //
 // Output: a compact JSON array, sorted by id, of
-//   { id, courseNumber, name, hubUnits, offeringPattern, career, studyAbroad, credits, upcomingSeasons }
+//   { id, courseNumber, name, hubUnits, offeringPattern, career, studyAbroad, credits, upcomingSeasons, inCurrentTerm }
 // with any field that is undefined/null/empty-array/false omitted.
 
 const { initializeApp, applicationDefault } = require('firebase-admin/app');
@@ -101,14 +105,16 @@ async function loadUpcomingTerms() {
     .select('courseKey', 'term', 'classStat')
     .get();
   const byKey = new Map();
+  const currentKeys = new Set();
   for (const doc of snap.docs) {
     const { courseKey, term, classStat } = doc.data();
     const label = termLabel(String(term ?? ''));
     if (!courseKey || !label || classStat === 'Cancelled') continue;
+    if (String(term) === CURRENT_TERM) currentKeys.add(courseKey);
     if (!byKey.has(courseKey)) byKey.set(courseKey, new Set());
     byKey.get(courseKey).add(label);
   }
-  return { byKey, sectionDocs: snap.size };
+  return { byKey, currentKeys, sectionDocs: snap.size };
 }
 
 function withUpcomingSeasons(entry, upcomingByKey) {
@@ -128,6 +134,7 @@ async function main() {
   const courses = snap.docs
     .map(toEntry)
     .map((entry) => withUpcomingSeasons(entry, upcoming.byKey))
+    .map((entry) => (upcoming.currentKeys.has(entry.id) ? { ...entry, inCurrentTerm: true } : entry))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   const json = JSON.stringify(courses);
@@ -146,6 +153,7 @@ async function main() {
     `upcomingSeasons: ${courses.filter((c) => c.upcomingSeasons).length} courses ` +
       `(from ${upcoming.sectionDocs} sections at or after ${CURRENT_TERM})`,
   );
+  console.log(`inCurrentTerm:   ${courses.filter((c) => c.inCurrentTerm).length} courses`);
 
   const byId = new Map(courses.map((c) => [c.id, c]));
   const studyAbroad = courses.find((c) => c.studyAbroad && c.id.endsWith('E'));

@@ -130,6 +130,7 @@ html[data-theme='dark'] {
   cursor: pointer;
 }
 .sched-search-result:disabled { opacity: .5; cursor: default; }
+.sched-search-no-term { margin-top: 3px; }
 .sched-search-add-icon {
   flex-shrink: 0;
   width: 22px;
