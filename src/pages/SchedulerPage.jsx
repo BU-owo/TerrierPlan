@@ -31,6 +31,7 @@ import SavedSchedulesPanel from '../components/scheduler/SavedSchedulesPanel';
 import IncompleteBanner from '../components/scheduler/IncompleteBanner';
 import { CURRENT_TERM, CURRENT_TERM_LABEL, scheduleTerm, termLabel } from '../utils/term';
 import { sectionsConflict, describeSectionTime, examMeetings } from '../utils/sectionTime';
+import { placedOverlaps, overlapTagText } from '../utils/manualOverlaps';
 import { withMockMeetings } from '../utils/mockMeetings';
 import { describeSectionName } from '../utils/sectionType';
 import { classifyComponent, groupSectionsByComponent } from '../utils/sectionComponents';
@@ -1001,6 +1002,27 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   }, [scheduleMode, manualSectionIds, draftCourses, sectionsByCourse, sectionsById, courseMap, loadingSectionsFor]);
 
   const manualPlacedSet = useMemo(() => new Set(manualSectionIds), [manualSectionIds]);
+  // Manual: section id -> { text, title } for rows that overlap what's placed
+  // in the other groups (the row's own group is left out). Auto never reads it.
+  const manualOverlapTags = useMemo(() => {
+    const tags = {};
+    if (scheduleMode !== 'manual') return tags;
+    const placed = manualSectionIds.map((id) => sectionsById[id]).filter(Boolean);
+    if (placed.length === 0) return tags;
+    const nameOf = (o) => `${courseMap[o.courseKey]?.courseNumber ?? o.courseKey} ${o.componentLabel || classifyComponent(o)}`;
+    for (const course of draftCourses) {
+      for (const section of sectionsByCourse[course.courseKey] || []) {
+        const overlaps = placedOverlaps(section, placed);
+        if (overlaps.length > 0) {
+          tags[section.id] = {
+            text: overlapTagText(overlaps, nameOf),
+            title: `Overlaps ${overlaps.map(nameOf).join(', ')}`,
+          };
+        }
+      }
+    }
+    return tags;
+  }, [scheduleMode, manualSectionIds, draftCourses, sectionsByCourse, sectionsById, courseMap]);
   // Manual: every pair of placed sections that overlap, [idA, idB] each.
   const manualOverlapPairs = useMemo(() => {
     const placed = manualSectionIds.map((id) => sectionsById[id]).filter(Boolean);
@@ -2320,6 +2342,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
               onRemoveCourse={() => handleRemoveCourse(courseKey)}
               mode={scheduleMode}
               placedIds={manualPlacedSet}
+              overlapTags={manualOverlapTags}
               onPlace={(groupKey, sectionId) => handlePlaceManual(courseKey, groupKey, sectionId)}
               ghostGroupKeys={ghostKeysByCourse[courseKey] || EMPTY_SET}
               onToggleGhosts={(groupKey) => handleToggleGhostGroup(courseKey, groupKey)}

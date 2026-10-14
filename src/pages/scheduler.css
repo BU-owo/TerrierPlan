@@ -631,6 +631,14 @@ html[data-theme='dark'] {
   background: var(--border-light);
   color: var(--text-muted);
 }
+.sched-overlap-badge {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0;
+}
 .sched-exam-chip {
   font-size: 10px;
   font-weight: 700;

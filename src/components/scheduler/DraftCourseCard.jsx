@@ -41,6 +41,8 @@ export default function DraftCourseCard({
   // instead of checking it into the generation pool.
   mode = 'auto',
   placedIds = new Set(),
+  // Manual: section id -> { text, title } for rows overlapping other placed groups.
+  overlapTags = {},
   onPlace = () => {},
   // "Show all" ghosts: which of this course's group keys are drawn on the grid.
   ghostGroupKeys = new Set(),
@@ -273,6 +275,7 @@ export default function DraftCourseCard({
                   conflicts={manual ? undefined : conflictMap[section.id]}
                   notes={!group.commonNotes ? section.notes : null}
                   filteredOut={!group.matchingIds.has(section.id)}
+                  overlapTag={manual ? overlapTags[section.id] : undefined}
                   onToggle={() => (manual ? onPlace(group.key, section.id) : onToggleSection(group.key, section.id))}
                   onToggleLock={() => onToggleLock(group.key, section.id)}
                   manual={manual}

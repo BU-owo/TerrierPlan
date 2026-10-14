@@ -16,7 +16,7 @@ import { describeSectionTime, describeExamTime, describeMeeting, classMeetings, 
 //
 // `manual` (Manual mode): the checkbox means "placed on the grid" instead of
 // "in consideration", and there's no lock — pins only steer generation.
-export default function SectionRow({ section, checked, locked, conflicts, notes, filteredOut, onToggle, onToggleLock, manual = false }) {
+export default function SectionRow({ section, checked, locked, conflicts, notes, filteredOut, overlapTag, onToggle, onToggleLock, manual = false }) {
   const [conflictExpanded, setConflictExpanded] = useState(false);
 
   const instructorLabel = section.instructors?.length
@@ -41,7 +41,7 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
         checked ? 'is-checked' : '',
         locked ? 'is-locked' : '',
         conflictCount > 0 ? 'has-conflict' : '',
-        filteredOut ? 'is-filtered-out' : '',
+        filteredOut || overlapTag ? 'is-filtered-out' : '',
       ].filter(Boolean).join(' ')}
     >
       <label className="sched-section-row-main">
@@ -61,6 +61,9 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
             {examTime && <span className="sched-exam-chip" title="This section has an exam block — it doesn't count as a time conflict">Exam block</span>}
             {filteredOut && (
               <span className="sched-filtered-out-badge" title="Doesn't fit your time filter">Outside filter</span>
+            )}
+            {overlapTag && (
+              <span className="sched-filtered-out-badge sched-overlap-badge" title={overlapTag.title}>Overlaps {overlapTag.text}</span>
             )}
           </div>
           <div className="sched-section-row-details">
