@@ -15,7 +15,7 @@
   color: var(--text);
 }
 html[data-theme='dark'] .home-page {
-  --home-plate: #E9E3D6;
+  --home-plate: var(--art-plate);
   --home-plate-ring: #3a4a60;
 }
 
@@ -109,13 +109,22 @@ html[data-theme='dark'] .home-page {
   padding: 56px 20px 48px;
   text-align: center;
 }
+/* The mascot file has a band of transparent space under the art; crop just
+   that (aspect ratio = width / bottom edge of the art) so the credit sits
+   right under it instead of floating mid-page. */
 .home-hero-logo {
-  width: 88px;
-  height: 88px;
-  object-fit: contain;
+  width: 160px;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 3000 / 2479;
+  object-fit: cover;
+  object-position: 50% 0;
   display: block;
-  margin: 0 auto 14px;
+  margin: 0 auto;
+  --art-outline-w: 2px; /* dark-mode outline, see .tp-art-outline */
 }
+/* Size and color come from .tp-art-credit (App.css). */
+.home-hero .home-hero-credit { margin: 3px auto 14px; }
 .home-hero-title {
   font-size: 44px;
   font-weight: 800;
@@ -375,6 +384,13 @@ html[data-theme='dark'] .home-page {
   padding: 56px 20px 64px;
   text-align: center;
 }
+.home-closing-paw {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto 10px;
+}
 .home-closing-title {
   font-size: 28px;
   font-weight: 800;
@@ -433,7 +449,7 @@ html[data-theme='dark'] .home-page {
 
 @media (max-width: 680px) {
   .home-hero { padding: 40px 16px 36px; }
-  .home-hero-logo { width: 72px; height: 72px; }
+  .home-hero-logo { width: 130px; }
   .home-hero-title { font-size: 36px; }
   .home-hero-tagline { font-size: 16px; }
   .home-app-buttons { flex-direction: column; align-items: stretch; }

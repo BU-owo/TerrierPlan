@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import HelpSupportModal from '../components/HelpSupportModal';
 import Disclaimer from '../components/Disclaimer';
+import { ART_ALT, CREDIT_SHORT, ART_MASCOT_SRC } from '../constants/credits';
 import './home.css';
 
 // Duplicated from HelpSupportModal.jsx / GlobalFooter.jsx, which each keep
@@ -228,13 +229,9 @@ export default function HomePage({ theme = 'light', onToggleTheme }) {
 
       <main>
         <section className="home-hero">
-          <img
-            className="home-hero-logo"
-            src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
-            alt=""
-            width={88}
-            height={88}
-          />
+          {/* Liberty Miller's mascot, in both themes. */}
+          <img className="home-hero-logo tp-art-outline" src={ART_MASCOT_SRC} alt={ART_ALT} width={160} height={132} />
+          <p className="tp-art-credit home-hero-credit">{CREDIT_SHORT}</p>
           <h1 className="home-hero-title">Terrier Plan</h1>
           <p className="home-hero-tagline">
             An academic planning tool for BU students, built to replace your spreadsheet, bulletin, and MyBU juggling!
@@ -287,6 +284,13 @@ export default function HomePage({ theme = 'light', onToggleTheme }) {
         {/* Heading, intro and both contact actions copied from
             HelpSupportModal.jsx. */}
         <section className="home-closing" aria-labelledby="home-closing-title">
+          <img
+            className="home-closing-paw"
+            src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
+            alt="TerrierPlan paw logo"
+            width={64}
+            height={64}
+          />
           <h2 id="home-closing-title" className="home-closing-title">Need a paw?</h2>
           <p className="home-closing-intro">
             TerrierPlan is built and maintained by BUowo and friends, and we want this to be a tool that

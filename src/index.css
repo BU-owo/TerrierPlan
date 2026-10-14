@@ -81,6 +81,9 @@ html[data-theme='dark'] {
   --scarlet-light: #4b2026;
   --scarlet-pale: #2d1a20;
   --scarlet-text: #FF8A80;
+  /* Light cream for black-outlined art on the dark page: the plate behind
+     Rhett, the sticker outline around Liberty Miller's mascot. */
+  --art-plate: #E9E3D6;
   --warning-surface: #402327;
   --warning-text: #FFB4AD;
   --warning-border: #F97066;

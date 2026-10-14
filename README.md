@@ -77,3 +77,7 @@ future deploys. Confirm `pwd` shows the repo root before deploying.
 ## Tech stack
 
 Vite + React, Firebase (Auth + Firestore).
+
+## Credits
+
+- Terrier mascot art (`public/terrier_7.png`, `public/TP2.png`) by Liberty Miller.

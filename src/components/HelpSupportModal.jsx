@@ -11,6 +11,14 @@ export default function HelpSupportModal({ open, onClose }) {
     <div className="help-overlay" role="dialog" aria-modal="true" aria-labelledby="help-modal-title">
       <div className="help-modal">
         <div className="help-modal-header">
+          {/* No paw variant reads on both themes, so it follows the theme like the loading screen. */}
+          <img
+            className="help-modal-paw"
+            src={document.documentElement.dataset.theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
+            alt="TerrierPlan paw logo"
+            width={64}
+            height={64}
+          />
           <h2 id="help-modal-title">Need a paw?</h2>
           <button type="button" className="help-close-btn" onClick={onClose} aria-label="Close">
             ×

@@ -8,7 +8,7 @@ import { loadAllCourses, isProfessionalCareer } from '../../utils/courseQuery';
 // filters and drag-and-drop, neither of which matters here). HUB filtering
 // is planner-specific (degree requirements), not relevant when the goal is
 // just "which sections can I take this term."
-export default function SchedulerSearch({ draftCourseKeys, onAddCourse }) {
+export default function SchedulerSearch({ draftCourseKeys, onAddCourse, theme = 'light' }) {
   const [query, setQuery] = useState('');
   const [allCourses, setAllCourses] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -112,6 +112,13 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse }) {
 
         {!searching && !query.trim() && (
           <div className="search-empty">
+            <img
+              className="search-empty-paw"
+              src={theme === 'dark' ? '/favicondark.png' : '/faviconlight.png'}
+              alt="TerrierPlan paw logo"
+              width={28}
+              height={28}
+            />
             Search by course code or name, then add it to build your schedule.
           </div>
         )}

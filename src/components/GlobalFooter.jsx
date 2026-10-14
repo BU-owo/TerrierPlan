@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import HelpSupportModal from './HelpSupportModal';
 import useSiteStats from '../hooks/useSiteStats';
 import { BU_LINKS } from '../data/officialLinks';
+import { CREDIT_FULL } from '../constants/credits';
 
 const SUPPORT_EMAIL = 'terrierplan@gmail.com';
 const DISCORD_URL = 'https://discord.gg/bostonuniversity';
@@ -49,6 +50,15 @@ export default function GlobalFooter() {
         <a href={BU_LINKS.myBU.url} target="_blank" rel="noopener noreferrer">MyBU</a>, the{' '}
         <a href={BU_LINKS.bulletin.url} target="_blank" rel="noopener noreferrer">Bulletin</a>, and your
         advisor.
+      </p>
+      {/* Each credit stays on one line; a narrow screen wraps between them. */}
+      <p className="app-footer-disclaimer app-footer-credit">
+        {CREDIT_FULL.split(' · ').map((part, i) => (
+          <Fragment key={part}>
+            {i > 0 && <span className="app-footer-dot" aria-hidden="true"> · </span>}
+            <span className="app-footer-credit-part">{part}</span>
+          </Fragment>
+        ))}
       </p>
 
       <HelpSupportModal open={showHelp} onClose={() => setShowHelp(false)} />

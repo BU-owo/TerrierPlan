@@ -50,6 +50,7 @@ import OneTimeHint from '../components/OneTimeHint';
 import useOneTimeHint from '../hooks/useOneTimeHint';
 import useDesktopLayout from '../hooks/useDesktopLayout';
 import { BU_LINKS } from '../data/officialLinks';
+import { ART_ALT, CREDIT_SHORT, ART_MASCOT_SRC } from '../constants/credits';
 import './planner.css';
 import './scheduler.css';
 import '../App.css';
@@ -2172,7 +2173,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
       <div className="scheduler-body" data-mobile-view={mobileView}>
         <aside className="scheduler-left">
-          <SchedulerSearch draftCourseKeys={draftCourseKeys} onAddCourse={handleAddCourse} />
+          <SchedulerSearch draftCourseKeys={draftCourseKeys} onAddCourse={handleAddCourse} theme={theme} />
         </aside>
 
         <main className="scheduler-center">
@@ -2252,6 +2253,13 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
           {draftCourses.length === 0 && (
             <div className="search-empty sched-draft-empty">
+              <img
+                className="sched-draft-empty-art"
+                src="/RhettCal.png"
+                alt="Rhett the terrier with a calendar"
+                width={110}
+                height={110}
+              />
               Search a course to start building your schedule.
               <span className="sched-draft-empty-mobile"> Tap the Search tab below.</span>
             </div>
@@ -2356,6 +2364,9 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
           {scheduleMode === 'auto' && !previewHold && generated && generated.schedules.length === 0 ? (
             <div className="sched-generated-empty">
+              <div className="tp-art">
+                <img className="tp-art-mascot tp-art-outline" src={ART_MASCOT_SRC} alt={ART_ALT} title={CREDIT_SHORT} width={56} height={56} />
+              </div>
               <p>
                 No conflict-free combination exists for the sections currently in consideration — try
                 checking an additional section for one of your courses.

@@ -11,6 +11,7 @@ import {
   reloadPage,
   resetDraftAndReload,
 } from '../startupErrors';
+import { ART_ALT, CREDIT_SHORT, ART_MASCOT_SRC } from '../constants/credits';
 
 // Top-level boundary: a render, lifecycle, or effect error anywhere in the app
 // shows the same crash screen startupErrors.js draws for non-React failures,
@@ -39,6 +40,10 @@ export default class ErrorBoundary extends Component {
     return (
       <div className="tp-crash" role="alert">
         <div className="tp-crash-inner">
+          <div className="tp-crash-art">
+            <img className="tp-art-outline" src={ART_MASCOT_SRC} alt={ART_ALT} width={64} height={53} />
+            <p>{CREDIT_SHORT}</p>
+          </div>
           <h1 className="tp-crash-title">{CRASH_TITLE}</h1>
           <pre className="tp-crash-details">{formatErrorDetails(error, componentStack)}</pre>
           <p className="tp-crash-report">

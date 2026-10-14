@@ -18,6 +18,91 @@
   }
 }
 
+/* Liberty Miller's mascot (see constants/credits.js) as a small accent. In
+   small panels the credit is the img's alt/title only; elsewhere a
+   .tp-art-credit line sits just under the art. */
+.tp-art {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 auto 10px;
+}
+.tp-art-mascot {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  display: block;
+}
+/* The mascot file has a band of transparent space under the art; crop it
+   (aspect ratio = width / bottom edge of the art) so a credit can sit close. */
+.tp-art-cropped {
+  height: auto;
+  aspect-ratio: 3000 / 2479;
+  object-fit: cover;
+  object-position: 50% 0;
+}
+/* On every <img> of her art. Dark mode only: a sticker-style outline (four
+   stacked drop-shadows) so the black outline and ears don't vanish into the
+   page. Width scales with the image: 1px by default, larger images set
+   --art-outline-w themselves. */
+html[data-theme='dark'] .tp-art-outline {
+  filter:
+    drop-shadow(var(--art-outline-w, 1px) 0 0 var(--art-plate))
+    drop-shadow(calc(-1 * var(--art-outline-w, 1px)) 0 0 var(--art-plate))
+    drop-shadow(0 var(--art-outline-w, 1px) 0 var(--art-plate))
+    drop-shadow(0 calc(-1 * var(--art-outline-w, 1px)) 0 var(--art-plate));
+}
+.tp-art-credit {
+  margin: 3px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+/* Quieter on dark, but kept at ≥4.5:1 (4.8:1 on --cream). */
+html[data-theme='dark'] .tp-art-credit { opacity: .8; }
+
+/* 404 (NotFoundPage.jsx) */
+.not-found-page {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--cream);
+}
+.not-found-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  text-align: center;
+}
+.not-found-mascot {
+  width: 120px;
+  display: block;
+  --art-outline-w: 2px; /* dark-mode outline, see .tp-art-outline */
+}
+.not-found-title {
+  margin: 6px 0 6px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--scarlet);
+}
+.not-found-text {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.not-found-btn {
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  background: var(--scarlet);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+.not-found-btn:hover { background: var(--scarlet-dark); }
+
 /* Outer 100dvh flex column: routed page content (flexible, own scrolling)
    on top, GlobalFooter (shrink-to-fit) pinned below it — see App.jsx. */
 .app-shell {
@@ -106,6 +191,8 @@
   font-size: .7rem;
   text-align: center;
 }
+.app-footer-credit { margin-top: 2px; }
+.app-footer-credit-part { white-space: nowrap; }
 
 @media (max-width: 480px) {
   .app-footer { padding: 8px 12px; }

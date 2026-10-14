@@ -14,8 +14,11 @@
 //
 // Nothing here throws, and every error is still console.error'd.
 
+// The only import: plain string constants with no imports of their own.
+import { ART_ALT, CREDIT_SHORT, ART_MASCOT_SRC } from './constants/credits.js';
+
 // Same value as DRAFT_STORAGE_KEY in utils/draftStorage.js. Hard-coded so this
-// module has no imports and can't itself fail to load. Only this key is ever
+// module doesn't pull in app code and can't itself fail to load. Only this key is ever
 // cleared: terrierplan_scheduler_schedules and terrierplan_session are kept.
 const DRAFT_STORAGE_KEY = 'terrierplan_scheduler_draft';
 const PRELOAD_RELOAD_KEY = 'terrierplan_preload_reload_at';
@@ -26,7 +29,7 @@ export const CRASH_TITLE = 'Something went wrong loading TerrierPlan.';
 export const CRASH_RELOAD_LABEL = 'Reload';
 export const CRASH_RESET_LABEL = 'Reset saved scheduler data and reload';
 // Same invite as DISCORD_URL in components/GlobalFooter.jsx (hard-coded here
-// because this module has no imports).
+// so this module doesn't pull in app code).
 export const CRASH_DISCORD_URL = 'https://discord.gg/bostonuniversity';
 export const CRASH_REDDIT_URL = 'https://www.reddit.com/user/BUowo/';
 
@@ -105,6 +108,10 @@ const CRASH_STYLES = `
   line-height: 1.5;
 }
 .tp-crash-inner { max-width: 640px; margin: 0 auto; }
+.tp-crash-art { display: flex; flex-direction: column; align-items: flex-start; margin: 0 0 12px; }
+.tp-crash-art img { width: 64px; height: auto; aspect-ratio: 3000 / 2479; object-fit: cover; object-position: 50% 0; display: block; }
+.tp-crash-art p { margin: 3px 0 0; font-size: 11px; color: var(--text-muted, #9E9890); }
+html[data-theme='dark'] .tp-crash-art p { opacity: .8; }
 .tp-crash-title { font-size: 20px; font-weight: 700; margin: 0 0 16px; }
 .tp-crash-details {
   margin: 0 0 20px;
@@ -184,6 +191,19 @@ export function renderCrashScreen(error) {
     const inner = document.createElement('div');
     inner.className = 'tp-crash-inner';
 
+    const art = document.createElement('div');
+    art.className = 'tp-crash-art';
+    const artImg = document.createElement('img');
+    artImg.className = 'tp-art-outline';
+    artImg.src = ART_MASCOT_SRC;
+    artImg.alt = ART_ALT;
+    artImg.width = 64;
+    artImg.height = 53;
+    const artCredit = document.createElement('p');
+    artCredit.textContent = CREDIT_SHORT;
+    art.appendChild(artImg);
+    art.appendChild(artCredit);
+
     const title = document.createElement('h1');
     title.className = 'tp-crash-title';
     title.textContent = CRASH_TITLE;
@@ -219,6 +239,7 @@ export function renderCrashScreen(error) {
     // work on old Safari, which is exactly where startup failures show up.
     actions.appendChild(reload);
     actions.appendChild(reset);
+    inner.appendChild(art);
     inner.appendChild(title);
     inner.appendChild(details);
     inner.appendChild(report);

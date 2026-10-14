@@ -34,6 +34,23 @@
   font-size: 19px;
   color: var(--scarlet);
 }
+/* Paw centered above the title; the × is pinned to the corner. */
+.help-modal-header {
+  position: relative;
+  flex-direction: column;
+  gap: 6px;
+}
+.help-modal-header .help-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+}
+.help-modal-paw {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  display: block;
+}
 .help-close-btn {
   border: 0;
   background: transparent;

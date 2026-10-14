@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CURRENT_TERM, CURRENT_TERM_LABEL, scheduleTerm, termLabel } from '../../utils/term';
 import { describeSectionSet, scheduleKey, overlapSummary } from '../../utils/scheduleCombos';
 import GuestSignInButton from '../GuestSignInButton';
+import { ART_ALT, CREDIT_SHORT, ART_MASCOT_SRC } from '../../constants/credits';
 
 // Small inline pencil glyph for the rename affordance — a real icon asset
 // rather than a text/emoji dingbat, matching CourseSearch's PawIcon and
@@ -242,6 +243,9 @@ export default function SavedSchedulesPanel({
             )}
             {schedules.length === 0 && (
               <div className="search-empty sched-saved-empty">
+                <div className="tp-art">
+                  <img className="tp-art-mascot tp-art-outline" src={ART_MASCOT_SRC} alt={ART_ALT} title={CREDIT_SHORT} width={56} height={56} />
+                </div>
                 No saved schedules yet for {CURRENT_TERM_LABEL}.
               </div>
             )}

@@ -1,9 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import PlannerPage from './pages/PlannerPage';
 import SchedulerPage from './pages/SchedulerPage';
+import NotFoundPage from './pages/NotFoundPage';
 import GlobalFooter from './components/GlobalFooter';
 import { markAppReady } from './startupErrors';
 import { useState, useEffect } from 'react';
@@ -28,7 +29,7 @@ function AppRoutes({ theme, onToggleTheme }) {
           <Route path="/login" element={<LoginPage theme={theme} onToggleTheme={onToggleTheme} />} />
           <Route path="/planner" element={<PlannerPage theme={theme} onToggleTheme={onToggleTheme} />} />
           <Route path="/scheduler" element={<SchedulerPage theme={theme} onToggleTheme={onToggleTheme} />} />
-          <Route path="*" element={<Navigate to="/planner" replace />} />
+          <Route path="*" element={<NotFoundPage theme={theme} onToggleTheme={onToggleTheme} />} />
         </Routes>
       </div>
 

@@ -2543,6 +2543,15 @@ html[data-theme='dark'] .sched-global-filter-label { color: var(--scarlet-text);
 /* Empty-draft line: the "Search tab" pointer only makes sense on the narrow
    layout, where search is a bottom tab instead of a left panel. */
 .sched-draft-empty-mobile { display: none; }
+/* Rhett above the empty-draft text (only rendered while the draft is empty). */
+.sched-draft-empty-art {
+  display: block;
+  width: 110px;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto 12px;
+}
 @media (max-width: 860px) {
   .sched-draft-empty-mobile { display: inline; }
+  .sched-draft-empty-art { width: 90px; }
 }
