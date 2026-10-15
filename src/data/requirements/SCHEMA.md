@@ -25,6 +25,13 @@ corresponding program entry in `src/data/bu-programs.js`, and the value stored
 in a plan's `majorBulletinUrl` field (see root `SCHEMA.md`). The UI matches on
 this field, not on filename — filenames are just for human organization.
 
+`totalCoursesRequired` is a fallback. The progress line ("X of N courses
+counted") uses a total derived from the evaluated tree along the branch that
+counts — `required` per node, a `ONE_OF`'s active child only, a
+`SEQUENCE_GROUP`'s matched (or closest) option's course count, 0 for
+`UNRESOLVED` and waived nodes — so it follows the student's track. The
+authored number is used only if that derivation fails.
+
 ## Requirement node types
 
 Every node has a `type`, a `label`, and an **`id`** — a short, stable,
@@ -35,6 +42,15 @@ root `SCHEMA.md`) uses to attach a waive/substitute to a specific node, so it
 must stay stable across edits to that node's `label`/wording. Don't reuse an
 id elsewhere in the same file, and don't repurpose an existing id for a
 different node once a plan may have referenced it — add a new one instead.
+
+Two optional text fields, for two different readers:
+
+- **`note`** — shown to students. Plain language, written for someone
+  planning their degree ("This isn't checked automatically."), no internal
+  details. Today the UI renders it on `UNRESOLVED` nodes; on other node
+  types it's stored but not shown.
+- **`devNote`** — for authors only: sourcing, approximations, catalog
+  gaps, TODOs. Never rendered, and ignored by the engine and the UI.
 
 The evaluator adds `status` (`'satisfied' | 'unsatisfied' | 'needs_review'`),
 `matched`, `missing`, `satisfiedCount`, and `required` to each node in its
@@ -48,11 +64,25 @@ enumerable list of courseKeys that would satisfy that slot (a plain courseKey
 or `OR_EQUIVALENT`/`SUBSTITUTE_GROUP`/`COURSE_LIST` entry), or `null` for
 `COURSE_RANGE`/`COURSE_RANGE_CAP` entries, which aren't enumerable without a
 full course catalog. Those same entries carry `range` instead —
-`{ subject, min, max, exclude }` taken straight from the pool entry — so the
-UI can offer a "browse this range" action even though it can't list the
-courses up front. The UI uses `courseKeys` to offer "add this course" chips
-for enumerable remaining-eligible courses, and `range` to offer a browse
-action for the non-enumerable ones.
+`{ subject, min, max, exclude, include }` taken from the pool entry — so the
+UI can list matching courses from the static catalog even though the engine
+can't list them up front. The UI uses `courseKeys` to offer stash chips for
+enumerable remaining-eligible courses, and `range` for an inline catalog list
+for the non-enumerable ones.
+
+Every `missing` entry also carries `fallback`: `true` when the entry came
+from `REMAINDER.additionalPool`, `false` otherwise. The UI shows fallback
+entries as a one-line "also counts here" note, never as stash chips.
+
+Full `missing` entry shape:
+`{ label, entryLabel, courseKeys, range, entryIndex, fallback }`.
+Full `matched` entry shape (`COUNT`/`REMAINDER`):
+`{ label, entryLabel, courseKeys, entryIndex, fallback, subsetIndex? }`.
+`label` is generated from the entry; `entryLabel` is the pool entry's own
+optional authored `label` (null if none); `entryIndex` is the entry's
+position in its own pool (`pool`, `additionalPool`, or an `atLeast` subset's
+pool); `subsetIndex` is present only on entries claimed by an `atLeast`
+subset (see `COUNT`).
 
 ### `ALL`
 Two forms, distinguished by which key is present:
@@ -73,6 +103,36 @@ then stops — later pool entries are left completely unclaimed (even if the
 student took a matching course), so they remain available to other
 requirement nodes (see Double-counting below). **Pool order is claim
 priority**, so put the entries you'd prefer claimed first.
+
+#### `atLeast` (optional, `COUNT` and `REMAINDER`)
+```jsonc
+"atLeast": [{ "label": "At least 1 calculus or statistics course", "min": 1, "pool": [...poolEntries] }]
+```
+"At least N of these must be among the courses." `label` is shown verbatim
+as the subset's sub-line (and as the marker on its courses), so write the
+whole phrase; without one the UI shows "At least N of these". Each subset is evaluated
+**first**, claiming up to its own `min` from its own `pool`; those claims
+count toward the node's total (`min` / REMAINDER's computed requirement).
+The main pool(s) then fill only `required − Σ subset.min`, so the node can't
+be satisfied while a subset is short. A subset pool may overlap the main
+pool — a course is still only claimed once. The evaluated node gets
+`subsets: [{ label, min, status, satisfiedCount, matched, missing }]` in
+`atLeast` order (always present, `[]` when there are none); subset claims
+are also in the node's `matched`, tagged with `subsetIndex`.
+
+### `ONE_OF`
+```jsonc
+{ "id": "...", "type": "ONE_OF", "label": "Chemistry track", "children": [...nodes] }
+```
+Exactly one child must be complete (e.g. standard vs. alternative track).
+Each child is evaluated against its own copy of the claimed set; the chosen
+child is the first satisfied one, else the one with the best
+`satisfiedCount / required` ratio (ties: first). Only the chosen child's
+claims are committed. Output: `status` (satisfied if any child is),
+`activeChildIndex`, `children` (all evaluated, for display — only the active
+one's claims are real), `satisfiedCount`/`required` = 1/1 or 0/1. For a
+sibling `REMAINDER`'s denominator it counts as the smallest child. Overrides:
+waive only (a substitute override on a `ONE_OF` has no effect).
 
 ### `REMAINDER`
 ```jsonc
@@ -153,7 +213,10 @@ being modeled as a second, independently-required sibling that would have to
 be satisfied *in addition to* an already-satisfied elective pool.
 
 ### `UNRESOLVED`
-`{ "type": "UNRESOLVED", "label": "...", "note": "..." }`
+`{ "type": "UNRESOLVED", "label": "...", "note": "...", "devNote": "..." }`
+
+`note` is what the student sees under the "Check with advisor" badge;
+`devNote` is author-only (see "Requirement node types").
 
 For petition/department-approval clauses that can't be auto-verified from a
 course list (e.g. "up to 2 non-CS courses may count with Undergraduate
@@ -182,14 +245,23 @@ pool (see below).
 
 ## Pool entries
 
-Used in `COUNT.pool`, `REMAINDER.pool`, and `REMAINDER.additionalPool`. A
-superset of slot refs — any slot ref is a valid pool entry — plus:
+Used in `COUNT.pool`, `REMAINDER.pool`, `REMAINDER.additionalPool`, and
+`atLeast[].pool`. A superset of slot refs — any slot ref is a valid pool
+entry — plus the types below. Any object pool entry may also carry an
+optional `"label"` (e.g. `"Calculus"`), carried through to the evaluated
+`matched`/`missing` entries as `entryLabel` and used by the UI as the
+entry's title.
 
 - `{ "type": "COURSE_RANGE", "subject": "CASCS", "min": 300, "max": 599, "exclude": ["CASCS398"] }`
   — matches any planned, unclaimed course whose courseKey parses to that
   `subject` and whose catalog number falls in `[min, max]`. `exclude` is
   optional. Can contribute multiple courses to a single node (as many as are
-  needed / available).
+  needed / available). Optional `"include": ["CASMA242", ...]` — extra
+  courseKeys (normalized) that also match, outside the subject/number range;
+  `exclude` and already-claimed still apply. `courseKeys` on a missing range
+  entry stays `null`; the include list is reported as `range.include`
+  instead (the UI lists those courses above the catalog browse list).
+  `COURSE_RANGE_CAP` ignores `include`.
 - `{ "type": "COURSE_RANGE_CAP", "subject": "CASCS", "min": 200, "max": 299, "cap": 2 }`
   — same matching as `COURSE_RANGE`, but never contributes more than `cap`
   courses to the node, even if the node needs more and more are available.
@@ -198,7 +270,8 @@ superset of slot refs — any slot ref is a valid pool entry — plus:
   explicitly named list (not a subject/number range). Unlike `OR_EQUIVALENT`,
   more than one course from the list can count if the node needs more than
   one — each listed course is its own potential claim, not a single slot with
-  alternatives.
+  alternatives. Optional `"cap": N` — never contributes more than N courses
+  to the node (like `COURSE_RANGE_CAP`, for an explicit list).
 - `{ "type": "SEQUENCE_GROUP", "options": [{ "label": "...", "courses": [...] }, ...] }`
   — see the `SEQUENCE_GROUP` node type above for the shape and matching
   rules. As a pool entry it still claims every course in its matched option,

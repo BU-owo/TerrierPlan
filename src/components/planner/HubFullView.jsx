@@ -12,6 +12,9 @@ import OneTimeHint from '../OneTimeHint';
 import useOneTimeHint from '../../hooks/useOneTimeHint';
 import CourseChip from '../requirements/CourseChip';
 import { PawIcon } from './CourseSearch';
+import FullViewHeader from './FullViewHeader';
+import { OfferingBadge, OfferedFilterToggle } from './CourseTags';
+import useCurrentTermCourseKeys from '../../hooks/useCurrentTermCourseKeys';
 
 // Every HUB code, in HUB_GROUPS' own order (so the picker reads grouped by
 // category, same visual order the color tokens already imply) — derived
@@ -58,7 +61,8 @@ function describeArcSegment(cx, cy, r, startPct, endPct) {
   return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`;
 }
 
-function HubProgressRing({ percent, fulfilled, total, potentialPercent, size = 56, strokeWidth = 6 }) {
+// `hideLabel` drops the center count (tiny rings that show it beside instead).
+export function HubProgressRing({ percent, fulfilled, total, potentialPercent, size = 56, strokeWidth = 6, hideLabel = false }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const cx = size / 2;
@@ -118,16 +122,18 @@ function HubProgressRing({ percent, fulfilled, total, potentialPercent, size = 5
         strokeLinecap="round"
         transform={`rotate(-90 ${cx} ${cy})`}
       />
-      <text
-        x="50%"
-        y="50%"
-        className="hub-ring-label"
-        textAnchor="middle"
-        dominantBaseline="central"
-        style={{ fontSize }}
-      >
-        {label}
-      </text>
+      {!hideLabel && (
+        <text
+          x="50%"
+          y="50%"
+          className="hub-ring-label"
+          textAnchor="middle"
+          dominantBaseline="central"
+          style={{ fontSize }}
+        >
+          {label}
+        </text>
+      )}
     </svg>
   );
 }
@@ -309,6 +315,8 @@ function DepartmentPrefixAutocomplete({ value, onChange, allPrefixes }) {
 // already-fulfilled (muted) instead of rendering every tag the same.
 function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash, shaded = false, neededUnitCodes }) {
   const label = course.courseNumber ?? course.id;
+  // Staged rows come from courseMap, which has no `inCurrentTerm`.
+  const currentTermKeys = useCurrentTermCourseKeys();
   return (
     <div className="search-result-card" style={{ cursor: 'default' }}>
       <div className="search-result-info" style={shaded ? { opacity: 0.55 } : undefined}>
@@ -319,9 +327,9 @@ function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash
             <span className="offering-badge offering-badge-abroad">Study abroad</span>
           )}
         </div>
-        {course.hubUnits?.length > 0 && (
-          <div className="search-result-hub">
-            {course.hubUnits.map((unit) => {
+        {/* Tags line: HUB tags, then the offering badge (hidden when empty). */}
+        <div className="search-result-hub">
+            {course.hubUnits?.map((unit) => {
               if (!neededUnitCodes) {
                 return (
                   <span key={unit} className={`hub-chip hub-chip-${HUB_COLOR_FOR[unit]?.groupId ?? 'def'}`}>
@@ -345,8 +353,12 @@ function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash
                 </span>
               );
             })}
-          </div>
-        )}
+            <OfferingBadge
+              offeringPattern={course.offeringPattern}
+              upcomingSeasons={course.upcomingSeasons}
+              inCurrentTerm={course.inCurrentTerm ?? currentTermKeys?.has(course.id)}
+            />
+        </div>
       </div>
       <button
         type="button"
@@ -424,6 +436,8 @@ export default function HubFullView({
   onClose,
   // Closes this view and opens the planner's Paw-tential Courses tab.
   onShowStash,
+  // Swaps to the Requirements overlay without closing (see FullViewHeader).
+  onSwitchView,
 }) {
   // One-time hints for this view (they outrank the planner's behind it).
   const [finderHintVisible, dismissFinderHint, markFinderSeen] = useOneTimeHint('hub_finder', { priority: 1 });
@@ -575,14 +589,18 @@ export default function HubFullView({
   // separate searches.
   const trimmedPrefix = searchPrefix.trim();
   const searchActive = Boolean(trimmedPrefix) || hubSearchInclude.length > 0 || hubSearchExclude.length > 0;
+  // In-memory only: limit results to catalog `inCurrentTerm` courses.
+  const [offeredOnly, setOfferedOnly] = useState(false);
+  const hasCurrentTermData = useMemo(() => allCourses.some((c) => c.inCurrentTerm), [allCourses]);
   const searchResults = useMemo(() => {
     if (!searchActive) return [];
-    return queryCourses(
+    const matches = queryCourses(
       nonProfessionalCourses,
       { prefix: trimmedPrefix, hubUnitCodes: hubSearchInclude, mode: hubSearchMode, excludeUnitCodes: hubSearchExclude },
       excludeKeys,
     );
-  }, [searchActive, nonProfessionalCourses, trimmedPrefix, hubSearchInclude, hubSearchMode, hubSearchExclude, excludeKeys]);
+    return offeredOnly ? matches.filter((course) => course.inCurrentTerm) : matches;
+  }, [searchActive, nonProfessionalCourses, trimmedPrefix, hubSearchInclude, hubSearchMode, hubSearchExclude, excludeKeys, offeredOnly]);
 
   // Per-category collapse state — the ONE source of truth for both the
   // overview ring row and each category's own card; same "override
@@ -761,17 +779,13 @@ export default function HubFullView({
 
   return (
     <div className="full-view" role="dialog" aria-modal="true" aria-label="HUB Tracker and Course Finder">
-      <header className="full-view-header">
-        <h2 className="full-view-title">HUB Tracker &amp; Course Finder</h2>
-        <button
-          type="button"
-          className="full-view-close"
-          onClick={onClose}
-          aria-label="Close HUB tracker and course finder"
-        >
-          × Close
-        </button>
-      </header>
+      <FullViewHeader
+        title="HUB Tracker & Course Finder"
+        view="hub"
+        onSwitchView={onSwitchView}
+        onClose={onClose}
+        closeAriaLabel="Close HUB tracker and course finder"
+      />
       <div className="full-view-body">
         <div className="full-view-inner">
           <HubYearToggle isTransfer={isTransfer} onToggleTransfer={onToggleTransfer} />
@@ -875,6 +889,7 @@ export default function HubFullView({
               </div>
             </div>
 
+            {hasCurrentTermData && <OfferedFilterToggle checked={offeredOnly} onChange={setOfferedOnly} />}
             <p className="search-hint">Paw = save to Paw-tential Courses (maybe-later list).</p>
 
             {searchActive && (

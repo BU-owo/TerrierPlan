@@ -1,0 +1,74 @@
+{
+  "programName": "Political Science",
+  "degree": "BA",
+  "school": "CAS",
+  "bulletinUrl": "https://www.bu.edu/academics/cas/programs/political-science/ba/",
+  "minGrade": "C",
+  "totalCoursesRequired": 11,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "id": "polisci-ba-root",
+    "type": "ALL",
+    "label": "Political Science BA — Major Requirements",
+    "children": [
+      {
+        "id": "polisci-ba-core",
+        "type": "COUNT",
+        "label": "PO Core Courses (3 of 5)",
+        "min": 3,
+        "pool": [
+          "CASPO111",
+          "CASPO141",
+          "CASPO151",
+          "CASPO171",
+          "CASPO191"
+        ]
+      },
+      {
+        "id": "polisci-ba-seminar",
+        "type": "COUNT",
+        "label": "Seminar (PO 504–598)",
+        "min": 1,
+        "pool": [
+          {
+            "type": "COURSE_RANGE",
+            "subject": "CASPO",
+            "min": 504,
+            "max": 598
+          }
+        ],
+        "devNote": "At least one of the eight PO 200–599 courses must be a seminar. Listed before the other seven so it claims a seminar first.",
+        "note": "One of your eight PO 200–599 courses must be a seminar (PO 504–598)."
+      },
+      {
+        "id": "polisci-ba-upper",
+        "type": "COUNT",
+        "label": "Other PO courses (200–599)",
+        "min": 7,
+        "pool": [
+          {
+            "type": "COURSE_RANGE",
+            "subject": "CASPO",
+            "min": 200,
+            "max": 599
+          }
+        ]
+      },
+      {
+        "id": "polisci-ba-directed-study",
+        "type": "UNRESOLVED",
+        "label": "Directed study limit",
+        "devNote": "No more than 8 units toward the major may come from directed study — not tracked.",
+        "note": "No more than 8 units toward the major may come from directed study. This isn't checked automatically."
+      },
+      {
+        "id": "polisci-ba-ir-crosslist",
+        "type": "UNRESOLVED",
+        "label": "IR courses",
+        "devNote": "CAS IR courses only count if cross-listed with a PO course — not tracked. Add the PO number of the cross-listed course instead.",
+        "note": "CAS IR courses only count if they're cross-listed with a PO course. Enter the PO number of the cross-listed course."
+      }
+    ]
+  }
+}

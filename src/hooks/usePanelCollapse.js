@@ -37,5 +37,9 @@ export default function usePanelCollapse(storageKey, defaultCollapsed = false) {
     }
   }, [storageKey]);
 
-  return { collapsed: stored && desktop, desktop, setCollapsed };
+  // Expands for this visit only — the remembered preference in storage is
+  // left alone, so a reload restores whatever the user last chose.
+  const expandTemporarily = useCallback(() => setStored(false), []);
+
+  return { collapsed: stored && desktop, desktop, setCollapsed, expandTemporarily };
 }

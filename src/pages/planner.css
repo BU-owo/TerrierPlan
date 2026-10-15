@@ -80,7 +80,9 @@
 
 /* ----- Right Panel (HUB) ----- */
 .planner-right {
-  width: 244px;
+  /* --planner-right-width: set on .planner-body when the student drags the
+     resize handle (PlannerPage / PanelResizeHandle). */
+  width: var(--planner-right-width, 244px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -89,6 +91,36 @@
   overflow-y: auto;
   transition: width 200ms ease-out;
 }
+
+/* Right panel drag-resize handle (desktop only). Zero net width (negative
+   margins) so it doesn't take space from the board; 8px hit area, a
+   scarlet line on hover/drag/focus. Hidden while the panel is collapsed —
+   the rail ignores the saved width. */
+.panel-resize-handle {
+  position: relative;
+  z-index: 3;
+  flex-shrink: 0;
+  width: 8px;
+  margin: 0 -4px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.panel-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background .12s;
+}
+.panel-resize-handle:hover::after,
+.panel-resize-handle:focus-visible::after,
+.panel-resize-handle.is-dragging::after { background: var(--scarlet); }
+.panel-resize-handle:focus-visible { outline: none; }
+.planner-body:has(.side-panel-collapsed) .panel-resize-handle { display: none; }
+.planner-body.is-resizing-right .planner-right { transition: none; }
 
 /* Collapse the right panel when its single tabbed status panel is collapsed. */
 .planner-right:has(.side-panel-collapsed) {
@@ -1129,6 +1161,87 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
 .offering-badge-career { color: var(--text); background: var(--cream-dark); box-shadow: inset 0 0 0 1px var(--border); }
 .course-card-career { display: inline-block; margin-top: 3px; }
 .course-card-abroad + .course-card-career { margin-left: 4px; }
+/* ✓ "{CURRENT_TERM_LABEL}" (catalog inCurrentTerm) — .offering-badge's
+   size/radius/weight in the completed-row greens; ✓ sized and centered like
+   the placed card's ⚠. It never ellipsizes: container queries step it down
+   instead (✓ "Spring 2027" -> ● "Spring" -> dot only) so HUB tags and the
+   title keep their room. Containers: `offering-line` = a tags-only line
+   (card HUB line, two-line sidebar meta line); `offering-row` = a one-line
+   requirement row; `offering-compact` = a sequence row (badge only, no
+   tags), which never shows the full label. */
+.offering-badge-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--success-text);
+  background: var(--success-surface);
+}
+.offering-badge-check { font-weight: 700; line-height: 1; }
+.offering-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success-strong); }
+.offering-badge-short,
+.offering-badge-dot { display: none; }
+.req-course-row.is-in-plan .offering-badge-current { box-shadow: inset 0 0 0 1px var(--success-strong); }
+.search-result-hub { container: offering-line / inline-size; }
+.search-result-hub:empty { display: none; }
+.req-course-row { container: offering-row / inline-size; }
+.req-course-row.is-compact { container-name: offering-compact; }
+.req-course-row .offering-badge.offering-badge-current { flex-shrink: 0; overflow: visible; }
+@container offering-row (max-width: 439px) {
+  .offering-badge-current > .offering-badge-check,
+  .offering-badge-current > .offering-badge-long { display: none; }
+  .offering-badge-current > .offering-badge-dot { display: inline-block; }
+  .offering-badge-current > .offering-badge-short { display: inline; }
+}
+@container offering-line (max-width: 219px) {
+  .offering-badge-current > .offering-badge-check,
+  .offering-badge-current > .offering-badge-long { display: none; }
+  .offering-badge-current > .offering-badge-dot { display: inline-block; }
+  .offering-badge-current > .offering-badge-short { display: inline; }
+}
+.req-course-row.is-compact .offering-badge-current > .offering-badge-check,
+.req-course-row.is-compact .offering-badge-current > .offering-badge-long { display: none; }
+.req-course-row.is-compact .offering-badge-current > .offering-badge-dot { display: inline-block; }
+.req-course-row.is-compact .offering-badge-current > .offering-badge-short { display: inline; }
+/* Dot only, when ● "Spring" truly won't fit. The tooltip keeps the full
+   "Offered …" text. */
+@container offering-row (max-width: 319px) {
+  .offering-badge.offering-badge-current { width: 7px; height: 7px; padding: 0; border-radius: 50%; background: var(--success-strong); }
+  .offering-badge-current > .offering-badge-check,
+  .offering-badge-current > .offering-badge-long,
+  .offering-badge-current > .offering-badge-dot,
+  .offering-badge-current > .offering-badge-short { display: none; }
+}
+@container offering-line (max-width: 159px) {
+  .offering-badge.offering-badge-current { width: 7px; height: 7px; padding: 0; border-radius: 50%; background: var(--success-strong); }
+  .offering-badge-current > .offering-badge-check,
+  .offering-badge-current > .offering-badge-long,
+  .offering-badge-current > .offering-badge-dot,
+  .offering-badge-current > .offering-badge-short { display: none; }
+}
+@container offering-compact (max-width: 199px) {
+  .req-course-row.is-compact .offering-badge.offering-badge-current { width: 7px; height: 7px; padding: 0; border-radius: 50%; background: var(--success-strong); }
+  .req-course-row.is-compact .offering-badge-current > * { display: none; }
+}
+/* "{CURRENT_TERM_LABEL}" filter pill — a HUB code chip in green: outlined
+   off, filled with a ✓ on. Plus a one-line snapshot note. */
+.offered-filter { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin: 6px 0 2px; }
+.offered-filter-chip {
+  font-family: inherit;
+  text-transform: none;
+  cursor: pointer;
+  color: var(--success-text);
+  background: transparent;
+  border: 1.5px solid currentColor;
+}
+.offered-filter-chip.is-on { color: var(--success-surface); background: var(--success-text); border-color: var(--success-text); }
+.offered-filter-note {
+  max-width: 100%;
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ===== SIDE PANEL TABS (HUB / Requirements / Credits) ===== */
 /* One panel visible at a time; collapse/expand applies to the whole tabbed
@@ -2081,6 +2194,23 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
 }
 .req-full-view-close:hover,
 .full-view-close:hover { background: rgba(255,255,255,.24); }
+/* FullViewHeader: big, full-contrast Close (44px touch target) and the
+   Requirements | HUB switch. The header sits outside the scrolling
+   .full-view-body, so both stay visible while scrolling. */
+.full-view-header { flex-wrap: wrap; }
+.full-view-header .full-view-close {
+  min-height: 44px;
+  padding: 0 20px;
+  font-size: 15px;
+  font-weight: 700;
+  border: 2px solid #fff;
+  background: #fff;
+  color: var(--scarlet);
+}
+.full-view-header .full-view-close:hover { background: var(--cream); }
+.full-view-header .full-view-close:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.full-view-switch { margin: 0 0 0 auto; min-width: 200px; }
+.full-view-switch .hub-year-toggle-btn { font-size: 12px; padding: 6px 10px; }
 .req-full-view-body,
 .full-view-body {
   flex: 1;
@@ -2233,6 +2363,368 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   font-style: italic;
   padding: 6px 0;
 }
+
+/* Requirement cards/rows — built on HubFullView's .hub-full-group /
+   .hub-full-requirement styles (see RequirementNodeView); only the bits
+   those don't cover live here. */
+.hub-full-overview-toolbar.req-toolbar { justify-content: flex-end; margin: 0 0 10px; }
+
+/* Sidebar (compact) Requirements tab. */
+.req-compact-summary .panel-summary-line { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.req-beta-tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--badge-cool-bg);
+  color: var(--badge-cool-text);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.req-panel:not(.req-panel--full) .req-tree { gap: 6px; margin-top: 10px; }
+.req-card--compact { padding: 7px 8px; }
+.req-card--compact.is-expanded { padding: 8px; }
+.req-card--compact .hub-full-group-header { gap: 8px; }
+.req-card--compact .hub-full-group-label { font-size: 12.5px; }
+/* Compact card labels wrap (up to 2 lines collapsed, all lines expanded)
+   instead of ellipsizing. The title attribute still has the full label. */
+.req-card--compact .hub-full-group-label {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.req-card--compact.is-expanded .hub-full-group-label,
+.req-card--compact.req-card--needs-review .hub-full-group-label,
+.req-card--compact.req-card--petitioned .hub-full-group-label { display: block; }
+.req-card-subtitle { display: block; }
+/* A node's student-facing `note` (RequirementNodeView), under its header text. */
+.req-node-note {
+  margin: 0 0 4px;
+  font-size: 11.5px;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.req-panel:not(.req-panel--full) .req-node-note { font-size: 10.5px; }
+
+/* Compact card header as a grid so nothing wraps loose: ring | label |
+   count or badge | ⋯ | caret, all top-aligned on one row. */
+.req-card--compact .hub-full-group-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: start;
+  column-gap: 6px;
+  row-gap: 4px;
+}
+.req-card--compact .hub-full-group-header > .hub-ring-wrap { grid-column: 1; grid-row: 1; }
+.req-card--compact .hub-full-group-header > .hub-full-group-heading { grid-column: 2; grid-row: 1; }
+.req-card--compact .hub-full-group-header > .req-card-count,
+.req-card--compact .hub-full-group-header > .req-node-review-badge,
+.req-card--compact .hub-full-group-header > .req-node-petitioned-badge { grid-column: 3; grid-row: 1; }
+.req-card--compact .hub-full-group-header > .req-node-menu { grid-column: 4; grid-row: 1; }
+.req-card--compact .hub-full-group-header > .hub-full-group-caret { grid-column: 5; grid-row: 1; }
+
+/* Nested rows in the sidebar: same idea — indicator | label (header text
+   below it) | count or badge | ⋯ — so the ⋯ stays top-right. */
+.req-panel:not(.req-panel--full) .req-row-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: start;
+  column-gap: 6px;
+  row-gap: 2px;
+}
+.req-panel:not(.req-panel--full) .req-row-header > .hub-full-requirement-indicator { grid-column: 1; grid-row: 1; }
+.req-panel:not(.req-panel--full) .req-row-header > .hub-full-requirement-label { grid-column: 2; grid-row: 1; }
+.req-panel:not(.req-panel--full) .req-row-header > .hub-full-requirement-detail { grid-column: 2 / 4; grid-row: 2; }
+.req-panel:not(.req-panel--full) .req-row-header > .hub-full-requirement-count,
+.req-panel:not(.req-panel--full) .req-row-header > .req-node-review-badge,
+.req-panel:not(.req-panel--full) .req-row-header > .req-node-petitioned-badge { grid-column: 3; grid-row: 1; }
+.req-panel:not(.req-panel--full) .req-row-header > .req-node-menu { grid-column: 4; grid-row: 1; }
+.req-panel:not(.req-panel--full) .req-row-body { padding-left: 10px; }
+.req-panel:not(.req-panel--full) .req-course-row { gap: 4px; padding: 3px 4px; }
+.req-panel:not(.req-panel--full) .req-course-row-title { min-width: 0; }
+
+/* Sidebar range-only nodes: one merged line + link (CoursePool); the
+   inline lists only show in a wide panel (see the container query below). */
+.req-range-merged {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.req-range-wide { display: none; }
+
+/* Container queries on the right panel's width (sidebar only — every rule
+   is scoped to compact density, so the full view is untouched). */
+.planner-right { container: planner-right / inline-size; }
+@container planner-right (max-width: 439px) {
+  /* A badge + ⋯ never squeeze the label: they drop to their own line. */
+  .req-card--compact .hub-full-group-header:has(> .req-node-review-badge, > .req-node-petitioned-badge) > .hub-full-group-heading { grid-column: 2 / 5; }
+  .req-card--compact .hub-full-group-header > .req-node-review-badge,
+  .req-card--compact .hub-full-group-header > .req-node-petitioned-badge { grid-row: 2; grid-column: 2; justify-self: start; }
+  .req-card--compact .hub-full-group-header:has(> .req-node-review-badge, > .req-node-petitioned-badge) > .req-node-menu { grid-row: 2; }
+  .req-panel:not(.req-panel--full) .req-row-header:has(> .req-node-review-badge, > .req-node-petitioned-badge) > .hub-full-requirement-label { grid-column: 2 / 5; }
+  .req-panel:not(.req-panel--full) .req-row-header > .req-node-review-badge,
+  .req-panel:not(.req-panel--full) .req-row-header > .req-node-petitioned-badge { grid-row: 3; grid-column: 2; justify-self: start; }
+  .req-panel:not(.req-panel--full) .req-row-header:has(> .req-node-review-badge, > .req-node-petitioned-badge) > .req-node-menu { grid-row: 3; }
+}
+@container planner-right (max-width: 379px) {
+  /* Two-line rows: paw + code + title + (i), then HUB tags + badge. */
+  .req-panel:not(.req-panel--full) .req-course-row {
+    /* Two-line rows: the badge sizes off its tags line (offering-line). */
+    container-name: none;
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 4px;
+    row-gap: 1px;
+  }
+  .req-panel:not(.req-panel--full) .req-course-row > .search-result-stash-btn,
+  .req-panel:not(.req-panel--full) .req-course-row > .req-course-row-check { grid-column: 1; grid-row: 1; }
+  .req-panel:not(.req-panel--full) .req-course-row > .req-course-row-code { grid-column: 2; grid-row: 1; }
+  .req-panel:not(.req-panel--full) .req-course-row > .req-course-row-title { grid-column: 3; grid-row: 1; }
+  .req-panel:not(.req-panel--full) .req-course-row > .req-course-row-info { grid-column: 4; grid-row: 1; }
+  .req-panel:not(.req-panel--full) .req-course-row > .req-course-row-meta {
+    grid-column: 2 / 4;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 10px;
+    container: offering-line / inline-size;
+  }
+  .req-panel:not(.req-panel--full) .req-course-row > .req-course-row-meta:empty { display: none; }
+  /* Sequence rows (badge only): stay one line, badge after the title. */
+  .req-panel:not(.req-panel--full) .req-course-row.is-compact { display: flex; container-name: offering-compact; }
+  .req-panel:not(.req-panel--full) .req-course-row.is-compact > .req-course-row-meta { display: contents; }
+}
+/* A wide (dragged-out) right panel gets the full view's 2-column rows and
+   inline range lists. Desktop only — the mobile Tracker tab keeps one
+   column. */
+@media (min-width: 861px) {
+  @container planner-right (min-width: 520px) {
+    /* .planner-right prefix: outranks the 1-column compact rules below. */
+    .planner-right .req-panel:not(.req-panel--full) .req-course-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .planner-right .req-panel:not(.req-panel--full) .req-course-grid--pair { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+    .planner-right .req-panel:not(.req-panel--full) .req-seq-courses { flex-direction: row; align-items: center; }
+    .planner-right .req-range-merged { display: none; }
+    .planner-right .req-range-wide { display: flex; flex-direction: column; gap: 6px; }
+  }
+}
+.req-card-count { flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: var(--text-muted); }
+.req-card-count.satisfied { color: var(--success-strong); }
+.req-coming-soon .req-bulletin-open-btn { margin: 8px auto 0; max-width: 280px; }
+.req-coming-soon-ask { margin: 10px 0 0; font-size: 11px; color: var(--text-muted); }
+.req-coming-soon-ask a { color: inherit; font-weight: 600; }
+.req-tracking-count { margin-top: -4px; }
+.req-ring .hub-ring-fill { stroke: var(--scarlet); }
+.req-ring.is-satisfied .hub-ring-fill { stroke: var(--success-strong); }
+.req-card--fulfilled:not(.is-expanded) .hub-full-group-label { color: var(--success-strong); }
+.req-card-body { display: flex; flex-direction: column; gap: 6px; }
+.req-row-header { cursor: pointer; align-items: center; }
+.req-row-body { padding: 0 0 2px 21px; }
+/* UNRESOLVED ("Check with advisor") — quieter than a real requirement. */
+.req-card--needs-review { background: transparent; border-style: dashed; }
+.req-card--needs-review .hub-full-group-label,
+.req-row.needs-review .hub-full-requirement-label { font-weight: 600; color: var(--text-secondary); }
+.req-card--needs-review .req-node-review-badge,
+.req-row.needs-review .req-node-review-badge {
+  color: var(--text-muted);
+  border-color: var(--border);
+  background: transparent;
+}
+
+/* Slots: one dashed row per unfilled pool entry ("CS 132 or MA 242"). */
+.req-slot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.req-slot--open {
+  padding: 4px 6px;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-xs, 3px);
+}
+.req-slot-text { font-size: 11.5px; color: var(--text-secondary); font-style: italic; }
+/* Pool entry group title (authored label, else generated). */
+.req-slot-title { flex-basis: 100%; font-size: 11.5px; font-weight: 700; color: var(--text-secondary); }
+/* atLeast subset sub-line + its marker on matching courses. */
+.req-subset-line { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+.req-subset-line.is-satisfied { color: var(--success-strong); }
+.req-pool-chip-status.req-subset-badge { background: var(--badge-cool-bg); color: var(--badge-cool-text); }
+/* ONE_OF option switcher (HubYearToggle's pill toggle). */
+.req-one-of-toggle { margin: 2px 0 6px; flex-wrap: wrap; }
+.req-fallback-note { font-style: italic; }
+.req-range-list { flex-basis: 100%; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.req-range-list .req-node-pool-toggle { align-self: flex-start; }
+
+/* Course rows (RequirementCourseRow) — one compact line each, in a 2-column
+   grid (1 on narrow screens and in the compact sidebar). No inner scroll. */
+.req-course-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.req-panel:not(.req-panel--full) .req-course-grid { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 640px) {
+  .req-course-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.req-course-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  font-size: 12px;
+  line-height: 1.2;
+}
+.req-course-row .search-result-stash-btn,
+.req-course-row .search-result-info-btn { width: 20px; height: 20px; margin-top: 0; }
+.req-course-row .search-result-stash-btn:hover { background: var(--scarlet); color: #fff; }
+.req-course-row .search-result-stash-btn.is-stashed:hover { background: var(--badge-warm-text); color: #fff; }
+.req-course-row-check {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--success-strong);
+}
+.req-course-row.is-in-plan { background: var(--success-surface); border-color: transparent; }
+.req-course-row-code { flex-shrink: 0; font-weight: 700; color: var(--text); white-space: nowrap; }
+/* Tags + badge + ✱ wrapper: invisible to layout (one-line rows) unless a
+   narrow sidebar row puts it on its own second line. */
+.req-course-row-meta { display: contents; }
+.req-course-row-title {
+  flex: 1 1 60px;
+  min-width: 40px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+/* Tags and badges give way (clip / ellipsize) before the title does. */
+.req-course-row-tags { display: flex; gap: 3px; flex-shrink: 1; min-width: 0; overflow: hidden; }
+.req-course-row .offering-badge {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.req-course-row-info { flex-shrink: 0; margin-left: auto; }
+/* Whole-row click adds to Paw-tential Courses. */
+.req-course-row.is-clickable { cursor: pointer; transition: background .12s, border-color .12s; }
+.req-course-row.is-clickable:hover { background: var(--cream); border-color: var(--border); }
+/* Sidebar rows that can be dragged onto a semester (RequirementCourseRow). */
+.req-course-row.is-draggable { cursor: grab; touch-action: pan-y; }
+.req-course-row.is-dragging { opacity: .35; }
+/* Long-unoffered course, shown only because nothing else is left. */
+.req-course-row.is-dimmed { opacity: .55; }
+
+/* Two-option either/or slot: "or" pill centered between the columns (or
+   between the rows once the grid drops to 1 column). */
+.req-either-caption { font-size: 11px; font-style: italic; color: var(--text-muted); }
+.req-course-grid--pair { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
+@media (max-width: 640px) {
+  .req-course-grid--pair { grid-template-columns: minmax(0, 1fr); }
+}
+.req-or-pill {
+  justify-self: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--cream-dark);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* "Added to Paw-tential · Undo" — above the full view (60) and the info
+   panel (65), below modals (100). */
+.req-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 70;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--white);
+  font-size: 13px;
+  box-shadow: var(--shadow-lg);
+}
+.req-toast-undo {
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* SEQUENCE_GROUP options — one compact card per option, courses joined by "+". */
+.req-seq-cards { flex-basis: 100%; display: flex; flex-direction: column; gap: 4px; }
+.req-seq-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--cream);
+}
+.req-seq-card.is-partial { border-color: var(--badge-cool-text); background: var(--badge-cool-bg); }
+.req-seq-progress { align-self: flex-start; font-size: 10.5px; font-weight: 700; color: var(--badge-cool-text); }
+/* An option's courses side by side, joined by "+"; stacked when narrow. */
+.req-seq-courses { display: flex; align-items: center; gap: 4px; }
+.req-seq-courses .req-course-row { flex: 1 1 0; min-width: 0; }
+.req-seq-plus { flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+.req-panel:not(.req-panel--full) .req-seq-courses { flex-direction: column; align-items: stretch; }
+@media (max-width: 640px) {
+  .req-seq-courses { flex-direction: column; align-items: stretch; }
+  .req-seq-plus { align-self: center; }
+}
+.req-seq-or {
+  align-self: center;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  line-height: 1;
+  color: var(--text-muted);
+}
+/* atLeast marker on rows (full label in its tooltip) and in the legend. */
+.req-subset-marker { flex-shrink: 0; font-weight: 700; color: var(--badge-cool-text); cursor: help; }
+.req-subset-done { color: var(--success-strong); font-weight: 700; }
+
+/* Stash chips — same paw/amber language as .search-result-stash-btn. */
+.req-pool-chip--stash { display: inline-flex; align-items: center; gap: 4px; }
+.req-pool-chip--stash svg { flex-shrink: 0; }
+.req-pool-chip.eligible.is-stashed {
+  color: var(--badge-warm-text);
+  border-color: var(--badge-warm-text);
+  background: var(--badge-warm-bg);
+}
+.req-pool-chip.eligible.is-stashed:hover { background: var(--badge-warm-text); color: #fff; }
+
+/* Per-node "⋯" menu; the dropdown itself is .tp-user-dropdown. */
+.req-node-menu { position: relative; flex-shrink: 0; }
+.req-node-menu-btn {
+  width: 24px;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.req-node-menu-btn:hover,
+.req-node-menu-btn[aria-expanded='true'] { border-color: var(--border); color: var(--text); background: var(--cream); }
+.req-node-menu-dropdown { top: calc(100% + 4px); z-index: 5; min-width: 200px; }
 
 /* ===== HUB TRACKER — FULL-SCREEN VIEW ===== */
 /* Sits inside the shared .full-view shell above (not touched here).
@@ -2659,6 +3151,8 @@ html[data-theme='dark'] .hub-stash-link { color: var(--warning-border); }
   color: var(--text-secondary);
 }
 .hub-search-row + .estimate-note.is-prominent { margin: 10px 0 14px; }
+/* Requirements full view: tucked under the progress card. */
+.req-progress-summary + .estimate-note.is-prominent { margin: -8px 0 16px; }
 
 .credits-hint {
   font-size: 10px;

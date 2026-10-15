@@ -32,6 +32,9 @@ function structuralCourseCount(node) {
       // use the smallest so a sibling REMAINDER's denominator is never
       // overstated regardless of which option the student ends up matching.
       return Math.min(...node.options.map((option) => option.courses.length));
+    case 'ONE_OF':
+      // Only one child ever counts — same "never overstate" rule as above.
+      return Math.min(...node.children.map(structuralCourseCount));
     case 'REMAINDER':
     case 'UNRESOLVED':
       return 0;
@@ -40,11 +43,18 @@ function structuralCourseCount(node) {
   }
 }
 
-function matchCourseRange(ctx, subject, min, max, exclude) {
+// `include` (COURSE_RANGE only): extra courseKeys that also match, on top of
+// the subject/number range — same exclude/claimed rules.
+function matchCourseRange(ctx, subject, min, max, exclude, include = []) {
   const excludeSet = new Set((exclude || []).map(normalizeCourseKey));
+  const includeSet = new Set((include || []).map(normalizeCourseKey));
   const results = [];
   for (const key of ctx.planCourseKeys) {
     if (ctx.claimed.has(key) || excludeSet.has(key)) continue;
+    if (includeSet.has(key)) {
+      results.push(key);
+      continue;
+    }
     const parsed = parseCourseKey(key);
     if (!parsed || parsed.subject !== subject) continue;
     if (parsed.number < min || parsed.number > max) continue;
@@ -59,7 +69,8 @@ function matchCourseRange(ctx, subject, min, max, exclude) {
 // null for entry types that aren't enumerable without a full course catalog
 // (COURSE_RANGE / COURSE_RANGE_CAP match anything in-subject/in-range, which
 // the engine can only discover by scanning the plan, not list up front).
-function poolEntryCandidateKeys(entry) {
+// Also used by the UI to find which node "owns" a fallback course.
+export function poolEntryCandidateKeys(entry) {
   if (typeof entry === 'string') return [normalizeCourseKey(entry)];
   switch (entry.type) {
     case 'OR_EQUIVALENT':
@@ -84,7 +95,13 @@ function poolEntryCandidateKeys(entry) {
 function poolEntryRange(entry) {
   if (typeof entry === 'string') return null;
   if (entry.type === 'COURSE_RANGE' || entry.type === 'COURSE_RANGE_CAP') {
-    return { subject: entry.subject, min: entry.min, max: entry.max, exclude: entry.exclude || [] };
+    return {
+      subject: entry.subject,
+      min: entry.min,
+      max: entry.max,
+      exclude: entry.exclude || [],
+      include: entry.type === 'COURSE_RANGE' ? (entry.include || []).map(normalizeCourseKey) : [],
+    };
   }
   return null;
 }
@@ -130,7 +147,7 @@ function claimPoolEntry(entry, ctx, need) {
       return { claimedKeys: [], candidateKeys };
     }
     case 'COURSE_RANGE': {
-      const candidates = matchCourseRange(ctx, entry.subject, entry.min, entry.max, entry.exclude);
+      const candidates = matchCourseRange(ctx, entry.subject, entry.min, entry.max, entry.exclude, entry.include);
       const claim = candidates.slice(0, need);
       claim.forEach((key) => ctx.claimed.add(key));
       return { claimedKeys: claim, candidateKeys };
@@ -146,7 +163,8 @@ function claimPoolEntry(entry, ctx, need) {
       const candidates = (entry.courses || [])
         .map(normalizeCourseKey)
         .filter((key) => ctx.planCourseKeys.has(key) && !ctx.claimed.has(key));
-      const claim = candidates.slice(0, need);
+      // Optional `cap`: never more than that many from this list.
+      const claim = candidates.slice(0, Math.min(need, entry.cap ?? Infinity));
       claim.forEach((key) => ctx.claimed.add(key));
       return { claimedKeys: claim, candidateKeys };
     }
@@ -174,22 +192,34 @@ function claimPoolEntry(entry, ctx, need) {
 // `additionalPool`, if given) in order, stopping once `required` is met.
 // Entries left unevaluated once the need is met stay unclaimed, so later
 // siblings (e.g. a REMAINDER's additionalPool) can still use them.
+// Missing entries from any pool after the first (additionalPool) are tagged
+// `fallback: true` so the UI can show them as a note instead of add chips.
+// Every matched/missing entry also carries `entryIndex` (its position in its
+// own pool) and `entryLabel` (the pool entry's optional authored `label`,
+// else null), so the UI can line results back up with the pool in order.
 function claimFromPools(pools, required, ctx) {
   const matched = [];
   const missing = [];
   let satisfiedCount = 0;
 
-  for (const pool of pools) {
-    for (const entry of pool) {
+  for (const [poolIndex, pool] of pools.entries()) {
+    for (const [entryIndex, entry] of pool.entries()) {
       const remaining = required - satisfiedCount;
       if (remaining <= 0) break;
       const result = claimPoolEntry(entry, ctx, remaining);
+      const entryLabel = typeof entry === 'string' ? null : entry.label ?? null;
       if (result.claimedKeys.length > 0) {
         // A SEQUENCE_GROUP entry's bundleClaim counts as 1 slot regardless of
         // how many real courses back it — everything else counts by however
         // many courses it actually claimed.
         satisfiedCount += result.bundleClaim ? 1 : result.claimedKeys.length;
-        matched.push({ label: describeEntry(entry), courseKeys: result.claimedKeys });
+        matched.push({
+          label: describeEntry(entry),
+          entryLabel,
+          courseKeys: result.claimedKeys,
+          entryIndex,
+          fallback: poolIndex > 0,
+        });
       } else {
         // courseKeys is null for non-enumerable entries (COURSE_RANGE /
         // COURSE_RANGE_CAP) — there's no fixed list to offer as "add this".
@@ -197,8 +227,11 @@ function claimFromPools(pools, required, ctx) {
         // so the UI can offer a "browse this range" action.
         missing.push({
           label: describeEntry(entry),
+          entryLabel,
           courseKeys: result.candidateKeys,
           range: poolEntryRange(entry),
+          entryIndex,
+          fallback: poolIndex > 0,
         });
       }
     }
@@ -267,14 +300,45 @@ function evaluateAllLeaf(node, ctx) {
   };
 }
 
+// COUNT/REMAINDER with optional `atLeast` subsets: each subset claims up to
+// its own `min` from its own pool FIRST, and those claims count toward the
+// node's total. The main pools then fill only what's left after every
+// subset's `min` is reserved, so a node can't be satisfied while a subset is
+// still short. Subset results are reported as `subsets` (same order as
+// `atLeast`); their matched entries are included in the node's `matched`,
+// tagged with `subsetIndex`. `missing` is the main pools' only.
+function claimWithSubsets(node, mainPools, required, ctx) {
+  const subsets = (node.atLeast || []).map((subset, subsetIndex) => {
+    const result = claimFromPools([subset.pool || []], subset.min, ctx);
+    return {
+      label: subset.label ?? null,
+      min: subset.min,
+      status: result.satisfiedCount >= subset.min ? 'satisfied' : 'unsatisfied',
+      satisfiedCount: result.satisfiedCount,
+      matched: result.matched.map((entry) => ({ ...entry, subsetIndex })),
+      missing: result.missing,
+    };
+  });
+  const reserved = subsets.reduce((sum, subset) => sum + subset.min, 0);
+  const subsetCount = subsets.reduce((sum, subset) => sum + subset.satisfiedCount, 0);
+  const main = claimFromPools(mainPools, Math.max(required - reserved, 0), ctx);
+  return {
+    matched: [...subsets.flatMap((subset) => subset.matched), ...main.matched],
+    missing: main.missing,
+    satisfiedCount: subsetCount + main.satisfiedCount,
+    subsets,
+  };
+}
+
 function evaluateCount(node, ctx) {
   const required = node.min;
-  const { matched, missing, satisfiedCount } = claimFromPools([node.pool || []], required, ctx);
+  const { matched, missing, satisfiedCount, subsets } = claimWithSubsets(node, [node.pool || []], required, ctx);
   return {
     ...node,
     status: satisfiedCount >= required ? 'satisfied' : 'unsatisfied',
     matched,
     missing,
+    subsets,
     satisfiedCount,
     required,
   };
@@ -283,14 +347,49 @@ function evaluateCount(node, ctx) {
 function evaluateRemainder(node, ctx, meta = {}) {
   const required = Math.max(node.totalRequired - (meta.siblingsExpected ?? 0), 0);
   const pools = [node.pool || [], node.additionalPool || []];
-  const { matched, missing, satisfiedCount } = claimFromPools(pools, required, ctx);
+  const { matched, missing, satisfiedCount, subsets } = claimWithSubsets(node, pools, required, ctx);
   return {
     ...node,
     status: satisfiedCount >= required ? 'satisfied' : 'unsatisfied',
     matched,
     missing,
+    subsets,
     satisfiedCount,
     required,
+  };
+}
+
+// Exactly one child must be complete (e.g. a standard track vs. an
+// alternative track). Each child is evaluated against its own COPY of the
+// claimed set, so trying one track never eats courses another could use;
+// only the chosen child's claims are committed. Chosen = first satisfied
+// child, else the best satisfiedCount/required ratio (ties: first). All
+// children are returned evaluated, for display; `activeChildIndex` says
+// which one counts. Counts as one slot: 1/1 or 0/1.
+function evaluateOneOf(node, ctx) {
+  const attempts = node.children.map((child) => {
+    const childCtx = { ...ctx, claimed: new Set(ctx.claimed) };
+    return { result: evaluateNode(child, childCtx), claimed: childCtx.claimed };
+  });
+  const ratio = ({ result }) => (result.required > 0 ? result.satisfiedCount / result.required : 0);
+  let activeChildIndex = attempts.findIndex(({ result }) => result.status === 'satisfied');
+  if (activeChildIndex === -1) {
+    activeChildIndex = 0;
+    attempts.forEach((attempt, i) => {
+      if (ratio(attempt) > ratio(attempts[activeChildIndex])) activeChildIndex = i;
+    });
+  }
+  attempts[activeChildIndex].claimed.forEach((key) => ctx.claimed.add(key));
+  const satisfied = attempts[activeChildIndex].result.status === 'satisfied';
+  return {
+    ...node,
+    children: attempts.map(({ result }) => result),
+    activeChildIndex,
+    status: satisfied ? 'satisfied' : 'unsatisfied',
+    matched: [],
+    missing: [],
+    satisfiedCount: satisfied ? 1 : 0,
+    required: 1,
   };
 }
 
@@ -432,7 +531,9 @@ function evaluateSubstituted(node, ctx, meta, override) {
     return { ...result, substituted: true, overrideNote: override.note ?? null };
   }
 
-  return null; // ALL: no pool to substitute into — caller falls back to normal evaluation.
+  // ALL / ONE_OF: no pool to substitute into — caller falls back to normal
+  // evaluation (ONE_OF only supports waive).
+  return null;
 }
 
 function evaluateNode(node, ctx, meta) {
@@ -452,6 +553,8 @@ function evaluateNode(node, ctx, meta) {
       return evaluateRemainder(node, ctx, meta);
     case 'SEQUENCE_GROUP':
       return evaluateSequenceGroup(node, ctx);
+    case 'ONE_OF':
+      return evaluateOneOf(node, ctx);
     case 'UNRESOLVED':
       return evaluateUnresolved(node, ctx);
     default:
@@ -466,6 +569,34 @@ function evaluateNode(node, ctx, meta) {
 // requirementOverrides is the plan's student-reported waive/substitute map,
 // keyed by requirement node id (see src/data/requirements/SCHEMA.md's Manual
 // overrides section) — entirely plan-scoped, never persisted to programDef.
+// How many courses the evaluated tree actually asks for, along the branch
+// that counts: ONE_OF -> its active child; SEQUENCE_GROUP -> the matched
+// option's course count (unsatisfied: the closest option's, else the
+// smallest); UNRESOLVED -> 0 (unless substituted, which claims one course);
+// waived nodes -> 0 (they claim nothing either); everything else ->
+// `required`. Lets the progress total follow the student's track instead of
+// the program's fixed totalCoursesRequired. NaN if something's off, so the
+// caller can fall back.
+export function deriveRequiredTotal(node) {
+  if (node.waived) return 0;
+  switch (node.type) {
+    case 'ALL':
+      return Array.isArray(node.children)
+        ? node.children.reduce((sum, child) => sum + deriveRequiredTotal(child), 0)
+        : node.required;
+    case 'ONE_OF':
+      return deriveRequiredTotal(node.children[node.activeChildIndex]);
+    case 'SEQUENCE_GROUP':
+      if (node.status === 'satisfied') return node.matched.length;
+      if (node.partialMatch) return node.partialMatch.haveKeys.length + node.partialMatch.needKeys.length;
+      return Math.min(...node.options.map((option) => option.courses.length));
+    case 'UNRESOLVED':
+      return node.substituted ? node.required : 0;
+    default:
+      return node.required;
+  }
+}
+
 export function evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides = {}) {
   const planSet = new Set(
     Array.from(planCourseKeys)
@@ -474,6 +605,7 @@ export function evaluateRequirementTree(programDef, planCourseKeys, requirementO
   );
   const ctx = { planCourseKeys: planSet, claimed: new Set(), overrides: requirementOverrides || {} };
   const tree = evaluateNode(programDef.tree, ctx);
+  const derivedTotal = deriveRequiredTotal(tree);
 
   return {
     programName: programDef.programName,
@@ -482,7 +614,11 @@ export function evaluateRequirementTree(programDef, planCourseKeys, requirementO
     verifiedBy: programDef.verifiedBy ?? null,
     verifiedDate: programDef.verifiedDate ?? null,
     status: tree.status,
-    totalCoursesRequired: programDef.totalCoursesRequired,
+    // Derived from the tree (see deriveRequiredTotal); the authored number
+    // is only the fallback.
+    totalCoursesRequired: Number.isFinite(derivedTotal) && derivedTotal > 0
+      ? derivedTotal
+      : programDef.totalCoursesRequired,
     totalCoursesClaimed: ctx.claimed.size,
     tree,
   };

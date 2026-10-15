@@ -1,117 +1,159 @@
-import { useState } from 'react';
-import CourseChip from './CourseChip';
+import CourseList from './CourseList';
+import RequirementCourseRow from './RequirementCourseRow';
+import RangeCourseList from './RangeCourseList';
+import { SequenceOptionCards } from './SequenceGroupDetail';
+import { shortCourseCode, describeLockStatus, hideInactive } from './treeHelpers';
 
-// Above this many entries, a full-density pool section gets a text filter
-// instead of dumping every chip inline — e.g. BMB Electives' ~46-course
-// COURSE_LIST is an unreadable wall otherwise. Compact (sidebar) density
-// never filters, regardless of pool size — same behavior as before.
-const LARGE_POOL_THRESHOLD = 12;
-
-function courseMatchesFilter(key, courseMap, filterLower) {
-  if (!filterLower) return true;
-  const data = courseMap[key];
-  const haystack = `${data?.courseNumber ?? key} ${data?.name ?? ''} ${key}`.toLowerCase();
-  return haystack.includes(filterLower);
-}
-
+// Pool view for one leaf node: atLeast subset legend lines ("✱ At least 1
+// calculus or statistics course ✓ — MA 123"), then one group per pool entry
+// in pool order (see collectPoolGroups): its title, its claimed courses as
+// green-tinted ✓ rows, then what it can still offer — a grid of course rows (CourseList),
+// range include rows plus the catalog browse list, or sequence option
+// cards — then the additionalPool note.
 export default function CoursePool({
-  claimed,
-  eligible,
-  ranges,
+  pool,
+  subsets = [],
+  subsetLabels,
+  fallbackNote,
   courseMap,
-  onAddCourse,
-  onBrowseRange,
-  density = 'compact',
   lockStatusMap,
+  planCourseKeySet,
+  stashSet,
+  onToggleStash,
+  onShowCourseInfo,
+  onRowClick,
+  inactiveKeys = new Set(),
+  density = 'compact',
+  // Compact (sidebar) only: range entries link here instead of listing
+  // the catalog inline.
+  onOpenFullView,
 }) {
-  const [eligibleFilter, setEligibleFilter] = useState('');
-  const [claimedFilter, setClaimedFilter] = useState('');
+  const { groups } = pool;
+  if (groups.length === 0 && subsets.length === 0 && !fallbackNote) return null;
 
-  if (claimed.length === 0 && eligible.length === 0 && ranges.length === 0) return null;
+  const listProps = { stashSet, onToggleStash, onShowCourseInfo, subsetLabels, onRowClick };
+  const toCourses = (keys) => keys.map((key) => ({ id: key, ...(courseMap[key] || {}) }));
+  // Choices only: inactive courses hide unless in the plan or stash (see hideInactive).
+  const keep = (key) => stashSet.has(key) || planCourseKeySet.has(key);
+  function choiceList(keys, extra = {}) {
+    const { keys: shown, dimmed } = hideInactive(keys, inactiveKeys, keep);
+    return <CourseList courses={toCourses(shown)} dimmed={dimmed} {...extra} {...listProps} />;
+  }
 
-  const eligibleFilterable = density === 'full' && eligible.length > LARGE_POOL_THRESHOLD;
-  const claimedFilterable = density === 'full' && claimed.length > LARGE_POOL_THRESHOLD;
+  // Sidebar, pool made only of ranges: claimed rows + one merged line.
+  const compactRangeOnly = density === 'compact' && pool.rangeOnly;
 
-  const eligibleLower = eligibleFilter.trim().toLowerCase();
-  const visibleEligible = eligibleFilterable
-    ? eligible.filter(({ key }) => courseMatchesFilter(key, courseMap, eligibleLower))
-    : eligible;
+  function claimedRow(key) {
+    return (
+      <RequirementCourseRow
+        key={key}
+        courseKey={key}
+        course={courseMap[key]}
+        inPlan
+        statusLabel={describeLockStatus(lockStatusMap?.[key]).label}
+        onShowCourseInfo={onShowCourseInfo}
+        subsetLabel={subsetLabels?.get(key)}
+      />
+    );
+  }
 
-  const claimedLower = claimedFilter.trim().toLowerCase();
-  const visibleClaimed = claimedFilterable
-    ? claimed.filter(({ key }) => courseMatchesFilter(key, courseMap, claimedLower))
-    : claimed;
+  function renderOffer(group) {
+    if (group.kind === 'range') {
+      if (!group.showRange) return null;
+      return (
+        <>
+          {group.includeOptions.length > 0 && choiceList(group.includeOptions)}
+          {density === 'compact' && onOpenFullView ? (
+            <button type="button" className="req-node-pool-toggle" onClick={onOpenFullView}>
+              See all in full view →
+            </button>
+          ) : (
+            <RangeCourseList range={group.range} planCourseKeySet={planCourseKeySet} {...listProps} />
+          )}
+        </>
+      );
+    }
+    if (group.kind === 'sequence') {
+      if (group.sequenceOptions.length === 0) return null;
+      return (
+        <SequenceOptionCards
+          options={group.sequenceOptions}
+          courseMap={courseMap}
+          planCourseKeySet={planCourseKeySet}
+          stashSet={stashSet}
+          onToggleStash={onToggleStash}
+          onShowCourseInfo={onShowCourseInfo}
+          onRowClick={onRowClick}
+          inactiveKeys={inactiveKeys}
+        />
+      );
+    }
+    if (group.options.length === 0) return null;
+    // Required courses (ALL leaf) are never hidden — they aren't choices.
+    if (group.required) return <CourseList courses={toCourses(group.options)} {...listProps} />;
+    return choiceList(group.options, { equivalent: group.equivalent });
+  }
 
   return (
     <div className="req-pool">
-      {(eligible.length > 0 || ranges.length > 0) && (
-        <div className="req-pool-section">
-          <span className="req-pool-section-label">Add:</span>
-          {eligibleFilterable && (
-            <input
-              type="text"
-              className="req-pool-filter-input"
-              placeholder={`Filter ${eligible.length} courses…`}
-              value={eligibleFilter}
-              onChange={(e) => setEligibleFilter(e.target.value)}
-            />
-          )}
-          <div className={eligibleFilterable ? 'req-pool-chips req-pool-chips--list' : 'req-pool-chips'}>
-            {eligibleFilterable && visibleEligible.length === 0 && (
-              <span className="req-pool-filter-empty">No courses match &ldquo;{eligibleFilter}&rdquo;.</span>
-            )}
-            {visibleEligible.map(({ key }) => (
-              <CourseChip
-                key={key}
-                courseKey={key}
-                courseMap={courseMap}
-                density={density}
-                interactive
-                onClick={() => onAddCourse(key)}
-              />
-            ))}
-            {ranges.map(({ range, label }) => (
-              <button
-                key={`${range.subject}-${range.min}-${range.max}`}
-                type="button"
-                className="req-pool-chip eligible"
-                title={`Browse ${label} in Search`}
-                onClick={() => onBrowseRange(range)}
-              >
-                Browse eligible courses →
-              </button>
-            ))}
+      {subsets.map((subset, i) => {
+        const keys = subset.matched.flatMap((entry) => entry.courseKeys || []);
+        const done = subset.status === 'satisfied';
+        return (
+          // Legend for the ✱ marker on this subset's course rows. Authored
+          // labels are the whole line; ✓ (plus what met it) once satisfied.
+          <div key={i} className={`req-subset-line${done ? ' is-satisfied' : ''}`}>
+            <span className="req-subset-marker" aria-hidden="true">✱</span>{' '}
+            {subset.label ?? `At least ${subset.min} of these`}
+            {done && <span className="req-subset-done"> ✓</span>}
+            {keys.length > 0 && ` — ${keys.map(shortCourseCode).join(', ')}`}
           </div>
-        </div>
-      )}
-      {claimed.length > 0 && (
-        <div className="req-pool-section">
-          <span className="req-pool-section-label">Fulfilled by:</span>
-          {claimedFilterable && (
-            <input
-              type="text"
-              className="req-pool-filter-input"
-              placeholder={`Filter ${claimed.length} courses…`}
-              value={claimedFilter}
-              onChange={(e) => setClaimedFilter(e.target.value)}
-            />
+        );
+      })}
+      {compactRangeOnly ? (
+        <>
+          {groups.some((group) => group.claimed.length > 0) && (
+            <div className="req-course-grid">{groups.flatMap((group) => group.claimed.map(claimedRow))}</div>
           )}
-          <div className={claimedFilterable ? 'req-pool-chips req-pool-chips--list' : 'req-pool-chips'}>
-            {claimedFilterable && visibleClaimed.length === 0 && (
-              <span className="req-pool-filter-empty">No courses match &ldquo;{claimedFilter}&rdquo;.</span>
+          {pool.rangeSummary && (
+            <>
+              {/* Narrow sidebar: one line + link. A panel ≥520px wide shows
+                  the full view's inline lists instead (planner.css). */}
+              <div className="req-range-merged">
+                <span className="req-range-merged-text">{pool.rangeSummary}</span>
+                {onOpenFullView && (
+                  <button type="button" className="req-node-pool-toggle" onClick={onOpenFullView}>
+                    See all in full view →
+                  </button>
+                )}
+              </div>
+              <div className="req-range-wide">
+                {groups.filter((group) => group.showRange).map((group) => (
+                  <div key={group.key} className="req-slot req-slot--open">
+                    {group.title && <span className="req-slot-title">{group.title}</span>}
+                    {group.includeOptions.length > 0 && choiceList(group.includeOptions)}
+                    <RangeCourseList range={group.range} planCourseKeySet={planCourseKeySet} {...listProps} />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      ) : groups.map((group) => {
+        const offer = renderOffer(group);
+        const empty = group.claimed.length === 0 && !offer && !group.title;
+        return (
+          <div key={group.key} className={`req-slot${group.open ? ' req-slot--open' : ''}`}>
+            {group.title && <span className="req-slot-title">{group.title}</span>}
+            {group.claimed.length > 0 && (
+              <div className="req-course-grid">{group.claimed.map(claimedRow)}</div>
             )}
-            {visibleClaimed.map(({ key }) => (
-              <CourseChip
-                key={key}
-                courseKey={key}
-                courseMap={courseMap}
-                density={density}
-                lockStatus={lockStatusMap?.[key]}
-              />
-            ))}
+            {offer}
+            {empty && <span className="req-slot-text">{group.textIfEmpty}</span>}
           </div>
-        </div>
-      )}
+        );
+      })}
+      {fallbackNote && <span className="req-node-detail req-fallback-note">{fallbackNote}</span>}
     </div>
   );
 }

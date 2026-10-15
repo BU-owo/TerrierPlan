@@ -1,49 +1,52 @@
 import { useEffect } from 'react';
 import RequirementTree from '../requirements/RequirementTree';
+import FullViewHeader from './FullViewHeader';
 
 // Full-screen overlay/mode rendered from inside PlannerPage (not a route —
 // see PlannerPage's requirementsFullView state) so it shares the exact same
 // plan state and handlers as the compact sidebar tab instead of duplicating
 // any of it. All tree-walk/pool/exception logic lives in the shared
 // RequirementTree (density="full" here) — this component is just the
-// full-screen chrome around it.
+// full-screen chrome around it. Course chips here toggle Paw-tential
+// Courses (stash), never the plan, so the add-to-plan / browse-in-Search
+// props PlannerPage still passes are deliberately not forwarded.
 export default function RequirementsFullView({
   majorBulletinUrl,
   planCourseKeys,
   onMajorSelect,
   courseMap,
-  activeSemIndex,
-  semesterOptions,
-  onAddCourse,
   onEnsureCourseData,
-  onBrowseRange,
   requirementOverrides,
   onSetRequirementOverride,
   onRemoveRequirementOverride,
   lockStatusMap,
+  stash,
+  onAddToStash,
+  onRemoveFromStash,
+  onShowCourseInfo,
   onClose,
+  // Swaps to the HUB overlay without closing (see FullViewHeader).
+  onSwitchView,
+  // True while CourseInfoPanel is open, so its own Escape closes just it.
+  ignoreEscape = false,
 }) {
   useEffect(() => {
     function handleKeyDown(e) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !ignoreEscape) onClose();
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, ignoreEscape]);
 
   return (
     <div className="req-full-view" role="dialog" aria-modal="true" aria-label="Requirements">
-      <header className="req-full-view-header">
-        <h2 className="req-full-view-title">Requirements</h2>
-        <button
-          type="button"
-          className="req-full-view-close"
-          onClick={onClose}
-          aria-label="Close full-screen requirements view"
-        >
-          × Close
-        </button>
-      </header>
+      <FullViewHeader
+        title="Requirements"
+        view="requirements"
+        onSwitchView={onSwitchView}
+        onClose={onClose}
+        closeAriaLabel="Close full-screen requirements view"
+      />
       <div className="req-full-view-body">
         <div className="req-full-view-inner">
           <RequirementTree
@@ -52,15 +55,15 @@ export default function RequirementsFullView({
             planCourseKeys={planCourseKeys}
             onMajorSelect={onMajorSelect}
             courseMap={courseMap}
-            activeSemIndex={activeSemIndex}
-            semesterOptions={semesterOptions}
-            onAddCourse={onAddCourse}
             onEnsureCourseData={onEnsureCourseData}
-            onBrowseRange={onBrowseRange}
             requirementOverrides={requirementOverrides}
             onSetRequirementOverride={onSetRequirementOverride}
             onRemoveRequirementOverride={onRemoveRequirementOverride}
             lockStatusMap={lockStatusMap}
+            stash={stash}
+            onAddToStash={onAddToStash}
+            onRemoveFromStash={onRemoveFromStash}
+            onShowCourseInfo={onShowCourseInfo}
           />
         </div>
       </div>

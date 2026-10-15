@@ -1,15 +1,15 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useDraggable } from '@dnd-kit/core';
-import { HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { parseCourseKey, normalizeCourseKey, compareByCatalogNumber } from '../../utils/courseKey';
 import {
   loadAllCoursesWhenRequested,
   requestCatalogLoad,
   isProfessionalCareer,
+  isInactiveCourse,
 } from '../../utils/courseQuery';
-import { getOfferingBadge } from '../../utils/offeringPattern';
 import { aliasFor } from '../../utils/grsAlias';
 import SemesterPickerModal from './SemesterPickerModal';
+import { HubUnitTags, OfferingBadge, OfferedFilterToggle } from './CourseTags';
 
 // Stash toggle glyph — filled paw = stashed, outline paw = not. `currentColor`
 // so it inherits the button's own color (scarlet / stashed-amber / hover
@@ -55,7 +55,6 @@ function SearchResultCard({
 
   // Search results are the cached catalog's own entries, so upcomingSeasons
   // is already on them (absent on the Firestore fallback).
-  const offeringBadge = getOfferingBadge(course.offeringPattern, course.upcomingSeasons);
   const courseLabel = course.courseNumber ?? course.id;
 
   return (
@@ -89,11 +88,6 @@ function SearchResultCard({
         </div>
         <div className="search-result-name-row">
           <span className="search-result-name">{course.name ?? '—'}</span>
-          {offeringBadge && (
-            <span className={`offering-badge ${offeringBadge.className}`} title={offeringBadge.text}>
-              {offeringBadge.label}
-            </span>
-          )}
           {course.studyAbroad && (
             <span className="offering-badge offering-badge-abroad">Study abroad</span>
           )}
@@ -101,20 +95,15 @@ function SearchResultCard({
             <span className="offering-badge offering-badge-career">{course.career}</span>
           )}
         </div>
-        {course.hubUnits?.length > 0 && (
-          <div className="search-result-hub">
-            {course.hubUnits.slice(0, 4).map((unit) => (
-              <span
-                key={unit}
-                className={`hub-chip hub-chip-${
-                  HUB_COLOR_FOR[unit]?.groupId ?? 'def'
-                }`}
-              >
-                {unit}
-              </span>
-            ))}
-          </div>
-        )}
+        {/* Tags line: HUB tags, then the offering badge (hidden when empty). */}
+        <div className="search-result-hub">
+          <HubUnitTags units={course.hubUnits} />
+          <OfferingBadge
+            offeringPattern={course.offeringPattern}
+            upcomingSeasons={course.upcomingSeasons}
+            inCurrentTerm={course.inCurrentTerm}
+          />
+        </div>
       </div>
       {/* Secondary actions, independent of the card's own add-to-planner
           click/drag. Stacked in a column (not side by side) so the narrow
@@ -179,6 +168,8 @@ export default function CourseSearch({
   // active, so the results list can show "Showing all N CAS CS courses"
   // instead of a keyword-search list — see the filter effect below.
   const [subjectModeInfo, setSubjectModeInfo] = useState(null);
+  // In-memory only: limit results to catalog `inCurrentTerm` courses.
+  const [offeredOnly, setOfferedOnly] = useState(false);
   const debounceRef = useRef(null);
 
   // Real subject prefixes present in the loaded catalog (e.g. "CASCS",
@@ -188,7 +179,15 @@ export default function CourseSearch({
   // A GRS course that was renumbered into CAS is hidden here so only its CAS
   // twin shows (src/data/grsAliases.js). Plans and the info panel still open
   // the GRS key; searching the old GRS code finds the CAS course instead.
-  const searchableCourses = useMemo(() => allCourses.filter((course) => !aliasFor(course.id)), [allCourses]);
+  // Long-unoffered (inactive) courses are left out of results too, in both
+  // keyword and subject-prefix mode — they stay in plans, stash and info.
+  const searchableCourses = useMemo(
+    () => allCourses.filter((course) => !aliasFor(course.id) && !isInactiveCourse(course)),
+    [allCourses],
+  );
+  // The toggle only shows when the catalog carries `inCurrentTerm` (not the
+  // Firestore fallback).
+  const hasCurrentTermData = useMemo(() => allCourses.some((c) => c.inCurrentTerm), [allCourses]);
 
   const subjectPrefixes = useMemo(() => {
     const set = new Set();
@@ -310,6 +309,7 @@ export default function CourseSearch({
           return textMatch && rangeMatch;
         });
       }
+      if (offeredOnly) matches = matches.filter((course) => course.inCurrentTerm);
       // Law/Dental/Medical courses (not open to undergrads) go after
       // everything else, before the keyword list is cut to 20. Stable sort,
       // so each group keeps the ordering above.
@@ -331,7 +331,7 @@ export default function CourseSearch({
     }, 300);
 
     return () => clearTimeout(debounceRef.current);
-  }, [searchQuery, rangeFilter, coursesLoaded, searchableCourses, subjectPrefixes]);
+  }, [searchQuery, rangeFilter, coursesLoaded, searchableCourses, subjectPrefixes, offeredOnly]);
 
   const hasActiveQuery = Boolean(searchQuery.trim()) || Boolean(rangeFilter);
   const stashSet = useMemo(() => new Set(stash), [stash]);
@@ -364,6 +364,7 @@ export default function CourseSearch({
             spellCheck={false}
           />
         </div>
+        {hasCurrentTermData && <OfferedFilterToggle checked={offeredOnly} onChange={setOfferedOnly} />}
         {onOpenHubFullView && (
           <button type="button" className="search-hub-finder-btn" onClick={onOpenHubFullView}>
             Find courses by HUB unit →

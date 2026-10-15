@@ -24,6 +24,33 @@ export function getUpcomingSeasonsIndex() {
   return upcomingSeasonsByKey;
 }
 
+// A catalog entry the export marked `inactive` (no offering after Spring
+// 2022 and no current/upcoming section — see scripts/export-catalog.cjs).
+// Used ONLY where courses are offered as choices (search results, the HUB
+// finder, requirement lists). Never for courses already in a plan/stash/
+// completed list, transcript import, requirement matching, course info,
+// scheduler lookups, or HUB counting.
+export function isInactiveCourse(entry) {
+  return entry?.inactive === true;
+}
+
+// courseKeys of inactive catalog entries, built alongside
+// upcomingSeasonsByKey once the catalog loads. null until then.
+let inactiveCourseKeys = null;
+
+export function getInactiveCourseKeys() {
+  return inactiveCourseKeys;
+}
+
+// courseKeys the export marked `inCurrentTerm` (a non-cancelled CURRENT_TERM
+// section in the last import), built alongside inactiveCourseKeys so rows
+// fed by Firestore course docs can look it up. Browsing badges/filters only.
+let currentTermCourseKeys = null;
+
+export function getCurrentTermCourseKeys() {
+  return currentTermCourseKeys;
+}
+
 async function loadCoursesFromStaticFile() {
   const res = await fetch('/courses.json');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -51,6 +78,8 @@ export function loadAllCourses() {
         upcomingSeasonsByKey = new Map(
           courses.filter((c) => c.upcomingSeasons?.length).map((c) => [c.id, c.upcomingSeasons]),
         );
+        inactiveCourseKeys = new Set(courses.filter(isInactiveCourse).map((c) => c.id));
+        currentTermCourseKeys = new Set(courses.filter((c) => c.inCurrentTerm).map((c) => c.id));
         return courses;
       })
       .catch((err) => {
@@ -116,6 +145,9 @@ export const HUB_MATCH_MODES = { AND: 'and', OR: 'or' };
 //   of match (e.g. courses already in the plan or stash) — same
 //   Set-membership exclusion collectPoolCourses uses in treeHelpers.js.
 //
+// Inactive courses (isInactiveCourse) are always left out — this only
+// powers "pick a course" lists.
+//
 // Results are sorted by catalog number ascending, matching CourseSearch's
 // subject-mode ordering.
 export function queryCourses(
@@ -129,6 +161,7 @@ export function queryCourses(
 
   const matches = courses.filter((course) => {
     if (excludeKeys.has(course.id)) return false;
+    if (isInactiveCourse(course)) return false;
     if (normalizedPrefix && !course.id.startsWith(normalizedPrefix)) return false;
 
     const courseUnits = course.hubUnits ?? [];

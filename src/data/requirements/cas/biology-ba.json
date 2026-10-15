@@ -1,0 +1,368 @@
+{
+  "programName": "Biology",
+  "degree": "BA",
+  "school": "CAS",
+  "bulletinUrl": "https://www.bu.edu/academics/cas/programs/biology/ba/",
+  "minGrade": "C",
+  "totalCoursesRequired": 16,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "id": "bio-ba-root",
+    "type": "ALL",
+    "label": "Biology BA — Major Requirements",
+    "children": [
+      {
+        "id": "bio-ba-intro",
+        "type": "ALL",
+        "label": "Introductory Biology",
+        "children": [
+          {
+            "id": "bio-ba-intro-1",
+            "type": "COUNT",
+            "label": "Biology 1",
+            "min": 1,
+            "pool": [
+              {
+                "type": "OR_EQUIVALENT",
+                "options": [
+                  "CASBI107",
+                  "CGSNS201"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bio-ba-intro-2",
+            "type": "COUNT",
+            "label": "Biology 2",
+            "min": 1,
+            "pool": [
+              {
+                "type": "OR_EQUIVALENT",
+                "options": [
+                  "CASBI108",
+                  "CASBI116"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "bio-ba-breadth",
+        "type": "ALL",
+        "label": "Breadth (one from each area)",
+        "children": [
+          {
+            "id": "bio-ba-breadth-cm",
+            "type": "COUNT",
+            "label": "Cell & Molecular Biology",
+            "min": 1,
+            "pool": [
+              {
+                "type": "OR_EQUIVALENT",
+                "options": [
+                  "CASBI203",
+                  "CASBI213",
+                  "CASBI218",
+                  "CASBI206",
+                  "CASBI216"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bio-ba-breadth-pn",
+            "type": "COUNT",
+            "label": "Physiology & Neurobiology",
+            "min": 1,
+            "pool": [
+              {
+                "type": "OR_EQUIVALENT",
+                "options": [
+                  "CASBI310",
+                  "CASBI315",
+                  "CASBI325"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bio-ba-breadth-ebe",
+            "type": "COUNT",
+            "label": "Ecology, Behavior, Evolution",
+            "min": 1,
+            "pool": [
+              {
+                "type": "OR_EQUIVALENT",
+                "options": [
+                  "CASBI225",
+                  "CASBI260",
+                  "CASBI303",
+                  "CASBI306",
+                  "CASBI309",
+                  "CASBI407"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "bio-ba-electives",
+        "type": "COUNT",
+        "label": "Biology Electives (4 courses)",
+        "min": 4,
+        "pool": [
+          {
+            "type": "COURSE_RANGE",
+            "label": "Biology Department courses (BI 200–599, BB 522)",
+            "subject": "CASBI",
+            "min": 200,
+            "max": 599,
+            "exclude": [
+              "CASBI210",
+              "CASBI211"
+            ],
+            "include": [
+              "CASBB522"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "Approved non-Biology courses (max 2)",
+            "cap": 2,
+            "courses": [
+              "CASBB421",
+              "CASBB422",
+              "CASCH373",
+              "CASPS338",
+              "GMSBI751",
+              "SARHS251",
+              "SARHS369",
+              "SARHS370"
+            ]
+          }
+        ],
+        "devNote": "APPROXIMATE: 2-unit BI courses can combine into one elective per the bulletin; not tracked.",
+        "note": "Two-unit BI courses can combine to count as one elective. That isn't tracked here."
+      },
+      {
+        "id": "bio-ba-chem",
+        "type": "ONE_OF",
+        "label": "Related: Chemistry",
+        "children": [
+          {
+            "id": "bio-ba-chem-standard",
+            "type": "ALL",
+            "label": "Standard Track (recommended)",
+            "children": [
+              {
+                "id": "bio-ba-chem-general",
+                "type": "SEQUENCE_GROUP",
+                "label": "General Chemistry Sequence",
+                "options": [
+                  {
+                    "label": "CH 101 + CH 102",
+                    "courses": [
+                      "CASCH101",
+                      "CASCH102"
+                    ]
+                  },
+                  {
+                    "label": "CH 101 + CH 116",
+                    "courses": [
+                      "CASCH101",
+                      "CASCH116"
+                    ]
+                  },
+                  {
+                    "label": "CH 109 + CH 110",
+                    "courses": [
+                      "CASCH109",
+                      "CASCH110"
+                    ]
+                  },
+                  {
+                    "label": "CH 111 + CH 112",
+                    "courses": [
+                      "CASCH111",
+                      "CASCH112"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "bio-ba-chem-organic",
+                "type": "COUNT",
+                "label": "Organic Chemistry",
+                "min": 1,
+                "pool": [
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "options": [
+                      "CASCH203",
+                      "CASCH211",
+                      "CASCH218"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bio-ba-chem-alt-track",
+            "type": "ALL",
+            "label": "Alternative Track (not acceptable for most prehealth careers)",
+            "children": [
+              {
+                "id": "bio-ba-chem-alt-171",
+                "type": "COUNT",
+                "label": "CH 171 (or a completed standard-track general chemistry sequence)",
+                "min": 1,
+                "pool": [
+                  "CASCH171"
+                ],
+                "devNote": "The 'or any completed general chemistry sequence' option isn't tracked; only CH 171 is matched.",
+                "note": "Only CH 171 is checked here, not a completed standard-track chemistry sequence."
+              },
+              {
+                "id": "bio-ba-chem-alt-172",
+                "type": "COUNT",
+                "label": "CH 172 or CH 174",
+                "min": 1,
+                "pool": [
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "options": [
+                      "CASCH172",
+                      "CASCH174"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "bio-ba-mathcs",
+        "type": "COUNT",
+        "label": "Related: Mathematics/Computer Science (2 courses)",
+        "min": 2,
+        "atLeast": [
+          {
+            "label": "At least 1 calculus or statistics course",
+            "min": 1,
+            "pool": [
+              {
+                "type": "COURSE_LIST",
+                "courses": [
+                  "CASMA121",
+                  "CASMA122",
+                  "CASMA123",
+                  "CASMA124",
+                  "CASMA129",
+                  "CASMA115",
+                  "CASMA116",
+                  "CASMA213",
+                  "CASMA214",
+                  "CDSDS100"
+                ]
+              }
+            ]
+          }
+        ],
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "label": "Calculus, Statistics, or Computer Science",
+            "courses": [
+              "CASMA121",
+              "CASMA122",
+              "CASMA123",
+              "CASMA124",
+              "CASMA129",
+              "CASMA115",
+              "CASMA116",
+              "CASMA213",
+              "CASMA214",
+              "CDSDS100",
+              "CASCS105",
+              "CASCS108",
+              "CASCS111",
+              "CDSDS110"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "bio-ba-physics",
+        "type": "ONE_OF",
+        "label": "Related: Physics",
+        "children": [
+          {
+            "id": "bio-ba-physics-standard",
+            "type": "SEQUENCE_GROUP",
+            "label": "Standard Track (recommended)",
+            "options": [
+              {
+                "label": "PY 105 + PY 106",
+                "courses": [
+                  "CASPY105",
+                  "CASPY106"
+                ]
+              },
+              {
+                "label": "PY 211 + PY 106",
+                "courses": [
+                  "CASPY211",
+                  "CASPY106"
+                ]
+              },
+              {
+                "label": "PY 211 + PY 212",
+                "courses": [
+                  "CASPY211",
+                  "CASPY212"
+                ]
+              },
+              {
+                "label": "PY 241 + PY 242",
+                "courses": [
+                  "CASPY241",
+                  "CASPY242"
+                ]
+              },
+              {
+                "label": "PY 251 + PY 252",
+                "courses": [
+                  "CASPY251",
+                  "CASPY252"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bio-ba-physics-alt-track",
+            "type": "COUNT",
+            "label": "Alternative Track (not acceptable for most prehealth careers)",
+            "min": 1,
+            "note": "PY 104 satisfies physics only with Biology department permission.",
+            "pool": [
+              "CASPY104"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "bio-ba-lab-300-residency",
+        "type": "UNRESOLVED",
+        "label": "Lab, 300+, and residency minimums",
+        "devNote": "Excluding Introductory Biology and non-majors courses: at least 3 biology courses must have a lab component, at least 3 must be 300+, and at least 5 must be taken in the BU Biology Department. Not auto-checked.",
+        "note": "Excluding Introductory Biology and non-majors courses: at least 3 biology courses must have a lab component, at least 3 must be 300+ level, and at least 5 must be taken in the BU Biology Department. This isn't checked automatically."
+      }
+    ]
+  }
+}

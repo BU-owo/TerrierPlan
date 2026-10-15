@@ -33,6 +33,8 @@ import CourseCard from '../components/planner/CourseCard';
 import SidePanelTabs from '../components/planner/SidePanelTabs';
 import { PanelCollapseButton, PanelRail } from '../components/planner/PanelCollapseControls';
 import usePanelCollapse from '../hooks/usePanelCollapse';
+import useResizableWidth from '../hooks/useResizableWidth';
+import PanelResizeHandle from '../components/planner/PanelResizeHandle';
 import useOneTimeHint from '../hooks/useOneTimeHint';
 import RequirementsFullView from '../components/planner/RequirementsFullView';
 import HubFullView from '../components/planner/HubFullView';
@@ -79,6 +81,13 @@ const ONBOARDED_KEY = 'terrierplan_onboarded_v2';
 const PLANNER_VIEW_KEY = 'terrierplan_planner_view';
 // Overview needs the desktop 3-column layout; below this the mobile layout stays.
 const OVERVIEW_MIN_WIDTH_QUERY = '(min-width: 861px)';
+// Right status panel drag-resize bounds (px). Min = the default width in
+// planner.css (.planner-right); the board never gets narrower than
+// RIGHT_PANEL_BOARD_MIN (about what it gets today at the 861px desktop
+// breakpoint with both panels open).
+const RIGHT_PANEL_MIN = 244;
+const RIGHT_PANEL_MAX = 720;
+const RIGHT_PANEL_BOARD_MIN = 360;
 // A student's "current semester", completed courses, and AP/IB/transfer
 // credits are facts about them, not about any one hypothetical plan — kept
 // in their own storage key (signed-in: the top-level `users/{uid}` doc;
@@ -285,7 +294,33 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [activeSemIndex, setActiveSemIndex] = useState(0);
   // Which single panel is shown on narrow/mobile screens: 'search' | 'board' | 'hub'
   const [mobileView, setMobileView] = useState('board');
-  const { collapsed: leftCollapsed, desktop: isDesktopLayout, setCollapsed: setLeftCollapsed } = usePanelCollapse('terrierplan_planner_left_collapsed');
+  const {
+    collapsed: leftCollapsed,
+    desktop: isDesktopLayout,
+    setCollapsed: setLeftCollapsed,
+    expandTemporarily: expandLeftTemporarily,
+  } = usePanelCollapse('terrierplan_planner_left_collapsed');
+
+  // Right status panel width (desktop drag-resize). null = planner.css's
+  // default. Max is the smaller of 720px, 55% of the viewport, and whatever
+  // leaves the board RIGHT_PANEL_BOARD_MIN; re-clamped when the left panel
+  // collapses/expands. Applied as a CSS variable, so the collapsed rail and
+  // the mobile layout (planner.css) still override it.
+  const leftPanelRef = useRef(null);
+  const rightPanelRef = useRef(null);
+  const [rightResizing, setRightResizing] = useState(false);
+  const getRightPanelMax = useCallback(() => {
+    const leftWidth = leftPanelRef.current?.getBoundingClientRect().width ?? 252;
+    return Math.min(
+      RIGHT_PANEL_MAX,
+      Math.floor(window.innerWidth * 0.55),
+      window.innerWidth - leftWidth - RIGHT_PANEL_BOARD_MIN,
+    );
+  }, []);
+  const { width: rightPanelWidth, setWidth: setRightPanelWidth, reset: resetRightPanelWidth } = useResizableWidth(
+    'terrierplan_planner_right_width',
+    { min: RIGHT_PANEL_MIN, getMax: getRightPanelMax, clampDeps: [leftCollapsed] },
+  );
   // 'detailed' | 'overview' — "All semesters" compact board (desktop only).
   const [boardView, setBoardView] = useState(() => {
     try {
@@ -595,6 +630,38 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       return next;
     });
   }
+
+  // Requirements <-> HUB switch in the overlay header. Replaces the history
+  // entry so Back doesn't step through every switch.
+  function switchFullView(view) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('view', view);
+      return next;
+    }, { replace: true });
+  }
+
+  // If the stash gained a course while a full-screen overlay was open
+  // (counting across Requirements <-> HUB switches), show Paw-tential
+  // Courses once the overlay closes, however it closed (Close, Escape,
+  // Back). Desktop expands a collapsed left panel for this visit only;
+  // mobile switches to the Search tab. Otherwise the panel is left alone.
+  const anyFullView = requirementsFullView || hubFullView;
+  const stashAtFullViewOpen = useRef(null);
+  useEffect(() => {
+    if (anyFullView) {
+      if (stashAtFullViewOpen.current === null) stashAtFullViewOpen.current = new Set(stash);
+      return;
+    }
+    const before = stashAtFullViewOpen.current;
+    stashAtFullViewOpen.current = null;
+    if (!before || !stash.some((key) => !before.has(key))) return;
+    if (!isDesktopLayout) setMobileView('search');
+    else if (leftCollapsed) expandLeftTemporarily();
+    setLeftTab('stash');
+    // Runs only on open/close; stash and layout are read as of that render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anyFullView]);
 
   // "View in planner" (HUB tracker rail) and the HUB tab's Paw-tential link:
   // close the HUB view if it's open, bring the left panel into view (Search
@@ -1864,7 +1931,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
     // Search results and stashed courses aren't on the grid yet — either
     // source just adds straight to the drop target, same as clicking would.
-    if (from === 'search' || from === 'stash') {
+    // Requirement rows in the sidebar (from: 'requirements') carry the same
+    // payload as a search result and land the same way.
+    if (from === 'search' || from === 'stash' || from === 'requirements') {
       handleAddCourse(courseKey, destTarget);
       return;
     }
@@ -2456,9 +2525,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div className="planner-body" data-mobile-view={mobileView}>
+        <div
+          className={`planner-body${rightResizing ? ' is-resizing-right' : ''}`}
+          data-mobile-view={mobileView}
+          style={rightPanelWidth != null ? { '--planner-right-width': `${rightPanelWidth}px` } : undefined}
+        >
           {/* Left: search */}
-          <aside className={`planner-left${leftCollapsed ? ' is-collapsed' : ''}`}>
+          <aside ref={leftPanelRef} className={`planner-left${leftCollapsed ? ' is-collapsed' : ''}`}>
             {isDesktopLayout && !leftCollapsed && (
               <div className="planner-panel-header">
                 <PanelCollapseButton side="left" name="search" onClick={() => setLeftCollapsed(true)} />
@@ -2579,8 +2652,22 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
             )}
           </main>
 
+          {/* Desktop only; hidden by CSS while the right panel is collapsed. */}
+          {isDesktopLayout && (
+            <PanelResizeHandle
+              panelRef={rightPanelRef}
+              width={rightPanelWidth}
+              min={RIGHT_PANEL_MIN}
+              max={getRightPanelMax()}
+              onResize={setRightPanelWidth}
+              onReset={resetRightPanelWidth}
+              onDraggingChange={setRightResizing}
+              label="Resize the HUB / Requirements / Credits panel"
+            />
+          )}
+
           {/* Right: HUB / Requirements / Credits status tabs */}
-          <aside className="planner-right">
+          <aside ref={rightPanelRef} className="planner-right">
             <SidePanelTabs
               hintsEnabled={hintsEnabled && hubTabVisible}
               stash={stash}
@@ -2607,6 +2694,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               onOpenFullView={openRequirementsFullView}
               onOpenHubFullView={openHubFullView}
               onShowStash={showStashTab}
+              onAddToStash={handleAddToStash}
+              onRemoveFromStash={handleRemoveFromStash}
+              onShowCourseInfo={setInfoCourseKey}
             />
           </aside>
         </div>
@@ -2640,7 +2730,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           onSetRequirementOverride={handleSetRequirementOverride}
           onRemoveRequirementOverride={handleRemoveRequirementOverride}
           lockStatusMap={lockStatusMap}
+          stash={stash}
+          onAddToStash={handleAddToStash}
+          onRemoveFromStash={handleRemoveFromStash}
+          onShowCourseInfo={setInfoCourseKey}
           onClose={closeRequirementsFullView}
+          onSwitchView={switchFullView}
+          ignoreEscape={Boolean(infoCourseKey)}
         />
       )}
 
@@ -2660,6 +2756,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           onAddToStash={handleAddToStash}
           onRemoveFromStash={handleRemoveFromStash}
           onClose={closeHubFullView}
+          onSwitchView={switchFullView}
         />
       )}
 

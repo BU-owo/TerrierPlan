@@ -1,0 +1,148 @@
+{
+  "programName": "Philosophy & Political Science",
+  "degree": "BA",
+  "school": "CAS",
+  "bulletinUrl": "https://www.bu.edu/academics/cas/programs/philosophy/ba-political-science/",
+  "minGrade": "C",
+  "totalCoursesRequired": 12,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "id": "phil-polisci-ba-root",
+    "type": "ALL",
+    "label": "Philosophy & Political Science BA — Major Requirements",
+    "children": [
+      {
+        "id": "phil-polisci-ba-ph",
+        "type": "ALL",
+        "label": "Philosophy (6 courses)",
+        "children": [
+          {
+            "id": "phil-polisci-ba-ph-history",
+            "type": "ALL",
+            "label": "History sequence",
+            "courses": [
+              "CASPH300",
+              "CASPH310",
+              "CASPH350"
+            ]
+          },
+          {
+            "id": "phil-polisci-ba-ph-listed",
+            "type": "COUNT",
+            "label": "One course from the approved list",
+            "min": 1,
+            "pool": [
+              {
+                "type": "COURSE_LIST",
+                "courses": [
+                  "CASPH253",
+                  "CASPH254",
+                  "CASPH256",
+                  "CASPH418",
+                  "CASPH453",
+                  "CASPH454",
+                  "CASPH458",
+                  "CASPH459"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "phil-polisci-ba-ph-200",
+            "type": "COUNT",
+            "label": "One PH course at 200+",
+            "min": 1,
+            "pool": [
+              {
+                "type": "COURSE_RANGE",
+                "subject": "CASPH",
+                "min": 200,
+                "max": 599
+              }
+            ]
+          },
+          {
+            "id": "phil-polisci-ba-ph-other",
+            "type": "COUNT",
+            "label": "One other PH course",
+            "min": 1,
+            "pool": [
+              {
+                "type": "COURSE_RANGE",
+                "subject": "CASPH",
+                "min": 100,
+                "max": 599
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "phil-polisci-ba-po",
+        "type": "ALL",
+        "label": "Political Science (6 courses)",
+        "children": [
+          {
+            "id": "phil-polisci-ba-po-theory",
+            "type": "COUNT",
+            "label": "Three political theory courses (PO 300 or 500 level)",
+            "min": 3,
+            "pool": [
+              {
+                "type": "COURSE_RANGE",
+                "subject": "CASPO",
+                "min": 300,
+                "max": 599
+              }
+            ],
+            "devNote": "APPROXIMATE: the bulletin requires political THEORY courses specifically, but the engine can't check subfield. This accepts any PO 300–599 course, so it can over-count.",
+            "note": "These should be political theory courses. This accepts any PO 300–599 course, so double-check the course topic."
+          },
+          {
+            "id": "phil-polisci-ba-po-200",
+            "type": "COUNT",
+            "label": "One PO course at 200+",
+            "min": 1,
+            "pool": [
+              {
+                "type": "COURSE_RANGE",
+                "subject": "CASPO",
+                "min": 200,
+                "max": 599
+              }
+            ]
+          },
+          {
+            "id": "phil-polisci-ba-po-other",
+            "type": "COUNT",
+            "label": "Two other PO courses (max one at 100-level)",
+            "min": 2,
+            "pool": [
+              {
+                "type": "COURSE_RANGE",
+                "subject": "CASPO",
+                "min": 200,
+                "max": 599
+              },
+              {
+                "type": "COURSE_RANGE_CAP",
+                "subject": "CASPO",
+                "min": 100,
+                "max": 199,
+                "cap": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "phil-polisci-ba-capstone",
+        "type": "UNRESOLVED",
+        "label": "Senior seminar or 400-level topics course",
+        "devNote": "One of the courses above must be a PO senior seminar (500 level) or a PH 400-level topics course — not auto-checked.",
+        "note": "One of your courses must be a PO senior seminar (500 level) or a PH 400-level topics course. This isn't checked automatically."
+      }
+    ]
+  }
+}

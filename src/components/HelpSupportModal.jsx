@@ -1,8 +1,9 @@
 import { BU_LINKS } from '../data/officialLinks';
 import './HelpSupportModal.css';
 
-const SUPPORT_EMAIL = 'terrierplan@gmail.com';
-const DISCORD_URL = 'https://discord.gg/bostonuniversity';
+// Exported for the Requirements "want yours next?" line.
+export const SUPPORT_EMAIL = 'terrierplan@gmail.com';
+export const DISCORD_URL = 'https://discord.gg/bostonuniversity';
 
 export default function HelpSupportModal({ open, onClose }) {
   if (!open) return null;

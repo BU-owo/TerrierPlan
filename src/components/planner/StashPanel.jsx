@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
-import { HUB_COLOR_FOR } from '../../utils/hubConstants';
-import { getOfferingBadge } from '../../utils/offeringPattern';
 import SemesterPickerModal from './SemesterPickerModal';
+import { HubUnitTags, OfferingBadge } from './CourseTags';
 import useUpcomingSeasons from '../../hooks/useUpcomingSeasons';
+import useCurrentTermCourseKeys from '../../hooks/useCurrentTermCourseKeys';
 
 // Reuses CourseSearch's result-card visual style AND its drag-and-drop
 // wiring (same `useDraggable` shape, tagged `from: 'stash'` instead of
@@ -26,7 +26,7 @@ function StashResultCard({
   });
 
   const upcomingSeasons = useUpcomingSeasons(course.id);
-  const offeringBadge = getOfferingBadge(course.offeringPattern, upcomingSeasons);
+  const currentTermKeys = useCurrentTermCourseKeys();
   const courseLabel = course.courseNumber ?? course.id;
 
   return (
@@ -58,24 +58,16 @@ function StashResultCard({
         <div className="search-result-code">{courseLabel}</div>
         <div className="search-result-name-row">
           <span className="search-result-name">{course.name ?? '—'}</span>
-          {offeringBadge && (
-            <span className={`offering-badge ${offeringBadge.className}`} title={offeringBadge.text}>
-              {offeringBadge.label}
-            </span>
-          )}
         </div>
-        {course.hubUnits?.length > 0 && (
-          <div className="search-result-hub">
-            {course.hubUnits.slice(0, 4).map((unit) => (
-              <span
-                key={unit}
-                className={`hub-chip hub-chip-${HUB_COLOR_FOR[unit]?.groupId ?? 'def'}`}
-              >
-                {unit}
-              </span>
-            ))}
-          </div>
-        )}
+        {/* Tags line: HUB tags, then the offering badge (hidden when empty). */}
+        <div className="search-result-hub">
+          <HubUnitTags units={course.hubUnits} />
+          <OfferingBadge
+            offeringPattern={course.offeringPattern}
+            upcomingSeasons={upcomingSeasons}
+            inCurrentTerm={currentTermKeys?.has(course.id)}
+          />
+        </div>
       </div>
       {/* Stacked like CourseSearch's result card — see the note there. */}
       <div className="search-result-actions">

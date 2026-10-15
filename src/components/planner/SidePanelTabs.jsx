@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import HubSidebar from './HubSidebar';
-import RequirementsBulletinTab from './RequirementsBulletinTab';
+import RequirementsSidebar from './RequirementsSidebar';
 import CreditsPanel from './CreditsPanel';
 import { PanelCollapseButton, PanelRail } from './PanelCollapseControls';
 import usePanelCollapse from '../../hooks/usePanelCollapse';
@@ -34,6 +34,16 @@ export default function SidePanelTabs({
   onToggleTransfer,
   majorBulletinUrl,
   onMajorSelect,
+  // Requirements tab (compact RequirementTree) — see RequirementsSidebar.
+  planCourseKeys,
+  onEnsureCourseData,
+  requirementOverrides,
+  onSetRequirementOverride,
+  onRemoveRequirementOverride,
+  onOpenFullView,
+  onAddToStash,
+  onRemoveFromStash,
+  onShowCourseInfo,
   onOpenHubFullView,
   // Switches the planner's left panel to the Paw-tential Courses tab.
   onShowStash,
@@ -136,16 +146,23 @@ export default function SidePanelTabs({
           />
         </div>
         <div className={activeTab === 'requirements' ? '' : 'side-panel-hidden'}>
-          {/* Temporarily just a major picker + bulletin link — see
-              RequirementsBulletinTab.jsx for why. The rest of this
-              component's props (planCourseKeys, onAddCourse, etc.) are
-              still threaded all the way down from PlannerPage even though
-              nothing here consumes them right now, so swapping
-              RequirementsSidebar back in later is a one-line change, not
-              a prop-plumbing project. */}
-          <RequirementsBulletinTab
+          <RequirementsSidebar
             majorBulletinUrl={majorBulletinUrl}
             onMajorSelect={onMajorSelect}
+            planCourseKeys={planCourseKeys}
+            courseMap={courseMap}
+            onEnsureCourseData={onEnsureCourseData}
+            requirementOverrides={requirementOverrides}
+            onSetRequirementOverride={onSetRequirementOverride}
+            onRemoveRequirementOverride={onRemoveRequirementOverride}
+            lockStatusMap={lockStatusMap}
+            stash={stash}
+            onAddToStash={onAddToStash}
+            onRemoveFromStash={onRemoveFromStash}
+            onShowCourseInfo={onShowCourseInfo}
+            onOpenFullView={onOpenFullView}
+            onSummaryChange={makeSummaryHandler('requirements')}
+            dragEnabled={desktop}
           />
         </div>
         <div className={activeTab === 'credits' ? '' : 'side-panel-hidden'}>

@@ -21,11 +21,22 @@
 // section in CURRENT_TERM exactly; omitted otherwise. Same snapshot caveat as
 // upcomingSeasons, and independent of offeringPattern.
 //
+// `inactive` is true when the course has NO offering after Spring 2022 (last
+// offered Spring 2022 or earlier, or no offering on record) AND no
+// non-cancelled section at or after CURRENT_TERM; omitted otherwise. Summer
+// 2022 and later count as offered. Read from the course doc's
+// lastOfferedYear; a course last offered in 2022 is resolved from
+// offeringHistory/{courseKey} (read-only) since the year alone can't tell
+// Spring 2022 from later that year. If that history is missing, the course
+// is kept active. The app hides inactive courses where courses are offered
+// as choices (see isInactiveCourse in src/utils/courseQuery.js), never
+// deletes or hides them anywhere else.
+//
 // Usage:
 //   GOOGLE_APPLICATION_CREDENTIALS=/path/outside/repo/key.json node scripts/export-catalog.cjs
 //
 // Output: a compact JSON array, sorted by id, of
-//   { id, courseNumber, name, hubUnits, offeringPattern, career, studyAbroad, credits, upcomingSeasons, inCurrentTerm }
+//   { id, courseNumber, name, hubUnits, offeringPattern, career, studyAbroad, credits, upcomingSeasons, inCurrentTerm, inactive }
 // with any field that is undefined/null/empty-array/false omitted.
 
 const { initializeApp, applicationDefault } = require('firebase-admin/app');
@@ -117,6 +128,63 @@ async function loadUpcomingTerms() {
   return { byKey, currentKeys, sectionDocs: snap.size };
 }
 
+// Last year a course could have been offered without counting as active:
+// anything after Spring of this year (Summer/Fall included) is "offered".
+const INACTIVE_CUTOFF_YEAR = 2022;
+const REQUIREMENTS_DIR = path.join(REPO_ROOT, 'src', 'data', 'requirements');
+// Only strings already in key form (labels like "GMS BI 751 credit overlap"
+// would otherwise match once their spaces were stripped).
+const COURSE_KEY_RE = /^[A-Z]{3}[A-Z]{2}\d+[A-Z]?$/;
+
+// courseKey → true/false: was it offered after Spring CUTOFF, judging by
+// offeringHistory? Only called for courses whose lastOfferedYear is the
+// cutoff year. Missing history → undefined (caller keeps the course active).
+async function loadOfferedAfterSpringCutoff(courseKeys) {
+  const result = new Map();
+  const CHUNK = 300;
+  for (let i = 0; i < courseKeys.length; i += CHUNK) {
+    const refs = courseKeys.slice(i, i + CHUNK).map((key) => db.collection('offeringHistory').doc(key));
+    const docs = await db.getAll(...refs, { fieldMask: ['history'] });
+    for (const doc of docs) {
+      if (!doc.exists) continue;
+      const history = doc.data().history || [];
+      result.set(
+        doc.id,
+        history.some((h) => {
+          if (h.sectionCount === 0) return false;
+          const year = Number(h.year);
+          return year > INACTIVE_CUTOFF_YEAR || (year === INACTIVE_CUTOFF_YEAR && !/^spring/i.test(String(h.season ?? '')));
+        }),
+      );
+    }
+  }
+  return result;
+}
+
+// Every courseKey-shaped string in src/data/requirements/**/*.json, with the
+// files it appears in (courses, options, include/exclude, pool keys, …).
+function collectRequirementCourseKeys() {
+  const byKey = new Map();
+  function walkDir(dir) {
+    for (const name of fs.readdirSync(dir)) {
+      const full = path.join(dir, name);
+      if (fs.statSync(full).isDirectory()) walkDir(full);
+      else if (name.endsWith('.json')) {
+        const rel = path.relative(REPO_ROOT, full);
+        JSON.stringify(JSON.parse(fs.readFileSync(full, 'utf8')), (_key, value) => {
+          if (typeof value === 'string' && COURSE_KEY_RE.test(value)) {
+            if (!byKey.has(value)) byKey.set(value, new Set());
+            byKey.get(value).add(rel);
+          }
+          return value;
+        });
+      }
+    }
+  }
+  walkDir(REQUIREMENTS_DIR);
+  return byKey;
+}
+
 function withUpcomingSeasons(entry, upcomingByKey) {
   const usual = USUAL_SEASONS[entry.offeringPattern];
   const upcoming = upcomingByKey.get(entry.id);
@@ -128,13 +196,37 @@ function withUpcomingSeasons(entry, upcomingByKey) {
 
 async function main() {
   const [snap, upcoming] = await Promise.all([
-    db.collection('courses').select(...FIELDS).get(),
+    db.collection('courses').select(...FIELDS, 'lastOfferedYear').get(),
     loadUpcomingTerms(),
   ]);
+
+  // Inactive rule (see header). lastOfferedYear isn't exported — it's only
+  // read here to decide `inactive`.
+  const lastYearById = new Map(snap.docs.map((doc) => [doc.id, doc.data().lastOfferedYear ?? null]));
+  const cutoffYearIds = [...lastYearById]
+    .filter(([id, year]) => Number(year) === INACTIVE_CUTOFF_YEAR && !upcoming.byKey.has(id))
+    .map(([id]) => id);
+  const offeredAfterCutoff = await loadOfferedAfterSpringCutoff(cutoffYearIds);
+  let ambiguousKeptActive = 0;
+  function isInactive(id) {
+    if (upcoming.byKey.has(id)) return false;
+    const year = lastYearById.get(id);
+    if (year === null || year === undefined || year === '') return true; // no offering on record
+    if (Number(year) > INACTIVE_CUTOFF_YEAR) return false;
+    if (Number(year) < INACTIVE_CUTOFF_YEAR) return true;
+    const after = offeredAfterCutoff.get(id);
+    if (after === undefined) {
+      ambiguousKeptActive += 1;
+      return false;
+    }
+    return !after;
+  }
+
   const courses = snap.docs
     .map(toEntry)
     .map((entry) => withUpcomingSeasons(entry, upcoming.byKey))
     .map((entry) => (upcoming.currentKeys.has(entry.id) ? { ...entry, inCurrentTerm: true } : entry))
+    .map((entry) => (isInactive(entry.id) ? { ...entry, inactive: true } : entry))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   const json = JSON.stringify(courses);
@@ -156,6 +248,22 @@ async function main() {
   console.log(`inCurrentTerm:   ${courses.filter((c) => c.inCurrentTerm).length} courses`);
 
   const byId = new Map(courses.map((c) => [c.id, c]));
+
+  const inactive = courses.filter((c) => c.inactive);
+  console.log('\nInactive (no offering after Spring 2022, no section at or after the current term):');
+  console.log(`  total courses:            ${courses.length}`);
+  console.log(`  inactive:                 ${inactive.length}`);
+  console.log(`  inactive with hubUnits:   ${inactive.filter((c) => c.hubUnits?.length).length}`);
+  console.log(`  2022, no history (kept active): ${ambiguousKeptActive}`);
+
+  const requirementKeys = collectRequirementCourseKeys();
+  const reqInactive = [...requirementKeys].filter(([key]) => byId.get(key)?.inactive);
+  const reqMissing = [...requirementKeys].filter(([key]) => !byId.has(key));
+  console.log(`\nRequirement JSON courseKeys: ${requirementKeys.size}`);
+  console.log(`  inactive (${reqInactive.length}):`);
+  for (const [key, files] of reqInactive) console.log(`    ${key}  (${[...files].join(', ')})`);
+  console.log(`  missing from catalog (${reqMissing.length}):`);
+  for (const [key, files] of reqMissing) console.log(`    ${key}  (${[...files].join(', ')})`);
   const studyAbroad = courses.find((c) => c.studyAbroad && c.id.endsWith('E'));
   console.log('\nSamples:');
   for (const id of SAMPLE_IDS) {

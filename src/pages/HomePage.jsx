@@ -61,7 +61,7 @@ const FEATURES = [
       'Credit Tracking',
       'Quickly check major/minor requirements by accessing the bulletin!',
       'Coming Soon: GPA calculator',
-      'Coming Soon: Major / Minor Requirement Tracking',
+      'Major requirement tracking for select majors, with more on the way!',
     ],
   },
   {
