@@ -198,7 +198,6 @@ export default function RequirementTree({
     flatNodes,
     onAddFromRow: addFromRow,
     inactiveKeys,
-    onOpenFullView,
   };
 
   // Same "planning only" line as the HUB views, under the progress summary

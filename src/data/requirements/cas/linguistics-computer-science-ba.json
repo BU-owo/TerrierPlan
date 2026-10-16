@@ -1,0 +1,103 @@
+{
+  "programName": "Linguistics & Computer Science",
+  "degree": "BA",
+  "school": "CAS",
+  "bulletinUrl": "https://www.bu.edu/academics/cas/programs/linguistics/ba-in-linguistics-computer-science/",
+  "minGrade": "C",
+  "totalCoursesRequired": 15,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "id": "ling-cs-ba-root",
+    "type": "ALL",
+    "label": "Linguistics & Computer Science BA — Major Requirements",
+    "children": [
+      {
+        "id": "ling-cs-ba-min-grade",
+        "type": "UNRESOLVED",
+        "label": "Grade minimum",
+        "note": "All 15 courses need a C or better. This isn't checked automatically.",
+        "devNote": "Bulletin: 15 courses 'all completed with a grade of C or higher'. minGrade is set at the top level but the engine doesn't check grades. Honors in the Major is not modeled."
+      },
+      {
+        "id": "ling-cs-ba-calculus",
+        "type": "UNRESOLVED",
+        "label": "Calculus",
+        "note": "Calculus at about the level of MA 123 is expected for this major. It isn't one of the 15 courses and isn't checked automatically.",
+        "devNote": "Bulletin: students 'are also expected to be comfortable with standard high school mathematics as well as calculus at a level equivalent to completion of CAS MA 123.' Not one of the 15 courses."
+      },
+      {
+        "id": "ling-cs-ba-lx-required",
+        "type": "ALL",
+        "label": "Linguistics: required courses",
+        "courses": [
+          "CASLX250",
+          "CASLX301",
+          "CASLX321",
+          "CASLX331"
+        ],
+        "devNote": "Bulletin: 'Six courses in Linguistics' = LX 250, 301, 321, 331 + two additional LX courses at or above the 300 level (separate node below). Fixed courses are evaluated first so the broad LX ranges later can't claim them."
+      },
+      {
+        "id": "ling-cs-ba-lx-additional",
+        "type": "REMAINDER",
+        "label": "Linguistics: two additional courses (LX 300 or above)",
+        "pool": [
+          {
+            "type": "COURSE_RANGE",
+            "subject": "CASLX",
+            "min": 300,
+            "max": 599
+          }
+        ],
+        "devNote": "Bulletin: 'Two additional CAS LX courses at or above the 300 level', listed right after the four required LX courses. It is a REMAINDER (totalRequired 15 = the 13 other courses + these 2) so it evaluates last, after the Computational Linguistics/NLP and additional-course nodes, and can't take LX 496 or an LX 400-level course they need. LX 301/321/331 and any LX course already used elsewhere are claimed earlier and not counted twice. If a sibling's size changes, recompute totalRequired.",
+        "totalRequired": 15,
+        "note": "Any LX course numbered 300 or above that isn't already counting somewhere else in this major."
+      },
+      {
+        "id": "ling-cs-ba-cs-required",
+        "type": "ALL",
+        "label": "Computer Science: required courses",
+        "courses": [
+          "CASCS111",
+          "CASCS112",
+          "CASCS131",
+          "CASCS132",
+          "CASCS210",
+          "CASCS237",
+          "CASCS330"
+        ],
+        "devNote": "Bulletin: 'Seven courses in Computer Science'. Unlike the CS BA, this bulletin lists no MA substitutes for CS 132 or CS 237, so none are modeled."
+      },
+      {
+        "id": "ling-cs-ba-nlp",
+        "type": "COUNT",
+        "label": "Computational Linguistics or NLP (1)",
+        "min": 1,
+        "pool": [
+          "CASCS505",
+          "CASLX496"
+        ],
+        "devNote": "Bulletin: one course from CS 505 or LX 496. CS 505 is listed first so a student with both keeps LX 496 free for the 'additional course' node (LX 496 is a 400-level LX course). This node is listed before the additional-course node, unlike the bulletin, so it claims first: the additional course's LX 400-499 range would otherwise take a lone LX 496.",
+        "note": "LX 496 and CS 505 both count here. If you take both, one counts here and the other can count as your additional course."
+      },
+      {
+        "id": "ling-cs-ba-additional",
+        "type": "COUNT",
+        "label": "One additional course: CS 542 or an LX 400-level course",
+        "min": 1,
+        "pool": [
+          "CASCS542",
+          {
+            "type": "COURSE_RANGE",
+            "subject": "CASLX",
+            "min": 400,
+            "max": 499
+          }
+        ],
+        "devNote": "Bulletin: 'One additional course in Computer Science or Linguistics': CS 542, or one LX course at the 400 level. CS 542 first, then the LX 400-499 range. Study-abroad (E-suffixed) keys are skipped by range matching on purpose. Evaluated before the two additional LX 300+ courses so a 400-level course fills this slot first.",
+        "note": "LX 496 can count here too, but not if it's already counting as your Computational Linguistics/NLP course."
+      }
+    ]
+  }
+}

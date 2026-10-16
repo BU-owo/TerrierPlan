@@ -84,6 +84,20 @@
         "label": "Political Science (6 courses)",
         "children": [
           {
+            "id": "phil-polisci-ba-po-200",
+            "type": "COUNT",
+            "label": "One PO course at 200+",
+            "min": 1,
+            "pool": [
+              {
+                "type": "COURSE_RANGE",
+                "subject": "CASPO",
+                "min": 200,
+                "max": 599
+              }
+            ]
+          },
+          {
             "id": "phil-polisci-ba-po-theory",
             "type": "COUNT",
             "label": "Three political theory courses (PO 300 or 500 level)",
@@ -98,20 +112,6 @@
             ],
             "devNote": "APPROXIMATE: the bulletin requires political THEORY courses specifically, but the engine can't check subfield. This accepts any PO 300–599 course, so it can over-count.",
             "note": "These should be political theory courses. This accepts any PO 300–599 course, so double-check the course topic."
-          },
-          {
-            "id": "phil-polisci-ba-po-200",
-            "type": "COUNT",
-            "label": "One PO course at 200+",
-            "min": 1,
-            "pool": [
-              {
-                "type": "COURSE_RANGE",
-                "subject": "CASPO",
-                "min": 200,
-                "max": 599
-              }
-            ]
           },
           {
             "id": "phil-polisci-ba-po-other",
@@ -134,7 +134,8 @@
               }
             ]
           }
-        ]
+        ],
+        "devNote": "Children follow the bulletin's order (200+, theory, other). Range matching claims the lowest numbers first, so the 200+ course prefers a 2xx course and leaves PO 300+ for the theory node."
       },
       {
         "id": "phil-polisci-ba-capstone",

@@ -13,6 +13,13 @@
     "label": "Biochemistry & Molecular Biology BA — Major Requirements",
     "children": [
       {
+        "id": "bmb-ba-residency",
+        "type": "UNRESOLVED",
+        "label": "BU residency requirement",
+        "devNote": "Excluding Foundation Courses, at least 5 courses counting toward the BMB major must be taken in the BU BMB Program — not tracked, since the engine doesn't currently distinguish which claimed courses are transfer credit vs. taken at BU.",
+        "note": "At least 5 courses counting toward the major (not counting Foundation Courses) must be taken in the BU BMB Program. This isn't checked automatically."
+      },
+      {
         "id": "bmb-ba-foundation-bio",
         "type": "ALL",
         "label": "Foundation Courses: Biology",
@@ -145,40 +152,9 @@
         ]
       },
       {
-        "id": "bmb-ba-adv-lab-elective",
-        "type": "COUNT",
-        "label": "Advanced Lab Elective",
-        "min": 1,
-        "pool": [
-          {
-            "type": "SUBSTITUTE_GROUP",
-            "primary": "CASBB522",
-            "substitutes": [
-              "CASBI513",
-              "CASCH524"
-            ]
-          },
-          {
-            "type": "SEQUENCE_GROUP",
-            "options": [
-              {
-                "label": "BB 401 + BB 402",
-                "courses": [
-                  "CASBB401",
-                  "CASBB402"
-                ]
-              }
-            ]
-          }
-        ],
-        "devNote": "Evaluated before BMB Electives below (array order = claim priority) so a course claimed here — BB522, BI513, CH524, or the BB401+BB402 bundle — can't also be double-counted as a BMB Elective.",
-        "note": "Any two of BB 450, 451, 452, and 453 taken together also count. That option isn't checked automatically."
-      },
-      {
         "id": "bmb-ba-electives",
-        "type": "COUNT",
+        "type": "REMAINDER",
         "label": "BMB Electives",
-        "min": 2,
         "pool": [
           {
             "type": "COURSE_LIST",
@@ -243,8 +219,39 @@
             ]
           }
         ],
-        "devNote": "CASMB722 (MB 722, corrected from an earlier GMSMB722 guess) is a catalog data gap — neither CASMB722 nor GMSMB722 resolves to a document in the `courses` Firestore collection as of 2026-08-09 (confirmed via a live public read, not just a local guess), so this elective can't be auto-tracked if a student has taken it. Same pattern as the FYW/WRI gap in HUB_REQUIREMENTS.md: flagged rather than guessed further, pending a catalog scrape/import that actually includes this course.",
-        "note": "Other courses may count by petition or department approval. GMS BI 751 (6 units) can't be combined with CH 373, BB 421, or BB 422 for credit. Neither is checked automatically."
+        "devNote": "CASMB722 (MB 722, corrected from an earlier GMSMB722 guess) is a catalog data gap — neither CASMB722 nor GMSMB722 resolves to a document in the `courses` Firestore collection as of 2026-08-09 (confirmed via a live public read, not just a local guess), so this elective can't be auto-tracked if a student has taken it. Same pattern as the FYW/WRI gap in HUB_REQUIREMENTS.md: flagged rather than guessed further, pending a catalog scrape/import that actually includes this course. Listed before the Advanced Lab Elective to follow the bulletin's order. It is a REMAINDER (totalRequired 17 = the structural count of its siblings + 2 electives) so it still evaluates after the Advanced Lab Elective and can't claim courses that node needs. If a sibling's size changes, recompute totalRequired so this node still asks for 2.",
+        "note": "Other courses may count by petition or department approval. GMS BI 751 (6 units) can't be combined with CH 373, BB 421, or BB 422 for credit. Neither is checked automatically.",
+        "totalRequired": 17
+      },
+      {
+        "id": "bmb-ba-adv-lab-elective",
+        "type": "COUNT",
+        "label": "Advanced Lab Elective",
+        "min": 1,
+        "pool": [
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "CASBB522",
+            "substitutes": [
+              "CASBI513",
+              "CASCH524"
+            ]
+          },
+          {
+            "type": "SEQUENCE_GROUP",
+            "options": [
+              {
+                "label": "BB 401 + BB 402",
+                "courses": [
+                  "CASBB401",
+                  "CASBB402"
+                ]
+              }
+            ]
+          }
+        ],
+        "devNote": "Evaluated before BMB Electives (which is listed above it, in the bulletin's order, but is a REMAINDER so it always evaluates last) so a course claimed here — BB522, BI513, CH524, or the BB401+BB402 bundle — can't also be double-counted as a BMB Elective.",
+        "note": "Any two of BB 450, 451, 452, and 453 taken together also count. That option isn't checked automatically."
       },
       {
         "id": "bmb-ba-related-mathcs",
@@ -347,13 +354,6 @@
           }
         ],
         "devNote": "PY 241 and PY 242 don't appear anywhere in the local catalog scrape (bu_courses_all.csv) or the `courses` Firestore collection (confirmed via a live public read, 2026-08-09) — unlike CH 111 in the General Chemistry Sequence above, they're also not referenced as a prerequisite anywhere else in the catalog, so this option couldn't be independently corroborated as a currently-offered BU sequence. Kept as-is since it was already in the prior bulletin transcription rather than guessed away, but worth a human check against the current bulletin."
-      },
-      {
-        "id": "bmb-ba-residency",
-        "type": "UNRESOLVED",
-        "label": "BU residency requirement",
-        "devNote": "Excluding Foundation Courses, at least 5 courses counting toward the BMB major must be taken in the BU BMB Program — not tracked, since the engine doesn't currently distinguish which claimed courses are transfer credit vs. taken at BU.",
-        "note": "At least 5 courses counting toward the major (not counting Foundation Courses) must be taken in the BU BMB Program. This isn't checked automatically."
       }
     ]
   }

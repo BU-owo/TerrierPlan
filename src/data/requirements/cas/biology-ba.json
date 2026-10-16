@@ -13,6 +13,13 @@
     "label": "Biology BA — Major Requirements",
     "children": [
       {
+        "id": "bio-ba-lab-300-residency",
+        "type": "UNRESOLVED",
+        "label": "Lab, 300+, and residency minimums",
+        "devNote": "Excluding Introductory Biology and non-majors courses: at least 3 biology courses must have a lab component, at least 3 must be 300+, and at least 5 must be taken in the BU Biology Department. Not auto-checked.",
+        "note": "Excluding Introductory Biology and non-majors courses: at least 3 biology courses must have a lab component, at least 3 must be 300+ level, and at least 5 must be taken in the BU Biology Department. This isn't checked automatically."
+      },
+      {
         "id": "bio-ba-intro",
         "type": "ALL",
         "label": "Introductory Biology",
@@ -355,14 +362,7 @@
             ]
           }
         ]
-      },
-      {
-        "id": "bio-ba-lab-300-residency",
-        "type": "UNRESOLVED",
-        "label": "Lab, 300+, and residency minimums",
-        "devNote": "Excluding Introductory Biology and non-majors courses: at least 3 biology courses must have a lab component, at least 3 must be 300+, and at least 5 must be taken in the BU Biology Department. Not auto-checked.",
-        "note": "Excluding Introductory Biology and non-majors courses: at least 3 biology courses must have a lab component, at least 3 must be 300+ level, and at least 5 must be taken in the BU Biology Department. This isn't checked automatically."
       }
     ]
   }
-} 
+}

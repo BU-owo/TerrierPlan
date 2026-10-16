@@ -123,8 +123,10 @@ export function describeRequirement(node, visibility = null) {
     }
     case 'REMAINDER': {
       const pool = node.pool || [];
-      if (pool.length > 0 && pool.every(isListEntry)) {
-        return `${node.required} more from this list${capSuffix(pool.find((e) => e.cap != null))}`;
+      // Course lists and/or sequence bundles (no ranges): read like a COUNT over a
+      // list. A sequence still shows on its own row, so it isn't named here.
+      if (pool.length > 0 && pool.every((e) => isListEntry(e) || isSequenceEntry(e))) {
+        return `Pick ${node.required} from this list${capSuffix(pool.find((e) => e.cap != null))}`;
       }
       return `${node.required} more: ${pool.map(describePoolEntryShort).join(', ')}`;
     }
@@ -291,23 +293,7 @@ export function collectPoolGroups(node, planCourseKeySet) {
     });
   });
   const fallback = satisfied ? [] : (node.missing || []).filter((entry) => entry.fallback);
-  // A pool made only of ranges: the sidebar shows one merged line ("Any PH
-  // 200–599 · up to 1 from PO 100–199") instead of one empty box per range.
-  // Only ranges that can still take a course are mentioned.
-  const pool = node.pool || [];
-  const rangeOnly = pool.length > 0 && pool.every(isRangeEntry);
-  const rangeSummary = rangeOnly
-    ? groups
-      .filter((group) => group.showRange)
-      .map((group) => {
-        const entry = pool[Number(group.key)];
-        if (entry.label) return entry.label;
-        const span = `${displaySubject(entry.subject)} ${entry.min}–${entry.max}`;
-        return entry.type === 'COURSE_RANGE_CAP' ? `up to ${entry.cap} from ${span}` : `Any ${span}`;
-      })
-      .join(' · ')
-    : '';
-  return { groups: finish(groups), fallback, rangeOnly, rangeSummary, substituted: openSubstituted };
+  return { groups: finish(groups), fallback, substituted: openSubstituted };
 }
 
 // Drops long-unoffered (inactive) courses from a list of choices, except

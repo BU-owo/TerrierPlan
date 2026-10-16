@@ -8,8 +8,9 @@ import { shortCourseCode, describeLockStatus, hideInactive } from './treeHelpers
 // calculus or statistics course ✓ — MA 123"), then one group per pool entry
 // in pool order (see collectPoolGroups): its title, its claimed courses as
 // green-tinted ✓ rows, then what it can still offer — a grid of course rows (CourseList),
-// range include rows plus the catalog browse list, or sequence option
-// cards — then the additionalPool note.
+// range include rows plus the inline catalog browse list (RangeCourseList,
+// the same in the sidebar and the full view), or sequence option cards — then
+// the additionalPool note.
 export default function CoursePool({
   pool,
   subsets = [],
@@ -23,10 +24,6 @@ export default function CoursePool({
   onShowCourseInfo,
   onRowClick,
   inactiveKeys = new Set(),
-  density = 'compact',
-  // Compact (sidebar) only: range entries link here instead of listing
-  // the catalog inline.
-  onOpenFullView,
 }) {
   const { groups } = pool;
   if (groups.length === 0 && subsets.length === 0 && !fallbackNote && !pool.substituted?.length) return null;
@@ -39,9 +36,6 @@ export default function CoursePool({
     const { keys: shown, dimmed } = hideInactive(keys, inactiveKeys, keep);
     return <CourseList courses={toCourses(shown)} dimmed={dimmed} {...extra} {...listProps} />;
   }
-
-  // Sidebar, pool made only of ranges: claimed rows + one merged line.
-  const compactRangeOnly = density === 'compact' && pool.rangeOnly;
 
   // Petitioned (substituted) courses render as muted ✎ rows, in the slot they fill.
   function substitutedRows(list = []) {
@@ -84,13 +78,11 @@ export default function CoursePool({
       return (
         <>
           {group.includeOptions.length > 0 && choiceList(group.includeOptions)}
-          {density === 'compact' && onOpenFullView ? (
-            <button type="button" className="req-node-pool-toggle" onClick={onOpenFullView}>
-              See all in full view →
-            </button>
-          ) : (
-            <RangeCourseList range={group.range} planCourseKeySet={planCourseKeySet} {...listProps} />
-          )}
+          <RangeCourseList
+            range={group.range}
+            planCourseKeySet={planCourseKeySet}
+            {...listProps}
+          />
         </>
       );
     }
@@ -132,36 +124,7 @@ export default function CoursePool({
           </div>
         );
       })}
-      {compactRangeOnly ? (
-        <>
-          {groups.some((group) => group.claimed.length > 0) && (
-            <div className="req-course-grid">{groups.flatMap((group) => group.claimed.map(claimedRow))}</div>
-          )}
-          {pool.rangeSummary && (
-            <>
-              {/* Narrow sidebar: one line + link. A panel ≥520px wide shows
-                  the full view's inline lists instead (planner.css). */}
-              <div className="req-range-merged">
-                <span className="req-range-merged-text">{pool.rangeSummary}</span>
-                {onOpenFullView && (
-                  <button type="button" className="req-node-pool-toggle" onClick={onOpenFullView}>
-                    See all in full view →
-                  </button>
-                )}
-              </div>
-              <div className="req-range-wide">
-                {groups.filter((group) => group.showRange).map((group) => (
-                  <div key={group.key} className="req-slot req-slot--open">
-                    {group.title && <span className="req-slot-title">{group.title}</span>}
-                    {group.includeOptions.length > 0 && choiceList(group.includeOptions)}
-                    <RangeCourseList range={group.range} planCourseKeySet={planCourseKeySet} {...listProps} />
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </>
-      ) : groups.map((group) => {
+      {groups.map((group) => {
         const offer = renderOffer(group);
         const substituted = group.substituted?.length > 0;
         // A slot filled by a petition shows only its ✎ row (a label-only

@@ -2487,17 +2487,6 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
 .req-panel:not(.req-panel--full) .req-course-row { gap: 4px; padding: 3px 4px; }
 .req-panel:not(.req-panel--full) .req-course-row-title { min-width: 0; }
 
-/* Sidebar range-only nodes: one merged line + link (CoursePool); the
-   inline lists only show in a wide panel (see the container query below). */
-.req-range-merged {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 8px;
-  font-size: 11.5px;
-  color: var(--text-secondary);
-}
-.req-range-wide { display: none; }
 
 /* Container queries on the right panel's width (sidebar only — every rule
    is scoped to compact density, so the full view is untouched). */
@@ -2554,8 +2543,6 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
     .planner-right .req-panel:not(.req-panel--full) .req-course-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .planner-right .req-panel:not(.req-panel--full) .req-course-grid--pair { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
     .planner-right .req-panel:not(.req-panel--full) .req-seq-courses { flex-direction: row; align-items: center; }
-    .planner-right .req-range-merged { display: none; }
-    .planner-right .req-range-wide { display: flex; flex-direction: column; gap: 6px; }
   }
 }
 .req-card-count { flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: var(--text-muted); }

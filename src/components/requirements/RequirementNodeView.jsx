@@ -41,7 +41,6 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
     flatNodes,
     onAddFromRow,
     inactiveKeys,
-    onOpenFullView,
   } = shared;
 
   // Which ONE_OF option is on screen; null = follow node.activeChildIndex.
@@ -210,7 +209,6 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
               pool.fallback.length > 0 ? describeFallbackNote(node, pool.fallback, flatNodes) : null
             }
             courseMap={courseMap}
-            density={density}
             lockStatusMap={lockStatusMap}
             planCourseKeySet={planCourseKeySet}
             stashSet={stashSet}
@@ -218,7 +216,6 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
             onShowCourseInfo={onShowCourseInfo}
             onRowClick={onAddFromRow}
             inactiveKeys={inactiveKeys}
-            onOpenFullView={onOpenFullView}
           />
         )}
         <PetitionActiveDisplay
