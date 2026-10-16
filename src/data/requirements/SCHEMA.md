@@ -108,6 +108,15 @@ student took a matching course), so they remain available to other
 requirement nodes (see Double-counting below). **Pool order is claim
 priority**, so put the entries you'd prefer claimed first.
 
+#### Display fields (optional, display only)
+- `"subtitle": "..."` on a `COUNT` replaces the generated line under its title
+  ("Pick N of M", "Pick N from this list"). Counting is unchanged.
+- `"noteStyle": "caption"` renders the node's `note` as normal-weight caption
+  text instead of the default italic grey.
+- `"continues": true` on a pool entry draws that entry inside the previous
+  entry's box with no heading of its own (e.g. an either/or slot plus a list
+  that together form one visible area). Claiming order is unchanged.
+
 #### `atLeast` (optional, `COUNT` and `REMAINDER`)
 ```jsonc
 "atLeast": [{ "label": "At least 1 calculus or statistics course", "min": 1, "pool": [...poolEntries] }]
@@ -137,6 +146,15 @@ claims are committed. Output: `status` (satisfied if any child is),
 one's claims are real), `satisfiedCount`/`required` = 1/1 or 0/1. For a
 sibling `REMAINDER`'s denominator it counts as the smallest child. Overrides:
 waive only (a substitute override on a `ONE_OF` has no effect).
+
+Optional `"presentation": "tracks"` (display only — evaluation is unchanged)
+hoists a top-level `ONE_OF` out of the card list: its options become a track
+selector (same segmented control, the bulletin's track names) under the
+progress header, and the selected option's children render as ordinary
+top-level cards, with no "Required Courses 0/1" card and no repeated track
+heading. The selected tab starts on the engine's active track. Use it only for
+a major whose whole requirement is a choice of tracks (Mathematics BA); other
+`ONE_OF`s (Biology's chemistry and physics) render as a card with a toggle.
 
 ### `REMAINDER`
 ```jsonc

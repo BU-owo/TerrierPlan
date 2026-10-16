@@ -45,6 +45,8 @@ export default function RequirementTree({
   dragEnabled = false,
 }) {
   const [collapsedOverrides, setCollapsedOverrides] = useState({});
+  // Selected tab of a hoisted ONE_OF ("tracks"), by node id.
+  const [trackViews, setTrackViews] = useState({});
   // { nodeId, mode: 'waive' | 'substitute' } while the exception form is open
   // ('waive' is only "Mark as done" on an UNRESOLVED node).
   const [exception, setException] = useState(null);
@@ -224,9 +226,22 @@ export default function RequirementTree({
     </a>
   ) : null;
 
-  const topNodes = result
-    ? (Array.isArray(result.tree.children) ? unresolvedLast(result.tree.children) : [result.tree])
-    : [];
+  // A ONE_OF flagged `presentation: "tracks"` is hoisted out of the card list:
+  // its options become a selector under the progress header, and the selected
+  // option's children render as ordinary top-level cards. The selected tab
+  // follows the engine's active track until the student picks another (view
+  // state only — never what is evaluated).
+  const rootChildren = result ? (Array.isArray(result.tree.children) ? result.tree.children : [result.tree]) : [];
+  const hoisted = rootChildren.find((n) => n.type === 'ONE_OF' && n.presentation === 'tracks' && Array.isArray(n.children)) ?? null;
+  const trackIndex = hoisted ? trackViews[hoisted.id] ?? hoisted.activeChildIndex ?? 0 : 0;
+  const hoistedTrack = hoisted ? hoisted.children[trackIndex] ?? null : null;
+  const topNodes = unresolvedLast(
+    rootChildren.flatMap((n) => {
+      if (n !== hoisted) return [n];
+      if (!hoistedTrack) return [];
+      return Array.isArray(hoistedTrack.children) ? hoistedTrack.children : [hoistedTrack];
+    })
+  );
   // Collapsed cards share grid rows in full density (same as HubFullView);
   // the narrow compact sidebar just stacks them.
   const segments = density === 'full'
@@ -327,6 +342,22 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
           )}
 
           {disclaimer}
+
+          {hoisted && (
+            <div className="hub-year-toggle-group req-one-of-toggle req-tracks-toggle" role="group" aria-label={hoisted.label}>
+              {hoisted.children.map((option, i) => (
+                <button
+                  key={option.id ?? i}
+                  type="button"
+                  className={`hub-year-toggle-btn${i === trackIndex ? ' active' : ''}`}
+                  aria-pressed={i === trackIndex}
+                  onClick={() => setTrackViews((prev) => ({ ...prev, [hoisted.id]: i }))}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {result.status === 'satisfied' && (
             <div className="panel-all-fulfilled">

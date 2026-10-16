@@ -17,11 +17,13 @@ import { deriveRequiredTotal } from '../../utils/requirementsEngine';
 import { unresolvedLast } from '../../utils/unresolvedLast';
 
 // One requirement node, in bulletin order. depth 0 (the root's direct
-// children) renders as a HubFullView-style card with a progress ring;
-// anything deeper renders as a hub requirement row inside its card. Every
-// node collapses to one line (satisfied ones by default, keyed by node.id):
-// "✓ Label — CS 132, CS 237". Leaf nodes get a "⋯" menu for petitions
-// (substitute a course). `shared` is everything passed down unchanged to children.
+// children) renders as a HubFullView-style card with a progress ring.
+// Deeper, a container is just a section heading (title, progress count, a thin
+// divider; always open, no chevron, no border) and a leaf is a collapsible row.
+// Cards and rows collapse to one line (satisfied ones by default, keyed by
+// node.id): "✓ Label — CS 132, CS 237", each with one chevron at the far right.
+// Leaf nodes get a "⋯" menu for petitions (substitute a course). `shared` is
+// everything passed down unchanged to children.
 export default function RequirementNodeView({ node, depth = 0, ...shared }) {
   const {
     collapsedOverrides,
@@ -126,7 +128,7 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
     // Student-facing `note` on any node type, first thing in the body (so in
     // a collapsed card it only shows once expanded). UNRESOLVED keeps its own
     // note line below. `devNote` is never rendered.
-    const noteLine = !isUnresolved && node.note ? <p className="req-node-note">{node.note}</p> : null;
+    const noteLine = !isUnresolved && node.note ? <p className={`req-node-note${node.noteStyle === 'caption' ? ' req-node-note--caption' : ''}`}>{node.note}</p> : null;
     if (isContainer) {
       return (
         <>
@@ -292,6 +294,29 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
     );
   }
 
+  // A container nested inside a card is a plain section heading, not a
+  // collapsible row: its leaves are the collapsible things.
+  if (isContainer) {
+    return (
+      <div className={`req-section ${statusClass}`}>
+        <div className="req-section-header">
+          <span className="req-section-label">{node.label}</span>
+          {badge ?? (
+            <span className={`req-section-count${satisfied ? ' satisfied' : ''}`}>
+              {doneCount}/{needCount}
+            </span>
+          )}
+        </div>
+        {node.note && <p className="req-node-note">{node.note}</p>}
+        <div className="hub-full-requirements">
+          {unresolvedLast(node.children).map((child) => (
+            <RequirementNodeView key={child.id} node={child} depth={depth + 1} {...shared} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`hub-full-requirement req-row ${statusClass}`}>
       <div
@@ -315,6 +340,7 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
           </span>
         )}
         {menu}
+        <span className="hub-full-group-caret" aria-hidden="true">{collapsed ? '▸' : '▾'}</span>
       </div>
       {!collapsed && <div className="req-row-body">{renderBody()}</div>}
     </div>

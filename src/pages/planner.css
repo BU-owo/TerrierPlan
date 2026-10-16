@@ -2449,6 +2449,8 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   color: var(--text-muted);
 }
 .req-panel:not(.req-panel--full) .req-node-note { font-size: 10.5px; }
+/* noteStyle: "caption" — a plain caption under the subtitle, not italic grey. */
+.req-node-note--caption { font-style: normal; color: var(--text-secondary); }
 
 /* Compact card header as a grid so nothing wraps loose: ring | label |
    count or badge | ⋯ | caret, all top-aligned on one row. */
@@ -2471,7 +2473,7 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
    below it) | count or badge | ⋯ — so the ⋯ stays top-right. */
 .req-panel:not(.req-panel--full) .req-row-header {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   align-items: start;
   column-gap: 6px;
   row-gap: 2px;
@@ -2483,6 +2485,7 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
 .req-panel:not(.req-panel--full) .req-row-header > .req-node-review-badge,
 .req-panel:not(.req-panel--full) .req-row-header > .req-node-petitioned-badge { grid-column: 3; grid-row: 1; }
 .req-panel:not(.req-panel--full) .req-row-header > .req-node-menu { grid-column: 4; grid-row: 1; }
+.req-panel:not(.req-panel--full) .req-row-header > .hub-full-group-caret { grid-column: 5; grid-row: 1; }
 .req-panel:not(.req-panel--full) .req-row-body { padding-left: 10px; }
 .req-panel:not(.req-panel--full) .req-course-row { gap: 4px; padding: 3px 4px; }
 .req-panel:not(.req-panel--full) .req-course-row-title { min-width: 0; }
@@ -3106,6 +3109,10 @@ html[data-theme='dark'] .hub-stash-link { color: var(--warning-border); }
   transition: transform .12s;
 }
 .req-card .hub-full-group-header[aria-expanded='true'] .hub-full-group-caret::before { transform: translateY(-2px) rotate(45deg); }
+/* Leaf rows get the same single chevron as cards (collapsible = one chevron,
+   far right); rotation keys off the row header's aria-expanded. */
+.req-row-header > .hub-full-group-caret { width: 20px; height: 24px; }
+.req-card .req-row-header[aria-expanded='true'] .hub-full-group-caret::before { transform: translateY(-2px) rotate(45deg); }
 /* Sidebar cards are tight: the chevron keeps its 16px glyph and 28px height but
    gives back width to the title (the whole header is the click target). */
 .req-card--compact .hub-full-group-header { column-gap: 4px; }
@@ -4438,3 +4445,23 @@ html[data-theme='dark'] .course-card.is-compact:is(:hover, :focus-within) .cours
     overflow: hidden;
   }
 }
+
+/* A container nested inside a card: a plain section heading — title, progress
+   count, a thin divider. Always open, no chevron, no border. */
+.req-section { padding: 6px 0 2px; }
+.req-section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-bottom: 3px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.req-section-label { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 700; color: var(--text); }
+.req-section-count { flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: var(--text-muted); }
+.req-section-count.satisfied { color: var(--success-strong); }
+.req-section.fulfilled .req-section-label { color: var(--success-strong); }
+.req-section > .hub-full-requirements { padding-left: 0; }
+/* Hoisted track selector (presentation: "tracks"): sits under the progress
+   header, outside any card. */
+.req-tracks-toggle { margin: 0 0 12px; }

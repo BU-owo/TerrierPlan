@@ -6,6 +6,7 @@ import { evaluateRequirementTree, normalizeSubstitutions } from './requirementsE
 
 const biology = JSON.parse(readFileSync(new URL('../data/requirements/cas/biology-ba.json', import.meta.url), 'utf8'));
 const econ = JSON.parse(readFileSync(new URL('../data/requirements/cas/economics-ba.json', import.meta.url), 'utf8'));
+const math = JSON.parse(readFileSync(new URL('../data/requirements/cas/mathematics-ba.json', import.meta.url), 'utf8'));
 const csBa = JSON.parse(readFileSync(new URL('../data/requirements/cas/computer-science-ba.json', import.meta.url), 'utf8'));
 const waive = (extra = {}) => ({ type: 'waive', note: null, createdAt: '2026-03-01T00:00:00.000Z', ...extra });
 const child = (result, id) => result.tree.children.find((c) => c.id === id);
@@ -440,4 +441,53 @@ test('legacy single-course substitute (no `for`) fills one open slot; an older w
   assert.equal(u.substituted, true);
   assert.equal(u.satisfiedCount, 1);
   assert.equal(unresolved.totalCoursesClaimed, 1);
+});
+
+// ── Mathematics BA, Applied focus areas: five labeled groups, one COUNT (min 4) ──
+const findNode = (node, id) => {
+  if (node.id === id) return node;
+  for (const c of Array.isArray(node.children) ? node.children : []) {
+    const hit = findNode(c, id);
+    if (hit) return hit;
+  }
+  return null;
+};
+const focusKeys = (plan) => {
+  const focus = findNode(evaluateRequirementTree(math, plan, {}).tree, 'math-ba-applied-focus');
+  return { focus, keys: focus.matched.flatMap((m) => m.courseKeys) };
+};
+
+test('Applied focus areas: MA 573 is in two areas but counts once', () => {
+  const alone = focusKeys(['CASMA573']);
+  assert.equal(alone.focus.satisfiedCount, 1);
+  assert.equal(alone.focus.required, 4);
+  const four = focusKeys(['CASMA573', 'CASMA565', 'CASMA561', 'CASMA562']);
+  assert.equal(four.focus.satisfiedCount, 4);
+  assert.equal(four.focus.status, 'satisfied');
+  assert.deepEqual(four.keys.filter((k) => k === 'CASMA573'), ['CASMA573']);
+  assert.equal(new Set(four.keys).size, four.keys.length);
+});
+
+test('Applied focus areas: only one of MA 411 and MA 511 counts', () => {
+  const both = focusKeys(['CASMA411', 'CASMA511']);
+  assert.equal(both.focus.satisfiedCount, 1);
+  assert.deepEqual(both.keys, ['CASMA511']);
+  const only411 = focusKeys(['CASMA411', 'CASMA412']);
+  assert.equal(only411.focus.satisfiedCount, 2);
+});
+
+test('Applied focus areas: pool is the five labeled areas in the bulletin order, display fields set', () => {
+  const { focus } = focusKeys([]);
+  const titles = focus.pool.map((e) => e.label);
+  assert.deepEqual(titles, [
+    'Mathematical analysis', 'Mathematical analysis',
+    'Mathematical methods in the biological/life sciences',
+    'Mathematical modeling and analysis in the physical sciences',
+    'Numerical analysis and methods of computational mathematics',
+    'Probability and mathematical statistics',
+  ]);
+  assert.equal(focus.pool[1].continues, true);
+  assert.equal(focus.subtitle, 'Choose two areas below and take at least two courses in each.');
+  assert.equal(focus.noteStyle, 'caption');
+  assert.equal(focus.required, 4);
 });

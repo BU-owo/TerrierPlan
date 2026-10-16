@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import CourseList from './CourseList';
 import RequirementCourseRow from './RequirementCourseRow';
 import RangeCourseList from './RangeCourseList';
@@ -72,6 +73,40 @@ export default function CoursePool({
     );
   }
 
+  // A pool entry flagged `continues` is drawn inside the previous entry's box
+  // (one visible area made of an either/or slot plus a plain list).
+  function foldContinuing(list) {
+    const folded = [];
+    for (const group of list) {
+      if (group.continues && folded.length > 0) folded[folded.length - 1].continued.push(group);
+      else folded.push({ ...group, continued: [] });
+    }
+    return folded;
+  }
+
+  function renderGroupBody(group) {
+    const offer = renderOffer(group);
+    const substituted = group.substituted?.length > 0;
+    // A slot filled by a petition shows only its ✎ row (a label-only
+    // substitute has no claimed course, so it would otherwise look empty).
+    const empty = group.claimed.length === 0 && !substituted && !offer && !group.title;
+    return (
+      <Fragment key={group.key}>
+        {group.note && <span className="req-slot-note">{group.note}</span>}
+        {group.claimed.filter((key) => !group.substituted?.some((sub) => sub.courseKey === key)).length > 0 && (
+          <div className="req-course-grid">
+            {group.claimed
+              .filter((key) => !group.substituted?.some((sub) => sub.courseKey === key))
+              .map((key) => claimedRow(key, group.optionTags))}
+          </div>
+        )}
+        {substitutedRows(group.substituted)}
+        {offer}
+        {empty && <span className="req-slot-text">{group.textIfEmpty}</span>}
+      </Fragment>
+    );
+  }
+
   function renderOffer(group) {
     if (group.kind === 'range') {
       if (!group.showRange) return null;
@@ -124,26 +159,14 @@ export default function CoursePool({
           </div>
         );
       })}
-      {groups.map((group) => {
-        const offer = renderOffer(group);
-        const substituted = group.substituted?.length > 0;
-        // A slot filled by a petition shows only its ✎ row (a label-only
-        // substitute has no claimed course, so it would otherwise look empty).
-        const empty = group.claimed.length === 0 && !substituted && !offer && !group.title;
+      {foldContinuing(groups).map((group) => {
+        const parts = [group, ...group.continued];
+        const substituted = parts.some((part) => part.substituted?.length > 0);
+        const open = parts.some((part) => part.open);
         return (
-          <div key={group.key} className={`req-slot${group.open || substituted ? ' req-slot--open' : ''}`}>
+          <div key={group.key} className={`req-slot${open || substituted ? ' req-slot--open' : ''}`}>
             {group.title && <span className="req-slot-title">{group.title}</span>}
-            {group.note && <span className="req-slot-note">{group.note}</span>}
-            {group.claimed.filter((key) => !group.substituted?.some((sub) => sub.courseKey === key)).length > 0 && (
-              <div className="req-course-grid">
-                {group.claimed
-                  .filter((key) => !group.substituted?.some((sub) => sub.courseKey === key))
-                  .map((key) => claimedRow(key, group.optionTags))}
-              </div>
-            )}
-            {substitutedRows(group.substituted)}
-            {offer}
-            {empty && <span className="req-slot-text">{group.textIfEmpty}</span>}
+            {parts.map((part) => renderGroupBody(part))}
           </div>
         );
       })}

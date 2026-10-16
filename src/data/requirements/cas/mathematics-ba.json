@@ -1,0 +1,603 @@
+{
+  "programName": "Mathematics",
+  "degree": "BA",
+  "school": "CAS",
+  "bulletinUrl": "https://www.bu.edu/academics/cas/programs/mathematics-statistics/ba/",
+  "minGrade": "C",
+  "totalCoursesRequired": 15,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "id": "math-ba-root",
+    "type": "ALL",
+    "label": "Mathematics BA — Major Requirements",
+    "children": [
+      {
+        "id": "math-ba-min-grade",
+        "type": "UNRESOLVED",
+        "label": "Grade minimum",
+        "note": "Courses count toward the major only if you earn a C or higher. This isn't checked automatically.",
+        "devNote": "Bulletin: 'Courses may be credited toward the major only if a grade of C or higher is earned.' Honors in the Major is not modeled."
+      },
+      {
+        "id": "math-ba-classification",
+        "type": "UNRESOLVED",
+        "label": "One course per group",
+        "note": "Only one course in each group (such as Calculus I or Linear Algebra) can be taken for units. This isn't checked automatically.",
+        "devNote": "Bulletin, 'Classification of Elementary Courses': 'Any one course in a group satisfies a requirement, and only one course in each group may be taken for units.'"
+      },
+      {
+        "id": "math-ba-required",
+        "type": "ONE_OF",
+        "presentation": "tracks",
+        "label": "Required Courses",
+        "children": [
+          {
+            "id": "math-ba-pure",
+            "type": "ALL",
+            "label": "Track in Pure Mathematics",
+            "children": [
+              {
+                "id": "math-ba-pure-lower",
+                "type": "ALL",
+                "label": "Lower Division Courses",
+                "children": [
+                  {
+                    "id": "math-ba-pure-calculus",
+                    "type": "COUNT",
+                    "label": "Calculus (MA 123 and 124 or equivalent)",
+                    "min": 2,
+                    "pool": [
+                      {
+                        "type": "OR_EQUIVALENT",
+                        "label": "Calculus I",
+                        "options": [
+                          "CASMA123",
+                          "CASMA121"
+                        ],
+                        "optionTags": {
+                          "CASMA121": "Substitute"
+                        },
+                        "note": "Most students take MA 123. MA 121 also counts as Calculus I."
+                      },
+                      {
+                        "type": "OR_EQUIVALENT",
+                        "label": "Calculus II",
+                        "options": [
+                          "CASMA124",
+                          "CASMA122",
+                          "CASMA127",
+                          "CASMA129"
+                        ],
+                        "optionTags": {
+                          "CASMA122": "Substitute",
+                          "CASMA127": "Substitute",
+                          "CASMA129": "Substitute"
+                        },
+                        "note": "Most students take MA 124. MA 122, 127 and 129 also count as Calculus II. MA 129 can be taken for units by students with AP units for MA 124."
+                      }
+                    ],
+                    "devNote": "Bulletin: 'Calculus: CAS MA 123 and 124 or equivalent'. Equivalents follow the 'Classification of Elementary Courses' (Calculus I: MA 121, 123; Calculus II: MA 122, 124, 127, 129). Only one course in each group may be taken for units. MA 127 is not in public/courses.json (kept anyway; it matches nothing until it exists)."
+                  },
+                  {
+                    "id": "math-ba-pure-multivariate",
+                    "type": "COUNT",
+                    "label": "Multivariate calculus (MA 225 or 230)",
+                    "min": 1,
+                    "pool": [
+                      "CASMA225",
+                      "CASMA230"
+                    ]
+                  },
+                  {
+                    "id": "math-ba-pure-linalg",
+                    "type": "COUNT",
+                    "label": "Linear algebra (MA 242 or 442)",
+                    "min": 1,
+                    "pool": [
+                      "CASMA242",
+                      "CASMA442"
+                    ],
+                    "devNote": "MA 142 is in the Linear Algebra classification group but the track text lists only MA 242 or 442."
+                  },
+                  {
+                    "id": "math-ba-pure-cs",
+                    "type": "COUNT",
+                    "label": "Introduction to computer science (CS 111 or DS 110)",
+                    "min": 1,
+                    "pool": [
+                      "CASCS111",
+                      "CDSDS110"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "math-ba-pure-lower-additional",
+                "type": "REMAINDER",
+                "label": "Lower Division Courses: one additional mathematics or computer science course",
+                "totalRequired": 15,
+                "pool": [
+                  {
+                    "type": "COURSE_RANGE",
+                    "subject": "CASMA",
+                    "min": 100,
+                    "max": 599,
+                    "exclude": [
+                      "CASMA411"
+                    ]
+                  },
+                  {
+                    "type": "COURSE_RANGE",
+                    "subject": "CASCS",
+                    "min": 100,
+                    "max": 599
+                  }
+                ],
+                "note": "Chosen in consultation with a mathematics faculty advisor.",
+                "devNote": "Bulletin: 'One additional mathematics or computer science course selected in consultation with a mathematics faculty advisor' (last item of the Lower Division list). It is a REMAINDER at track level (listed right after the Lower Division node to keep the bulletin's order) so it always evaluates after the whole Upper Division and can't take a course the upper division needs. totalRequired 15 = the structural size of its two sibling nodes (14) + 1. RECOMPUTE totalRequired if a sibling's size changes. A future claimPriority engine option would replace this. The 'consultation' rule is not checked."
+              },
+              {
+                "id": "math-ba-pure-upper",
+                "type": "ALL",
+                "label": "Upper Division Courses",
+                "children": [
+                  {
+                    "id": "math-ba-pure-fixed",
+                    "type": "ALL",
+                    "label": "MA 511 and MA 541",
+                    "courses": [
+                      "CASMA511",
+                      "CASMA541"
+                    ]
+                  },
+                  {
+                    "id": "math-ba-pure-complex",
+                    "type": "COUNT",
+                    "label": "MA 412 (Complex Variables) or MA 713 (Functions of a Complex Variable I)",
+                    "min": 1,
+                    "pool": [
+                      "CASMA412",
+                      "CASMA713"
+                    ]
+                  },
+                  {
+                    "id": "math-ba-pure-additional",
+                    "type": "COUNT",
+                    "label": "Six additional CAS MA courses numbered 200 or above",
+                    "min": 6,
+                    "pool": [
+                      {
+                        "type": "COURSE_RANGE",
+                        "subject": "CASMA",
+                        "min": 200,
+                        "max": 999,
+                        "exclude": [
+                          "CASMA411"
+                        ]
+                      }
+                    ],
+                    "atLeast": [
+                      {
+                        "label": "At least two of these numbered 500 or above",
+                        "min": 2,
+                        "pool": [
+                          {
+                            "type": "COURSE_RANGE",
+                            "subject": "CASMA",
+                            "min": 500,
+                            "max": 999,
+                            "exclude": [
+                              "CASMA411"
+                            ]
+                          }
+                        ]
+                      }
+                    ],
+                    "note": "MA 411 can't be used for any requirement of this track because it is so similar to MA 511.",
+                    "devNote": "Bulletin: 'Six additional CAS MA courses numbered 200 or above. At least two of these must be numbered 500 or above.' One COUNT with an atLeast subset (the 500+ courses are claimed first and count toward the six). MA 411 excluded per the bulletin. Ranges run to 999 because 'numbered 200 or above' includes graduate courses. Evaluated after MA 511/541 and MA 412/713 so those fixed courses are claimed first."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "math-ba-applied",
+            "type": "ALL",
+            "label": "Track in Applied Mathematics",
+            "children": [
+              {
+                "id": "math-ba-applied-lower",
+                "type": "ALL",
+                "label": "Lower Division Courses",
+                "children": [
+                  {
+                    "id": "math-ba-applied-calculus",
+                    "type": "COUNT",
+                    "label": "Calculus (MA 123 and 124 or equivalent)",
+                    "min": 2,
+                    "pool": [
+                      {
+                        "type": "OR_EQUIVALENT",
+                        "label": "Calculus I",
+                        "options": [
+                          "CASMA123",
+                          "CASMA121"
+                        ],
+                        "optionTags": {
+                          "CASMA121": "Substitute"
+                        },
+                        "note": "Most students take MA 123. MA 121 also counts as Calculus I."
+                      },
+                      {
+                        "type": "OR_EQUIVALENT",
+                        "label": "Calculus II",
+                        "options": [
+                          "CASMA124",
+                          "CASMA122",
+                          "CASMA127",
+                          "CASMA129"
+                        ],
+                        "optionTags": {
+                          "CASMA122": "Substitute",
+                          "CASMA127": "Substitute",
+                          "CASMA129": "Substitute"
+                        },
+                        "note": "Most students take MA 124. MA 122, 127 and 129 also count as Calculus II. MA 129 can be taken for units by students with AP units for MA 124."
+                      }
+                    ],
+                    "devNote": "Bulletin: 'Calculus: CAS MA 123 and 124 or equivalent'. Equivalents follow the 'Classification of Elementary Courses' (Calculus I: MA 121, 123; Calculus II: MA 122, 124, 127, 129). Only one course in each group may be taken for units. MA 127 is not in public/courses.json (kept anyway; it matches nothing until it exists)."
+                  },
+                  {
+                    "id": "math-ba-applied-multivariate",
+                    "type": "COUNT",
+                    "label": "Multivariate calculus (MA 225 or 230)",
+                    "min": 1,
+                    "pool": [
+                      "CASMA225",
+                      "CASMA230"
+                    ]
+                  },
+                  {
+                    "id": "math-ba-applied-diffeq",
+                    "type": "COUNT",
+                    "label": "Elementary differential equations (MA 226 or 231)",
+                    "min": 1,
+                    "pool": [
+                      "CASMA226",
+                      "CASMA231"
+                    ]
+                  },
+                  {
+                    "id": "math-ba-applied-linalg",
+                    "type": "COUNT",
+                    "label": "Linear algebra (MA 242 or 442)",
+                    "min": 1,
+                    "pool": [
+                      "CASMA242",
+                      "CASMA442"
+                    ],
+                    "devNote": "MA 142 is in the Linear Algebra classification group but the track text lists only MA 242 or 442."
+                  },
+                  {
+                    "id": "math-ba-applied-cs",
+                    "type": "COUNT",
+                    "label": "Introduction to computer science (CS 111 or DS 110)",
+                    "min": 1,
+                    "pool": [
+                      "CASCS111",
+                      "CDSDS110"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "math-ba-applied-lower-additional",
+                "type": "REMAINDER",
+                "label": "Lower Division Courses: one additional mathematics or computer science course",
+                "totalRequired": 15,
+                "pool": [
+                  {
+                    "type": "COURSE_RANGE",
+                    "subject": "CASMA",
+                    "min": 100,
+                    "max": 599,
+                    "exclude": [
+                      "CASMA411"
+                    ]
+                  },
+                  {
+                    "type": "COURSE_RANGE",
+                    "subject": "CASCS",
+                    "min": 100,
+                    "max": 599
+                  }
+                ],
+                "note": "Chosen in consultation with a mathematics faculty advisor.",
+                "devNote": "Bulletin: 'One additional mathematics or computer science course selected in consultation with a mathematics faculty advisor' (last item of the Lower Division list). It is a REMAINDER at track level (listed right after the Lower Division node to keep the bulletin's order) so it always evaluates after the whole Upper Division and can't take a course the upper division needs. totalRequired 15 = the structural size of its two sibling nodes (14) + 1. RECOMPUTE totalRequired if a sibling's size changes. A future claimPriority engine option would replace this. The 'consultation' rule is not checked."
+              },
+              {
+                "id": "math-ba-applied-upper",
+                "type": "ALL",
+                "label": "Upper Division Courses",
+                "children": [
+                  {
+                    "id": "math-ba-applied-focus",
+                    "type": "COUNT",
+                    "label": "Two focus areas, at least two courses in each (4 courses)",
+                    "min": 4,
+                    "pool": [
+                      {
+                        "type": "OR_EQUIVALENT",
+                        "label": "Mathematical analysis",
+                        "options": [
+                          "CASMA511",
+                          "CASMA411"
+                        ],
+                        "note": "Only one of MA 411 and MA 511 counts."
+                      },
+                      {
+                        "type": "COURSE_LIST",
+                        "label": "Mathematical analysis",
+                        "courses": [
+                          "CASMA412",
+                          "CASMA512"
+                        ],
+                        "continues": true
+                      },
+                      {
+                        "type": "COURSE_LIST",
+                        "label": "Mathematical methods in the biological/life sciences",
+                        "courses": [
+                          "CASMA565",
+                          "CASMA573",
+                          "CASMA579"
+                        ]
+                      },
+                      {
+                        "type": "COURSE_LIST",
+                        "label": "Mathematical modeling and analysis in the physical sciences",
+                        "courses": [
+                          "CASMA561",
+                          "CASMA562",
+                          "CASMA573"
+                        ]
+                      },
+                      {
+                        "type": "COURSE_LIST",
+                        "label": "Numerical analysis and methods of computational mathematics",
+                        "courses": [
+                          "CASMA539",
+                          "CASMA555",
+                          "CASMA556",
+                          "CASMA589"
+                        ]
+                      },
+                      {
+                        "type": "COURSE_LIST",
+                        "label": "Probability and mathematical statistics",
+                        "courses": [
+                          "CASMA581",
+                          "CASMA582",
+                          "CASMA583"
+                        ]
+                      }
+                    ],
+                    "note": "The tracker only checks that you have four of these courses, not that they fall in two areas.",
+                    "devNote": "APPROXIMATE. Bulletin: choose two of five focus areas and take at least two courses within each (4 total). The engine can't express 'two areas with two courses each', so this is one COUNT (min 4) over the union of the five areas' courses, drawn as five labeled groups (pool entries in the bulletin's area order). Mathematical analysis is an OR_EQUIVALENT slot (MA 511 or 411; 511 first, so a student with both keeps MA 411 unclaimed) plus a COURSE_LIST (412, 512) marked `continues` so the UI draws them as one area. MA 573 is in both the biological and physical groups; a course is only claimed once, so it counts once (the first group claims it). MA 411 is excluded from the additional courses below. `subtitle` replaces the generated 'Pick N of M'. Exact modeling needs an engine node that counts groups, e.g. COUNT_GROUPS { groups: [{ label, pool }], minGroups: 2, minPerGroup: 2 }.",
+                    "subtitle": "Choose two areas below and take at least two courses in each.",
+                    "noteStyle": "caption"
+                  },
+                  {
+                    "id": "math-ba-applied-additional",
+                    "type": "COUNT",
+                    "label": "Four additional courses numbered 200 or above",
+                    "min": 4,
+                    "pool": [
+                      {
+                        "type": "COURSE_RANGE",
+                        "subject": "CASMA",
+                        "min": 200,
+                        "max": 999,
+                        "exclude": [
+                          "CASMA411"
+                        ]
+                      }
+                    ],
+                    "atLeast": [
+                      {
+                        "label": "At least one of these numbered 500 or above",
+                        "min": 1,
+                        "pool": [
+                          {
+                            "type": "COURSE_RANGE",
+                            "subject": "CASMA",
+                            "min": 500,
+                            "max": 999,
+                            "exclude": [
+                              "CASMA411"
+                            ]
+                          }
+                        ]
+                      }
+                    ],
+                    "devNote": "Bulletin: 'Four additional courses numbered 200 or above. At least one of these must be numbered 500 or above.' atLeast subset for the 500+ course. MA 411 is excluded so it can never count as one of these (at most one of 411/511 may be used for the track; a student who used 511 in a focus area and also has 411 can't double-count it). Side effect: MA 411 can't count as an additional course even when 511 isn't used. Ranges run to 999 (graduate courses allowed by 'numbered 200 or above')."
+                  },
+                  {
+                    "id": "math-ba-applied-411-511",
+                    "type": "UNRESOLVED",
+                    "label": "MA 411 and MA 511",
+                    "note": "You can use at most one of MA 411 and MA 511 for this track. This is only partly checked automatically.",
+                    "devNote": "Bulletin: 'Students can use at most one of CAS MA 411 and CAS MA 511 to fulfill the requirements of this track.' The focus-area slot and the exclusion of MA 411 from the additional courses cover the common cases."
+                  },
+                  {
+                    "id": "math-ba-applied-advisor-substitute",
+                    "type": "UNRESOLVED",
+                    "label": "Advisor-approved substitute",
+                    "note": "A major advisor can approve one roughly equivalent upper-level course, inside or outside the Department of Mathematics & Statistics, in place of one course in one focus area. This isn't checked automatically.",
+                    "devNote": "Bulletin: 'A major advisor can approve one roughly equivalent upper-level course ... as a substitute for one course in one focus area.' Students can record it with ⋯ → Substitute a course… on the focus-area card."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "math-ba-statistics",
+            "type": "ALL",
+            "label": "Track in Statistics",
+            "children": [
+              {
+                "id": "math-ba-stats-lower",
+                "type": "ALL",
+                "label": "Lower Division Courses",
+                "children": [
+                  {
+                    "id": "math-ba-stats-calculus",
+                    "type": "COUNT",
+                    "label": "Calculus (MA 123 and 124 or equivalent)",
+                    "min": 2,
+                    "pool": [
+                      {
+                        "type": "OR_EQUIVALENT",
+                        "label": "Calculus I",
+                        "options": [
+                          "CASMA123",
+                          "CASMA121"
+                        ],
+                        "optionTags": {
+                          "CASMA121": "Substitute"
+                        },
+                        "note": "Most students take MA 123. MA 121 also counts as Calculus I."
+                      },
+                      {
+                        "type": "OR_EQUIVALENT",
+                        "label": "Calculus II",
+                        "options": [
+                          "CASMA124",
+                          "CASMA122",
+                          "CASMA127",
+                          "CASMA129"
+                        ],
+                        "optionTags": {
+                          "CASMA122": "Substitute",
+                          "CASMA127": "Substitute",
+                          "CASMA129": "Substitute"
+                        },
+                        "note": "Most students take MA 124. MA 122, 127 and 129 also count as Calculus II. MA 129 can be taken for units by students with AP units for MA 124."
+                      }
+                    ],
+                    "devNote": "Bulletin: 'Calculus: CAS MA 123 and 124 or equivalent'. Equivalents follow the 'Classification of Elementary Courses' (Calculus I: MA 121, 123; Calculus II: MA 122, 124, 127, 129). Only one course in each group may be taken for units. MA 127 is not in public/courses.json (kept anyway; it matches nothing until it exists)."
+                  },
+                  {
+                    "id": "math-ba-stats-multivariate",
+                    "type": "COUNT",
+                    "label": "Multivariate calculus (MA 225 or 230)",
+                    "min": 1,
+                    "pool": [
+                      "CASMA225",
+                      "CASMA230"
+                    ]
+                  },
+                  {
+                    "id": "math-ba-stats-linalg",
+                    "type": "COUNT",
+                    "label": "Linear algebra (MA 242 or 442)",
+                    "min": 1,
+                    "pool": [
+                      "CASMA242",
+                      "CASMA442"
+                    ],
+                    "devNote": "MA 142 is in the Linear Algebra classification group but the track text lists only MA 242 or 442."
+                  },
+                  {
+                    "id": "math-ba-stats-probstat",
+                    "type": "ALL",
+                    "label": "Introduction to probability and statistics (MA 213 and 214)",
+                    "courses": [
+                      "CASMA213",
+                      "CASMA214"
+                    ]
+                  },
+                  {
+                    "id": "math-ba-stats-cs",
+                    "type": "COUNT",
+                    "label": "Introduction to computer science (CS 111 or DS 110)",
+                    "min": 1,
+                    "pool": [
+                      "CASCS111",
+                      "CDSDS110"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "math-ba-stats-upper",
+                "type": "ALL",
+                "label": "Upper Division Courses",
+                "children": [
+                  {
+                    "id": "math-ba-stats-fixed",
+                    "type": "ALL",
+                    "label": "MA 416 (Analysis of Variance) and MA 575 (Linear Models)",
+                    "courses": [
+                      "CASMA416",
+                      "CASMA575"
+                    ]
+                  },
+                  {
+                    "id": "math-ba-stats-two-of-three",
+                    "type": "COUNT",
+                    "label": "Two of MA 581, MA 582, MA 583",
+                    "min": 2,
+                    "pool": [
+                      "CASMA581",
+                      "CASMA582",
+                      "CASMA583"
+                    ]
+                  },
+                  {
+                    "id": "math-ba-stats-additional",
+                    "type": "COUNT",
+                    "label": "Four additional CAS mathematics courses",
+                    "min": 4,
+                    "pool": [
+                      {
+                        "type": "COURSE_RANGE",
+                        "subject": "CASMA",
+                        "min": 200,
+                        "max": 999,
+                        "exclude": [
+                          "CASMA681"
+                        ]
+                      }
+                    ],
+                    "atLeast": [
+                      {
+                        "label": "At least two chosen from MA 500–599",
+                        "min": 2,
+                        "pool": [
+                          {
+                            "type": "COURSE_RANGE",
+                            "subject": "CASMA",
+                            "min": 500,
+                            "max": 599,
+                            "exclude": [
+                              "CASMA681"
+                            ]
+                          }
+                        ]
+                      }
+                    ],
+                    "note": "You can't get elective credit for MA 681.",
+                    "devNote": "Bulletin: 'Four additional CAS mathematics courses are required: two at the 200 level or above, and two chosen from among MA 500–599. ... may not receive any elective credit for CAS MA 681.' atLeast subset for the two 500-599 courses; MA 681 excluded. The third of MA 581/582/583 can count here (it is a 500-599 course left unclaimed by the two-of-three node)."
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "devNote": "Bulletin: students must satisfy 'either the Track in Pure Mathematics, the Track in Applied Mathematics, or the Track in Statistics'. Every track totals 15 courses. The active track is the first complete one, else the closest by satisfied parts."
+      }
+    ]
+  }
+}

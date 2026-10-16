@@ -96,6 +96,8 @@ export function describeRequirement(node, visibility = null) {
       if (Array.isArray(node.children)) return null;
       return node.courses.length === 1 ? 'Required' : `All ${node.courses.length} required`;
     case 'COUNT': {
+      // An authored subtitle replaces the generated "Pick N of M" line.
+      if (typeof node.subtitle === 'string' && node.subtitle) return node.subtitle;
       const pool = node.pool || [];
       if (pool.some(isRangeEntry)) return `Pick ${node.min}: ${pool.map(describePoolEntryShort).join(', ')}`;
       // Pick-one nodes count every selectable course (a sequence bundle is one).
@@ -263,6 +265,8 @@ export function collectPoolGroups(node, planCourseKeySet) {
     groups.push({
       key: `${i}`,
       title: entryTitle(entry),
+      // Display only: drawn inside the previous entry's box, without its own heading.
+      continues: Boolean(entry.continues),
       // Optional authored per-course pills ("Substitute") and a student note
       // for this slot (OR_EQUIVALENT entries; see requirements SCHEMA.md).
       optionTags: entry.optionTags
