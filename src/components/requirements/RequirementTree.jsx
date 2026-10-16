@@ -9,6 +9,7 @@ import ExceptionModal from './ExceptionModal';
 import EstimateNote from '../EstimateNote';
 import { BU_LINKS } from '../../data/officialLinks';
 import { RequirementDragContext } from './requirementDrag';
+import { unresolvedLast } from '../../utils/unresolvedLast';
 import { DISCORD_URL, SUPPORT_EMAIL } from '../HelpSupportModal';
 import { findProgramByUrl } from '../../data/bu-programs';
 import useInactiveCourseKeys from '../../hooks/useInactiveCourseKeys';
@@ -224,7 +225,7 @@ export default function RequirementTree({
   ) : null;
 
   const topNodes = result
-    ? (Array.isArray(result.tree.children) ? result.tree.children : [result.tree])
+    ? (Array.isArray(result.tree.children) ? unresolvedLast(result.tree.children) : [result.tree])
     : [];
   // Collapsed cards share grid rows in full density (same as HubFullView);
   // the narrow compact sidebar just stacks them.

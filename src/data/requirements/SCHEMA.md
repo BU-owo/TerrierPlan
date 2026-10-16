@@ -34,6 +34,8 @@ authored number is used only if that derivation fails.
 
 ## Requirement node types
 
+Author nodes in the order the bulletin states them; the UI shows `UNRESOLVED` ("Check with advisor") nodes last among their siblings, in the same relative order. (Display only — evaluation and claim order stay as written.)
+
 Every node has a `type`, a `label`, and an **`id`** — a short, stable,
 kebab-case string, unique within the file (e.g. `"cs-ba-group-a"`). `id` is
 required on every node, including the root `tree` node and every nested

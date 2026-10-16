@@ -14,6 +14,7 @@ import SequenceGroupDetail from './SequenceGroupDetail';
 import RequirementNodeMenu from './RequirementNodeMenu';
 import { HubProgressRing } from '../planner/HubFullView';
 import { deriveRequiredTotal } from '../../utils/requirementsEngine';
+import { unresolvedLast } from '../../utils/unresolvedLast';
 
 // One requirement node, in bulletin order. depth 0 (the root's direct
 // children) renders as a HubFullView-style card with a progress ring;
@@ -131,7 +132,7 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
         <>
           {noteLine}
           <div className="hub-full-requirements">
-            {node.children.map((child) => (
+            {unresolvedLast(node.children).map((child) => (
               <RequirementNodeView key={child.id} node={child} depth={depth + 1} {...shared} />
             ))}
           </div>
