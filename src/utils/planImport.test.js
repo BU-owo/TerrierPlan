@@ -226,7 +226,7 @@ test('requirementOverrides need a known program and real node ids', () => {
     },
   }), ctx);
   assert.deepEqual(Object.keys(good.plan.requirementOverrides).sort(), ['cs-ba-deep', 'cs-ba-group-a']);
-  assert.equal(good.plan.requirementOverrides['cs-ba-deep'].courseKey, 'CASMA123');
+  assert.deepEqual(good.plan.requirementOverrides['cs-ba-deep'].substitutions, [{ courseKey: 'CASMA123' }]);
   assert.equal(good.plan.requirementOverrides['cs-ba-deep'].note.length, 200);
   assert.equal(good.plan.requirementOverrides['cs-ba-group-a'].type, 'waive');
   assert.equal('courseKey' in good.plan.requirementOverrides['cs-ba-group-a'], false);
@@ -249,11 +249,69 @@ test('requirementOverrides need a known program and real node ids', () => {
   assert.deepEqual(unknown.plan.requirementOverrides, {});
   assert.ok(unknown.dropped.some((d) => d.where === 'Major'));
 
-  // Substitute with a bad course.
-  const badSub = sanitizePlanBlob(validBlob({
+  // Substitute with a course that isn't in the catalog: kept as a plain-text label.
+  const outside = sanitizePlanBlob(validBlob({
     requirementOverrides: { 'cs-ba-group-a': { type: 'substitute', courseKey: 'ZZZZZ999', createdAt: '2026-03-01' } },
   }), ctx);
-  assert.deepEqual(badSub.plan.requirementOverrides, {});
+  assert.deepEqual(outside.plan.requirementOverrides['cs-ba-group-a'].substitutions, [{ label: 'ZZZZZ999' }]);
+});
+
+test('substitutions round-trip, including label-only ones; older shapes still import', () => {
+  const created = '2026-03-01T00:00:00.000Z';
+  const r = sanitizePlanBlob(validBlob({
+    requirementOverrides: {
+      'cs-ba-group-a': {
+        type: 'substitute',
+        substitutions: [
+          { courseKey: 'casMA123', for: 'CASCS111' },
+          { courseKey: 'CASMA123', for: 'CASCS112' }, // duplicate substitute: kept once
+          { label: '  ECON 1115 — <b>Northeastern</b>\n', for: 'CASCS112' }, // label only; markup stripped
+          { courseKey: 'ZZZZZ999' }, // not in the catalog: kept as a label, not dropped
+          { courseKey: 'CASCS330', label: 'Study abroad London' }, // both: courseKey leads
+          { label: '   ' }, // nothing usable: dropped on its own
+          { courseKey: 'CASCS112', for: 'ZZZZZ999' }, // unknown replaced course: dropped on its own
+        ],
+        note: 'approved',
+        createdAt: created,
+      },
+      // Older shape: a single courseKey becomes one substitution with no `for`.
+      'cs-ba-group-b': { type: 'substitute', courseKey: 'CASMA123', note: null, createdAt: created },
+      // Older whole-node waive is untouched.
+      'cs-ba-deep': { type: 'waive', note: 'n', createdAt: created },
+    },
+  }), ctx);
+  const ov = r.plan.requirementOverrides;
+  assert.deepEqual(ov['cs-ba-group-a'].substitutions, [
+    { courseKey: 'CASMA123', for: 'CASCS111' },
+    { label: 'ECON 1115 — bNortheastern/b', for: 'CASCS112' },
+    { label: 'ZZZZZ999' },
+    { courseKey: 'CASCS330', label: 'Study abroad London' },
+  ]);
+  assert.equal(ov['cs-ba-group-a'].note, 'approved');
+  assert.deepEqual(ov['cs-ba-group-b'].substitutions, [{ courseKey: 'CASMA123' }]);
+  assert.equal('courseKey' in ov['cs-ba-group-b'], false);
+  assert.deepEqual(Object.keys(ov['cs-ba-deep']).sort(), ['createdAt', 'note', 'type']);
+  assert.equal(r.dropped.length, 2); // the empty label and the unknown `for`
+  // No undefined values anywhere (Firestore rejects them), labels capped at 80.
+  for (const o of Object.values(ov)) {
+    assert.ok(Object.values(o).every((v) => v !== undefined));
+    for (const sub of o.substitutions ?? []) assert.ok(Object.values(sub).every((v) => v !== undefined));
+  }
+  const long = sanitizePlanBlob(validBlob({
+    requirementOverrides: { 'cs-ba-group-a': { type: 'substitute', substitutions: [{ label: 'x'.repeat(500) }], createdAt: created } },
+  }), ctx);
+  assert.equal(long.plan.requirementOverrides['cs-ba-group-a'].substitutions[0].label.length, 80);
+  // Dropped fields from the earlier waive work are not carried over.
+  const old = sanitizePlanBlob(validBlob({
+    requirementOverrides: { 'cs-ba-group-a': { type: 'waive', slots: 2, courses: ['CASCS111'], createdAt: created } },
+  }), ctx);
+  assert.deepEqual(Object.keys(old.plan.requirementOverrides['cs-ba-group-a']).sort(), ['createdAt', 'note', 'type']);
+
+  // Nothing usable left: the override goes.
+  for (const bad of [{ substitutions: [] }, { substitutions: [{ label: '' }] }, { courseKey: '' }, { substitutions: 'CASMA123' }]) {
+    const out = sanitizePlanBlob(validBlob({ requirementOverrides: { 'cs-ba-group-a': { type: 'substitute', createdAt: created, ...bad } } }), ctx);
+    assert.deepEqual(out.plan.requirementOverrides, {}, JSON.stringify(bad));
+  }
 });
 
 test('isTransfer must be exactly true', () => {

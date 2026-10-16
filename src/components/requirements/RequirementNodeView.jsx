@@ -5,6 +5,7 @@ import {
   collectPoolGroups,
   collectSubsetLabels,
   collectMatchedKeys,
+  countCounted,
   shortCourseCode,
 } from './treeHelpers';
 import CoursePool from './CoursePool';
@@ -18,8 +19,8 @@ import { deriveRequiredTotal } from '../../utils/requirementsEngine';
 // children) renders as a HubFullView-style card with a progress ring;
 // anything deeper renders as a hub requirement row inside its card. Every
 // node collapses to one line (satisfied ones by default, keyed by node.id):
-// "✓ Label — CS 132, CS 237". Every node gets a "⋯" menu for waive/
-// substitute. `shared` is everything passed down unchanged to children.
+// "✓ Label — CS 132, CS 237". Leaf nodes get a "⋯" menu for petitions
+// (substitute a course). `shared` is everything passed down unchanged to children.
 export default function RequirementNodeView({ node, depth = 0, ...shared }) {
   const {
     collapsedOverrides,
@@ -34,8 +35,9 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
     requirementOverrides,
     onRemoveRequirementOverride,
     onMarkDone,
-    onCountDifferent,
     onUndo,
+    onSubstitute,
+    onUndoSubstitution,
     flatNodes,
     onAddFromRow,
     inactiveKeys,
@@ -75,7 +77,17 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
   // across their subtree (same derivation as the program total); every
   // other node keeps its own satisfiedCount / required.
   const needCount = isContainer ? deriveRequiredTotal(node) : node.required;
-  const doneCount = isContainer ? Math.min(collectMatchedKeys(node).length, needCount) : node.satisfiedCount;
+  const doneCount = isContainer ? Math.min(countCounted(node), needCount) : node.satisfiedCount;
+  // Petitions applied to this node ("2 substituted"). Goes on the subtitle
+  // line (never next to the count, where it squeezed the title); the count
+  // itself is a plain "3/4" — a substitution fills a slot, so the numerator
+  // goes up by one and the denominator never changes.
+  const substitutedCount = (node.substitutions ?? []).filter((sub) => sub.status === 'applied').length;
+  // Which other requirement is already counting a plan course a petition points at.
+  const countedIn = (sub) => flatNodes.find(
+    (other) => other.id !== node.id && !Array.isArray(other.children) && collectMatchedKeys(other).includes(sub.courseKey)
+  )?.label;
+  const subtitle = [headerText, substitutedCount > 0 ? `${substitutedCount} substituted` : null].filter(Boolean).join(' · ');
   let collapsedSummary = null;
   if (collapsed && satisfied) {
     const codes = collectMatchedKeys(node).map(shortCourseCode);
@@ -102,8 +114,10 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
     <RequirementNodeMenu
       node={node}
       onMarkDone={onMarkDone}
-      onCountDifferent={onCountDifferent}
       onUndo={onUndo}
+      onSubstitute={onSubstitute}
+      onUndoSubstitution={onUndoSubstitution}
+      courseLabel={(sub) => (sub.courseKey ? shortCourseCode(sub.courseKey) : sub.label)}
     />
   );
 
@@ -125,8 +139,9 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
           <PetitionActiveDisplay
             node={node}
             override={override}
-            courseMap={courseMap}
             onRemoveOverride={onRemoveRequirementOverride}
+            onUndoSubstitution={onUndoSubstitution}
+            countedIn={countedIn}
           />
         </>
       );
@@ -160,8 +175,9 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
           <PetitionActiveDisplay
             node={node}
             override={override}
-            courseMap={courseMap}
             onRemoveOverride={onRemoveRequirementOverride}
+            onUndoSubstitution={onUndoSubstitution}
+            countedIn={countedIn}
           />
         </>
       );
@@ -208,8 +224,9 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
         <PetitionActiveDisplay
           node={node}
           override={override}
-          courseMap={courseMap}
           onRemoveOverride={onRemoveRequirementOverride}
+          onUndoSubstitution={onUndoSubstitution}
+          countedIn={countedIn}
         />
       </>
     );
@@ -244,11 +261,14 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
             </span>
           )}
           <div className="hub-full-group-heading">
-            <h3 className="hub-full-group-label" title={node.label}>
+            <h3
+              className="hub-full-group-label"
+              title={collapsedSummary !== null ? `✓ ${node.label} ${collapsedSummary}`.trim() : node.label}
+            >
               {collapsedSummary !== null ? `✓ ${node.label} ${collapsedSummary}`.trim() : node.label}
             </h3>
-            {collapsedSummary === null && headerText && !compact && (
-              <span className="hub-full-group-count">{headerText}</span>
+            {collapsedSummary === null && subtitle && !compact && (
+              <span className="hub-full-group-count">{subtitle}</span>
             )}
           </div>
           {compact && showRing && (
@@ -264,8 +284,8 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
           <div className="req-card-body">
             {/* Compact: the header text gets its own full-width line — the
                 sidebar header row is too narrow for it. */}
-            {compact && collapsedSummary === null && headerText && (
-              <span className="hub-full-group-count req-card-subtitle">{headerText}</span>
+            {compact && collapsedSummary === null && subtitle && (
+              <span className="hub-full-group-count req-card-subtitle">{subtitle}</span>
             )}
             {renderBody()}
           </div>
@@ -289,7 +309,7 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
         {collapsedSummary !== null ? (
           collapsedSummary && <span className="hub-full-requirement-detail">{collapsedSummary}</span>
         ) : (
-          headerText && <span className="hub-full-requirement-detail">{headerText}</span>
+          subtitle && <span className="hub-full-requirement-detail">{subtitle}</span>
         )}
         {badge ?? (
           <span className={`hub-full-requirement-count${satisfied ? ' satisfied' : ''}`}>

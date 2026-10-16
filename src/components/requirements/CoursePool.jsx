@@ -29,7 +29,7 @@ export default function CoursePool({
   onOpenFullView,
 }) {
   const { groups } = pool;
-  if (groups.length === 0 && subsets.length === 0 && !fallbackNote) return null;
+  if (groups.length === 0 && subsets.length === 0 && !fallbackNote && !pool.substituted?.length) return null;
 
   const listProps = { stashSet, onToggleStash, onShowCourseInfo, subsetLabels, onRowClick };
   const toCourses = (keys) => keys.map((key) => ({ id: key, ...(courseMap[key] || {}) }));
@@ -43,7 +43,27 @@ export default function CoursePool({
   // Sidebar, pool made only of ranges: claimed rows + one merged line.
   const compactRangeOnly = density === 'compact' && pool.rangeOnly;
 
-  function claimedRow(key) {
+  // Petitioned (substituted) courses render as muted ✎ rows, in the slot they fill.
+  function substitutedRows(list = []) {
+    if (list.length === 0) return null;
+    return (
+      <div className="req-course-grid">
+        {list.map(({ courseKey, label, replaces }) => (
+          <RequirementCourseRow
+            key={courseKey ?? label}
+            courseKey={courseKey}
+            course={courseKey ? courseMap[courseKey] : undefined}
+            substituted
+            substituteLabel={courseKey ? undefined : label}
+            replacesLabel={replaces ? shortCourseCode(replaces) : undefined}
+            onShowCourseInfo={onShowCourseInfo}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  function claimedRow(key, optionTags) {
     return (
       <RequirementCourseRow
         key={key}
@@ -53,6 +73,7 @@ export default function CoursePool({
         statusLabel={describeLockStatus(lockStatusMap?.[key]).label}
         onShowCourseInfo={onShowCourseInfo}
         subsetLabel={subsetLabels?.get(key)}
+        tag={optionTags?.[key]}
       />
     );
   }
@@ -91,11 +112,12 @@ export default function CoursePool({
     if (group.options.length === 0) return null;
     // Required courses (ALL leaf) are never hidden — they aren't choices.
     if (group.required) return <CourseList courses={toCourses(group.options)} {...listProps} />;
-    return choiceList(group.options, { equivalent: group.equivalent });
+    return choiceList(group.options, { equivalent: group.equivalent, optionTags: group.optionTags });
   }
 
   return (
     <div className="req-pool">
+      {substitutedRows(pool.substituted)}
       {subsets.map((subset, i) => {
         const keys = subset.matched.flatMap((entry) => entry.courseKeys || []);
         const done = subset.status === 'satisfied';
@@ -141,13 +163,22 @@ export default function CoursePool({
         </>
       ) : groups.map((group) => {
         const offer = renderOffer(group);
-        const empty = group.claimed.length === 0 && !offer && !group.title;
+        const substituted = group.substituted?.length > 0;
+        // A slot filled by a petition shows only its ✎ row (a label-only
+        // substitute has no claimed course, so it would otherwise look empty).
+        const empty = group.claimed.length === 0 && !substituted && !offer && !group.title;
         return (
-          <div key={group.key} className={`req-slot${group.open ? ' req-slot--open' : ''}`}>
+          <div key={group.key} className={`req-slot${group.open || substituted ? ' req-slot--open' : ''}`}>
             {group.title && <span className="req-slot-title">{group.title}</span>}
-            {group.claimed.length > 0 && (
-              <div className="req-course-grid">{group.claimed.map(claimedRow)}</div>
+            {group.note && <span className="req-slot-note">{group.note}</span>}
+            {group.claimed.filter((key) => !group.substituted?.some((sub) => sub.courseKey === key)).length > 0 && (
+              <div className="req-course-grid">
+                {group.claimed
+                  .filter((key) => !group.substituted?.some((sub) => sub.courseKey === key))
+                  .map((key) => claimedRow(key, group.optionTags))}
+              </div>
             )}
+            {substitutedRows(group.substituted)}
             {offer}
             {empty && <span className="req-slot-text">{group.textIfEmpty}</span>}
           </div>

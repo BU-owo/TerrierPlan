@@ -48,3 +48,21 @@ export const COURSE_KEY_PATTERN = /^([A-Z]{3})([A-Z]{2})(\d+)$/;
 export function isValidCourseKeyFormat(rawValue) {
   return COURSE_KEY_PATTERN.test(String(rawValue).replace(/\s+/g, '').toUpperCase());
 }
+
+// Longest outside-course label a substitution (petition) may carry.
+export const MAX_SUBSTITUTE_LABEL = 80;
+
+// Free-text name of a course that isn't in the catalog / plan ("ECON 1115 —
+// Northeastern"): plain text only. Control characters and angle brackets are
+// dropped, whitespace is collapsed, then trimmed and capped. Returns '' for
+// anything that isn't a usable string.
+export function cleanSubstituteLabel(value) {
+  if (typeof value !== 'string') return '';
+  let out = '';
+  for (const ch of value) {
+    const code = ch.codePointAt(0);
+    if (code === 9 || code === 10 || code === 13) out += ' ';
+    else if (code >= 32 && code !== 127 && ch !== '<' && ch !== '>') out += ch;
+  }
+  return out.replace(/\s+/g, ' ').trim().slice(0, MAX_SUBSTITUTE_LABEL).trim();
+}

@@ -1,0 +1,161 @@
+{
+  "programName": "Psychology",
+  "degree": "BA",
+  "school": "CAS",
+  "bulletinUrl": "https://www.bu.edu/academics/cas/programs/psychology/ba/",
+  "minGrade": "C",
+  "totalCoursesRequired": 11,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "id": "psych-ba-root",
+    "type": "ALL",
+    "label": "Psychology BA — Major Requirements",
+    "children": [
+      {
+        "id": "psych-ba-prereq",
+        "type": "ALL",
+        "label": "Prerequisite course",
+        "courses": [
+          "CASPS101"
+        ],
+        "devNote": "Bulletin: 'CAS PS 101 General Psychology, or equivalent'. Equivalents (AP, transfer) only count if they reach the plan as CASPS101.",
+        "note": "PS 101 or an equivalent. If yours was approved as an equivalent (AP, transfer), use ⋯ → Substitute a course…"
+      },
+      {
+        "id": "psych-ba-physio",
+        "type": "COUNT",
+        "label": "Principal courses: Physiological Psychology",
+        "min": 1,
+        "pool": [
+          {
+            "type": "OR_EQUIVALENT",
+            "label": "Physiological Psychology (PS 231)",
+            "options": [
+              "CASPS231",
+              "CASNE101"
+            ],
+            "optionTags": {
+              "CASNE101": "Substitute"
+            },
+            "note": "Most students take PS 231. NE 101 counts instead only if you took it before declaring psychology, switched from a neuroscience major, or are a neuroscience/psychology double major. You only get units for one of them."
+          }
+        ],
+        "devNote": "PS 231 is one of the nine principal courses and is a separate requirement from Group A (it is not on the Group A list). The NE 101 conditions can't be checked, so NE 101 is selectable for everyone."
+      },
+      {
+        "id": "psych-ba-group-a",
+        "type": "COUNT",
+        "label": "Principal courses: Content Group A (2)",
+        "min": 2,
+        "pool": [
+          "CASPS222",
+          "CASPS234",
+          "CASPS333",
+          "CASPS336",
+          "CASPS337",
+          "CASPS338",
+          "CASPS339"
+        ]
+      },
+      {
+        "id": "psych-ba-group-b",
+        "type": "COUNT",
+        "label": "Principal courses: Content Group B (2)",
+        "min": 2,
+        "pool": [
+          "CASPS241",
+          "CASPS251",
+          "CASPS261",
+          "CASPS370",
+          "CASPS371"
+        ]
+      },
+      {
+        "id": "psych-ba-experimental",
+        "type": "COUNT",
+        "label": "Principal courses: experimental course (1)",
+        "min": 1,
+        "pool": [
+          {
+            "type": "OR_EQUIVALENT",
+            "label": "Experimental course (PS 323–329)",
+            "options": [
+              "CASPS323",
+              "CASPS324",
+              "CASPS325",
+              "CASPS326",
+              "CASPS327",
+              "CASPS328",
+              "CASPS329"
+            ],
+            "note": "Pick one experimental course. You only get units for one of PS 324, PS 325 and PS 326."
+          }
+        ],
+        "devNote": "Bulletin: one of the four 300+ principal courses must be an experimental course (PS 323–329). None of these are in Group A or B, so it is always one of the 'other' principal courses and is modeled as its own required slot."
+      },
+      {
+        "id": "psych-ba-other",
+        "type": "COUNT",
+        "label": "Principal courses: any other PS course (3)",
+        "min": 3,
+        "pool": [
+          {
+            "type": "COURSE_RANGE",
+            "subject": "CASPS",
+            "min": 200,
+            "max": 599,
+            "exclude": [
+              "CASPS211",
+              "CASPS212"
+            ]
+          }
+        ],
+        "devNote": "Nine principal = PS 231 + 2 Group A + 2 Group B + 1 experimental + 3 other. Bulletin: principal courses are those 'listed in the Bulletin and numbered at the 200 level or above, excluding PS 211 and PS/NE 212'. PS 211/212 are excluded from the range (CASNE212 never matches a CASPS range), and the statistics node can claim them. The range also matches PS directed study / honors / 5xx numbers; the bulletin doesn't exclude them, so they count. Suffixed (study-abroad) keys are skipped by range matching on purpose.",
+        "note": "Any PS course numbered 200 or above, except PS 211 and PS/NE 212."
+      },
+      {
+        "id": "psych-ba-statistics",
+        "type": "COUNT",
+        "label": "Statistics course",
+        "min": 1,
+        "pool": [
+          {
+            "type": "OR_EQUIVALENT",
+            "label": "Statistics (MA 116, MA 214, PS 211 or PS/NE 212)",
+            "options": [
+              "CASMA116",
+              "CASMA214",
+              "CASPS211",
+              "CASPS212",
+              "CASNE212"
+            ],
+            "note": "MA 116 needs MA 115 first, and MA 214 needs MA 213 first. You only get units for one of MA 116 and MA 214. MA 113 doesn't count. PS 211 and PS/NE 212 count here but not as principal courses."
+          }
+        ],
+        "devNote": "Bulletin: 'CAS MA 116 (prerequisite: MA 115), MA 214 (prerequisite: MA 213), CAS PS 211, or PS 212' with a C or higher; MA 113 explicitly does not count. CASPS212 and CASNE212 are the same cross-listed course (two catalog keys). The department's own Major Requirements page words this as PS 211, PS/NE 212, or MA 115 + MA 116 — it doesn't mention MA 214."
+      },
+      {
+        "id": "psych-ba-300-level",
+        "type": "UNRESOLVED",
+        "label": "300-level requirement",
+        "note": "At least four of your nine principal courses must be 300-level or higher. The experimental course counts toward the four. This isn't checked automatically.",
+        "devNote": "'Four of the nine principal courses must be selected from offerings at the 300 level or higher' cuts across the Group A/B/other claims (several Group A/B courses are 300+). atLeast subsets only claim from unclaimed courses in one node, so any ordering would under-count or steal from Groups A/B. The experimental part is modeled separately."
+      },
+      {
+        "id": "psych-ba-min-grade",
+        "type": "UNRESOLVED",
+        "label": "Grade minimum",
+        "note": "You need a C or better in all principal courses and in the statistics course. This isn't checked automatically.",
+        "devNote": "Bulletin: 'A grade of C or higher is required in all principal courses' and in the statistics course. minGrade is set at the top level but the engine doesn't check grades."
+      },
+      {
+        "id": "psych-ba-transfer-cap",
+        "type": "UNRESOLVED",
+        "label": "Transfer course limit",
+        "note": "At most three of your nine principal courses can be transferred in from outside BU, and the department has to approve each one first. BU Summer Term psychology courses with the same number and title as CAS courses don't count as transfers. This isn't checked automatically.",
+        "devNote": "Bulletin: max three transfer courses toward the nine principal courses; prior departmental approval required (DUS contact in the bulletin)."
+      }
+    ]
+  }
+}

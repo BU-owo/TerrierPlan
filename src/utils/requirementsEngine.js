@@ -1,4 +1,4 @@
-import { normalizeCourseKey, parseCourseKey } from './courseKey.js';
+import { normalizeCourseKey, parseCourseKey, cleanSubstituteLabel } from './courseKey.js';
 
 function describeEntry(entry) {
   if (typeof entry === 'string') return entry;
@@ -372,7 +372,13 @@ function evaluateOneOf(node, ctx) {
     return { result: evaluateNode(child, childCtx), claimed: childCtx.claimed };
   });
   const ratio = ({ result }) => (result.required > 0 ? result.satisfiedCount / result.required : 0);
-  let activeChildIndex = attempts.findIndex(({ result }) => result.status === 'satisfied');
+  // A child satisfied by courses the student actually holds beats everything,
+  // including a whole-node waived child (which always reads satisfied) — so
+  // waiving a track while another is genuinely complete changes nothing. With
+  // no genuinely complete child, a waived child wins (the student excused that
+  // track); otherwise the child with the most progress.
+  let activeChildIndex = attempts.findIndex(({ result }) => result.status === 'satisfied' && !result.waived);
+  if (activeChildIndex === -1) activeChildIndex = attempts.findIndex(({ result }) => result.waived);
   if (activeChildIndex === -1) {
     activeChildIndex = 0;
     attempts.forEach((attempt, i) => {
@@ -399,42 +405,93 @@ function evaluateOneOf(node, ctx) {
 // and unclaimed (array order = priority, same convention as claimFromPools);
 // a student who happens to qualify for more than one option only has the
 // first claimed, so no course gets pulled into two different options' counts.
-function evaluateSequenceGroup(node, ctx) {
-  for (const option of node.options) {
-    const keys = option.courses.map(normalizeCourseKey);
-    const allPresent = keys.every((key) => ctx.planCourseKeys.has(key) && !ctx.claimed.has(key));
-    if (allPresent) {
-      keys.forEach((key) => ctx.claimed.add(key));
-      return {
-        ...node,
-        status: 'satisfied',
-        matched: keys,
-        missing: [],
-        matchedOption: option.label,
-        partialMatch: null,
-        satisfiedCount: 1,
-        required: 1,
-      };
-    }
+//
+// Substitutions (see applySlotSubstitutions) replace one course of an option:
+// `for` names the replaced course, no `for` fills the first unmet course.
+// A substitution only applies while the real course isn't available, so
+// completing the real course later makes it inert (the course is released).
+// A substitute that is a plan course claims it; one that isn't in the plan
+// (transfer / study abroad / label only) fills the slot and claims nothing.
+// Matching is still all-or-nothing, so an unfinished option claims nothing.
+function matchOption(keys, subs, ctx) {
+  const avail = (key) => ctx.planCourseKeys.has(key) && !ctx.claimed.has(key);
+  const usable = subs.filter((sub) => !isClaimedElsewhere(sub, ctx) && !(sub.courseKey && keys.includes(sub.courseKey)));
+  const taken = new Set();
+  const fill = (replaces, sub) => {
+    taken.add(sub);
+    const real = isPlanCourse(sub, ctx);
+    return { key: real ? sub.courseKey : null, replaces, sub, outside: !real };
+  };
+  const slots = keys.map((key) => {
+    if (avail(key)) return { key };
+    const sub = usable.find((s) => s.for === key && !taken.has(s));
+    return sub ? fill(key, sub) : { key, unmet: true };
+  });
+  for (let i = 0; i < slots.length; i += 1) {
+    if (!slots[i].unmet) continue;
+    const sub = usable.find((s) => !s.for && !taken.has(s));
+    if (sub) slots[i] = fill(slots[i].key, sub);
+  }
+  return {
+    slots,
+    // Courses this option claims (substitutes from outside the plan claim nothing).
+    keys: slots.filter((slot) => slot.key && !slot.unmet).map((slot) => slot.key),
+    unmet: slots.filter((slot) => slot.unmet).map((slot) => slot.key),
+    complete: slots.every((slot) => !slot.unmet),
+  };
+}
+
+function evaluateSequenceGroup(node, ctx, subs = []) {
+  const attempts = node.options.map((option) => matchOption(option.courses.map(normalizeCourseKey), subs, ctx));
+  const wonIndex = attempts.findIndex((attempt) => attempt.complete);
+
+  // Nothing complete — report the "closest" option (most courses already
+  // present & unclaimed, substituted ones included) so the UI can show
+  // progress instead of a flat list of every option. Ties go to the first
+  // option in array order. null if the student has zero courses toward ANY
+  // option. Purely additional reporting; doesn't affect claiming.
+  let bestIndex = -1;
+  if (wonIndex === -1) {
+    attempts.forEach((attempt, i) => {
+      const have = attempt.slots.length - attempt.unmet.length;
+      const bestHave = bestIndex === -1 ? 0 : attempts[bestIndex].slots.length - attempts[bestIndex].unmet.length;
+      if (have > 0 && (bestIndex === -1 || have > bestHave)) bestIndex = i;
+    });
+  }
+  const shown = wonIndex !== -1 ? attempts[wonIndex] : attempts[bestIndex === -1 ? 0 : bestIndex];
+
+  // Per-substitution report, computed before this node claims anything.
+  const substitutions = subs.map((sub) => {
+    const used = shown.slots.find((slot) => slot.sub === sub);
+    if (used) return { ...subBase(sub), status: wonIndex !== -1 ? 'applied' : 'pending', replaces: used.replaces };
+    if (isClaimedElsewhere(sub, ctx)) return { ...subBase(sub), status: 'already-counted' };
+    return { ...subBase(sub), status: sub.for ? 'real-course-completed' : 'no-open-slot' };
+  });
+
+  if (wonIndex !== -1) {
+    shown.keys.forEach((key) => ctx.claimed.add(key));
+    shown.slots.forEach((slot) => {
+      if (slot.outside) ctx.claimed.add(outsideKey(node, subs.indexOf(slot.sub)));
+    });
+    return {
+      ...node,
+      status: 'satisfied',
+      matched: shown.keys,
+      missing: [],
+      matchedOption: node.options[wonIndex].label,
+      partialMatch: null,
+      satisfiedCount: 1,
+      required: 1,
+      substitutions,
+      openSlots: [],
+    };
   }
 
-  // Nothing satisfied — report the "closest" option (most courses already
-  // present & unclaimed) so the UI can show progress instead of a flat list
-  // of every option. Ties go to the first option in array order (only a
-  // strictly bigger count replaces the current best). null if the student
-  // has zero courses toward ANY option — nothing to prioritize over anything
-  // else. Purely additional reporting; doesn't affect status/claiming above.
-  let partialMatch = null;
-  for (const option of node.options) {
-    const keys = option.courses.map(normalizeCourseKey);
-    const haveKeys = keys.filter((key) => ctx.planCourseKeys.has(key) && !ctx.claimed.has(key));
-    if (haveKeys.length === 0) continue;
-    if (!partialMatch || haveKeys.length > partialMatch.haveKeys.length) {
-      const haveSet = new Set(haveKeys);
-      partialMatch = { label: option.label, haveKeys, needKeys: keys.filter((key) => !haveSet.has(key)) };
-    }
-  }
-
+  const partialMatch = bestIndex === -1 ? null : {
+    label: node.options[bestIndex].label,
+    haveKeys: attempts[bestIndex].slots.filter((slot) => !slot.unmet).map((slot) => slot.key ?? slot.replaces),
+    needKeys: attempts[bestIndex].unmet,
+  };
   return {
     ...node,
     status: 'unsatisfied',
@@ -443,6 +500,8 @@ function evaluateSequenceGroup(node, ctx) {
     partialMatch,
     satisfiedCount: 0,
     required: 1,
+    substitutions,
+    openSlots: shown.unmet.map((key) => ({ for: key, keys: [key] })),
   };
 }
 
@@ -457,102 +516,245 @@ function evaluateUnresolved(node) {
   };
 }
 
-// A "waive" override skips normal evaluation entirely — no children
-// evaluated, no courses claimed — and reports the node as fully satisfied.
-// Deliberately doesn't try to synthesize a real satisfiedCount/required (a
-// waived ALL container has no evaluated children to count), so the UI keys
-// off `waived` instead of the numbers to decide how to render it.
-function evaluateWaived(node, override) {
+// A whole-node "waive" override reports the node as satisfied, but the
+// courses the student actually has in it stay claimed and counted: the node
+// is evaluated normally first (so nothing it holds is released to later
+// nodes), then reported with `required` = the number of courses it holds.
+// A 3/5 node therefore reads 3/3 and the program total drops only by the
+// unmet 2. `matched` is the flat list of claimed keys; the evaluated
+// children are not returned (the UI renders a waived node as a leaf, keyed
+// off `waived`). UNRESOLVED nodes claim nothing, so they stay 0 / 0 and
+// never count toward totals. A SEQUENCE_GROUP is all-or-nothing when
+// evaluated normally, so its partially-held option's courses are claimed
+// here too.
+function evaluateWaived(node, override, claimedKeys = []) {
   return {
     ...node,
     status: 'satisfied',
-    matched: [],
+    matched: claimedKeys.filter((key) => !isOutsideKey(key)),
     missing: [],
-    satisfiedCount: 0,
-    required: 0,
+    satisfiedCount: claimedKeys.length,
+    required: claimedKeys.length,
     waived: true,
     overrideNote: override.note ?? null,
   };
 }
 
-// A "substitute" override adds override.courseKey to the node's pool for
-// this evaluation only (never written back to the program JSON — see
-// SCHEMA.md's Manual overrides section), then evaluates normally so it
-// participates in claim priority exactly like any other pool entry — it can
-// still lose the course to an earlier-evaluated sibling that also wants it.
-// UNRESOLVED nodes have no pool of their own, so they're evaluated as a
-// synthetic COUNT(min: 1) built just for this call. SEQUENCE_GROUP nodes
-// have no pool either — the courseKey must already appear in one of the
-// node's own options, and that option is then evaluated as if the student
-// had it, so its other courses still need to be genuinely in the plan; if
-// the courseKey doesn't belong to any option, this returns null so the
-// caller falls back to normal (unsubstituted) evaluation. ALL nodes have no
-// well-defined "add to pool" (there's no slot the substitute is *for*), so
-// they fall through to normal evaluation and the override has no effect.
-function evaluateSubstituted(node, ctx, meta, override) {
-  const subKey = normalizeCourseKey(override.courseKey);
-
-  if (node.type === 'UNRESOLVED') {
-    const synthetic = { ...node, type: 'COUNT', min: 1, pool: [subKey] };
-    const { status, matched, missing, satisfiedCount, required } = evaluateCount(synthetic, ctx);
-    return {
-      ...node,
-      status,
-      matched,
-      missing,
-      satisfiedCount,
-      required,
-      substituted: true,
-      overrideNote: override.note ?? null,
-    };
-  }
-
-  if (node.type === 'COUNT') {
-    const patched = { ...node, pool: [subKey, ...(node.pool || [])] };
-    const result = evaluateCount(patched, ctx);
-    return { ...result, pool: node.pool, substituted: true, overrideNote: override.note ?? null };
-  }
-
-  if (node.type === 'REMAINDER') {
-    const patched = { ...node, pool: [subKey, ...(node.pool || [])] };
-    const result = evaluateRemainder(patched, ctx, meta);
-    return { ...result, pool: node.pool, substituted: true, overrideNote: override.note ?? null };
-  }
-
+function evaluateWholeWaived(node, ctx, meta, override) {
+  if (node.type === 'UNRESOLVED') return evaluateWaived(node, override);
+  const before = new Set(ctx.claimed);
   if (node.type === 'SEQUENCE_GROUP') {
-    const optionIndex = node.options.findIndex((option) =>
-      option.courses.map(normalizeCourseKey).includes(subKey)
-    );
-    if (optionIndex === -1) return null; // doesn't match any option's course list — fail gracefully.
-    // Treat subKey as satisfied via petition for whichever option it belongs
-    // to — the option's other courses still need to be genuinely in the plan.
-    const patchedCtx = { ...ctx, planCourseKeys: new Set(ctx.planCourseKeys).add(subKey) };
-    const result = evaluateSequenceGroup(node, patchedCtx);
-    return { ...result, substituted: true, overrideNote: override.note ?? null };
+    const result = evaluateSequenceGroup(node, ctx);
+    if (result.status !== 'satisfied') {
+      (result.partialMatch?.haveKeys || []).forEach((key) => ctx.claimed.add(key));
+    }
+  } else {
+    evaluateNodeBody(node, ctx, meta);
+  }
+  const claimedKeys = [...ctx.claimed].filter((key) => !before.has(key));
+  return evaluateWaived(node, override, claimedKeys);
+}
+
+// ── Substitutions (petitions) ───────────────────────────────────────────────
+// A petition replaces ONE required course with a different course, so it
+// fills one still-unmet slot of its node: the node's `required` (and so the
+// program total) never changes, the substitute is claimed by that node (+1 in
+// the numerator) and can't be claimed again elsewhere. The stored override is
+//   { type: 'substitute', substitutions: [{ courseKey, for? }], note?, createdAt }
+// where `for` names what is replaced: the required courseKey on an ALL leaf,
+// any course of a named COUNT slot, or a course in a SEQUENCE_GROUP option.
+// COUNT / REMAINDER nodes with range or list pools have no named slots, so
+// `for` is omitted and a substitution just fills one open slot. The legacy
+// shape { type: 'substitute', courseKey } reads as one substitution with no
+// `for`. Containers and ONE_OF have no courses of their own: substitutions
+// live on the leaf nodes inside them (for a ONE_OF, on the track that counts).
+// Each entry is { courseKey?, label?, for? } — at least one of courseKey /
+// label. `courseKey` is a catalog course (in the plan or not); `label` is free
+// text for a course from somewhere else (transfer, study abroad, ...).
+export function normalizeSubstitutions(override) {
+  if (override?.type !== 'substitute') return [];
+  let list = [];
+  if (Array.isArray(override.substitutions)) list = override.substitutions;
+  else if (typeof override.courseKey === 'string') list = [{ courseKey: override.courseKey }];
+  const seen = new Set();
+  const out = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const courseKey = typeof item.courseKey === 'string' && item.courseKey ? normalizeCourseKey(item.courseKey) : '';
+    const label = cleanSubstituteLabel(item.label);
+    if (!courseKey && !label) continue;
+    const id = courseKey || `label:${label.toLowerCase()}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      ...(courseKey ? { courseKey } : {}),
+      ...(label ? { label } : {}),
+      ...(typeof item.for === 'string' && item.for ? { for: normalizeCourseKey(item.for) } : {}),
+    });
+  }
+  return out;
+}
+
+function isSingleSlotEntry(entry) {
+  return typeof entry === 'string'
+    || entry.type === 'OR_EQUIVALENT'
+    || entry.type === 'SUBSTITUTE_GROUP'
+    || entry.type === 'SEQUENCE_GROUP';
+}
+
+// A COUNT whose every pool entry is one required slot (Economics core: min 4,
+// four either/or entries) has named slots a substitution can target.
+function hasNamedSlots(node) {
+  return node.type === 'COUNT' && (node.pool || []).length === node.min && (node.pool || []).every(isSingleSlotEntry);
+}
+
+// A substitute from outside the plan (a catalog course not in the plan, or a
+// label-only course) claims nothing, so it can't collide with other nodes; it
+// is counted in the numerator through a synthetic claimed key instead (never
+// a real courseKey, so nothing else can match it).
+const OUTSIDE_PREFIX = 'OUTSIDE|';
+function outsideKey(node, index) {
+  return `${OUTSIDE_PREFIX}${node.id}|${index}`;
+}
+export function isOutsideKey(key) {
+  return typeof key === 'string' && key.startsWith(OUTSIDE_PREFIX);
+}
+
+const isPlanCourse = (sub, ctx) => Boolean(sub.courseKey) && ctx.planCourseKeys.has(sub.courseKey);
+// A plan course another node already counts: the substitution stays inert.
+const isClaimedElsewhere = (sub, ctx) => isPlanCourse(sub, ctx) && ctx.claimed.has(sub.courseKey);
+const subBase = (sub) => ({
+  ...(sub.courseKey ? { courseKey: sub.courseKey } : {}),
+  ...(sub.label ? { label: sub.label } : {}),
+  ...(sub.for ? { for: sub.for } : {}),
+});
+
+// Runs after a leaf / COUNT / REMAINDER node's normal evaluation. Each
+// substitution fills one open slot (the one `for` names, else the first
+// open one), up to the node's unmet slots. Reports, on the evaluated node:
+//   substitutions: [{ courseKey?, label?, for?, status, replaces?, entryIndex? }]
+//     status 'applied', or why it's inert: 'real-course-completed' (the real
+//     course is done, so the substitute is released), 'already-counted'
+//     (a plan course another node counts), 'no-open-slot'
+//   openSlots: what is still unmet, for the substitute picker
+//     [{ for, keys, label? }] per course / named slot, or one
+//     [{ for: null, keys: null, count }] for range / list pools
+function applySlotSubstitutions(node, result, ctx, subs) {
+  const leaf = node.type === 'ALL';
+  const named = hasNamedSlots(node);
+  let open = [];
+  if (leaf) {
+    open = result.missing.map((key) => ({ for: key, keys: [key], entryIndex: null }));
+  } else if (named) {
+    open = result.missing
+      .filter((entry) => !entry.fallback)
+      .map((entry) => ({ for: (entry.courseKeys || [])[0], keys: entry.courseKeys || [], entryIndex: entry.entryIndex, label: entry.entryLabel }));
   }
 
-  // ALL / ONE_OF: no pool to substitute into — caller falls back to normal
-  // evaluation (ONE_OF only supports waive).
-  return null;
+  let filled = result.satisfiedCount;
+  const matched = [...result.matched];
+  let missing = result.missing;
+  const statuses = [];
+  for (const sub of subs) {
+    const base = subBase(sub);
+    let reason = isClaimedElsewhere(sub, ctx) ? 'already-counted' : null;
+    let slot = null;
+    if (!reason) {
+      if (leaf || named) {
+        slot = sub.for ? open.find((candidate) => candidate.keys.includes(sub.for)) : open[0];
+        if (!slot) reason = sub.for ? 'real-course-completed' : 'no-open-slot';
+      } else if (filled >= result.required) {
+        reason = 'no-open-slot';
+      }
+    }
+    if (reason) {
+      statuses.push({ ...base, status: reason });
+      continue;
+    }
+    // A plan course is claimed by this node; anything else claims nothing.
+    const real = isPlanCourse(sub, ctx);
+    ctx.claimed.add(real ? sub.courseKey : outsideKey(node, subs.indexOf(sub)));
+    filled += 1;
+    if (slot) open = open.filter((candidate) => candidate !== slot);
+    if (leaf) {
+      if (real) matched.push(sub.courseKey);
+      missing = missing.filter((missingKey) => missingKey !== slot.for);
+    } else {
+      matched.push({
+        label: sub.courseKey ?? sub.label,
+        entryLabel: null,
+        courseKeys: real ? [sub.courseKey] : [],
+        entryIndex: slot ? slot.entryIndex : null,
+        fallback: false,
+        substituted: true,
+      });
+      if (slot) missing = missing.filter((entry) => entry.fallback || entry.entryIndex !== slot.entryIndex);
+    }
+    statuses.push({
+      ...base,
+      status: 'applied',
+      ...(slot ? { replaces: slot.for, entryIndex: slot.entryIndex } : {}),
+    });
+  }
+
+  let openSlots;
+  if (leaf || named) {
+    openSlots = open.map((candidate) => ({ for: candidate.for, keys: candidate.keys, ...(candidate.label ? { label: candidate.label } : {}) }));
+  } else {
+    const unmet = result.required - filled;
+    openSlots = unmet > 0 ? [{ for: null, keys: null, count: unmet }] : [];
+  }
+
+  return {
+    ...result,
+    status: filled >= result.required ? 'satisfied' : 'unsatisfied',
+    matched,
+    missing,
+    satisfiedCount: filled,
+    substitutions: statuses,
+    openSlots,
+  };
+}
+
+// Legacy: a substitute on an UNRESOLVED node (the old "Count a different
+// course") is evaluated as a synthetic COUNT(min 1) of the chosen course so
+// it still claims it. Nothing creates these anymore; saved ones keep working.
+function evaluateUnresolvedSubstituted(node, ctx, sub, override) {
+  const synthetic = { ...node, type: 'COUNT', min: 1, pool: [sub.courseKey] };
+  const { status, matched, missing, satisfiedCount, required } = evaluateCount(synthetic, ctx);
+  return {
+    ...node,
+    status,
+    matched,
+    missing,
+    satisfiedCount,
+    required,
+    substituted: true,
+    overrideNote: override.note ?? null,
+  };
 }
 
 function evaluateNode(node, ctx, meta) {
   const override = ctx.overrides?.[node.id];
-  if (override?.type === 'waive') return evaluateWaived(node, override);
-  if (override?.type === 'substitute' && override.courseKey) {
-    const substituted = evaluateSubstituted(node, ctx, meta, override);
-    if (substituted) return substituted;
-  }
+  if (override?.type === 'waive') return evaluateWholeWaived(node, ctx, meta, override);
+  const substitutions = normalizeSubstitutions(override);
+  const legacyUnresolved = node.type === 'UNRESOLVED' ? substitutions.find((sub) => sub.courseKey) : null;
+  if (legacyUnresolved) return evaluateUnresolvedSubstituted(node, ctx, legacyUnresolved, override);
+  return evaluateNodeBody(node, ctx, meta, substitutions);
+}
 
+function evaluateNodeBody(node, ctx, meta, substitutions = []) {
   switch (node.type) {
     case 'ALL':
-      return Array.isArray(node.children) ? evaluateAllContainer(node, ctx) : evaluateAllLeaf(node, ctx);
+      return Array.isArray(node.children)
+        ? evaluateAllContainer(node, ctx)
+        : applySlotSubstitutions(node, evaluateAllLeaf(node, ctx), ctx, substitutions);
     case 'COUNT':
-      return evaluateCount(node, ctx);
+      return applySlotSubstitutions(node, evaluateCount(node, ctx), ctx, substitutions);
     case 'REMAINDER':
-      return evaluateRemainder(node, ctx, meta);
+      return applySlotSubstitutions(node, evaluateRemainder(node, ctx, meta), ctx, substitutions);
     case 'SEQUENCE_GROUP':
-      return evaluateSequenceGroup(node, ctx);
+      return evaluateSequenceGroup(node, ctx, substitutions);
     case 'ONE_OF':
       return evaluateOneOf(node, ctx);
     case 'UNRESOLVED':
@@ -573,12 +775,13 @@ function evaluateNode(node, ctx, meta) {
 // that counts: ONE_OF -> its active child; SEQUENCE_GROUP -> the matched
 // option's course count (unsatisfied: the closest option's, else the
 // smallest); UNRESOLVED -> 0 (unless substituted, which claims one course);
-// waived nodes -> 0 (they claim nothing either); everything else ->
+// waived nodes -> the courses they actually hold (`required`, set by
+// evaluateWaived; 0 for UNRESOLVED); everything else ->
 // `required`. Lets the progress total follow the student's track instead of
 // the program's fixed totalCoursesRequired. NaN if something's off, so the
 // caller can fall back.
 export function deriveRequiredTotal(node) {
-  if (node.waived) return 0;
+  if (node.waived) return node.required ?? 0;
   switch (node.type) {
     case 'ALL':
       return Array.isArray(node.children)
@@ -587,7 +790,8 @@ export function deriveRequiredTotal(node) {
     case 'ONE_OF':
       return deriveRequiredTotal(node.children[node.activeChildIndex]);
     case 'SEQUENCE_GROUP':
-      if (node.status === 'satisfied') return node.matched.length;
+      // The matched option's size (not `matched.length`: a substitute from outside the plan fills a slot without being a matched course).
+      if (node.status === 'satisfied') return node.options.find((option) => option.label === node.matchedOption)?.courses.length ?? node.matched.length;
       if (node.partialMatch) return node.partialMatch.haveKeys.length + node.partialMatch.needKeys.length;
       return Math.min(...node.options.map((option) => option.courses.length));
     case 'UNRESOLVED':
@@ -606,6 +810,9 @@ export function evaluateRequirementTree(programDef, planCourseKeys, requirementO
   const ctx = { planCourseKeys: planSet, claimed: new Set(), overrides: requirementOverrides || {} };
   const tree = evaluateNode(programDef.tree, ctx);
   const derivedTotal = deriveRequiredTotal(tree);
+  const totalCoursesRequired = Number.isFinite(derivedTotal) && derivedTotal > 0
+    ? derivedTotal
+    : programDef.totalCoursesRequired;
 
   return {
     programName: programDef.programName,
@@ -616,9 +823,7 @@ export function evaluateRequirementTree(programDef, planCourseKeys, requirementO
     status: tree.status,
     // Derived from the tree (see deriveRequiredTotal); the authored number
     // is only the fallback.
-    totalCoursesRequired: Number.isFinite(derivedTotal) && derivedTotal > 0
-      ? derivedTotal
-      : programDef.totalCoursesRequired,
+    totalCoursesRequired,
     totalCoursesClaimed: ctx.claimed.size,
     tree,
   };

@@ -257,7 +257,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [cumulativeGpa, setCumulativeGpa] = useState(null);
   const [earnedCredits, setEarnedCredits] = useState(null);
   const [gradePoints, setGradePoints] = useState(null);
-  // { [requirementNodeId]: { type: 'waive'|'substitute', courseKey?, note?, createdAt } }
+  // { [requirementNodeId]: { type: 'substitute', substitutions: [{ courseKey, for? }], note?, createdAt } }
+  // (older: type 'waive', or 'substitute' with a single courseKey)
   // Student-reported petition/waive exceptions — informational only, never
   // written back to the requirements JSON. See requirementOverrides in SCHEMA.md.
   const [requirementOverrides, setRequirementOverrides] = useState({});

@@ -1,14 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 
-// Per-node "⋯" menu — the entry point for waive/substitute exceptions
-// (replaces the old global "Report an exception" button). Reuses the header
-// account dropdown's look (.tp-user-dropdown). Clicks inside never reach the
-// node header, so opening the menu doesn't also collapse/expand the node.
+// Per-node "⋯" menu — the entry point for petitions. A petition replaces one
+// required course with a different course ("Substitute a course…") on leaf
+// nodes that have courses of their own (course lists, COUNT, REMAINDER,
+// SEQUENCE_GROUP); each existing substitution gets its own "Undo
+// substitution: …". UNRESOLVED nodes keep "Mark as done" / "Undo". Pure
+// containers and ONE_OF have no courses of their own, so they only show
+// "Undo" for an older whole-node waive, and hide the menu when there's
+// nothing to offer. Reuses the header account dropdown's look
+// (.tp-user-dropdown). Clicks inside never reach the node header, so
+// opening the menu doesn't also collapse/expand the node.
 //
 // Escape is caught on window in the capture phase and stopped there, so it
 // closes only this menu — not RequirementsFullView (or CourseInfoPanel),
 // whose own Escape listeners sit on window in the bubble phase.
-export default function RequirementNodeMenu({ node, onMarkDone, onCountDifferent, onUndo }) {
+export default function RequirementNodeMenu({
+  node,
+  onMarkDone,
+  onUndo,
+  onSubstitute,
+  onUndoSubstitution,
+  courseLabel = (sub) => sub.courseKey ?? sub.label,
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
 
@@ -30,15 +43,28 @@ export default function RequirementNodeMenu({ node, onMarkDone, onCountDifferent
     };
   }, [open]);
 
+  // Older whole-node overrides (a waive, or a substitute on an UNRESOLVED
+  // node): nothing creates them anymore, but they can still be undone.
   const isOverridden = Boolean(node.waived || node.substituted);
-  // ALL / ONE_OF nodes have no slot a substitute could fill — the engine
-  // ignores substitute overrides on them (see evaluateSubstituted).
-  const canSubstitute = node.type !== 'ALL' && node.type !== 'ONE_OF';
+  const isUnresolved = node.type === 'UNRESOLVED';
+  const hasCourses = node.type === 'COUNT' || node.type === 'REMAINDER' || node.type === 'SEQUENCE_GROUP'
+    || (node.type === 'ALL' && !Array.isArray(node.children));
+  const substitutions = node.substitutions ?? [];
+  const canSubstitute = hasCourses && !isOverridden && (node.openSlots?.length ?? 0) > 0;
+  const hasItems = isOverridden || isUnresolved || canSubstitute || (hasCourses && substitutions.length > 0);
 
   function choose(action) {
     setOpen(false);
     action(node);
   }
+
+  if (!hasItems) return null;
+
+  const item = (label, onClick, key) => (
+    <button key={key ?? label} type="button" role="menuitem" className="tp-user-dropdown-item" onClick={onClick}>
+      {label}
+    </button>
+  );
 
   return (
     <div
@@ -55,6 +81,7 @@ export default function RequirementNodeMenu({ node, onMarkDone, onCountDifferent
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Options for ${node.label}`}
+        title="Options"
         onClick={() => setOpen((v) => !v)}
       >
         ⋯
@@ -62,24 +89,20 @@ export default function RequirementNodeMenu({ node, onMarkDone, onCountDifferent
       {open && (
         <div className="tp-user-dropdown req-node-menu-dropdown" role="menu">
           {isOverridden ? (
-            <button type="button" role="menuitem" className="tp-user-dropdown-item" onClick={() => choose(onUndo)}>
-              Undo
-            </button>
+            item('Undo', () => choose(onUndo))
+          ) : isUnresolved ? (
+            item('Mark as done', () => choose(onMarkDone))
           ) : (
             <>
-              <button type="button" role="menuitem" className="tp-user-dropdown-item" onClick={() => choose(onMarkDone)}>
-                Mark as done
-              </button>
-              {canSubstitute && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="tp-user-dropdown-item"
-                  onClick={() => choose(onCountDifferent)}
-                >
-                  Count a different course
-                </button>
-              )}
+              {canSubstitute && item('Substitute a course…', () => choose(onSubstitute))}
+              {substitutions.map((sub, index) => item(
+                `Undo substitution: ${courseLabel(sub)}`,
+                () => {
+                  setOpen(false);
+                  onUndoSubstitution(node, index);
+                },
+                `undo-${sub.courseKey ?? sub.label}`,
+              ))}
             </>
           )}
         </div>

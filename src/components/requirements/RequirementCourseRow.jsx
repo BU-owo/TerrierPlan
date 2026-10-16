@@ -36,6 +36,15 @@ export default function RequirementCourseRow({
   compact = false,
   // Long-unoffered course shown only because nothing else is left.
   dimmed = false,
+  // Alternate-course pill ("Substitute"): row stays fully selectable, just softer.
+  tag,
+  // Filled by a petition (a substituted course): ✎ and a "Substituted" pill.
+  // `replacesLabel` ("EC 201") names the required course it stands in for.
+  substituted = false,
+  replacesLabel,
+  // Substitute from outside the catalog / plan (transfer, study abroad, ...):
+  // free text shown in place of a course code and title.
+  substituteLabel,
 }) {
   const catalogSeasons = useUpcomingSeasons(courseKey);
   const currentTermKeys = useCurrentTermCourseKeys();
@@ -51,14 +60,32 @@ export default function RequirementCourseRow({
     disabled: !canDrag,
   });
 
+  if (substituted && substituteLabel) {
+    return (
+      <div className="req-course-row is-substituted">
+        <span className="req-course-row-check req-course-row-sub-mark" title="Substituted" aria-label="Substituted">✎</span>
+        <span className="req-course-row-code req-course-row-sub-label" title={substituteLabel}>{substituteLabel}</span>
+        <span className="req-course-row-meta">
+          <span className="req-course-row-pill">{replacesLabel ? `Substituted for ${replacesLabel}` : 'Substituted'}</span>
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={canDrag ? setNodeRef : undefined}
-      className={`req-course-row${isStashed ? ' is-stashed' : ''}${compact ? ' is-compact' : ''}${inPlan ? ' is-in-plan' : ''}${clickable ? ' is-clickable' : ''}${dimmed ? ' is-dimmed' : ''}${canDrag ? ' is-draggable' : ''}${isDragging ? ' is-dragging' : ''}`}
+      className={`req-course-row${isStashed ? ' is-stashed' : ''}${compact ? ' is-compact' : ''}${inPlan ? ' is-in-plan' : ''}${clickable ? ' is-clickable' : ''}${dimmed ? ' is-dimmed' : ''}${tag ? ' is-alt' : ''}${substituted ? ' is-substituted' : ''}${canDrag ? ' is-draggable' : ''}${isDragging ? ' is-dragging' : ''}`}
       onClick={clickable ? () => onRowClick(courseKey) : undefined}
       {...(canDrag ? { ...attributes, ...listeners } : {})}
     >
-      {inPlan ? (
+      {substituted ? (
+        <span
+          className="req-course-row-check req-course-row-sub-mark"
+          title={replacesLabel ? `Substituted for ${replacesLabel}` : 'Substituted'}
+          aria-label="Substituted"
+        >✎</span>
+      ) : inPlan ? (
         <span className="req-course-row-check" title={statusLabel} aria-label={statusLabel}>✓</span>
       ) : (
         <button
@@ -80,6 +107,10 @@ export default function RequirementCourseRow({
       {/* display: contents normally (one line); narrow sidebar rows put
           this on a second line (planner.css). */}
       <span className="req-course-row-meta">
+        {substituted && (
+          <span className="req-course-row-pill">{replacesLabel ? `Substituted for ${replacesLabel}` : 'Substituted'}</span>
+        )}
+        {tag && <span className="req-course-row-pill">{tag}</span>}
         {compact ? (
           <OfferingBadge inCurrentTerm={course?.inCurrentTerm ?? currentTermKeys?.has(courseKey)} />
         ) : (

@@ -44,7 +44,8 @@ export default function RequirementTree({
   dragEnabled = false,
 }) {
   const [collapsedOverrides, setCollapsedOverrides] = useState({});
-  // { nodeId, mode: 'waive' | 'substitute' } while the exception form is open.
+  // { nodeId, mode: 'waive' | 'substitute' } while the exception form is open
+  // ('waive' is only "Mark as done" on an UNRESOLVED node).
   const [exception, setException] = useState(null);
 
   const programDef = useMemo(
@@ -132,18 +133,51 @@ export default function RequirementTree({
 
   const exceptionNode = exception ? flatNodes.find((n) => n.id === exception.nodeId) || null : null;
 
-  // "Count a different course" choices: a SEQUENCE_GROUP only accepts its
-  // own courses (see evaluateSubstituted); anything else takes a plan course
-  // no requirement has claimed yet.
+  // "Substitute a course" choices: any course in the plan that no requirement
+  // is counting yet (a course not in the plan yet can be typed in the form).
   const substituteOptions = useMemo(() => {
     if (!exceptionNode || exception?.mode !== 'substitute' || !result) return [];
-    if (exceptionNode.type === 'SEQUENCE_GROUP') {
-      const keys = exceptionNode.options.flatMap((option) => option.courses.map(normalizeCourseKey));
-      return Array.from(new Set(keys));
-    }
     const claimed = new Set(collectMatchedKeys(result.tree));
     return Array.from(planCourseKeySet).filter((key) => !claimed.has(key)).sort();
   }, [exceptionNode, exception, result, planCourseKeySet]);
+
+  // Petitions (see requirementsEngine's normalizeSubstitutions). One override
+  // per node: { type: 'substitute', substitutions: [{ courseKey, for? }],
+  // note? }. Rebuilt from the evaluated node's normalized list, so an older
+  // single-course substitute is upgraded the first time it's touched. Fields
+  // are omitted rather than set to undefined (Firestore rejects undefined),
+  // and a node left with no substitutions loses its override entirely.
+  function writeSubstitutions(node, list, newNote) {
+    if (list.length === 0) {
+      onRemoveRequirementOverride?.(node.id);
+      return;
+    }
+    const existingNote = requirementOverrides[node.id]?.note;
+    const note = typeof existingNote === 'string' && existingNote ? existingNote : newNote;
+    onSetRequirementOverride?.(node.id, {
+      type: 'substitute',
+      substitutions: list,
+      ...(note ? { note } : {}),
+    });
+  }
+
+  const toStored = (sub) => ({
+    ...(sub.courseKey ? { courseKey: sub.courseKey } : {}),
+    ...(sub.label ? { label: sub.label } : {}),
+    ...(sub.for ? { for: sub.for } : {}),
+  });
+
+  // `courseKey` (a catalog course) and/or `label` (free text for a course from
+  // somewhere else); `replaces` is the required course it stands in for.
+  function addSubstitution(node, { courseKey, label, replaces, note }) {
+    const current = (node.substitutions ?? []).map(toStored);
+    writeSubstitutions(node, [...current, toStored({ courseKey, label, for: replaces })], note);
+  }
+
+  function undoSubstitution(node, index) {
+    const next = (node.substitutions ?? []).filter((_, i) => i !== index).map(toStored);
+    writeSubstitutions(node, next);
+  }
 
   const shared = {
     collapsedOverrides,
@@ -158,8 +192,9 @@ export default function RequirementTree({
     requirementOverrides,
     onRemoveRequirementOverride,
     onMarkDone: (node) => setException({ nodeId: node.id, mode: 'waive' }),
-    onCountDifferent: (node) => setException({ nodeId: node.id, mode: 'substitute' }),
+    onSubstitute: (node) => setException({ nodeId: node.id, mode: 'substitute' }),
     onUndo: (node) => onRemoveRequirementOverride(node.id),
+    onUndoSubstitution: undoSubstitution,
     flatNodes,
     onAddFromRow: addFromRow,
     inactiveKeys,
@@ -172,10 +207,22 @@ export default function RequirementTree({
     <EstimateNote
       prominent={density === 'full'}
       link={BU_LINKS.myBU}
-      lead="For planning only. Confirm with your advisor and on"
+      lead="For planning only. Verify on the official bulletin and"
       label="MyBU"
     />
   );
+
+  // Tracked programs only; the coming-soon branch has its own bulletin button.
+  const bulletinLink = programDef ? (
+    <a
+      href={programDef.bulletinUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="req-bulletin-link"
+    >
+      View official bulletin ↗
+    </a>
+  ) : null;
 
   const topNodes = result
     ? (Array.isArray(result.tree.children) ? result.tree.children : [result.tree])
@@ -258,6 +305,7 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
                 <div className="req-progress-bar-fill" style={{ width: `${percentComplete}%` }} />
               </div>
               <p className="req-progress-summary-sub">{result.programName} {result.degree}</p>
+              {bulletinLink}
             </div>
           ) : (
             <div className="req-compact-summary">
@@ -274,6 +322,7 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
               >
                 <div className="req-progress-bar-fill" style={{ width: `${percentComplete}%` }} />
               </div>
+              {bulletinLink}
             </div>
           )}
 
@@ -321,7 +370,9 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
         node={exceptionNode}
         mode={exception?.mode}
         substituteOptions={substituteOptions}
+        hasNote={Boolean(exceptionNode && requirementOverrides[exceptionNode.id]?.note)}
         courseMap={courseMap}
+        onSubstitute={addSubstitution}
         onSetOverride={onSetRequirementOverride}
         onClose={() => setException(null)}
       />

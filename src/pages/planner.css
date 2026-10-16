@@ -1945,6 +1945,8 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   margin-top: 6px;
   font-size: 9px;
 }
+.req-petition-active--list { flex-direction: column; align-items: stretch; gap: 3px; }
+.req-petition-line { display: flex; align-items: baseline; gap: 6px; }
 .req-petition-detail {
   flex: 1;
   min-width: 0;
@@ -1995,6 +1997,26 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   border-radius: var(--radius-xs, 3px);
   background: var(--white);
 }
+.req-petition-choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.req-petition-choices legend { padding: 0; margin-bottom: 3px; }
+.req-petition-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text);
+  cursor: pointer;
+}
+.req-petition-choice input { margin-top: 2px; padding: 0; }
+.req-petition-field select:disabled,
+.req-petition-field input:disabled { opacity: .55; cursor: not-allowed; }
 .req-petition-form-actions {
   display: flex;
   gap: 6px;
@@ -2017,6 +2039,13 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
 }
 .req-petition-save:hover {
   background: var(--scarlet-dark, var(--scarlet));
+}
+.req-petition-save:disabled,
+.req-petition-save:disabled:hover {
+  background: var(--cream-dark);
+  border-color: var(--border);
+  color: var(--text-muted);
+  cursor: not-allowed;
 }
 .req-petition-cancel {
   border: 1px solid var(--border);
@@ -2250,6 +2279,18 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   border-radius: 999px;
   transition: width .3s ease;
 }
+/* "View official bulletin ↗" under the progress summary (sidebar + full view). */
+.req-bulletin-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--scarlet);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.req-bulletin-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+.req-progress-summary .req-bulletin-link { font-size: 13px; }
 .req-progress-summary-sub {
   margin: 8px 0 0;
   font-size: 12px;
@@ -2606,6 +2647,23 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   white-space: nowrap;
   color: var(--text-secondary);
 }
+/* Alternate-course pill (optionTags): muted, and the row reads a bit softer
+   than the untagged standard course. Still fully selectable and counted. */
+.req-course-row-pill {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--cream);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  white-space: nowrap;
+}
+.req-course-row.is-alt:not(.is-in-plan) .req-course-row-code { font-weight: 600; color: var(--text-secondary); }
+/* Per-slot student note under a pool entry's title. */
+.req-slot-note { flex-basis: 100%; font-size: 11px; line-height: 1.4; color: var(--text-muted); }
 /* Tags and badges give way (clip / ellipsize) before the title does. */
 .req-course-row-tags { display: flex; gap: 3px; flex-shrink: 1; min-width: 0; overflow: hidden; }
 .req-course-row .offering-badge {
@@ -2712,21 +2770,33 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
 }
 .req-pool-chip.eligible.is-stashed:hover { background: var(--badge-warm-text); color: #fff; }
 
+/* Petitions: a substituted course is a filled row with a ✎ and a "Substituted
+   for EC 201" pill. */
+.req-course-row.is-substituted { background: var(--success-surface); border-color: transparent; }
+.req-course-row.is-substituted .req-course-row-code { font-weight: 600; }
+.req-course-row-sub-mark { color: var(--text-muted); }
+
 /* Per-node "⋯" menu; the dropdown itself is .tp-user-dropdown. */
 .req-node-menu { position: relative; flex-shrink: 0; }
 .req-node-menu-btn {
-  width: 24px;
-  height: 22px;
-  border: 1px solid transparent;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 14px;
+  background: var(--cream);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
   line-height: 1;
   cursor: pointer;
+  transition: background .12s, border-color .12s;
 }
 .req-node-menu-btn:hover,
-.req-node-menu-btn[aria-expanded='true'] { border-color: var(--border); color: var(--text); background: var(--cream); }
+.req-node-menu-btn[aria-expanded='true'] { border-color: var(--text-secondary); background: var(--cream-dark); }
+.req-node-menu-btn:focus-visible { outline: 2px solid var(--scarlet); outline-offset: 1px; }
+/* Card headers: keep the ⋯ clearly apart from the collapse caret. */
+.hub-full-group-header > .req-node-menu { margin-right: 8px; }
 .req-node-menu-dropdown { top: calc(100% + 4px); z-index: 5; min-width: 200px; }
 
 /* ===== HUB TRACKER — FULL-SCREEN VIEW ===== */
@@ -2991,9 +3061,11 @@ html[data-theme='dark'] .hub-stash-link { color: var(--warning-border); }
 }
 .hub-full-groups-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
+/* Let tiles shrink below their content (long collapsed labels ellipsize). */
+.hub-full-groups-row > .hub-full-group { min-width: 0; }
 .hub-full-group {
   background: var(--white);
   border: 1px solid var(--border);
@@ -3024,6 +3096,34 @@ html[data-theme='dark'] .hub-stash-link { color: var(--warning-border); }
 .hub-full-group-count { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
 .hub-full-group-count.satisfied { color: var(--success-strong); }
 .hub-full-group-caret { flex-shrink: 0; font-size: 11px; color: var(--text-muted); }
+/* Requirements cards: a real, readable chevron (same color as the ⋯ glyph) in a
+   28px tap target, beside the bordered ⋯ button. */
+.req-card .hub-full-group-caret {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  /* The ▸ / ▾ glyphs draw tiny, so hide the text and draw a ~16px chevron
+     instead (points right collapsed, down expanded). */
+  font-size: 0;
+  line-height: 1;
+  color: var(--text);
+}
+.req-card .hub-full-group-caret::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-right: 2.5px solid currentColor;
+  border-bottom: 2.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform .12s;
+}
+.req-card .hub-full-group-header[aria-expanded='true'] .hub-full-group-caret::before { transform: translateY(-2px) rotate(45deg); }
+/* Sidebar cards are tight: the chevron keeps its 16px glyph and 28px height but
+   gives back width to the title (the whole header is the click target). */
+.req-card--compact .hub-full-group-header { column-gap: 4px; }
+.req-card--compact .hub-full-group-header > .hub-full-group-caret { width: 20px; }
+.req-card--compact .hub-full-group-label { overflow-wrap: anywhere; }
 
 /* Requirement rows — a plain divided list inside the card, not a stack of
    nested cards: no per-row background/border-left/radius, just a hairline
@@ -3099,10 +3199,10 @@ html[data-theme='dark'] .hub-stash-link { color: var(--warning-border); }
 }
 
 @media (max-width: 860px) {
-  .hub-full-groups-row { grid-template-columns: repeat(2, 1fr); }
+  .hub-full-groups-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
-  .hub-full-groups-row { grid-template-columns: 1fr; }
+  .hub-full-groups-row { grid-template-columns: minmax(0, 1fr); }
   .hub-full-overview-item { width: 76px; }
 }
 
@@ -4337,3 +4437,17 @@ html[data-theme='dark'] .course-card.is-compact:is(:hover, :focus-within) .cours
 .extra-terms-strip-label { font-size: 10px; font-weight: 700; color: var(--text-secondary); }
 .extra-terms-strip-courses { display: flex; flex-wrap: wrap; gap: 3px; }
 .extra-terms-strip-courses .course-card.is-compact { width: 190px; }
+
+/* Phone width, full view: an expanded requirement card's title wraps to two
+   lines (count and ⋯ stay top-right) instead of ellipsizing. Collapsed tiles
+   keep their ellipsis + tooltip. */
+@media (max-width: 640px) {
+  .req-card.is-expanded:not(.req-card--compact) .hub-full-group-header { align-items: flex-start; }
+  .req-card.is-expanded:not(.req-card--compact) .hub-full-group-label {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+}

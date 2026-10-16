@@ -29,7 +29,7 @@ this field, not on filename — filenames are just for human organization.
 counted") uses a total derived from the evaluated tree along the branch that
 counts — `required` per node, a `ONE_OF`'s active child only, a
 `SEQUENCE_GROUP`'s matched (or closest) option's course count, 0 for
-`UNRESOLVED` and waived nodes — so it follows the student's track. The
+`UNRESOLVED` and the unmet part of (older) whole-node waives — so it follows the student's track. A substitution never changes it. The
 authored number is used only if that derivation fails.
 
 ## Requirement node types
@@ -56,8 +56,10 @@ The evaluator adds `status` (`'satisfied' | 'unsatisfied' | 'needs_review'`),
 `matched`, `missing`, `satisfiedCount`, and `required` to each node in its
 output — don't set those in the source JSON, they're computed. When a
 `requirementOverrides` entry targets a node's `id`, the evaluator also adds
-`waived: true` (for a `"waive"` override) or `substituted: true` (for a
-`"substitute"` override) plus `overrideNote` — see "Manual overrides" below.
+`waived: true` (for a whole-node `"waive"` override) plus `overrideNote`. Leaf
+nodes (`ALL` course lists, `COUNT`, `REMAINDER`, `SEQUENCE_GROUP`) also get
+`substitutions` and `openSlots` — see "Manual overrides" below. (`substituted:
+true` only marks an older substitute on an `UNRESOLVED` node.)
 
 For `COUNT`/`REMAINDER`, each `missing` entry also carries `courseKeys`: the
 enumerable list of courseKeys that would satisfy that slot (a plain courseKey
@@ -243,6 +245,21 @@ pool (see below).
   `SUBSTITUTE_GROUP` when the bulletin frames it as "X (or Y)", `OR_EQUIVALENT`
   when it frames it as a flat list of equal options.)
 
+### Slot-ref display fields (optional, pool entries only)
+
+On an object pool entry that is a single-slot ref (`OR_EQUIVALENT` /
+`SUBSTITUTE_GROUP`), two optional fields change how the slot is drawn. Neither
+affects matching, claiming or counts:
+
+- `"optionTags": { "CASEC221": "Substitute", "QSTQM221": "Substitute" }` —
+  courseKey → short pill text. A tagged option shows a small muted pill and a
+  slightly softer row; options without a tag are the standard/default
+  course. Nothing is hidden or reordered — list the standard option first
+  yourself. Keys are normalized like any courseKey; unknown keys are ignored.
+- `"note"` — one plain-language line shown under the slot's title (student-facing,
+  same rules as node `note`; no internal details). Use `devNote` for authoring
+  notes (it is ignored on pool entries).
+
 ## Pool entries
 
 Used in `COUNT.pool`, `REMAINDER.pool`, `REMAINDER.additionalPool`, and
@@ -306,30 +323,59 @@ never written back to the program JSON, and it's student-reported, not
 verified. Before evaluating a node, the engine checks
 `requirementOverrides[node.id]`:
 
-- `{ type: "waive" }` — the node is treated as fully satisfied and its
-  normal evaluation is skipped entirely: no children are evaluated, no
-  courses are claimed. A waived `ALL` container's children never render in
-  the output tree (there's nothing to show — the whole node is excused).
+- `{ type: "waive" }` — whole-node waive: the node is reported as satisfied,
+  but the courses the student actually holds in it stay claimed and counted
+  (the node is evaluated normally first, so nothing is released to later
+  nodes). Its `required` becomes the number of courses it holds — a 3/5 node
+  reads 3/3, and the program total drops only by the unmet 2. `matched` is a
+  flat list of the claimed keys. A `SEQUENCE_GROUP` also claims the courses of
+  its closest partially-held option. `UNRESOLVED` nodes claim nothing and stay
+  0 / 0. A waived `ALL` container's children never render in the output tree
+  (there's nothing to show — the whole node is excused).
   Waiving a node doesn't change what its siblings structurally expect (see
   `structuralCourseCount` — that's computed from the static JSON shape, not
   from live evaluation), so a waived Group C still counts as "2 courses" for
   a sibling `REMAINDER`'s denominator, same as if it'd been satisfied
   normally.
-- `{ type: "substitute", courseKey }` — the given courseKey is added to the
-  node's pool for this evaluation only, then the node evaluates normally so
-  the course participates in claim priority exactly like any other pool
-  entry (including losing out to an earlier-evaluated sibling that also
-  wants it — see Double-counting above). Meaningful for `UNRESOLVED` nodes
-  (evaluated as a synthetic `COUNT(min: 1, pool: [courseKey])` so they can
-  actually claim something) and for `COUNT`/`REMAINDER` nodes (courseKey is
-  prepended to `pool`). For `SEQUENCE_GROUP` nodes, courseKey must already
-  appear in one of the node's own `options` — that option is then evaluated
-  as if the student had it, so the option's *other* courses still need to be
-  genuinely in the plan (this doesn't manufacture a whole bundle out of
-  nothing, it excuses one course within it); if courseKey doesn't belong to
-  any option, the override has no effect and the node evaluates normally.
-  Has no effect on `ALL` nodes — there's no pool to add to, and no
-  well-defined "which required course does this substitute for."
+- `{ type: "substitute", substitutions: [{ courseKey?, label?, for? }] }` — a
+  petition: each substitution replaces ONE required course with a different
+  course. The node is evaluated normally first; then each substitution fills
+  one still-unmet slot of that node (the slot `for` names, else the first open
+  one). The node's `required`, and so the program total, never changes, and
+  the numerator goes up by one. The substitute does not have to be in the
+  plan: `courseKey` is a catalog course, `label` is plain free text (trimmed,
+  max 80 chars, at least one of the two) for a course from somewhere else
+  (transfer, study abroad, ...). A substitute that is a plan course not counted
+  elsewhere is claimed by the node (so it can't be counted twice); one that
+  isn't in the plan, or has only a `label`, claims nothing and is counted
+  through a synthetic claimed key. Per node type:
+  - `ALL` leaf — `for` is the required courseKey being replaced.
+  - `COUNT` with named slots (every pool entry is one slot — a plain
+    courseKey, `OR_EQUIVALENT`, `SUBSTITUTE_GROUP` or `SEQUENCE_GROUP` — and
+    `pool.length === min`, like the Economics core) — `for` is any course of
+    the slot being replaced. Other `COUNT`s and `REMAINDER` have no named slots
+    (range / list pools, or pick-N-of-M): `for` is omitted and a substitution
+    fills one open slot.
+  - `SEQUENCE_GROUP` — `for` is a course of the option being completed. The
+    group is still all-or-nothing, so an unfinished option claims nothing yet
+    (the substitution reads `pending`).
+  - `ALL` container and `ONE_OF` have no courses of their own: substitutions
+    live on the leaf nodes inside (for a `ONE_OF`, the track that counts).
+  A substitution is inert — not counted, and a plan course it names is
+  released to other nodes — when the real course for its slot is completed
+  (`real-course-completed`), when it names a plan course another node already
+  counts (`already-counted`), or when the node has no unmet slot left
+  (`no-open-slot`); effective substitutions are capped at the node's unmet
+  slots. The evaluated node carries `substitutions: [{ courseKey?, label?,
+  for?, status, replaces?, entryIndex? }]` and `openSlots` (what is still
+  unmet: `[{ for, keys, label? }]` per course or named slot, or one `[{ for:
+  null, keys: null, count }]` for range / list pools), which the substitute
+  picker uses. The older shape `{ type: "substitute", courseKey }` is read as
+  one substitution with no `for`; on an `UNRESOLVED` node it is still
+  evaluated as a synthetic `COUNT(min: 1, pool: [courseKey])` (nothing creates
+  it any more). `ONE_OF` completing through substitutions can make its track
+  the active one, so the total follows that track's size — that is the ONE_OF
+  rule, not a denominator change by the substitution.
 
 ## Worked example
 

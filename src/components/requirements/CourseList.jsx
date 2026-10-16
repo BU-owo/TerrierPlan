@@ -27,6 +27,8 @@ export default function CourseList({
   // Every course here is inactive (nothing else to offer) — shown greyed
   // with a "Not offered recently" caption instead of an empty slot.
   dimmed = false,
+  // courseKey -> pill text for alternates ("Substitute"); untagged = standard.
+  optionTags,
 }) {
   const pair = equivalent && courses.length === 2;
   const [filter, setFilter] = useState('');
@@ -81,6 +83,7 @@ export default function CourseList({
               subsetLabel={subsetLabels?.get(course.id)}
               onRowClick={onRowClick}
               dimmed={dimmed}
+              tag={optionTags?.[course.id]}
             />
           </Fragment>
         ))}

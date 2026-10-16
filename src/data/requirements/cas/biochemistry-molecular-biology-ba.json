@@ -302,7 +302,8 @@
             ]
           }
         ],
-        "devNote": "The bulletin requires 2 courses total with at least 1 from the calculus/statistics subset. Expressed as a COUNT(min 1, calc/stats-only pool) plus a REMAINDER that fills the 2nd slot from the full combined pool — composing the two guarantees the subset minimum without needing a node type that expresses 'min 1 of a subset' directly."
+        "devNote": "The bulletin requires 2 courses total with at least 1 from the calculus/statistics subset. Expressed as a COUNT(min 1, calc/stats-only pool) plus a REMAINDER that fills the 2nd slot from the full combined pool — composing the two guarantees the subset minimum without needing a node type that expresses 'min 1 of a subset' directly. Hidden prerequisite: CAS CH 525 (Physical Biochemistry, required core) lists MA 121 or MA 123 as an undergraduate prerequisite per the course page. The Related Math/CS requirement can otherwise be met with statistics or CS alone, so students can miss this.",
+        "note": "CH 525, one of the required core courses, needs MA 121 or MA 123 first. Make sure your calculus course here is MA 121 or MA 123, not only statistics or computer science."
       },
       {
         "id": "bmb-ba-related-physics",

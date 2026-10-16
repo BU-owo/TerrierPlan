@@ -1,0 +1,128 @@
+{
+  "programName": "Economics",
+  "degree": "BA",
+  "school": "CAS",
+  "bulletinUrl": "https://www.bu.edu/academics/cas/programs/economics/ba/",
+  "minGrade": "C",
+  "totalCoursesRequired": 11,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "id": "econ-ba-root",
+    "type": "ALL",
+    "label": "Economics BA — Major Requirements",
+    "children": [
+      {
+        "id": "econ-ba-prereqs",
+        "type": "ALL",
+        "label": "Prerequisite courses",
+        "courses": [
+          "CASEC101",
+          "CASEC102"
+        ],
+        "note": "EC 101 and EC 102 are part of the major. If you have equivalent credit that isn't showing, use ⋯ → Substitute a course…",
+        "devNote": "Bulletin: 'Major in Economics' = Prerequisites (EC 101, EC 102) + Principal Courses (nine). The 'nine courses with C or higher' minimum applies to the principal courses only. Transfer-cap exception for 101/102 is in the transfer node."
+      },
+      {
+        "id": "econ-ba-core",
+        "type": "COUNT",
+        "label": "Principal courses: core (EC 201-204)",
+        "min": 4,
+        "pool": [
+          {
+            "type": "OR_EQUIVALENT",
+            "label": "Intermediate Microeconomics (EC 201)",
+            "options": [
+              "CASEC201",
+              "CASEC221"
+            ],
+            "optionTags": {
+              "CASEC221": "Substitute"
+            },
+            "note": "Most students take EC 201. EC 221 is for students with a strong background in mathematics."
+          },
+          {
+            "type": "OR_EQUIVALENT",
+            "label": "Intermediate Macroeconomics (EC 202)",
+            "options": [
+              "CASEC202",
+              "CASEC222"
+            ],
+            "optionTags": {
+              "CASEC222": "Substitute"
+            },
+            "note": "Most students take EC 202. EC 222 is for students with a strong background in mathematics."
+          },
+          {
+            "type": "OR_EQUIVALENT",
+            "label": "Empirical Economics 1 (EC 203)",
+            "options": [
+              "CASEC203",
+              "CASEC223",
+              "QSTQM221",
+              "CASMA115",
+              "CASMA213"
+            ],
+            "optionTags": {
+              "CASEC223": "Substitute",
+              "QSTQM221": "Substitute",
+              "CASMA115": "Substitute",
+              "CASMA213": "Substitute"
+            },
+            "note": "Most students take EC 203. EC 223 is for students with a strong background in mathematics. QST QM 221, MA 115 and MA 213 are also accepted."
+          },
+          {
+            "type": "OR_EQUIVALENT",
+            "label": "Empirical Economics 2 (EC 204)",
+            "options": [
+              "CASEC204",
+              "CASEC224"
+            ],
+            "optionTags": {
+              "CASEC224": "Substitute"
+            },
+            "note": "Most students take EC 204. EC 224 is for students with a strong background in mathematics."
+          }
+        ],
+        "devNote": "EC 221/222/223/224 are substitutes for 201–204 for students with a strong background in mathematics (\"for the corresponding\" course). Modeled per slot, so mixing EC 201–204 and 221–224 is allowed — the bulletin says 'any of the courses in the sequence' may replace 'the corresponding' course, which permits mixing. EC 203 also accepts QST QM 221, MA 115 or MA 213. Core courses 'should be taken before the senior year' — not enforced."
+      },
+      {
+        "id": "econ-ba-electives",
+        "type": "COUNT",
+        "label": "Principal courses: electives (EC 320-599)",
+        "min": 5,
+        "pool": [
+          {
+            "type": "COURSE_RANGE",
+            "subject": "CASEC",
+            "min": 320,
+            "max": 599
+          }
+        ],
+        "devNote": "Bulletin: remaining five 4-unit courses from EC 320 through EC 599. E-suffixed study-abroad courses are deliberately excluded because the bulletin doesn't say they count and range matching skips suffixed keys. EC 303/304 aren't in the range. EC 401/402 fall in range and count as two electives. 500+ is graduate-level and needs instructor permission (see note).",
+        "note": "EC 500-level and above are graduate courses and need instructor permission. Approved a study-abroad course? Use ⋯ → Substitute a course."
+      },
+      {
+        "id": "econ-ba-calculus",
+        "type": "UNRESOLVED",
+        "label": "Calculus requirement",
+        "note": "You need calculus (MA 121, 122, 123, 124, 127 or 129 with a C or better, or a 4+ on the AP exam) before taking EC 201 or EC 202. This isn't checked automatically.",
+        "devNote": "Not one of the nine principal courses. Kept UNRESOLVED on purpose: a COUNT node here would push the derived program total to 10, since UNRESOLVED nodes don't count toward the total. AP credit does reach the engine via externalCredits, but multi-course 'A+B' keys (known issue 13) mean Calc BC wouldn't match anyway. MA 127 is in the bulletin but not in public/courses.json."
+      },
+      {
+        "id": "econ-ba-min-grade",
+        "type": "UNRESOLVED",
+        "label": "Grade minimum",
+        "note": "All nine principal courses need a C or better. This isn't checked automatically.",
+        "devNote": "Bulletin: 'Nine courses with grades of C or higher'. minGrade is set at the top level but the engine doesn't check grades."
+      },
+      {
+        "id": "econ-ba-transfer-cap",
+        "type": "UNRESOLVED",
+        "label": "Transfer course limit",
+        "note": "After you start at BU, at most four courses at the 200 level or higher can transfer in from other schools. Transfer petitions go through your Economics advisor. This isn't checked automatically.",
+        "devNote": "EC 101/102 transfer equivalents don't count toward the four-course cap."
+      }
+    ]
+  }
+}

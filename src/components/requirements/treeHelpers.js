@@ -166,18 +166,32 @@ function entryTitle(entry) {
 // dashed). Satisfied nodes only keep groups that claimed something.
 // `fallback` holds additionalPool missing entries (note only). null for
 // nodes with no pool.
+// A petition as the pool view shows it: the substitute is a catalog course
+// (`courseKey`) or free text (`label`), standing in for the course `replaces`.
+const toSubstituted = (sub) => ({
+  ...(sub.courseKey ? { courseKey: sub.courseKey } : {}),
+  ...(sub.label ? { label: sub.label } : {}),
+  replaces: sub.replaces,
+});
+
 export function collectPoolGroups(node, planCourseKeySet) {
   const satisfied = node.status === 'satisfied';
+  // Petitions the engine applied to this node (see applySlotSubstitutions).
+  const appliedSubs = (node.substitutions || []).filter((sub) => sub.status === 'applied');
   const offerable = (keys, claimedSet) =>
     keys.filter((key) => !planCourseKeySet.has(key) && !claimedSet.has(key));
   const finish = (groups) => groups
-    .map((group) => ({ ...group, open: !satisfied && group.claimed.length === 0 }))
-    .filter((group) => !satisfied || group.claimed.length > 0);
+    .map((group) => ({ ...group, open: !satisfied && group.claimed.length === 0 && !group.substituted?.length }))
+    .filter((group) => !satisfied || group.claimed.length > 0 || group.substituted?.length > 0);
 
   if (node.type === 'ALL' && !Array.isArray(node.children)) {
     const keys = (node.courses || []).map(normalizeCourseKey);
     const claimed = node.matched || [];
     const claimedSet = new Set(claimed);
+    // A course replaced by a petition is filled by its substitute (a muted ✎
+    // row), never offered as something still to take.
+    const substituted = appliedSubs.map(toSubstituted);
+    const replacedSet = new Set(appliedSubs.map((sub) => sub.replaces));
     return {
       groups: finish([{
         key: 'all',
@@ -186,10 +200,12 @@ export function collectPoolGroups(node, planCourseKeySet) {
         // Every course here is required, not a choice — never hidden as inactive.
         required: true,
         claimed,
-        options: satisfied ? [] : offerable(keys, claimedSet),
+        substituted,
+        options: satisfied ? [] : offerable(keys.filter((key) => !replacedSet.has(key)), claimedSet),
         textIfEmpty: keys.map(shortCourseCode).join(', '),
       }]),
       fallback: [],
+      substituted: [],
     };
   }
 
@@ -197,16 +213,24 @@ export function collectPoolGroups(node, planCourseKeySet) {
 
   const mainMatched = (node.matched || []).filter((m) => m.subsetIndex === undefined && !m.fallback);
   const groups = [];
+  // Petitions filling the slot at pool index i (named slots only; ones that
+  // just fill an open slot of a range / list pool are returned separately).
+  const subsForEntry = (i) => appliedSubs.filter((sub) => sub.entryIndex === i).map(toSubstituted);
+  const openSubstituted = appliedSubs
+    .filter((sub) => sub.entryIndex === undefined || sub.entryIndex === null)
+    .map(toSubstituted);
   (node.pool || []).forEach((entry, i) => {
     const claimed = mainMatched.find((m) => m.entryIndex === i)?.courseKeys || [];
     const claimedSet = new Set(claimed);
 
     if (typeof entry === 'string') {
       const key = normalizeCourseKey(entry);
-      const options = satisfied || claimed.length > 0 ? [] : offerable([key], claimedSet);
+      const substituted = subsForEntry(i);
+      const options = satisfied || claimed.length > 0 || substituted.length > 0 ? [] : offerable([key], claimedSet);
       const prev = groups[groups.length - 1];
       if (prev?.plainKeys) {
         prev.claimed = [...prev.claimed, ...claimed];
+        prev.substituted = [...prev.substituted, ...substituted];
         prev.options = [...prev.options, ...options];
         prev.textIfEmpty += `, ${shortCourseCode(key)}`;
       } else {
@@ -216,6 +240,7 @@ export function collectPoolGroups(node, planCourseKeySet) {
           kind: 'courses',
           plainKeys: true,
           claimed,
+          substituted,
           options,
           textIfEmpty: shortCourseCode(key),
         });
@@ -228,7 +253,7 @@ export function collectPoolGroups(node, planCourseKeySet) {
     // keep claiming until the node (or the entry's cap) is full.
     const singleSlot = isAlternativesEntry(entry) || kind === 'sequence';
     const capReached = entry.cap != null && claimed.length >= entry.cap;
-    const hasRoom = !satisfied && !capReached && !(singleSlot && claimed.length > 0);
+    const hasRoom = !satisfied && !capReached && !(singleSlot && (claimed.length > 0 || subsForEntry(i).length > 0));
     const exclude = isRangeEntry(entry) ? (entry.exclude || []).map(normalizeCourseKey) : [];
     const include = entry.type === 'COURSE_RANGE'
       ? (entry.include || []).map(normalizeCourseKey).filter((key) => !exclude.includes(key))
@@ -236,10 +261,17 @@ export function collectPoolGroups(node, planCourseKeySet) {
     groups.push({
       key: `${i}`,
       title: entryTitle(entry),
+      // Optional authored per-course pills ("Substitute") and a student note
+      // for this slot (OR_EQUIVALENT entries; see requirements SCHEMA.md).
+      optionTags: entry.optionTags
+        ? Object.fromEntries(Object.entries(entry.optionTags).map(([key, tag]) => [normalizeCourseKey(key), tag]))
+        : null,
+      note: entry.note ?? null,
       kind,
       // Pick-one nodes render either/or slots as a plain grid (no "or" pill).
       equivalent: isAlternativesEntry(entry) && node.min !== 1,
       claimed,
+      substituted: subsForEntry(i),
       options: hasRoom ? offerable(poolEntryCandidateKeys(entry) || [], claimedSet) : [],
       range: isRangeEntry(entry)
         ? {
@@ -275,7 +307,7 @@ export function collectPoolGroups(node, planCourseKeySet) {
       })
       .join(' · ')
     : '';
-  return { groups: finish(groups), fallback, rangeOnly, rangeSummary };
+  return { groups: finish(groups), fallback, rangeOnly, rangeSummary, substituted: openSubstituted };
 }
 
 // Drops long-unoffered (inactive) courses from a list of choices, except
@@ -344,6 +376,12 @@ export function describeFallbackNote(node, fallbackEntries, flatNodes) {
 // counts its active child — the others were evaluated on a copy.
 export function collectMatchedKeys(node, acc = []) {
   if (!node) return acc;
+  // A whole-node waive keeps the courses the student holds in that node
+  // claimed (flat key list in `matched`); its raw children aren't evaluated.
+  if (node.waived) {
+    for (const key of node.matched || []) acc.push(key);
+    return acc;
+  }
   if (node.type === 'ONE_OF' && Array.isArray(node.children) && node.activeChildIndex !== undefined) {
     return collectMatchedKeys(node.children[node.activeChildIndex], acc);
   }
@@ -356,6 +394,24 @@ export function collectMatchedKeys(node, acc = []) {
     else (entry.courseKeys || []).forEach((key) => acc.push(key));
   }
   return acc;
+}
+
+// How many courses a subtree counts: the matched courses plus applied
+// substitutions that aren't a matched plan course (a transfer / study-abroad
+// course fills a slot without being one). Mirrors collectMatchedKeys' walk, so
+// a container's "x / y" matches the header numerator.
+export function countCounted(node) {
+  if (!node) return 0;
+  if (node.waived) return (node.matched || []).length;
+  if (node.type === 'ONE_OF' && Array.isArray(node.children) && node.activeChildIndex !== undefined) {
+    return countCounted(node.children[node.activeChildIndex]);
+  }
+  if (Array.isArray(node.children)) return node.children.reduce((sum, child) => sum + countCounted(child), 0);
+  const matched = collectMatchedKeys(node);
+  const outside = (node.substitutions || []).filter(
+    (sub) => sub.status === 'applied' && !(sub.courseKey && matched.includes(sub.courseKey))
+  ).length;
+  return matched.length + outside;
 }
 
 // Same segmenting as HubFullView's segmentGroups: a run of consecutive

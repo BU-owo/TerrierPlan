@@ -7,7 +7,7 @@
 // pdfjs is imported lazily inside readPlanAttachment so this module (and its
 // tests) load without a browser, and so it never pulls in pdf-lib.
 import { normalizeCourseEntry, createNoteEntry, DEFAULT_NOTE_CREDITS } from './courseEntry.js';
-import { normalizeCourseKey } from './courseKey.js';
+import { normalizeCourseKey, cleanSubstituteLabel } from './courseKey.js';
 
 export const PLAN_FORMAT = 'terrierplan-plan';
 export const PLAN_VERSION = 1;
@@ -27,6 +27,7 @@ export const FALLBACK_NAME = 'Imported Plan';
 const MAX_ENTRIES_PER_SLOT = 40;
 const MAX_KEYS_PER_EXTRA_TERM = 40;
 const MAX_NOTE_OVERRIDE_TEXT = 200;
+const MAX_SUBSTITUTIONS = 20;
 const EXTRA_SEASONS = new Set(['summer', 'winter', 'fall', 'spring']);
 
 // Loose shape check only; the catalog is the real authority. (The stricter
@@ -382,12 +383,50 @@ function sanitize(blob, catalogIds, programs) {
         }
         const override = { type: raw.type };
         if (raw.type === 'substitute') {
-          const resolved = resolveKey(raw.courseKey, catalogIds);
-          if (!resolved.key) {
-            drop('Requirement exceptions', shortLabel(nodeId), resolved.reason);
+          // `substitutions: [{ courseKey?, label?, for? }]`; the older single
+          // `courseKey` shape is upgraded to one substitution here. A catalog
+          // courseKey is kept as one; text that isn't a catalog course is kept
+          // as a plain-text `label` (a course from somewhere else), so the
+          // entry survives. A bad entry is dropped on its own; if none
+          // survive the override goes.
+          const rawList = Array.isArray(raw.substitutions)
+            ? raw.substitutions.slice(0, MAX_SUBSTITUTIONS)
+            : [{ courseKey: raw.courseKey }];
+          const substitutions = [];
+          for (const item of rawList) {
+            if (!isPlainObject(item)) {
+              drop('Requirement exceptions', shortLabel(nodeId), 'not a course');
+              continue;
+            }
+            const entry = {};
+            let label = cleanSubstituteLabel(item.label);
+            if (typeof item.courseKey === 'string' && item.courseKey) {
+              const resolved = resolveKey(item.courseKey, catalogIds);
+              if (resolved.key) entry.courseKey = resolved.key;
+              else if (!label) label = cleanSubstituteLabel(item.courseKey);
+            }
+            if (label) entry.label = label;
+            if (!entry.courseKey && !entry.label) {
+              drop('Requirement exceptions', shortLabel(nodeId), 'no course');
+              continue;
+            }
+            const id = entry.courseKey ?? `label:${entry.label.toLowerCase()}`;
+            if (substitutions.some((existing) => (existing.courseKey ?? `label:${existing.label.toLowerCase()}`) === id)) continue;
+            if (item.for !== undefined) {
+              const replaced = resolveKey(item.for, catalogIds);
+              if (!replaced.key) {
+                drop('Requirement exceptions', shortLabel(nodeId), replaced.reason);
+                continue;
+              }
+              entry.for = replaced.key;
+            }
+            substitutions.push(entry);
+          }
+          if (substitutions.length === 0) {
+            if (rawList.length === 0) drop('Requirement exceptions', shortLabel(nodeId), 'no substitution');
             continue;
           }
-          override.courseKey = resolved.key;
+          override.substitutions = substitutions;
         }
         override.note = cleanText(raw.note, MAX_NOTE_OVERRIDE_TEXT) || null;
         override.createdAt = created.toISOString();

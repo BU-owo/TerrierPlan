@@ -146,10 +146,16 @@ not an array — one entry per overridden node, last-write-wins on re-save.
 
 | Field | Type | Notes |
 |---|---|---|
-| type | string | `'waive'` — treat the node as fully satisfied, no evaluation. `'substitute'` — add `courseKey` to the node's pool for this evaluation only. |
-| courseKey | string? | `'substitute'` only — the courseKey to try claiming for this node. |
+| type | string | `'substitute'` — a petition: replace one required course with a different course (see `substitutions`). `'waive'` — whole-node waive; nothing in the UI creates it any more except "Mark as done" on an `UNRESOLVED` node, but saved ones keep evaluating. |
+| substitutions | object[]? | `'substitute'` only — `[{ courseKey?, label?, for? }]`; at least one of `courseKey` / `label`. `courseKey` is a catalog course (in the plan or not). `label` is free text (plain text, trimmed, max 80 chars) for a course from somewhere else — transfer, study abroad, ... — e.g. `"ECON 1115 — Northeastern"`. The substitute does not have to be in the plan. `for` says what it replaces: the required courseKey on an `ALL` list, any course of a named `COUNT` slot, or a course in a `SEQUENCE_GROUP` option; omitted on `COUNT` / `REMAINDER` nodes with range or list pools (it just fills one open slot). Never `undefined` — omit the field. Outside-course substitutions don't touch credit totals or external credits. |
+| courseKey | string? | Older `'substitute'` shape (one course, no `substitutions`). Still read: it counts as one substitution with no `for`. New writes use `substitutions`. |
 | note | string? | Free-text self-reported justification (e.g. "Approved by advisor 3/2026"). Shown in the UI, never validated. |
 | createdAt | string | ISO timestamp, set client-side when the override is created |
+
+A substitution fills one still-unmet slot of its node, so it never lowers the
+program total: the denominator stays the same and the numerator goes up by
+one, whether or not the substitute course is in the plan. Fields that don't apply are omitted — never `undefined`, which Firestore
+rejects.
 
 Read/written by `requirementsEngine.js`'s `evaluateRequirementTree` (third
 argument) — see that file's `SCHEMA.md` for exactly how waive/substitute

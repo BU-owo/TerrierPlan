@@ -1,6 +1,7 @@
 import { Fragment } from 'react';
 import { normalizeCourseKey } from '../../utils/courseKey';
 import RequirementCourseRow from './RequirementCourseRow';
+import { shortCourseCode } from './treeHelpers';
 
 // Sequence options as cards — one compact card per option, its courses side
 // by side joined by "+" (stacked under 640px), a small "OR" divider between
@@ -12,6 +13,10 @@ import RequirementCourseRow from './RequirementCourseRow';
 export function SequenceOptionCards({
   options,
   progress,
+  // Petitions: { replacedKey: { courseKey?, label? } } shown in place of the
+  // course they stand in for, on the option labelled `substitutedOption` only.
+  substitutedFor,
+  substitutedOption,
   courseMap,
   planCourseKeySet,
   stashSet,
@@ -40,12 +45,19 @@ export function SequenceOptionCards({
             <div className={`req-seq-card${isProgress ? ' is-partial' : ''}`}>
               {isProgress && <span className="req-seq-progress">{progress.text}</span>}
               <div className="req-seq-courses">
-                {option.courses.map((key, j) => (
-                  <Fragment key={key}>
+                {option.courses.map((replacedKey, j) => {
+                  const sub = substitutedOption === option.label ? substitutedFor?.[replacedKey] : undefined;
+                  const subKey = sub?.courseKey;
+                  const key = subKey ?? replacedKey;
+                  return (
+                  <Fragment key={replacedKey}>
                     {j > 0 && <span className="req-seq-plus" aria-hidden="true">+</span>}
                     <RequirementCourseRow
                       courseKey={key}
                       course={courseMap[key]}
+                      substituted={Boolean(sub)}
+                      substituteLabel={sub && !subKey ? sub.label : undefined}
+                      replacesLabel={sub ? shortCourseCode(replacedKey) : undefined}
                       inPlan={planCourseKeySet.has(key)}
                       isStashed={stashSet.has(key)}
                       onToggleStash={onToggleStash}
@@ -55,7 +67,8 @@ export function SequenceOptionCards({
                       dimmed={dimmed}
                     />
                   </Fragment>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </Fragment>
@@ -81,5 +94,18 @@ export default function SequenceGroupDetail({ node, ...rest }) {
       text: `${partial.haveKeys.length} of ${partial.haveKeys.length + partial.needKeys.length} taken`,
     }
     : null;
-  return <SequenceOptionCards options={options} progress={progress} {...rest} />;
+  const substitutedFor = Object.fromEntries(
+    (node.substitutions || [])
+      .filter((sub) => sub.replaces && (sub.status === 'applied' || sub.status === 'pending'))
+      .map((sub) => [sub.replaces, { courseKey: sub.courseKey, label: sub.label }])
+  );
+  return (
+    <SequenceOptionCards
+      options={options}
+      progress={progress}
+      substitutedFor={substitutedFor}
+      substitutedOption={satisfied ? node.matchedOption : partial?.label ?? node.options[0]?.label}
+      {...rest}
+    />
+  );
 }
