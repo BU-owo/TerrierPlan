@@ -1,7 +1,8 @@
 // Shared "which semester?" fallback used anywhere a course can be added to
 // the plan without an active/focused semester to target — keep this as the
 // single add-flow picker rather than growing a second one per call site.
-// `semesterOptions` is [{ value, label }], grid slots plus any toggled-on
+// `semesterOptions` is [{ value, label, blockedBy }] (blockedBy: the label of
+// a special term filling that slot, shown disabled), grid slots plus any toggled-on
 // Summer slots — built once in PlannerPage and threaded down to every caller.
 export default function SemesterPickerModal({ course, semesterOptions, onPick, onClose }) {
   if (!course) return null;
@@ -25,13 +26,15 @@ export default function SemesterPickerModal({ course, semesterOptions, onPick, o
           </button>
         </div>
         <div className="search-picker-options">
-          {semesterOptions.map(({ value, label }) => (
+          {semesterOptions.map(({ value, label, blockedBy }) => (
             <button
               key={value}
               className="search-picker-option"
               onClick={() => onPick(value)}
+              disabled={Boolean(blockedBy)}
+              title={blockedBy ? `The ${blockedBy} fills the whole term.` : undefined}
             >
-              {label}
+              {blockedBy ? `${label} (${blockedBy})` : label}
             </button>
           ))}
         </div>

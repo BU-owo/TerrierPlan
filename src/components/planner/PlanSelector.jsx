@@ -31,7 +31,8 @@ export default function PlanSelector({
   }
 
   const statusLabel =
-    saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : saveStatus === 'error' ? 'Error'
+    saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved'
+      : saveStatus === 'error' ? "Couldn't save your changes. Reload the page, and if it keeps happening, tell us."
       : saveStatus === 'offline' ? 'Offline, will save when you reconnect' : null;
 
   return (

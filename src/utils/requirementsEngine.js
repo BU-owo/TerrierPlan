@@ -333,7 +333,7 @@ function claimWithSubsets(node, mainPools, required, ctx) {
 function evaluateCount(node, ctx) {
   const required = node.min;
   const { matched, missing, satisfiedCount, subsets } = claimWithSubsets(node, [node.pool || []], required, ctx);
-  return {
+  return fillFromBlock(node, {
     ...node,
     status: satisfiedCount >= required ? 'satisfied' : 'unsatisfied',
     matched,
@@ -341,6 +341,32 @@ function evaluateCount(node, ctx) {
     subsets,
     satisfiedCount,
     required,
+  }, ctx);
+}
+
+// `filledByBlock: "<blockType>"` on a COUNT: when the plan holds a block of
+// that type (ctx.blocks, from evaluateRequirementTree's options.blocks — a
+// whole special term such as the Marine Semester), its still-unmet slots are
+// filled through synthetic claimed keys (never real courseKeys, so nothing
+// else can match them). The numerator goes up, `required` (and so the
+// program total) doesn't change. Runs before substitutions, which then find
+// no open slot and stay inert. Each fill is reported in `matched` as
+// { filledByBlock, courseKeys: [] }.
+function fillFromBlock(node, result, ctx) {
+  const blockType = node.filledByBlock;
+  if (typeof blockType !== 'string' || !ctx.blocks?.has(blockType)) return result;
+  const unmet = result.required - result.satisfiedCount;
+  if (unmet <= 0) return result;
+  const fills = Array.from({ length: unmet }, (_, i) => {
+    ctx.claimed.add(outsideKey(node, `block-${i}`));
+    return { label: blockType, entryLabel: null, courseKeys: [], entryIndex: null, fallback: false, filledByBlock: blockType };
+  });
+  return {
+    ...result,
+    status: 'satisfied',
+    matched: [...result.matched, ...fills],
+    missing: [],
+    satisfiedCount: result.required,
   };
 }
 
@@ -801,13 +827,20 @@ export function deriveRequiredTotal(node) {
   }
 }
 
-export function evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides = {}) {
+// `options.blocks`: the blockTypes of the special-term blocks in the plan
+// (e.g. ['marine']), for COUNT nodes with `filledByBlock` (see fillFromBlock).
+export function evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides = {}, options = {}) {
   const planSet = new Set(
     Array.from(planCourseKeys)
       .filter(Boolean)
       .map((key) => normalizeCourseKey(key))
   );
-  const ctx = { planCourseKeys: planSet, claimed: new Set(), overrides: requirementOverrides || {} };
+  const ctx = {
+    planCourseKeys: planSet,
+    claimed: new Set(),
+    overrides: requirementOverrides || {},
+    blocks: new Set(Array.isArray(options?.blocks) ? options.blocks.filter((b) => typeof b === 'string') : []),
+  };
   const tree = evaluateNode(programDef.tree, ctx);
   const derivedTotal = deriveRequiredTotal(tree);
   const totalCoursesRequired = Number.isFinite(derivedTotal) && derivedTotal > 0

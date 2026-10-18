@@ -4,7 +4,9 @@
 // back yet. Loaded with a dynamic import() on click so pdf-lib stays out of
 // the main chunk.
 import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
-import { entryCourseKey, isNoteEntry } from './courseEntry';
+import {
+  blockEntryLabel, blockSpecialTerm, entriesBlockCredits, entryCourseKey, isBlockEntry, isCourseEntry, isNoteEntry, isPlainNoteEntry,
+} from './courseEntry';
 import { BU_SCHOOLS } from '../data/bu-programs';
 import { COURSE_KEY_PATTERN } from './courseKey';
 
@@ -183,10 +185,18 @@ function knownCredit(value) {
 // The one place per-entry credits and the semester total are decided; the
 // rows are drawn from `rows` and the header from `known`/`unknown`, so they
 // can't drift apart. `credits: null` = unknown (no creditsMap entry).
+// A block counts through entriesBlockCredits (same as the planner's
+// totals); an entry of an unknown kind has no credits and counts 0.
 function summarizeEntries(entries, creditsMap) {
   let known = 0;
   let unknown = 0;
   const rows = (entries || []).map((entry) => {
+    if (isBlockEntry(entry)) {
+      const credits = entriesBlockCredits([entry]);
+      known += credits;
+      return { entry, credits };
+    }
+    if (!isNoteEntry(entry) && !isCourseEntry(entry)) return { entry, credits: 0 };
     const credits = isNoteEntry(entry)
       ? knownCredit(entry.credits)
       : knownCredit(creditsMap?.[entryCourseKey(entry)]);
@@ -258,10 +268,14 @@ export async function buildPlanPdf({
       let code;
       let name;
       let isNote = false;
-      if (isNoteEntry(entry)) {
+      if (isPlainNoteEntry(entry)) {
         isNote = true;
         code = 'Placeholder';
         name = entry.text || '';
+      } else if (!isCourseEntry(entry)) {
+        isNote = true;
+        code = blockSpecialTerm(entry) ? 'Full term' : 'Other';
+        name = blockEntryLabel(entry);
       } else {
         const key = entryCourseKey(entry);
         const info = courseMap?.[key];

@@ -491,3 +491,77 @@ test('Applied focus areas: pool is the five labeled areas in the bulletin order,
   assert.equal(focus.noteStyle, 'caption');
   assert.equal(focus.required, 4);
 });
+
+// ── filledByBlock (special-term blocks, e.g. the Marine Semester) ──────────
+
+const marineBa = JSON.parse(readFileSync(new URL('../data/requirements/cas/marine-science-ba.json', import.meta.url), 'utf8'));
+const marineSemester = (result) => child(result, 'marine-ba-semester');
+const subs = (...items) => ({ type: 'substitute', substitutions: items, createdAt: '2026-03-01T00:00:00.000Z' });
+
+test('filledByBlock: no block -> 0/4 with one open slot of 4, total 17', () => {
+  const r = evaluateRequirementTree(marineBa, []);
+  const node = marineSemester(r);
+  assert.equal(node.status, 'unsatisfied');
+  assert.equal(node.satisfiedCount, 0);
+  assert.equal(node.required, 4);
+  assert.deepEqual(node.openSlots, [{ for: null, keys: null, count: 4 }]);
+  assert.equal(r.totalCoursesRequired, 17);
+  assert.equal(r.totalCoursesClaimed, 0);
+});
+
+test('filledByBlock: a marine block -> 4/4, numerator +4, total still 17', () => {
+  const r = evaluateRequirementTree(marineBa, [], {}, { blocks: ['marine'] });
+  const node = marineSemester(r);
+  assert.equal(node.status, 'satisfied');
+  assert.equal(node.satisfiedCount, 4);
+  assert.equal(node.required, 4);
+  assert.deepEqual(node.openSlots, []);
+  assert.equal(node.matched.length, 4);
+  assert.ok(node.matched.every((m) => m.filledByBlock === 'marine' && m.courseKeys.length === 0));
+  assert.equal(r.totalCoursesRequired, 17);
+  assert.equal(r.totalCoursesClaimed, 4);
+});
+
+test('filledByBlock: unknown blockTypes are ignored', () => {
+  const r = evaluateRequirementTree(marineBa, [], {}, { blocks: ['field', '', 5, null] });
+  assert.equal(marineSemester(r).satisfiedCount, 0);
+  assert.equal(r.totalCoursesClaimed, 0);
+  assert.equal(r.totalCoursesRequired, 17);
+});
+
+test('filledByBlock: substitutions fill open slots without a block, go inert with one', () => {
+  const four = subs({ label: 'BI 539 (transcript)' }, { label: 'BI 541' }, { label: 'EE 544' }, { label: 'MR 500' });
+  const without = evaluateRequirementTree(marineBa, [], { 'marine-ba-semester': four });
+  assert.equal(marineSemester(without).satisfiedCount, 4);
+  assert.equal(marineSemester(without).status, 'satisfied');
+  assert.equal(without.totalCoursesClaimed, 4);
+
+  const two = subs({ label: 'BI 539' }, { courseKey: 'CASBI541' });
+  const partial = evaluateRequirementTree(marineBa, [], { 'marine-ba-semester': two });
+  assert.equal(marineSemester(partial).satisfiedCount, 2);
+  assert.deepEqual(marineSemester(partial).openSlots, [{ for: null, keys: null, count: 2 }]);
+
+  const withBlock = evaluateRequirementTree(marineBa, ['CASBI541'], { 'marine-ba-semester': four }, { blocks: ['marine'] });
+  const node = marineSemester(withBlock);
+  assert.equal(node.satisfiedCount, 4);
+  assert.ok(node.substitutions.every((s) => s.status === 'no-open-slot'));
+  assert.equal(withBlock.totalCoursesClaimed, 4);
+  assert.equal(withBlock.totalCoursesRequired, 17);
+});
+
+test('filledByBlock: a full 17-course plan with a block', () => {
+  const plan = ['CASBI260', 'CASEE144', 'CASBI107', 'CASBI108', 'CASCH171', 'CASCH172', 'CASPY211',
+    'CASMA121', 'CASMA213', 'CASCS108', 'CASAN518', 'CASEE360', 'CASBI423'];
+  const r = evaluateRequirementTree(marineBa, plan, {}, { blocks: ['marine'] });
+  assert.equal(r.status, 'satisfied');
+  assert.equal(r.totalCoursesClaimed, 17);
+  assert.equal(r.totalCoursesRequired, 17);
+});
+
+test('filledByBlock: programs without the flag are unchanged by blocks', () => {
+  const plan = ['CASBI107', 'CASBI108', 'CASBI203'];
+  const a = evaluateRequirementTree(biology, plan);
+  const b = evaluateRequirementTree(biology, plan, {}, { blocks: ['marine'] });
+  assert.equal(b.totalCoursesClaimed, a.totalCoursesClaimed);
+  assert.equal(b.totalCoursesRequired, a.totalCoursesRequired);
+});

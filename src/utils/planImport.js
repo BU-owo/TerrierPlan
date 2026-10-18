@@ -6,7 +6,8 @@
 //    the file is spread into app state or written to Firestore as-is.
 // pdfjs is imported lazily inside readPlanAttachment so this module (and its
 // tests) load without a browser, and so it never pulls in pdf-lib.
-import { normalizeCourseEntry, createNoteEntry, DEFAULT_NOTE_CREDITS } from './courseEntry.js';
+import { normalizeCourseEntry, createNoteEntry, createBlockEntry, targetSeason, DEFAULT_NOTE_CREDITS } from './courseEntry.js';
+import { getSpecialTerm } from '../data/specialTerms.js';
 import { normalizeCourseKey, cleanSubstituteLabel } from './courseKey.js';
 
 export const PLAN_FORMAT = 'terrierplan-plan';
@@ -199,11 +200,20 @@ function sanitize(blob, catalogIds, programs) {
   const dropped = [];
   const drop = (where, what, reason) => dropped.push({ where, what, reason });
   const seen = new Set(); // course keys already placed in the plan
-  const counts = { courses: 0, placeholders: 0 };
+  const counts = { courses: 0, placeholders: 0, blocks: 0 };
+  const blockTypes = []; // one per block kept, for the import summary
 
-  // Course/placeholder entries for one slot.
-  function processEntries(rawEntries, where) {
+  // Course/placeholder/block entries for one slot. `slotIndex` is the grid
+  // index (null for a Summer slot). A block is a placeholder with a
+  // blockType (see isBlockEntry); one of a known special term
+  // (src/data/specialTerms.js) is kept as a block only in a slot of one of
+  // its seasons with nothing else in it, within its maxPerPlan, with a fresh
+  // id (text and credits forced by the normalizer). Anywhere else, or of an
+  // unknown type, it imports as a plain placeholder, blockType dropped.
+  // Step 1's { kind: 'block' } shape is read the same way.
+  function processEntries(rawEntries, where, slotIndex = null) {
     const out = [];
+    const candidates = []; // known blockTypes of this slot's placeholders
     if (!Array.isArray(rawEntries)) {
       if (rawEntries !== undefined && rawEntries !== null) drop(where, 'entries', 'not a list');
       return out;
@@ -213,7 +223,20 @@ function sanitize(blob, catalogIds, programs) {
         if (i === MAX_ENTRIES_PER_SLOT) drop(where, `${rawEntries.length - MAX_ENTRIES_PER_SLOT} more entries`, 'too many in one semester');
         return;
       }
+      if (isPlainObject(raw) && raw.kind === 'block') {
+        raw = {
+          kind: 'note',
+          text: getSpecialTerm(raw.blockType)?.label ?? 'Special term',
+          credits: raw.credits,
+          blockType: raw.blockType,
+        };
+      }
+      if (isPlainObject(raw) && raw.kind != null && raw.kind !== 'note') {
+        drop(where, shortLabel(raw.kind), 'unknown entry type');
+        return;
+      }
       if (isPlainObject(raw) && raw.kind === 'note') {
+        if (getSpecialTerm(raw.blockType)) candidates.push(raw.blockType);
         const credits = Number(raw.credits);
         out.push(normalizeCourseEntry({
           kind: 'note',
@@ -240,6 +263,16 @@ function sanitize(blob, catalogIds, programs) {
       out.push(normalizeCourseEntry({ courseKey: resolved.key }));
       counts.courses += 1;
     });
+    // The slot's only entry is that special-term placeholder: upgrade it to a block.
+    const term = candidates.length === 1 && out.length === 1 ? getSpecialTerm(candidates[0]) : null;
+    const season = slotIndex == null ? 'summer' : targetSeason(slotIndex);
+    if (term && term.seasons.includes(season)
+      && blockTypes.filter((type) => type === term.id).length < term.maxPerPlan) {
+      out[0] = createBlockEntry(term.id);
+      counts.placeholders -= 1;
+      counts.blocks += 1;
+      blockTypes.push(term.id);
+    }
     return out;
   }
 
@@ -280,7 +313,7 @@ function sanitize(blob, catalogIds, programs) {
 
   const semesters = Array.from({ length: slotCount }, () => []);
   [...rawSlots.keys()].sort((a, b) => a - b).forEach((index) => {
-    semesters[index] = processEntries(rawSlots.get(index), slotLabel(index));
+    semesters[index] = processEntries(rawSlots.get(index), slotLabel(index), index);
   });
 
   const gridSummerTerms = {};
@@ -440,13 +473,15 @@ function sanitize(blob, catalogIds, programs) {
     years: slotCount / 2,
     courseCount: counts.courses,
     placeholderCount: counts.placeholders,
+    blockCount: counts.blocks,
+    blockTypes,
     stashCount: stash.length,
     extraTermCount: extraTerms.length,
     overrideCount: Object.keys(requirementOverrides).length,
     majorBulletinUrl,
   };
 
-  if (counts.courses === 0 && counts.placeholders === 0) {
+  if (counts.courses === 0 && counts.placeholders === 0 && counts.blocks === 0) {
     return { plan: null, summary, dropped, errors: [{ code: 'no-courses', message: ERRORS.noCourses }] };
   }
 

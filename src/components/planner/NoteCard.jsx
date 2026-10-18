@@ -8,7 +8,11 @@ import { DEFAULT_NOTE_CREDITS } from '../../utils/courseEntry';
 // edited inline; `initiallyEditing` opens a freshly added note straight
 // into the text field. `compact` ("All semesters" view): one line like a
 // compact course card, with "Placeholder" moved into the tooltip.
-export default function NoteCard({ note, initiallyEditing = false, onUpdate, onRemove, compact = false }) {
+// `upgradeTerm`/`onUpgrade`: this placeholder looks like a special-term
+// block an older app version turned into a placeholder (see
+// degradedSpecialTerm in courseEntry.js) — offers an opt-in "Make this your
+// …" link; nothing changes without the click.
+export default function NoteCard({ note, initiallyEditing = false, onUpdate, onRemove, compact = false, upgradeTerm = null, onUpgrade }) {
   const [isEditingText, setIsEditingText] = useState(initiallyEditing);
   const [textDraft, setTextDraft] = useState(note.text);
   const [isEditingCredits, setIsEditingCredits] = useState(false);
@@ -116,6 +120,11 @@ export default function NoteCard({ note, initiallyEditing = false, onUpdate, onR
         )}
         {!compact && <span className="note-card-tag">Placeholder</span>}
       </div>
+      {upgradeTerm && onUpgrade && (
+        <button type="button" className="special-term-add-link note-card-upgrade" onClick={onUpgrade}>
+          Make this your {upgradeTerm.label}
+        </button>
+      )}
     </div>
   );
 }

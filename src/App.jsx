@@ -6,6 +6,7 @@ import PlannerPage from './pages/PlannerPage';
 import SchedulerPage from './pages/SchedulerPage';
 import NotFoundPage from './pages/NotFoundPage';
 import GlobalFooter from './components/GlobalFooter';
+import UpdateBanner from './components/UpdateBanner';
 import { markAppReady } from './startupErrors';
 import { useState, useEffect } from 'react';
 import PawLoader from './components/PawLoader';
@@ -24,6 +25,7 @@ const THEME_STORAGE_KEY = 'terrierplan_theme';
 function AppRoutes({ theme, onToggleTheme }) {
   return (
     <div className="app-shell">
+      <UpdateBanner />
       <div className="app-shell-routes">
         <Routes>
           <Route path="/" element={<HomePage theme={theme} onToggleTheme={onToggleTheme} />} />

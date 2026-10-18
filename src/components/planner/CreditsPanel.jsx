@@ -4,6 +4,8 @@ import { describeLockStatus } from '../requirements/treeHelpers';
 import EstimateNote from '../EstimateNote';
 import { BU_LINKS } from '../../data/officialLinks';
 
+const NO_BLOCK_CREDITS = { completed: 0, planned: 0 };
+
 export default function CreditsPanel({
   semesters,
   extraCourseKeys = [],
@@ -13,6 +15,11 @@ export default function CreditsPanel({
   // Plan-wide note-placeholder credits (Fall/Spring + Summer slots), summed
   // by PlannerPage — the same figure its header credit badge adds in.
   noteCredits = 0,
+  // Special-term block credits (e.g. the Marine Semester's 16), already
+  // split by PlannerPage: completed when the block's term is past (the same
+  // semester status the trackers use), else planned. Separate from
+  // noteCredits, which is plain placeholders only.
+  blockCredits = NO_BLOCK_CREDITS,
   onSummaryChange,
 }) {
   // Same completed/current/planned split as the Requirements and HUB
@@ -22,17 +29,17 @@ export default function CreditsPanel({
   // progress" bucket, just completed vs. everything still ahead).
   const { completedCredits, plannedCredits } = useMemo(() => {
     const allKeys = [...semesters.flatMap((sem) => entriesCourseKeys(sem)), ...extraCourseKeys];
-    let completed = 0;
+    let completed = blockCredits.completed;
     // Note placeholders (no courseKey) aren't real courses, so they're never
     // "completed" — their own credits always count as planned.
-    let planned = noteCredits;
+    let planned = noteCredits + blockCredits.planned;
     for (const key of allKeys) {
       const credit = creditsMap[key] ?? 0;
       if (describeLockStatus(lockStatusMap[key]).variant === 'completed') completed += credit;
       else planned += credit;
     }
     return { completedCredits: completed, plannedCredits: planned };
-  }, [semesters, extraCourseKeys, creditsMap, lockStatusMap, noteCredits]);
+  }, [semesters, extraCourseKeys, creditsMap, lockStatusMap, noteCredits, blockCredits]);
 
   const planCourseCredits = completedCredits + plannedCredits;
 

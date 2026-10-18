@@ -24,10 +24,14 @@ import useInactiveCourseKeys from '../../hooks/useInactiveCourseKeys';
 // {locked, source}, display-only — never fed into evaluateRequirementTree)
 // to distinguish planned vs. completed courses in claimed/fulfilled chips.
 // Course chips toggle Paw-tential Courses (`stash`) — never the plan.
+const EMPTY_BLOCKS = [];
+
 export default function RequirementTree({
   density = 'compact',
   majorBulletinUrl,
   planCourseKeys = [],
+  // blockTypes of the plan's special-term blocks, for filledByBlock nodes.
+  planBlocks = EMPTY_BLOCKS,
   onMajorSelect,
   onSummaryChange,
   courseMap = {},
@@ -57,8 +61,8 @@ export default function RequirementTree({
   );
 
   const result = useMemo(
-    () => (programDef ? evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides) : null),
-    [programDef, planCourseKeys, requirementOverrides]
+    () => (programDef ? evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides, { blocks: planBlocks }) : null),
+    [programDef, planCourseKeys, requirementOverrides, planBlocks]
   );
 
   const flatNodes = useMemo(() => (result ? collectAllNodes(result.tree) : []), [result]);

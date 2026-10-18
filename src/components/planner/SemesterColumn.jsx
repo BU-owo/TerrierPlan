@@ -2,7 +2,15 @@ import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import CourseCard from './CourseCard';
 import NoteCard from './NoteCard';
-import { entryCourseKey, entriesNoteCredits, isNoteEntry } from '../../utils/courseEntry';
+import TermBlockCard from './TermBlockCard';
+import SpecialTermCard from './SpecialTermCard';
+import {
+  blockSpecialTerm, entryCourseKey, entriesBlockCredits, entriesNoteCredits, exclusiveTermOf, isNoteEntry, splitBlockEntries,
+} from '../../utils/courseEntry';
+
+// A course card needs a courseKey; blocks (notes with a blockType), unknown
+// kinds and a keyless course object render as a read-only TermBlockCard.
+const isCourseCardEntry = (entry) => entryCourseKey(entry) != null;
 
 // Generic semester-shaped column — used both for the fixed Fall/Spring grid
 // slots and for a year's optional Summer slot (see SemesterBoard). `dropId`
@@ -41,18 +49,35 @@ export default function SemesterColumn({
   completedCourseKeys,
   // "All semesters" overview: compact header/cards.
   compact = false,
+  // Special terms (src/data/specialTerms.js), bound to this slot by
+  // SemesterBoard: `addableSpecialTerms` — registry entries this empty slot
+  // may become (the "Make this my …" link); `degradedSpecialTerm` — the term
+  // a lone plain placeholder here looks like (an older app version dropped
+  // its blockType), offered as an opt-in upgrade.
+  addableSpecialTerms = [],
+  onAddSpecialTerm,
+  onRemoveBlock,
+  degradedSpecialTerm = null,
+  onUpgradeNote,
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: dropId });
+  // A block of an exclusive special term fills the term: new adds and drops
+  // are refused (PlannerPage's shared check shows why). Entries already
+  // here (e.g. added by an older app version) are all still shown.
+  const exclusiveTerm = exclusiveTermOf(courses);
+  const { blocks: blockEntries, others: otherEntries } = splitBlockEntries(courses);
+  const dropBlocked = isOver && Boolean(exclusiveTerm);
   // Id of a note this column just added, so it mounts in edit mode.
   const [newNoteId, setNewNoteId] = useState(null);
 
   // Notes have no lock, so the lock toggle and "all locked" check only look
   // at real course entries — a column holding only notes is never "locked".
-  const courseEntries = courses.filter((entry) => !isNoteEntry(entry));
+  const courseEntries = courses.filter(isCourseCardEntry);
+  // Courses, plain placeholders and blocks each counted once, by their own helper.
   const totalCredits = courseEntries.reduce(
     (sum, entry) => sum + (creditsMap[entryCourseKey(entry)] ?? 0),
     0,
-  ) + entriesNoteCredits(courses);
+  ) + entriesNoteCredits(courses) + entriesBlockCredits(courses);
   const allLocked = courseEntries.length > 0
     && courseEntries.every((entry) => completedCourseKeys.has(entryCourseKey(entry)));
 
@@ -66,7 +91,8 @@ export default function SemesterColumn({
       className={[
         'semester-column',
         isActive ? 'is-active' : '',
-        isOver ? 'is-drag-over' : '',
+        isOver && !dropBlocked ? 'is-drag-over' : '',
+        dropBlocked ? 'is-drop-blocked' : '',
         status === 'current' ? 'is-current' : '',
         compact ? 'is-compact' : '',
         season ? `is-${season}` : '',
@@ -98,7 +124,7 @@ export default function SemesterColumn({
           {(courses.length > 0 || compact) && (
             <span className="semester-credits">{totalCredits || (compact ? 0 : '—')} cr</span>
           )}
-          {compact && onAddNote && (
+          {compact && onAddNote && !exclusiveTerm && (
             <button
               type="button"
               className="semester-add-note"
@@ -138,7 +164,18 @@ export default function SemesterColumn({
       </div>
 
       <div ref={compact ? undefined : setNodeRef} className="semester-courses">
-        {courses.map((entry) => {
+        {blockEntries.map((entry) => {
+          const term = blockSpecialTerm(entry);
+          return term
+            ? <SpecialTermCard key={entry.id} term={term} compact={compact} onRemove={onRemoveBlock ? () => onRemoveBlock(entry.id) : undefined} />
+            : <TermBlockCard key={entry.id} entry={entry} compact={compact} />;
+        })}
+        {exclusiveTerm && otherEntries.length > 0 && (
+          <p className="special-term-warning">
+            This term also has other courses, but the {exclusiveTerm.label} fills the whole term.
+          </p>
+        )}
+        {otherEntries.map((entry, index) => {
           if (isNoteEntry(entry)) {
             return (
               <NoteCard
@@ -148,8 +185,13 @@ export default function SemesterColumn({
                 compact={compact}
                 onUpdate={(patch) => onUpdateNote(entry.id, patch)}
                 onRemove={() => onRemoveNote(entry.id)}
+                upgradeTerm={degradedSpecialTerm}
+                onUpgrade={degradedSpecialTerm && onUpgradeNote ? () => onUpgradeNote(entry.id, degradedSpecialTerm.id) : undefined}
               />
             );
+          }
+          if (!isCourseCardEntry(entry)) {
+            return <TermBlockCard key={entry.id ?? `block-${index}`} entry={entry} compact={compact} />;
           }
           const key = entryCourseKey(entry);
           const locked = completedCourseKeys.has(key);
@@ -175,9 +217,20 @@ export default function SemesterColumn({
             {compact ? 'Drop here' : isActive ? 'Search and add a course ↗' : 'Drop courses here'}
           </div>
         )}
+        {courses.length === 0 && onAddSpecialTerm && addableSpecialTerms.map((term) => (
+          <button
+            key={term.id}
+            type="button"
+            className="special-term-add-link"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onAddSpecialTerm(term.id); }}
+          >
+            Make this my {term.label}
+          </button>
+        ))}
         {/* Last row of the list (inside the droppable, so dropping onto it
             still lands in this column). */}
-        {onAddNote && !compact && (
+        {onAddNote && !compact && !exclusiveTerm && (
           <button
             type="button"
             className="add-placeholder-row"

@@ -15,6 +15,7 @@ import RequirementNodeMenu from './RequirementNodeMenu';
 import { HubProgressRing } from '../planner/HubFullView';
 import { deriveRequiredTotal } from '../../utils/requirementsEngine';
 import { unresolvedLast } from '../../utils/unresolvedLast';
+import { getSpecialTerm } from '../../data/specialTerms';
 
 // One requirement node, in bulletin order. depth 0 (the root's direct
 // children) renders as a HubFullView-style card with a progress ring.
@@ -187,9 +188,24 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
 
     // Overridden nodes skip normal course tracking — the override supersedes it.
     const pool = isUnresolved || isOverridden ? null : collectPoolGroups(node, planCourseKeySet);
+    // Slots filled by a special-term block in the plan (filledByBlock): one row.
+    const blockFill = (node.matched || []).find((m) => m?.filledByBlock);
+    const blockTerm = blockFill ? getSpecialTerm(blockFill.filledByBlock) : null;
     return (
       <>
         {noteLine}
+        {blockFill && (
+          <div className="req-course-grid">
+            <div className="req-course-row is-in-plan">
+              <span className="req-course-row-check" aria-hidden="true">✓</span>
+              <span className="req-course-row-title">
+                {blockTerm
+                  ? `${blockTerm.label} · ${blockTerm.credits} credits (from your plan)`
+                  : 'Special term (from your plan)'}
+              </span>
+            </div>
+          </div>
+        )}
         {isUnresolved && node.note && <span className="req-node-detail">{node.note}</span>}
         {node.type === 'SEQUENCE_GROUP' && !isOverridden && (
           <SequenceGroupDetail

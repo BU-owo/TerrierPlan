@@ -133,6 +133,26 @@ pool — a course is still only claimed once. The evaluated node gets
 `atLeast` order (always present, `[]` when there are none); subset claims
 are also in the node's `matched`, tagged with `subsetIndex`.
 
+#### `filledByBlock` (optional, `COUNT`)
+```jsonc
+{ "type": "COUNT", "min": 4, "filledByBlock": "marine", "pool": [] }
+```
+For a requirement a whole "special term" satisfies (the Marine Semester:
+the program places students into its courses, so there's no list to
+maintain). The value is a blockType from `src/data/specialTerms.js`. The
+node evaluates normally; then, when the plan holds a block of that type
+(`evaluateRequirementTree`'s fourth argument, `{ blocks: ['marine', ...] }`,
+derived from the plan's semesters), every still-unmet slot is filled through
+a synthetic claimed key (`OUTSIDE|…`, never a real courseKey). The numerator
+goes up by the unmet count; `required`, and so the program total, never
+changes. Fills are in `matched` as `{ filledByBlock, courseKeys: [] }`, and
+the UI shows them as one "✓ Marine Semester · 16 credits (from your plan)"
+row. Fills run before substitutions, so with a block present a substitution
+finds no open slot (`no-open-slot`, inert). Without a block, an empty pool
+leaves one open slot of `min` for petitions, so a student who took the
+courses another way uses ⋯ → Substitute a course once per course. A `COUNT`
+with an empty `pool` renders without a "Pick N" line or an empty course box.
+
 ### `ONE_OF`
 ```jsonc
 { "id": "...", "type": "ONE_OF", "label": "Chemistry track", "children": [...nodes] }
@@ -336,8 +356,8 @@ earlier group didn't need it, it's still unclaimed and available.
 
 ## Manual overrides
 
-`evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides)`
-takes an optional third argument: the plan's `requirementOverrides` map (see
+`evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides, options)`
+(`options.blocks`: see `filledByBlock` above) takes an optional third argument: the plan's `requirementOverrides` map (see
 root `SCHEMA.md`), keyed by node `id`. This is entirely plan-scoped — it's
 never written back to the program JSON, and it's student-reported, not
 verified. Before evaluating a node, the engine checks

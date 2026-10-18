@@ -192,8 +192,17 @@ function findResultNode(tree, id) {
   return allNodes(tree).find((n) => n.id === id);
 }
 
-for (const { file, def } of programs) {
-  test(`petition sweep: ${file}`, (t) => {
+// Every program runs twice: no special-term blocks in the plan, and a
+// Marine Semester block (filledByBlock nodes fill; everything else must be
+// unaffected). The total never depends on a block.
+const BLOCK_VARIANTS = [
+  { name: 'no block', blocks: [] },
+  { name: 'marine block', blocks: ['marine'] },
+];
+
+for (const { file, def } of programs) for (const variant of BLOCK_VARIANTS) {
+  test(`petition sweep: ${file} (${variant.name})`, (t) => {
+    const options = { blocks: variant.blocks };
     const plan = [...syntheticPlan(def), ...IN_PLAN];
     const failures = [];
     const fail = (nodeId, kind, message) => failures.push(`${nodeId} [${kind}]: ${message}`);
@@ -206,7 +215,11 @@ for (const { file, def } of programs) {
     assert.ok(ids.every((id) => typeof id === 'string' && id), `${file}: every node needs an id`);
     assert.equal(new Set(ids).size, ids.length, `${file}: node ids must be unique`);
 
-    const base = evaluateRequirementTree(def, plan, {});
+    const base = evaluateRequirementTree(def, plan, {}, options);
+    const noBlockTotal = evaluateRequirementTree(def, plan, {}).totalCoursesRequired;
+    if (base.totalCoursesRequired !== noBlockTotal) {
+      fail('(no override)', 'baseline', `a block changed the total ${noBlockTotal} -> ${base.totalCoursesRequired}`);
+    }
     const baseClaimed = new Set(claimedList(base.tree));
     for (const oneOf of allNodes(base.tree).filter((n) => n.type === 'ONE_OF')) {
       if (oneOf.children.some((c) => c.status === 'satisfied' && !c.waived)) continue;
@@ -222,7 +235,7 @@ for (const { file, def } of programs) {
       for (const [kind, override] of overridesFor(findResultNode(base.tree, node.id))) {
         let result;
         try {
-          result = evaluateRequirementTree(def, plan, { [node.id]: override });
+          result = evaluateRequirementTree(def, plan, { [node.id]: override }, options);
         } catch (err) {
           fail(node.id, kind, `threw ${err.message}`);
           continue;

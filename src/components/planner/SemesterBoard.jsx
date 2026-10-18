@@ -1,5 +1,8 @@
 import SemesterColumn from './SemesterColumn';
-import { getSemesterStatus, isSummerTarget, summerYearFromTarget } from '../../utils/courseEntry';
+import {
+  canAddSpecialTerm, degradedSpecialTerm, getSemesterStatus, isSummerTarget, planBlockTypes, summerYearFromTarget,
+} from '../../utils/courseEntry';
+import { SPECIAL_TERMS } from '../../data/specialTerms';
 import { semesterLabel } from '../../utils/hubConstants';
 
 // Target encoding shared with PlannerPage: a plain number is a grid slot
@@ -33,6 +36,12 @@ export default function SemesterBoard({
   onAddNote,
   onUpdateNote,
   onRemoveNote,
+  // Special-term blocks (src/data/specialTerms.js), each taking the slot
+  // target last: add (blockType), remove (blockId), upgrade a degraded
+  // placeholder (noteId, blockType).
+  onAddSpecialTerm,
+  onRemoveBlock,
+  onUpgradeNote,
   draggingId,
   semesterOptions = [],
   currentSemesterTarget = null,
@@ -62,6 +71,21 @@ export default function SemesterBoard({
       onAddNote: () => onAddNote(target),
       onUpdateNote: (noteId, patch) => onUpdateNote(noteId, target, patch),
       onRemoveNote: (noteId) => onRemoveNote(noteId, target),
+    };
+  }
+
+  // Special-term props for one slot: which terms its empty column may
+  // become (registry seasons, maxPerPlan — never the plan's major), and the
+  // opt-in upgrade for a lone placeholder that looks like a degraded block.
+  const planTypes = planBlockTypes(semesters, gridSummerTerms);
+  function specialTermProps(target, entries) {
+    return {
+      addableSpecialTerms: Object.values(SPECIAL_TERMS)
+        .filter((term) => canAddSpecialTerm(term.id, target, entries, planTypes)),
+      onAddSpecialTerm: onAddSpecialTerm ? (blockType) => onAddSpecialTerm(blockType, target) : undefined,
+      onRemoveBlock: onRemoveBlock ? (blockId) => onRemoveBlock(blockId, target) : undefined,
+      degradedSpecialTerm: entries.length === 1 ? degradedSpecialTerm(entries[0], target, entries, planTypes) : null,
+      onUpgradeNote: onUpgradeNote ? (noteId, blockType) => onUpgradeNote(noteId, blockType, target) : undefined,
     };
   }
 
@@ -202,6 +226,7 @@ export default function SemesterBoard({
                 onShowCourseInfo={onShowCourseInfo}
                 onToggleSemesterLock={() => onToggleSemesterLock(fallIndex)}
                 {...noteProps(fallIndex)}
+                {...specialTermProps(fallIndex, semesters[fallIndex] || [])}
                 draggingId={draggingId}
                 status={fallStatus}
                 completedCourseKeys={completedCourseKeys}
@@ -221,6 +246,7 @@ export default function SemesterBoard({
                 onShowCourseInfo={onShowCourseInfo}
                 onToggleSemesterLock={() => onToggleSemesterLock(springIndex)}
                 {...noteProps(springIndex)}
+                {...specialTermProps(springIndex, semesters[springIndex] || [])}
                 draggingId={draggingId}
                 status={springStatus}
                 completedCourseKeys={completedCourseKeys}
@@ -241,6 +267,7 @@ export default function SemesterBoard({
                   onShowCourseInfo={onShowCourseInfo}
                   onToggleSemesterLock={() => onToggleSemesterLock(summerTarget(year))}
                   {...noteProps(summerTarget(year))}
+                  {...specialTermProps(summerTarget(year), summerCourses)}
                   onRemoveColumn={
                     summerCourses.length === 0
                       ? () => onToggleSummerYear(year, false)

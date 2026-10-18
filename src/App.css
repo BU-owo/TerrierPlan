@@ -123,6 +123,79 @@ html[data-theme='dark'] .tp-art-credit { opacity: .8; }
   overflow-y: auto;
 }
 
+/* "New version available" row (UpdateBanner.jsx): first row of .app-shell,
+   in normal flow, so it pushes the page down instead of covering the
+   header or the mobile tab bar. Wraps onto two lines on narrow screens. */
+.update-banner {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 12px;
+  background: var(--scarlet-light);
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  font-size: .82rem;
+  line-height: 1.35;
+}
+.update-banner-text {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.update-banner-btn {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: var(--scarlet);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.update-banner-btn:hover:not(:disabled) { background: var(--scarlet-dark); }
+.update-banner-btn:disabled { opacity: .7; cursor: default; }
+.update-banner-dismiss {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.update-banner-dismiss:hover { color: var(--text); }
+
+/* Toast.jsx: bottom-center notice, above the footer; on phones Toast sets
+   `bottom` inline to sit just above the planner's mobile tab bar. Below
+   modals (z-index 50), above the page and header stacking (20). */
+.tp-toast-region {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+.tp-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 9px 14px;
+  border-radius: var(--radius-md);
+  background: var(--text);
+  color: var(--cream);
+  font-size: .84rem;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,.25);
+}
+
 .app-footer {
   flex-shrink: 0;
   padding: 10px 20px;

@@ -399,9 +399,9 @@ export default function CourseSearch({
               onActiveSemChange(/^\d+$/.test(raw) ? Number(raw) : raw);
             }}
           >
-            {semesterOptions.map(({ value, label }) => (
-              <option key={value} value={value}>
-                {label}
+            {semesterOptions.map(({ value, label, blockedBy }) => (
+              <option key={value} value={value} disabled={Boolean(blockedBy)}>
+                {blockedBy ? `${label} (${blockedBy})` : label}
               </option>
             ))}
           </select>

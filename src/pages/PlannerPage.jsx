@@ -58,6 +58,13 @@ import {
   entriesNoteCredits,
   createNoteEntry,
   isNoteEntry,
+  isBlockEntry,
+  createBlockEntry,
+  entriesBlockCredits,
+  exclusiveTermOf,
+  planBlockTypes,
+  canAddSpecialTerm,
+  degradedSpecialTerm,
   isSummerTarget,
   summerYearFromTarget,
   getSemesterStatus,
@@ -66,6 +73,9 @@ import { semesterLabel } from '../utils/hubConstants';
 import { useHubProgress } from '../hooks/useHubProgress';
 import { CURRENT_TERM } from '../utils/term';
 import { aliasFor } from '../utils/grsAlias';
+import { registerPendingWriteFlush } from '../utils/pendingWrites';
+import { exclusiveTermMessage } from '../data/specialTerms';
+import Toast from '../components/Toast';
 import './planner.css';
 import '../App.css';
 
@@ -353,6 +363,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [rangeFilter, setRangeFilter] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(''); // 'saved' | 'error' | ''
+  // { id, message } for the bottom toast (see Toast.jsx), e.g. a refused add.
+  const [toast, setToast] = useState(null);
   const [online, setOnline] = useState(() => navigator.onLine);
   // A signed-in profile write is queued/unsent (mirrors pendingProfileWriteRef,
   // which can't drive a render); only used for the offline badge.
@@ -824,6 +836,22 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       flushPlanRef.current?.();
     };
   }, []);
+
+  // "Save and reload" (UpdateBanner): sends the pending plan edit and the
+  // pending profile write with the same flushes the leave paths use, and
+  // resolves false if either fails so the page isn't reloaded. On success,
+  // clears the unsaved flag (as handleLeaveAnyway does) so the browser's
+  // leave warning doesn't fire on the reload. Guests have nothing pending:
+  // their plan and profile are written to localStorage on every change.
+  useEffect(() => registerPendingWriteFlush(async () => {
+    const planSaved = await (flushPlanRef.current?.() ?? true);
+    const pending = pendingProfileWriteRef.current;
+    const profileSaved = pending && auth.currentUser?.uid === pending.uid
+      ? await persistProfile(pending.uid, pending.profile)
+      : true;
+    if (planSaved && profileSaved) hasUnsavedChanges.current = false;
+    return planSaved && profileSaved;
+  }), []);
 
   // ── Guest: persist to localStorage after React commits the new state ──────
   // Handlers used to call saveLocalPlan() immediately after setSemesters(),
@@ -1639,14 +1667,18 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     // needed to be planned. Non-locked entries are dropped; everything else
     // (stash, externalCredits, extraTerms, requirementOverrides, GPA
     // fields, major) still starts blank, same as before.
-    const seedSemesters = semesters.map((entries) =>
-      entries.filter((entry) => completedCourseKeySet.has(entryCourseKey(entry))),
+    // A special-term block in a past term (already done, like a completed
+    // course) carries over too.
+    const carriesOver = (entry, target) => completedCourseKeySet.has(entryCourseKey(entry))
+      || (isBlockEntry(entry) && getSemesterStatus(target, currentSemesterTarget) === 'past');
+    const seedSemesters = semesters.map((entries, i) =>
+      entries.filter((entry) => carriesOver(entry, i)),
     );
     const seedGridSummerTerms = Object.fromEntries(
       Object.entries(gridSummerTerms)
         .map(([year, entries]) => [
           year,
-          entries.filter((entry) => completedCourseKeySet.has(entryCourseKey(entry))),
+          entries.filter((entry) => carriesOver(entry, `summer:${year}`)),
         ])
         // Drop years with nothing left to seed rather than toggle on an
         // empty Summer column in an otherwise-blank plan.
@@ -1750,9 +1782,22 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     return null;
   }
 
+  // The one exclusivity check for every new add or drop (handleAddCourse,
+  // handleMoveCourse, handleAddNote): a slot holding an exclusive special
+  // term's block (e.g. the Marine Semester) refuses it and says why. Entries
+  // already in that slot are never touched.
+  function rejectIfTermFilled(target) {
+    const term = exclusiveTermOf(entriesAtTarget(target));
+    if (!term) return false;
+    setToast({ id: Date.now(), message: exclusiveTermMessage(term) });
+    return true;
+  }
+
   function handleAddCourse(courseKey, target) {
     const alreadyPlaced = findCourseTarget(courseKey) !== null;
     if (alreadyPlaced) return;
+    // Refused: stay where the student is (no jump to the mobile board).
+    if (rejectIfTermFilled(target)) return;
     setEntriesAtTarget(target, (entries) => [
       ...entries,
       { courseKey, locked: false, source: 'manual' },
@@ -1773,6 +1818,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   function handleMoveCourse(courseKey, fromTarget, toTarget) {
+    if (rejectIfTermFilled(toTarget)) return;
     const entry = entriesAtTarget(fromTarget).find((e) => entryCourseKey(e) === courseKey);
     if (!entry) return;
     setEntriesAtTarget(fromTarget, (entries) => entries.filter((e) => entryCourseKey(e) !== courseKey));
@@ -1790,6 +1836,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // the course handlers above (entryCourseKey is null for a note).
   // Returns the new note's id so the column can open it in edit mode.
   function handleAddNote(target) {
+    if (rejectIfTermFilled(target)) return null;
     const note = createNoteEntry();
     setEntriesAtTarget(target, (entries) => [...entries, note]);
     setIsDirty(true);
@@ -1805,6 +1852,33 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   function handleRemoveNote(noteId, target) {
     setEntriesAtTarget(target, (entries) => entries.filter((e) => !(isNoteEntry(e) && e.id === noteId)));
+    setIsDirty(true);
+  }
+
+  // Special-term blocks (see src/data/specialTerms.js): added to an empty
+  // slot of the right season, within the type's per-plan limit (never
+  // depends on the plan's major); removed by id.
+  function handleAddSpecialTerm(blockType, target) {
+    if (!canAddSpecialTerm(blockType, target, entriesAtTarget(target), planBlockTypes(semesters, gridSummerTerms))) return;
+    setEntriesAtTarget(target, (entries) => [...entries, createBlockEntry(blockType)]);
+    setIsDirty(true);
+  }
+
+  function handleRemoveBlock(blockId, target) {
+    setEntriesAtTarget(target, (entries) => entries.filter((e) => !(isBlockEntry(e) && e.id === blockId)));
+    setIsDirty(true);
+  }
+
+  // Opt-in only: turns a lone placeholder that an older app version made out
+  // of a block (see degradedSpecialTerm) back into that block, same id.
+  function handleUpgradeNote(noteId, blockType, target) {
+    const entries = entriesAtTarget(target);
+    const note = entries.find((e) => isNoteEntry(e) && e.id === noteId);
+    const term = note ? degradedSpecialTerm(note, target, entries, planBlockTypes(semesters, gridSummerTerms)) : null;
+    if (term?.id !== blockType) return;
+    setEntriesAtTarget(target, (current) => current.map((e) => (
+      isNoteEntry(e) && e.id === noteId ? { ...createBlockEntry(blockType), id: noteId } : e
+    )));
     setIsDirty(true);
   }
 
@@ -2271,6 +2345,27 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     return map;
   }, [semesters, gridSummerTerms, extraTerms, currentSemesterTarget, completedCourseKeySet]);
 
+  // blockTypes of the plan's special-term blocks (one per block), for the
+  // requirements engine's filledByBlock nodes. Memoized: RequirementTree's
+  // evaluation depends on it.
+  const planBlocks = useMemo(() => planBlockTypes(semesters, gridSummerTerms), [semesters, gridSummerTerms]);
+
+  // Special-term block credits, split like the trackers split courses: a
+  // block in a past term is completed, anything else is planned. Counted
+  // only here (entriesBlockCredits), never through the placeholder credits.
+  const planBlockCredits = useMemo(() => {
+    const split = { completed: 0, planned: 0 };
+    const add = (entries, target) => {
+      const credits = entriesBlockCredits(entries);
+      if (credits === 0) return;
+      if (getSemesterStatus(target, currentSemesterTarget) === 'past') split.completed += credits;
+      else split.planned += credits;
+    };
+    semesters.forEach((entries, i) => add(entries, i));
+    Object.entries(gridSummerTerms).forEach(([year, entries]) => add(entries, `summer:${year}`));
+    return split;
+  }, [semesters, gridSummerTerms, currentSemesterTarget]);
+
   // Unlike HUB (which excludes externalCredits entirely), the requirements
   // engine should see transfer/AP-equivalent courses too — they can satisfy
   // a major requirement even though they never count toward HUB. Falls back
@@ -2296,17 +2391,25 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const planNoteCredits = semesters.reduce((sum, sem) => sum + entriesNoteCredits(sem), 0)
     + Object.values(gridSummerTerms).reduce((sum, entries) => sum + entriesNoteCredits(entries), 0);
   const planCourseCredits = [...gridCourseKeys, ...extraCourseKeys]
-    .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0) + planNoteCredits;
+    .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0) + planNoteCredits + planBlockCredits.completed + planBlockCredits.planned;
 
   // Options for "add to" targets — grid semesters plus any toggled-on Summer
   // slots — shared by CourseSearch's dropdown, the SemesterPickerModal
   // fallback picker, and the "I am currently in" selector.
+  // `blockedBy`: the label of a special term filling that slot — the add
+  // pickers show it disabled (the "I am currently in" selector ignores it).
   const semesterOptions = [
-    ...semesters.map((_, i) => ({ value: i, label: semesterLabel(i) })),
+    ...semesters.map((entries, i) => ({
+      value: i, label: semesterLabel(i), blockedBy: exclusiveTermOf(entries)?.label ?? null,
+    })),
     ...Object.keys(gridSummerTerms)
       .map(Number)
       .sort((a, b) => a - b)
-      .map((year) => ({ value: `summer:${year}`, label: `Year ${year + 1} – Summer` })),
+      .map((year) => ({
+        value: `summer:${year}`,
+        label: `Year ${year + 1} – Summer`,
+        blockedBy: exclusiveTermOf(gridSummerTerms[year])?.label ?? null,
+      })),
   ];
 
   const externalCreditTotal = (externalCredits || []).reduce((sum, credit) => {
@@ -2621,6 +2724,9 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                   onAddNote={handleAddNote}
                   onUpdateNote={handleUpdateNote}
                   onRemoveNote={handleRemoveNote}
+                  onAddSpecialTerm={handleAddSpecialTerm}
+                  onRemoveBlock={handleRemoveBlock}
+                  onUpgradeNote={handleUpgradeNote}
                   draggingId={draggingId}
                   semesterOptions={semesterOptions}
                   currentSemesterTarget={currentSemesterTarget}
@@ -2679,10 +2785,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               creditsMap={creditsMap}
               lockStatusMap={lockStatusMap}
               noteCredits={planNoteCredits}
+              blockCredits={planBlockCredits}
               isTransfer={isTransfer}
               onToggleTransfer={handleToggleTransfer}
               majorBulletinUrl={majorBulletinUrl}
               planCourseKeys={requirementsCourseKeys}
+              planBlocks={planBlocks}
               onMajorSelect={handleMajorSelect}
               activeSemIndex={activeSemIndex}
               semesterOptions={semesterOptions}
@@ -2720,6 +2828,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         <RequirementsFullView
           majorBulletinUrl={majorBulletinUrl}
           planCourseKeys={requirementsCourseKeys}
+          planBlocks={planBlocks}
           onMajorSelect={handleMajorSelect}
           courseMap={courseMap}
           activeSemIndex={activeSemIndex}
@@ -2777,6 +2886,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       {showPathCard && <PickYourPath onChoose={handlePathChoice} onDismiss={dismissPathCard} />}
 
       <HelpSupportModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
 
       {/* ── Course info panel — the one instance for search, stash and placed
            cards. Deliberately a direct child of .planner-layout (not inside

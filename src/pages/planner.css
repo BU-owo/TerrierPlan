@@ -50,6 +50,8 @@
 .save-badge.saved   { background: rgba(22,163,74,.35); }
 .save-badge.saving  { background: rgba(255,255,255,.15); }
 .save-badge.error   { background: rgba(220,38,38,.4); }
+/* The error message is a sentence, not a word: let it wrap in the header. */
+.save-badge.error   { white-space: normal; max-width: 300px; border-radius: 10px; line-height: 1.3; }
 
 /* ----- Body ----- */
 .planner-body {
@@ -625,6 +627,13 @@
 
 .search-picker-option:active {
   background: var(--scarlet-light);
+}
+
+/* A term filled by a special term (e.g. the Marine Semester). */
+.search-picker-option:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  background: none;
 }
 
 /* ===== SEMESTER BOARD ===== */
@@ -4070,6 +4079,110 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   border-color: var(--scarlet);
   color: var(--scarlet);
 }
+/* Special-term block (SpecialTermCard.jsx, e.g. the Marine Semester): one
+   large card filling the term, a subtle scarlet tint (solid border, unlike a
+   dashed placeholder). Not draggable; × removes it. */
+.special-term-card {
+  position: relative;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 96px;
+  padding: 10px 26px 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--scarlet-pale);
+  color: var(--text);
+  cursor: default;
+}
+.special-term-card-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--scarlet);
+}
+html[data-theme='dark'] .special-term-card-label { color: var(--text); }
+.special-term-card-summary {
+  font-size: 11px;
+  font-weight: 600;
+}
+.special-term-card-help {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+.special-term-card-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.special-term-card-remove:hover,
+.special-term-card-remove:focus-visible {
+  background: var(--warning-surface);
+  color: var(--warning-text);
+}
+/* "All semesters": one line, like a compact card. */
+.special-term-card.is-compact {
+  flex: none;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 25px;
+  padding: 0 22px 0 6px;
+  border-width: 1px;
+}
+.special-term-card.is-compact .special-term-card-label {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.special-term-card-credits { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+.special-term-card.is-compact .special-term-card-remove { top: 2px; right: 1px; }
+/* "Make this my …" in an empty column, and "Make this your …" on a
+   placeholder: a small muted text link, not a button. */
+.special-term-add-link {
+  align-self: center;
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 10px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.special-term-add-link:hover,
+.special-term-add-link:focus-visible { color: var(--scarlet); }
+.note-card-upgrade { display: block; padding: 2px 0 0; text-align: left; }
+.note-card.is-compact { flex-wrap: wrap; }
+.note-card.is-compact .note-card-upgrade { flex-basis: 100%; padding: 0 0 2px; }
+/* A block plus other entries (added by an older app version). */
+.special-term-warning {
+  margin: 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--warning-surface);
+  color: var(--warning-text);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+/* Dragging over a term a special term fills: refused, shown as such. */
+.semester-column.is-drop-blocked {
+  border-color: var(--warning-text);
+  cursor: not-allowed;
+}
+
 /* "+ Add placeholder" — full-width last row of a semester's list, with the
    same dashed border as .note-card so it reads as "a placeholder goes
    here". Kept short and muted so it doesn't crowd a full column. */
