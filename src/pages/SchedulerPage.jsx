@@ -19,7 +19,7 @@ import useDelayedBusy from '../hooks/useDelayedBusy';
 import AppHeader from '../components/AppHeader';
 import GuestSignInButton from '../components/GuestSignInButton';
 import HelpSupportModal from '../components/HelpSupportModal';
-import SchedulerSearch from '../components/scheduler/SchedulerSearch';
+import SchedulerLeftTabs from '../components/scheduler/SchedulerLeftTabs';
 import DraftCourseCard from '../components/scheduler/DraftCourseCard';
 import GlobalTimeFilter from '../components/scheduler/GlobalTimeFilter';
 import ScheduleStepper, { ManualScheduleHeader, SwapDoneBar } from '../components/scheduler/ScheduleStepper';
@@ -54,6 +54,8 @@ import LargeSelectionBanner from '../components/scheduler/LargeSelectionBanner';
 import OneTimeHint from '../components/OneTimeHint';
 import useOneTimeHint from '../hooks/useOneTimeHint';
 import useDesktopLayout from '../hooks/useDesktopLayout';
+import useResizableWidth from '../hooks/useResizableWidth';
+import PanelResizeHandle from '../components/planner/PanelResizeHandle';
 import { BU_LINKS } from '../data/officialLinks';
 import { ART_ALT, CREDIT_SHORT, ART_MASCOT_SRC } from '../constants/credits';
 import { registerPendingWriteFlush } from '../utils/pendingWrites';
@@ -81,10 +83,17 @@ const EMPTY_SET = new Set();
 // Mirrors scheduler.css's .scheduler-right min-width — the drag can widen
 // the preview past its CSS default, never shrink it past this floor.
 const PREVIEW_MIN_WIDTH = 460;
-// Matching fixed/floor widths for the other two panes (scheduler-left's
-// fixed 220px, scheduler-center's min-width 280px) plus the handle itself,
-// so a drag can't squeeze search or the draft builder out of existence.
-const LEFT_WIDTH = 220;
+// Floor widths for the center pane (scheduler-center's min-width 280px) plus
+// the preview handle itself, so a drag can't squeeze the draft builder out of
+// existence. The left (search) pane is drag-resizable like the planner's.
+// Below 1200px wide it defaults to and never goes under LEFT_MIN_WIDTH
+// (220px, so the three panes fit without sideways scrolling); from 1200px
+// it's a 292px default and LEFT_MIN_WIDTH_WIDE floor (see scheduler.css).
+// The preview drag reads its live width.
+const LEFT_MIN_WIDTH = 220;
+const LEFT_MIN_WIDTH_WIDE = 252;
+const LEFT_WIDE_QUERY = '(min-width: 1200px)';
+const LEFT_MAX_WIDTH = 480;
 const CENTER_MIN_WIDTH = 280;
 const HANDLE_WIDTH = 7;
 
@@ -417,6 +426,33 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const [isResizingPreview, setIsResizingPreview] = useState(false);
   const rightPanelRef = useRef(null);
 
+  // ── Left (search) panel width (desktop drag-resize, same hook and handle
+  // as the planner's). Max: the smaller of LEFT_MAX_WIDTH, 40% of the
+  // viewport, and whatever leaves the center its floor next to the preview
+  // as it is now.
+  const leftPanelRef = useRef(null);
+  // Floor follows the 1200px step (220px below it, 252px from it).
+  const [leftWide, setLeftWide] = useState(() => window.matchMedia(LEFT_WIDE_QUERY).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(LEFT_WIDE_QUERY);
+    const onChange = (e) => setLeftWide(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const leftMinWidth = leftWide ? LEFT_MIN_WIDTH_WIDE : LEFT_MIN_WIDTH;
+  const getLeftPanelMax = useCallback(() => {
+    const previewLive = rightPanelRef.current?.getBoundingClientRect().width ?? PREVIEW_MIN_WIDTH;
+    return Math.min(
+      LEFT_MAX_WIDTH,
+      Math.floor(window.innerWidth * 0.4),
+      window.innerWidth - previewLive - CENTER_MIN_WIDTH - HANDLE_WIDTH,
+    );
+  }, []);
+  const { width: leftPanelWidth, setWidth: setLeftPanelWidth, reset: resetLeftPanelWidth } = useResizableWidth(
+    'terrierplan_scheduler_left_width',
+    { min: leftMinWidth, getMax: getLeftPanelMax, clampDeps: [previewWidth] },
+  );
+
   function handleResizeStart(e) {
     e.preventDefault();
     const startX = e.clientX;
@@ -426,9 +462,10 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     function onMove(ev) {
       // Handle sits to the left of the preview pane, so dragging left
       // (cursor moves toward startX's origin) widens it.
+      const leftLive = leftPanelRef.current?.getBoundingClientRect().width ?? leftMinWidth;
       const maxWidth = Math.max(
         PREVIEW_MIN_WIDTH,
-        window.innerWidth - LEFT_WIDTH - CENTER_MIN_WIDTH - HANDLE_WIDTH,
+        window.innerWidth - leftLive - CENTER_MIN_WIDTH - HANDLE_WIDTH,
       );
       const next = Math.min(Math.max(startWidth + (startX - ev.clientX), PREVIEW_MIN_WIDTH), maxWidth);
       setPreviewWidth(next);
@@ -2389,10 +2426,33 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
         onOpenHelp={() => setShowHelpModal(true)}
       />
 
-      <div className="scheduler-body" data-mobile-view={mobileView}>
-        <aside className="scheduler-left">
-          <SchedulerSearch draftCourseKeys={draftCourseKeys} onAddCourse={handleAddCourse} theme={theme} />
+      <div
+        className="scheduler-body"
+        data-mobile-view={mobileView}
+        style={leftPanelWidth != null ? { '--scheduler-left-width': `${leftPanelWidth}px` } : undefined}
+      >
+        <aside className="scheduler-left" ref={leftPanelRef}>
+          <SchedulerLeftTabs
+            user={user}
+            authLoading={authLoading}
+            draftCourseKeys={draftCourseKeys}
+            onAddCourse={handleAddCourse}
+            theme={theme}
+          />
         </aside>
+
+        {isDesktop && (
+          <PanelResizeHandle
+            panelRef={leftPanelRef}
+            panelSide="left"
+            width={leftPanelWidth}
+            min={leftMinWidth}
+            max={getLeftPanelMax()}
+            onResize={setLeftPanelWidth}
+            onReset={resetLeftPanelWidth}
+            label="Resize the search panel"
+          />
+        )}
 
         <main className="scheduler-center">
           {!user && !guestBannerDismissed && (

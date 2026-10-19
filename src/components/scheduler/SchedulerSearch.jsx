@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { normalizeCourseKey, parseCourseKey, compareByCatalogNumber } from '../../utils/courseKey';
 import { loadAllCourses, isProfessionalCareer } from '../../utils/courseQuery';
 import { CURRENT_TERM_LABEL } from '../../utils/term';
+import SchedulerCourseRow from './SchedulerCourseRow';
 
 // Left panel: add a course to the schedule draft. Same normalization/
 // subject-prefix approach as the Planner's CourseSearch (courseKey.js is
@@ -9,7 +10,7 @@ import { CURRENT_TERM_LABEL } from '../../utils/term';
 // filters and drag-and-drop, neither of which matters here). HUB filtering
 // is planner-specific (degree requirements), not relevant when the goal is
 // just "which sections can I take this term."
-export default function SchedulerSearch({ draftCourseKeys, onAddCourse, theme = 'light' }) {
+export default function SchedulerSearch({ draftCourseKeys, onAddCourse, onShowCourseInfo, theme = 'light' }) {
   const [query, setQuery] = useState('');
   const [allCourses, setAllCourses] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -173,50 +174,18 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, theme = 
           </div>
         )}
 
-        {visibleResults.map((course) => {
-          const added = draftCourseKeys.has(course.id);
-          const noCurrentTerm = gateByCurrentTerm && !course.inCurrentTerm;
-          const blocked = added || noCurrentTerm;
-          return (
-            <button
-              type="button"
-              key={course.id}
-              className={`search-result-card sched-search-result${added ? ' already-added' : ''}`}
-              disabled={blocked}
-              onClick={() => onAddCourse(course.id)}
-              title={
-                added
-                  ? 'Already in your draft'
-                  : noCurrentTerm
-                    ? `No ${CURRENT_TERM_LABEL} sections`
-                    : 'Add to schedule draft'
-              }
-            >
-              <div className="search-result-info">
-                <div className="search-result-code">{course.courseNumber ?? course.id}</div>
-                <div className="search-result-name-row">
-                  <span className="search-result-name" title={course.name ?? undefined}>{course.name ?? '—'}</span>
-                </div>
-                {(course.studyAbroad || isProfessionalCareer(course.career)) && (
-                  <div className="search-result-hub">
-                    {course.studyAbroad && (
-                      <span className="offering-badge offering-badge-abroad">Study abroad</span>
-                    )}
-                    {isProfessionalCareer(course.career) && (
-                      <span className="offering-badge offering-badge-career">{course.career}</span>
-                    )}
-                  </div>
-                )}
-                {noCurrentTerm && !added && (
-                  <div className="sched-search-no-term">
-                    <span className="offering-badge offering-badge-neutral">No {CURRENT_TERM_LABEL} sections</span>
-                  </div>
-                )}
-              </div>
-              <span className="sched-search-add-icon" aria-hidden="true">{added ? '✓' : '+'}</span>
-            </button>
-          );
-        })}
+        {visibleResults.map((course) => (
+          <SchedulerCourseRow
+            key={course.id}
+            courseKey={course.id}
+            course={course}
+            added={draftCourseKeys.has(course.id)}
+            noCurrentTerm={gateByCurrentTerm && !course.inCurrentTerm}
+            showCatalogFlags
+            onAdd={onAddCourse}
+            onShowInfo={onShowCourseInfo}
+          />
+        ))}
       </div>
     </div>
   );

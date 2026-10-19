@@ -91,6 +91,17 @@ const EMPTY_SEMESTERS = () => Array.from({ length: 8 }, () => []);
 // "+ Add Year" stops here (see handleAddYear/SemesterBoard).
 const MAX_PLAN_YEARS = 8;
 const LOCAL_STORAGE_KEY = 'terrierplan_session';
+// Signed-in: the plan open on this browser, per uid, so the Scheduler's
+// Paw-tential tab reads the same plan's stash (see SchedulerStashPanel).
+// Best-effort — a failed write just means the Scheduler falls back.
+const ACTIVE_PLAN_KEY_PREFIX = 'terrierplan_active_plan_';
+function rememberActivePlan(uid, planId) {
+  try {
+    localStorage.setItem(`${ACTIVE_PLAN_KEY_PREFIX}${uid}`, planId);
+  } catch {
+    // ignore
+  }
+}
 // Set once the first-visit card has been answered or closed.
 const BETA_SEEN_KEY = 'terrierplan_beta_seen';
 // Also set by the card: tells firstTimer.js this browser went through it.
@@ -1402,6 +1413,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const extra = data.extraTerms ?? [];
     debugPlanner('loadPlan-from-firestore', { planId, ...data });
     setActivePlanId(planId);
+    rememberActivePlan(uid, planId);
     setPlanName(data.name ?? 'My Plan');
     setSemesters(semData);
     setGridSummerTerms(summerData);
@@ -1472,6 +1484,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       updatedAt: serverTimestamp(),
     });
     setActivePlanId(ref.id);
+    rememberActivePlan(uid, ref.id);
     setPlanName(name);
     setSemesters(seedSemesters);
     setGridSummerTerms(seedGridSummerTerms);

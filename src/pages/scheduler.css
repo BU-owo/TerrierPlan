@@ -60,13 +60,20 @@ html[data-theme='dark'] {
   overflow: hidden;
 }
 .scheduler-left {
-  width: 220px;
+  /* --scheduler-left-width: set on .scheduler-body when the student drags the
+     left handle (PanelResizeHandle). 220px below 1200px wide (so search,
+     the 280px center and the 460px preview fit with less sideways
+     scrolling), 292px from there like the planner's search panel. */
+  width: var(--scheduler-left-width, 220px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   background: var(--white);
   border-right: 1px solid var(--border);
   overflow: hidden;
+}
+@media (min-width: 1200px) {
+  .scheduler-left { width: var(--scheduler-left-width, 292px); }
 }
 .scheduler-center {
   flex: 1;
@@ -119,8 +126,8 @@ html[data-theme='dark'] {
   background: var(--scarlet);
 }
 
-/* ===== LEFT: search-result-card is a <button> here (no drag) — reset the
-   native button chrome, keep the shared visual/hover treatment ===== */
+/* ===== LEFT: SchedulerCourseRow (search and Paw-tential rows) — the shared
+   search-result-card visual/hover treatment, clickable (no drag) ===== */
 .sched-search-result {
   width: 100%;
   border: none;
@@ -129,28 +136,56 @@ html[data-theme='dark'] {
   text-align: left;
   cursor: pointer;
 }
-.sched-search-result:disabled { opacity: .5; cursor: default; }
+/* planner.css gives .search-result-card touch-action: none for drag-and-drop;
+   scheduler rows don't drag, so let a vertical swipe scroll the list. */
+.search-result-card.sched-search-result { touch-action: pan-y; }
 .sched-search-no-term { margin-top: 3px; }
-.sched-search-add-icon {
+/* A div card holding a real "+" button and the "i" button. A div can't be
+   :disabled, so a dimmed row is .is-blocked (same as .already-added; "i"
+   opts back into pointer events). */
+.sched-search-result.is-blocked { opacity: .5; cursor: default; pointer-events: none; }
+/* Square "+" matching the planner's "i" (.search-result-info-btn): same
+   size, border and radius; scarlet on row hover, green ✓ once added. */
+.sched-row-add-btn {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  padding: 0;
+  border-radius: var(--radius-sm);
   border: 1.5px solid var(--border);
+  background: transparent;
   color: var(--text-muted);
-  font-size: 13px;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
 }
-.sched-search-result:not(:disabled):hover .sched-search-add-icon {
+/* Not on dimmed/added rows: hovering their "i" still puts the row in :hover. */
+.sched-search-result:not(.is-blocked):not(.already-added):hover .sched-row-add-btn {
   background: var(--scarlet);
   border-color: var(--scarlet);
   color: #fff;
 }
-.sched-search-result.already-added .sched-search-add-icon {
+.sched-search-result.already-added .sched-row-add-btn {
   border-color: var(--success-strong);
   color: var(--success-strong);
+}
+/* All-plans chip: its own line between the name and the tags. */
+.sched-row-plan-line { margin-top: 3px; min-width: 0; }
+.sched-row-plan-chip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: top;
+}
+/* Larger tap target, matching the "i" (planner.css bumps it to 32px here). */
+@media (max-width: 860px) {
+  .sched-row-add-btn { width: 32px; height: 32px; }
 }
 
 /* ===== CENTER: draft toolbar + course cards ===== */
