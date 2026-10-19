@@ -15,8 +15,8 @@ import { instructorLabel } from '../../utils/sectionInstructors';
 import { marineKind } from '../../data/marineSemester';
 import './CourseInfoPanel.css';
 
-// Past offerings ignores history before this year, in both the grid and the
-// "N of M years" summary.
+// Past offerings ignores history before the academic year starting this year
+// (Fall 2020 onward), in both the grid and the "N of M" summary.
 const OFFERING_HISTORY_MIN_YEAR = 2020;
 
 // Matches the planner's own mobile breakpoint (planner.css) — above it the
@@ -208,9 +208,29 @@ function isPastTerm(year, season) {
   return CURRENT_TERM_SEASON != null && SEASON_ORDER[season] < SEASON_ORDER[CURRENT_TERM_SEASON];
 }
 
-// offeringHistory `history` → one row per year from OFFERING_HISTORY_MIN_YEAR
-// through the current term's year, newest first, whether or not the course
-// has an entry for that year. Uses each entry's `year` and `season` as-is
+// True for the current term itself. False if its season can't be read.
+function isCurrentTerm(year, season) {
+  return year === CURRENT_TERM_YEAR && CURRENT_TERM_SEASON != null && season === CURRENT_TERM_SEASON;
+}
+
+// Academic years run Fall Y → Summer Y+1. A row is identified by startYear
+// (the Fall's calendar year); termYear gives the calendar year of one cell.
+function termYear(startYear, season) {
+  return season === 'Fall' ? startYear : startYear + 1;
+}
+
+function academicYearStart(year, season) {
+  return season === 'Fall' ? year : year - 1;
+}
+
+function academicYearLabel(startYear) {
+  return `${startYear}–${String(startYear + 1).slice(-2)}`;
+}
+
+// offeringHistory `history` → one row per academic year from
+// OFFERING_HISTORY_MIN_YEAR through the current term's academic year, newest
+// first, whether or not the course has an entry for that year. Uses each
+// entry's `year` and `season` as-is
 // (no term-code conversion). A cell is the section count, or null when that
 // season has no entry; whether a cell is in the future is decided at render
 // time by isFutureTerm. Entries outside the row range or in the future are
@@ -222,7 +242,7 @@ function buildOfferingRows(history) {
   for (const entry of Array.isArray(history) ? history : []) {
     const year = Number(entry?.year);
     if (!Number.isInteger(year) || !SEASONS.includes(entry.season)) continue;
-    if (year < OFFERING_HISTORY_MIN_YEAR || year > CURRENT_TERM_YEAR || isFutureTerm(year, entry.season)) continue;
+    if (academicYearStart(year, entry.season) < OFFERING_HISTORY_MIN_YEAR || year > CURRENT_TERM_YEAR || isFutureTerm(year, entry.season)) continue;
     const key = `${year}-${entry.season}`;
     const count = Number.isFinite(entry.sectionCount) ? entry.sectionCount : 0;
     offered.set(key, (offered.get(key) ?? 0) + count);
@@ -232,12 +252,17 @@ function buildOfferingRows(history) {
   }
   if (offered.size === 0) return { rows: [], lastOffered: null };
   const rows = [];
-  for (let year = CURRENT_TERM_YEAR; year >= OFFERING_HISTORY_MIN_YEAR; year -= 1) {
+  // If the current season can't be read, start from CURRENT_TERM_YEAR so a
+  // current-year Fall still gets a row.
+  const newestStart = CURRENT_TERM_SEASON != null
+    ? academicYearStart(CURRENT_TERM_YEAR, CURRENT_TERM_SEASON)
+    : CURRENT_TERM_YEAR;
+  for (let startYear = newestStart; startYear >= OFFERING_HISTORY_MIN_YEAR; startYear -= 1) {
     rows.push({
-      year,
-      Fall: offered.get(`${year}-Fall`) ?? null,
-      Spring: offered.get(`${year}-Spring`) ?? null,
-      Summer: offered.get(`${year}-Summer`) ?? null,
+      startYear,
+      Fall: offered.get(`${termYear(startYear, 'Fall')}-Fall`) ?? null,
+      Spring: offered.get(`${termYear(startYear, 'Spring')}-Spring`) ?? null,
+      Summer: offered.get(`${termYear(startYear, 'Summer')}-Summer`) ?? null,
     });
   }
   return { rows, lastOffered };
@@ -259,17 +284,22 @@ function withCurrentTermEntry(history, currentSections) {
 }
 
 // "Fall 4 of 4 · Spring 3 of 4 · Summer 0 of 4". Per season, M is the number
-// of terms of that season from the course's first offered year (in the row
-// range) up to, but not including, the current term, and N is how many of
-// those have a dot. Takes rows built from offeringHistory alone, so the
-// current term (counted from sections, not history) is in neither N nor M.
-function summarizeSeasons(rows) {
-  const offeredYears = rows
+// of terms of that season from the course's first offered academic year (in the row
+// range) that are past or the current term, i.e. the non-greyed cells in that
+// season's column; N is how many of those have a dot. `rows` is the grid's rows (current term included);
+// `historyRows` is built from offeringHistory alone and only decides the first
+// year, so a brand-new course doesn't read "1 of 1".
+function summarizeSeasons(rows, historyRows) {
+  const offeredYears = historyRows
     .filter((row) => SEASONS.some((season) => row[season] != null))
-    .map((row) => row.year);
+    .map((row) => row.startYear);
   const firstYear = Math.min(...offeredYears);
   return SEASONS.map((season) => {
-    const happened = rows.filter((row) => row.year >= firstYear && isPastTerm(row.year, season));
+    const happened = rows.filter((row) => {
+      if (row.startYear < firstYear) return false;
+      const year = termYear(row.startYear, season);
+      return isPastTerm(year, season) || isCurrentTerm(year, season);
+    });
     const offered = happened.filter((row) => row[season] != null).length;
     return `${season} ${offered} of ${happened.length}`;
   }).join(' · ');
@@ -355,7 +385,7 @@ function PastOfferings({ status, data, currentSections, onRetry }) {
               </p>
             )}
             {historyRows.length > 0 && (
-              <p className="course-info-offerings-summary">{summarizeSeasons(historyRows)}</p>
+              <p className="course-info-offerings-summary">{summarizeSeasons(rows, historyRows)}</p>
             )}
             <table className="course-info-offerings">
               <caption className="course-info-sr-only">Which seasons the course was offered, by year</caption>
@@ -371,16 +401,16 @@ function PastOfferings({ status, data, currentSections, onRetry }) {
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.year}>
-                    <th scope="row">{row.year}</th>
+                  <tr key={row.startYear}>
+                    <th scope="row">{academicYearLabel(row.startYear)}</th>
                     {SEASONS.map((season) => (
                       <td
                         key={season}
-                        className={isFutureTerm(row.year, season) ? 'is-future' : undefined}
-                        title={offeringCellTitle(row.year, season, row[season])}
-                        aria-label={offeringCellLabel(row.year, season, row[season])}
+                        className={isFutureTerm(termYear(row.startYear, season), season) ? 'is-future' : undefined}
+                        title={offeringCellTitle(termYear(row.startYear, season), season, row[season])}
+                        aria-label={offeringCellLabel(termYear(row.startYear, season), season, row[season])}
                       >
-                        {isFutureTerm(row.year, season) ? null : row[season] == null ? (
+                        {isFutureTerm(termYear(row.startYear, season), season) ? null : row[season] == null ? (
                           <span className="course-info-offerings-dash" aria-hidden="true">–</span>
                         ) : (
                           <span className="course-info-offerings-dot" aria-hidden="true">●</span>
