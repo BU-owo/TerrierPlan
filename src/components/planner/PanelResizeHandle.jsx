@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 
 const KEY_STEP = 16;
 
-// Thin vertical drag handle on a panel's LEFT edge (dragging left widens
-// the panel). Pointer events with capture, so the drag keeps going even
+// Thin vertical drag handle on a panel's edge facing the board: by default the
+// LEFT edge of a right-hand panel (dragging left widens it); with
+// panelSide="left" the RIGHT edge of the left-hand panel (dragging right
+// widens it). Pointer events with capture, so the drag keeps going even
 // when the cursor crosses the board; text selection is off while dragging.
-// Focusable: Left/Right arrows resize by 16px. Double-click resets to the
+// Focusable: the arrow that moves the edge outward resizes by 16px. Double-click resets to the
 // CSS default. `panelRef` is the panel being resized (its live width is the
 // drag's starting point).
 export default function PanelResizeHandle({
@@ -17,7 +19,12 @@ export default function PanelResizeHandle({
   onReset,
   onDraggingChange,
   label = 'Resize panel',
+  panelSide = 'right',
 }) {
+  // +1: moving the pointer right widens the panel (it sits left of the board).
+  const sign = panelSide === 'left' ? 1 : -1;
+  const widenKey = panelSide === 'left' ? 'ArrowRight' : 'ArrowLeft';
+  const narrowKey = panelSide === 'left' ? 'ArrowLeft' : 'ArrowRight';
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef(null);
   const keyBase = useRef(null);
@@ -43,7 +50,7 @@ export default function PanelResizeHandle({
 
   function handlePointerMove(e) {
     if (!dragStart.current) return;
-    onResize(dragStart.current.width + (dragStart.current.x - e.clientX));
+    onResize(dragStart.current.width + sign * (e.clientX - dragStart.current.x));
   }
 
   function endDrag(e) {
@@ -60,17 +67,17 @@ export default function PanelResizeHandle({
   }, [width]);
 
   function handleKeyDown(e) {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (e.key !== widenKey && e.key !== narrowKey) return;
     e.preventDefault();
     const base = keyBase.current ?? currentWidth();
-    const next = Math.min(Math.max(base + (e.key === 'ArrowLeft' ? KEY_STEP : -KEY_STEP), min), max);
+    const next = Math.min(Math.max(base + (e.key === widenKey ? KEY_STEP : -KEY_STEP), min), max);
     keyBase.current = next;
     onResize(next);
   }
 
   return (
     <div
-      className={`panel-resize-handle${dragging ? ' is-dragging' : ''}`}
+      className={`panel-resize-handle${panelSide === 'left' ? ' is-left-panel' : ''}${dragging ? ' is-dragging' : ''}`}
       role="separator"
       aria-orientation="vertical"
       aria-label={label}

@@ -12,6 +12,7 @@ import { withMockMeetings } from '../../utils/mockMeetings';
 import { sectionTypeLabel } from '../../utils/sectionType';
 import { groupSectionsByComponent } from '../../utils/sectionComponents';
 import { instructorLabel } from '../../utils/sectionInstructors';
+import { marineKind } from '../../data/marineSemester';
 import './CourseInfoPanel.css';
 
 // Past offerings ignores history before this year, in both the grid and the
@@ -611,6 +612,12 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
                   )
                 )}
               </div>
+
+              {marineKind(courseKey) === 'only' && (
+                <p className="course-info-marine-note">
+                  Taught as part of the Marine Semester. Requires admission to the Marine Semester.
+                </p>
+              )}
 
               <section className="course-info-section">
                 <h4 className="course-info-section-title">Description</h4>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import SemesterPickerModal from './SemesterPickerModal';
-import { HubUnitTags, OfferingBadge } from './CourseTags';
+import { HubUnitTags, MarineSemesterPill, OfferingBadge } from './CourseTags';
 import useUpcomingSeasons from '../../hooks/useUpcomingSeasons';
 import useCurrentTermCourseKeys from '../../hooks/useCurrentTermCourseKeys';
 
@@ -57,11 +57,12 @@ function StashResultCard({
       <div className="search-result-info">
         <div className="search-result-code">{courseLabel}</div>
         <div className="search-result-name-row">
-          <span className="search-result-name">{course.name ?? '—'}</span>
+          <span className="search-result-name" title={course.name ?? undefined}>{course.name ?? '—'}</span>
         </div>
         {/* Tags line: HUB tags, then the offering badge (hidden when empty). */}
         <div className="search-result-hub">
           <HubUnitTags units={course.hubUnits} />
+          <MarineSemesterPill courseKey={course.id} />
           <OfferingBadge
             offeringPattern={course.offeringPattern}
             upcomingSeasons={upcomingSeasons}

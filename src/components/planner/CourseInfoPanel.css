@@ -270,3 +270,13 @@ html[data-theme='dark'] .course-info-offerings-dot { color: var(--warning-border
   letter-spacing: .4px;
   line-height: 12px;
 }
+
+.course-info-marine-note {
+  margin: 0 0 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--badge-cool-bg);
+  color: var(--badge-cool-text);
+  font-size: .82rem;
+  line-height: 1.4;
+}

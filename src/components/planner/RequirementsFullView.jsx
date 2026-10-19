@@ -13,7 +13,7 @@ import FullViewHeader from './FullViewHeader';
 export default function RequirementsFullView({
   majorBulletinUrl,
   planCourseKeys,
-  planBlocks,
+  marineSlots,
   onMajorSelect,
   courseMap,
   onEnsureCourseData,
@@ -54,7 +54,7 @@ export default function RequirementsFullView({
             density="full"
             majorBulletinUrl={majorBulletinUrl}
             planCourseKeys={planCourseKeys}
-            planBlocks={planBlocks}
+            marineSlots={marineSlots}
             onMajorSelect={onMajorSelect}
             courseMap={courseMap}
             onEnsureCourseData={onEnsureCourseData}

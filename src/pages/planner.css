@@ -62,7 +62,9 @@
 
 /* ----- Left Panel (search) ----- */
 .planner-left {
-  width: 252px;
+  /* --planner-left-width: set on .planner-body when the student drags the
+     left handle. 252px below 1200px wide, 292px from there (see below). */
+  width: var(--planner-left-width, 252px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -121,8 +123,17 @@
 .panel-resize-handle:focus-visible::after,
 .panel-resize-handle.is-dragging::after { background: var(--scarlet); }
 .panel-resize-handle:focus-visible { outline: none; }
-.planner-body:has(.side-panel-collapsed) .panel-resize-handle { display: none; }
+.planner-body:has(.side-panel-collapsed) .panel-resize-handle:not(.is-left-panel) { display: none; }
 .planner-body.is-resizing-right .planner-right { transition: none; }
+.planner-body.is-resizing-left .planner-left { transition: none; }
+
+/* A little more room for course lists on laptop-and-up widths; the 861-1199px
+   range keeps the original panel widths (the board needs the space). A width
+   the student dragged to (the variables) wins at every size. */
+@media (min-width: 1200px) {
+  .planner-left { width: var(--planner-left-width, 292px); }
+  .planner-right { width: var(--planner-right-width, 264px); }
+}
 
 /* Collapse the right panel when its single tabbed status panel is collapsed. */
 .planner-right:has(.side-panel-collapsed) {
@@ -363,27 +374,29 @@
 .search-result-info { flex: 1; min-width: 0; }
 .search-result-code {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
+  white-space: nowrap;
   color: var(--scarlet);
   text-transform: uppercase;
   letter-spacing: .3px;
 }
 .search-result-name-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
   min-width: 0;
   margin-top: 1px;
 }
+/* Title: two lines, then an ellipsis (the full title is in its title attribute
+   and the info panel). Badges live on their own line below (.search-result-hub). */
 .search-result-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   font-size: 12px;
   color: var(--text);
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   line-height: 1.35;
   min-width: 0;
-  flex: 1;
 }
 .search-result-hub {
   display: flex;
@@ -400,8 +413,8 @@
    on the grid. */
 .search-result-stash-btn {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -434,8 +447,8 @@
    stash button above for visual consistency between the two panels. */
 .search-result-unstash-btn {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -495,6 +508,9 @@
   border-color: var(--scarlet);
   color: var(--scarlet);
 }
+/* Search / stash / requirement-row "i": a 28px tap target (the board card's
+   .course-card-info-btn keeps its own size). */
+.search-result-info-btn { width: 28px; height: 28px; }
 .search-loading { padding: 20px; text-align: center; color: var(--text-muted); font-size: 12px; }
 
 /* ===== SEARCH / STASH TOGGLE (planner-left) ===== */
@@ -2496,7 +2512,7 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
 .req-panel:not(.req-panel--full) .req-row-header > .req-node-menu { grid-column: 4; grid-row: 1; }
 .req-panel:not(.req-panel--full) .req-row-header > .hub-full-group-caret { grid-column: 5; grid-row: 1; }
 .req-panel:not(.req-panel--full) .req-row-body { padding-left: 10px; }
-.req-panel:not(.req-panel--full) .req-course-row { gap: 4px; padding: 3px 4px; }
+.req-panel:not(.req-panel--full) .req-course-row { gap: 6px; padding: 5px 6px; }
 .req-panel:not(.req-panel--full) .req-course-row-title { min-width: 0; }
 
 
@@ -2513,38 +2529,6 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   .req-panel:not(.req-panel--full) .req-row-header > .req-node-review-badge,
   .req-panel:not(.req-panel--full) .req-row-header > .req-node-petitioned-badge { grid-row: 3; grid-column: 2; justify-self: start; }
   .req-panel:not(.req-panel--full) .req-row-header:has(> .req-node-review-badge, > .req-node-petitioned-badge) > .req-node-menu { grid-row: 3; }
-}
-@container planner-right (max-width: 379px) {
-  /* Two-line rows: paw + code + title + (i), then HUB tags + badge. */
-  .req-panel:not(.req-panel--full) .req-course-row {
-    /* Two-line rows: the badge sizes off its tags line (offering-line). */
-    container-name: none;
-    display: grid;
-    grid-template-columns: auto auto minmax(0, 1fr) auto;
-    align-items: center;
-    column-gap: 4px;
-    row-gap: 1px;
-  }
-  .req-panel:not(.req-panel--full) .req-course-row > .search-result-stash-btn,
-  .req-panel:not(.req-panel--full) .req-course-row > .req-course-row-check { grid-column: 1; grid-row: 1; }
-  .req-panel:not(.req-panel--full) .req-course-row > .req-course-row-code { grid-column: 2; grid-row: 1; }
-  .req-panel:not(.req-panel--full) .req-course-row > .req-course-row-title { grid-column: 3; grid-row: 1; }
-  .req-panel:not(.req-panel--full) .req-course-row > .req-course-row-info { grid-column: 4; grid-row: 1; }
-  .req-panel:not(.req-panel--full) .req-course-row > .req-course-row-meta {
-    grid-column: 2 / 4;
-    grid-row: 2;
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    min-width: 0;
-    overflow: hidden;
-    font-size: 10px;
-    container: offering-line / inline-size;
-  }
-  .req-panel:not(.req-panel--full) .req-course-row > .req-course-row-meta:empty { display: none; }
-  /* Sequence rows (badge only): stay one line, badge after the title. */
-  .req-panel:not(.req-panel--full) .req-course-row.is-compact { display: flex; container-name: offering-compact; }
-  .req-panel:not(.req-panel--full) .req-course-row.is-compact > .req-course-row-meta { display: contents; }
 }
 /* A wide (dragged-out) right panel gets the full view's 2-column rows and
    inline range lists. Desktop only — the mobile Tracker tab keeps one
@@ -2612,23 +2596,24 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
 }
 .req-course-row {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 8px;
   min-width: 0;
-  padding: 3px 6px;
+  padding: 6px 8px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
   background: var(--white);
   font-size: 12px;
-  line-height: 1.2;
+  line-height: 1.3;
 }
 .req-course-row .search-result-stash-btn,
-.req-course-row .search-result-info-btn { width: 20px; height: 20px; margin-top: 0; }
+.req-course-row .search-result-info-btn { margin-top: 0; }
 .req-course-row .search-result-stash-btn:hover { background: var(--scarlet); color: #fff; }
 .req-course-row .search-result-stash-btn.is-stashed:hover { background: var(--badge-warm-text); color: #fff; }
 .req-course-row-check {
   flex-shrink: 0;
   width: 20px;
+  margin-top: 1px;
   text-align: center;
   font-weight: 700;
   color: var(--success-strong);
@@ -3889,8 +3874,10 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   .plan-btn-icon { width: 32px; height: 32px; }
   .search-result-stash-btn,
   .search-result-unstash-btn,
-  .search-result-info-btn,
+  .search-result-info-btn { width: 32px; height: 32px; }
   .course-card-info-btn { width: 26px; height: 26px; }
+  .req-course-row .req-stacked-actions button { width: 32px; height: 32px; }
+  .req-course-row .req-stacked-actions.is-three { grid-template-columns: repeat(2, 32px); }
 
   /* 16px avoids iOS Safari auto-zooming the page on input focus */
   .search-input, .plan-name-input { font-size: 16px; }
@@ -4079,95 +4066,7 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   border-color: var(--scarlet);
   color: var(--scarlet);
 }
-/* Special-term block (SpecialTermCard.jsx, e.g. the Marine Semester): one
-   large card filling the term, a subtle scarlet tint (solid border, unlike a
-   dashed placeholder). Not draggable; × removes it. */
-.special-term-card {
-  position: relative;
-  flex: 1 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 96px;
-  padding: 10px 26px 10px 12px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--scarlet-pale);
-  color: var(--text);
-  cursor: default;
-}
-.special-term-card-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--scarlet);
-}
-html[data-theme='dark'] .special-term-card-label { color: var(--text); }
-.special-term-card-summary {
-  font-size: 11px;
-  font-weight: 600;
-}
-.special-term-card-help {
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--text-muted);
-}
-.special-term-card-remove {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-.special-term-card-remove:hover,
-.special-term-card-remove:focus-visible {
-  background: var(--warning-surface);
-  color: var(--warning-text);
-}
-/* "All semesters": one line, like a compact card. */
-.special-term-card.is-compact {
-  flex: none;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 25px;
-  padding: 0 22px 0 6px;
-  border-width: 1px;
-}
-.special-term-card.is-compact .special-term-card-label {
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.special-term-card-credits { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
-.special-term-card.is-compact .special-term-card-remove { top: 2px; right: 1px; }
-/* "Make this my …" in an empty column, and "Make this your …" on a
-   placeholder: a small muted text link, not a button. */
-.special-term-add-link {
-  align-self: center;
-  border: none;
-  background: none;
-  padding: 2px 4px;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 10px;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-.special-term-add-link:hover,
-.special-term-add-link:focus-visible { color: var(--scarlet); }
-.note-card-upgrade { display: block; padding: 2px 0 0; text-align: left; }
-.note-card.is-compact { flex-wrap: wrap; }
-.note-card.is-compact .note-card-upgrade { flex-basis: 100%; padding: 0 0 2px; }
-/* A block plus other entries (added by an older app version). */
+/* A Marine Semester term holding courses that don't belong in it. */
 .special-term-warning {
   margin: 0;
   padding: 4px 6px;
@@ -4176,11 +4075,6 @@ html[data-theme='dark'] .special-term-card-label { color: var(--text); }
   color: var(--warning-text);
   font-size: 10.5px;
   line-height: 1.35;
-}
-/* Dragging over a term a special term fills: refused, shown as such. */
-.semester-column.is-drop-blocked {
-  border-color: var(--warning-text);
-  cursor: not-allowed;
 }
 
 /* "+ Add placeholder" — full-width last row of a semester's list, with the
@@ -4578,3 +4472,199 @@ html[data-theme='dark'] .course-card.is-compact:is(:hover, :focus-within) .cours
 /* Hoisted track selector (presentation: "tracks"): sits under the progress
    header, outside any card. */
 .req-tracks-toggle { margin: 0 0 12px; }
+
+/* ── Marine Semester ─────────────────────────────────────────────────────── */
+/* Pill on ONLY / ALSO courses (search, stash, requirement rows). */
+.marine-pill {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--badge-cool-text);
+  background: var(--badge-cool-bg);
+}
+.req-course-row .marine-pill { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The shared course-row anatomy (RequirementCourseRow, MarineCourseRow): the
+   bold code, the title (two lines then an ellipsis), then every badge on its
+   own wrapping line, with the buttons top right (28px tap targets). */
+.req-stacked-body { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.req-stacked-code { font-weight: 700; color: var(--text); white-space: nowrap; }
+.req-stacked-code.is-wrap { white-space: normal; overflow-wrap: anywhere; font-weight: 600; }
+.req-stacked-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+}
+.req-stacked-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 4px; margin-top: 2px; min-width: 0; }
+.req-stacked-badges:empty { display: none; }
+.req-stacked-status { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.req-stacked-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--text-muted); }
+.req-stacked-dot.is-offered { background: var(--success-strong); }
+.req-stacked-actions { display: flex; align-items: flex-start; gap: 4px; flex-shrink: 0; margin-left: auto; }
+.req-stacked-actions.is-three { display: grid; grid-template-columns: repeat(2, 28px); }
+.req-stacked-actions button { width: 28px; height: 28px; margin: 0; }
+/* Explicit "+" on a Marine card row. */
+.req-course-row-add {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.req-course-row-add:hover,
+.req-course-row-add:focus-visible { color: var(--scarlet); border-color: var(--scarlet); }
+.marine-pool-create {
+  align-self: flex-start;
+  margin: 2px 0 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--white);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.marine-pool-create:hover,
+.marine-pool-create:focus-visible { border-color: var(--scarlet); color: var(--scarlet); }
+/* Pinned "Marine Semester" search row: a button, not a course. */
+.search-pinned-marine {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  border-style: dashed;
+}
+.search-pinned-marine .search-result-info { display: flex; flex-direction: column; }
+.search-picker-empty { margin: 0; padding: 8px 4px; color: var(--text-muted); font-size: 13px; }
+/* Term header: badge + ⋯ menu. */
+.semester-header { position: relative; }
+.semester-marine-wrap { display: inline-flex; min-width: 0; }
+.semester-marine-badge {
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border: none;
+  border-radius: 20px;
+  white-space: nowrap;
+  min-width: 0;
+  display: inline-flex;
+  max-width: 100%;
+  cursor: pointer;
+  color: var(--badge-cool-text);
+  background: var(--badge-cool-bg);
+}
+.semester-marine-badge-text { overflow: hidden; text-overflow: ellipsis; }
+.semester-marine-badge:hover,
+.semester-marine-badge:focus-visible { box-shadow: 0 0 0 2px var(--border); }
+.semester-marine-badge.is-warn { color: var(--warning-text); background: var(--warning-surface); }
+.semester-marine-popover {
+  position: absolute;
+  /* Positioned against the whole header so it never runs off a narrow screen. */
+  top: calc(100% + 4px);
+  left: 8px;
+  right: 8px;
+  z-index: 12;
+  max-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--white);
+  color: var(--text);
+  box-shadow: var(--shadow-md);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-transform: none;
+  letter-spacing: 0;
+  text-align: left;
+  white-space: normal;
+}
+.semester-marine-popover p { margin: 0; }
+.semester-marine-popover-warn { color: var(--warning-text); }
+.semester-marine-popover-link {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--scarlet);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.semester-marine-menu-wrap { position: relative; display: inline-flex; }
+.semester-marine-menu-btn {
+  border: none;
+  background: none;
+  padding: 0 4px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.semester-marine-menu-btn:hover,
+.semester-marine-menu-btn:focus-visible { color: var(--scarlet); }
+.semester-marine-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 12;
+  min-width: 170px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--white);
+  box-shadow: var(--shadow-md);
+}
+.semester-marine-menu button {
+  border: none;
+  background: none;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.semester-marine-menu button:hover,
+.semester-marine-menu button:focus-visible { background: var(--cream-dark); }
+.semester-column.is-compact .semester-marine-badge { font-size: 9px; padding: 0 5px; }
+/* Marine Semester dialogs (MarineDialogs.jsx): reuse .beta-modal, left-aligned
+   and tighter so they stay readable on narrow screens. */
+.marine-dialog { padding: 22px 20px; text-align: left; align-items: stretch; max-height: calc(100vh - 32px); overflow-y: auto; }
+.marine-dialog h2 { margin: 0; text-align: left; }
+.marine-dialog p { margin: 0; text-align: left; }
+.marine-dialog-actions { flex-direction: column; align-items: stretch; }
+.marine-dialog-actions button { margin-top: 0; width: 100%; }
+.marine-dialog .unsaved-modal-actions { justify-content: flex-end; }
+.semester-header-right { min-width: 0; }
+.semester-header .semester-name { flex-shrink: 0; }
+.semester-header .semester-credits { white-space: nowrap; flex-shrink: 0; }
+.marine-dialog h2 { color: var(--text); }
+.req-course-row-title.is-wrap { white-space: normal; overflow-wrap: anywhere; }

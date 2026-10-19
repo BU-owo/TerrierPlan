@@ -57,14 +57,17 @@ import {
   entriesCourseKeys,
   entriesNoteCredits,
   createNoteEntry,
+  dropLoneMarker,
   isNoteEntry,
-  isBlockEntry,
-  createBlockEntry,
-  entriesBlockCredits,
-  exclusiveTermOf,
-  planBlockTypes,
-  canAddSpecialTerm,
-  degradedSpecialTerm,
+  isMarineTerm,
+  marinePlaceholderCredits,
+  marineSlotCounts,
+  marineTrackerSlots,
+  placeCourse,
+  removeCourse,
+  removeMarineSemester,
+  startMarineTerm,
+  targetSeason,
   isSummerTarget,
   summerYearFromTarget,
   getSemesterStatus,
@@ -74,7 +77,12 @@ import { useHubProgress } from '../hooks/useHubProgress';
 import { CURRENT_TERM } from '../utils/term';
 import { aliasFor } from '../utils/grsAlias';
 import { registerPendingWriteFlush } from '../utils/pendingWrites';
-import { exclusiveTermMessage } from '../data/specialTerms';
+import { CONFIRMATION_REASONS, placementMessage } from '../data/specialTerms';
+import { marineKind, withMarineCreditFallback } from '../data/marineSemester';
+import { createUndo, restoreSemesters, snapshotSemesters, stepUndo } from '../utils/undoToast';
+import { MarineRemoveDialog } from '../components/planner/MarineDialogs';
+import { MarineSemesterContext } from '../components/planner/marineContext';
+import SemesterPickerModal from '../components/planner/SemesterPickerModal';
 import Toast from '../components/Toast';
 import './planner.css';
 import '../App.css';
@@ -95,9 +103,14 @@ const OVERVIEW_MIN_WIDTH_QUERY = '(min-width: 861px)';
 // planner.css (.planner-right); the board never gets narrower than
 // RIGHT_PANEL_BOARD_MIN (about what it gets today at the 861px desktop
 // breakpoint with both panels open).
+// Default widths live in planner.css (right 244 -> 264px and left 252 -> 292px
+// from 1200px up); these are the drag-resize bounds. The left panel is
+// resizable the same way (handle on its right edge, double-click resets).
 const RIGHT_PANEL_MIN = 244;
 const RIGHT_PANEL_MAX = 720;
 const RIGHT_PANEL_BOARD_MIN = 360;
+const LEFT_PANEL_MIN = 252;
+const LEFT_PANEL_MAX = 480;
 // A student's "current semester", completed courses, and AP/IB/transfer
 // credits are facts about them, not about any one hypothetical plan — kept
 // in their own storage key (signed-in: the top-level `users/{uid}` doc;
@@ -299,7 +312,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   // ── Course data caches ────────────────────────────────────────────────────
   const [courseMap, setCourseMap] = useState({}); // courseKey → course doc
-  const [creditsMap, setCreditsMap] = useState({}); // courseKey → credits
+  // courseKey → credits as fetched (sections, then the course doc). creditsMap
+  // (below) is what everything shows and sums: the same, plus Marine Semester
+  // courses with unknown credits filled in (withMarineCreditFallback).
+  const [fetchedCreditsMap, setCreditsMap] = useState({});
+  const creditsMap = useMemo(() => withMarineCreditFallback(fetchedCreditsMap), [fetchedCreditsMap]);
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [activeSemIndex, setActiveSemIndex] = useState(0);
@@ -321,7 +338,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const rightPanelRef = useRef(null);
   const [rightResizing, setRightResizing] = useState(false);
   const getRightPanelMax = useCallback(() => {
-    const leftWidth = leftPanelRef.current?.getBoundingClientRect().width ?? 252;
+    const leftWidth = leftPanelRef.current?.getBoundingClientRect().width ?? 292;
     return Math.min(
       RIGHT_PANEL_MAX,
       Math.floor(window.innerWidth * 0.55),
@@ -332,6 +349,22 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     'terrierplan_planner_right_width',
     { min: RIGHT_PANEL_MIN, getMax: getRightPanelMax, clampDeps: [leftCollapsed] },
   );
+  // Left (search) panel width: the same hook. Max: the smaller of 480px, 40% of
+  // the viewport, and whatever leaves the board RIGHT_PANEL_BOARD_MIN next to
+  // the right panel as it is now.
+  const getLeftPanelMax = useCallback(() => {
+    const rightWidth = rightPanelRef.current?.getBoundingClientRect().width ?? 264;
+    return Math.min(
+      LEFT_PANEL_MAX,
+      Math.floor(window.innerWidth * 0.4),
+      window.innerWidth - rightWidth - RIGHT_PANEL_BOARD_MIN,
+    );
+  }, []);
+  const { width: leftPanelWidth, setWidth: setLeftPanelWidth, reset: resetLeftPanelWidth } = useResizableWidth(
+    'terrierplan_planner_left_width',
+    { min: LEFT_PANEL_MIN, getMax: getLeftPanelMax },
+  );
+  const [leftResizing, setLeftResizing] = useState(false);
   // 'detailed' | 'overview' — "All semesters" compact board (desktop only).
   const [boardView, setBoardView] = useState(() => {
     try {
@@ -365,6 +398,15 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [saveStatus, setSaveStatus] = useState(''); // 'saved' | 'error' | ''
   // { id, message } for the bottom toast (see Toast.jsx), e.g. a refused add.
   const [toast, setToast] = useState(null);
+  // The Marine Semester picker (see pickMarineFall), or null.
+  const [marinePicker, setMarinePicker] = useState(null);
+  // "Remove Marine Semester" dialog ({ target, count, allMarine }), or null.
+  const [marineRemove, setMarineRemove] = useState(null);
+  // The undo behind the "… is now your Marine Semester" toast (see
+  // utils/undoToast.js): { toastId, snapshot, baseline }, or null.
+  const [marineUndo, setMarineUndo] = useState(null);
+  const marineUndoRef = useRef(null);
+  marineUndoRef.current = marineUndo;
   const [online, setOnline] = useState(() => navigator.onLine);
   // A signed-in profile write is queued/unsent (mirrors pendingProfileWriteRef,
   // which can't drive a render); only used for the offline badge.
@@ -836,6 +878,28 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       flushPlanRef.current?.();
     };
   }, []);
+
+  // The Marine Semester Undo toast dismisses itself on ANY other plan edit, so
+  // Undo can never overwrite later changes: the first run after the change
+  // records the plan's editable state, any later difference dismisses it (see
+  // stepUndo in utils/undoToast.js). It also goes when its toast does.
+  useEffect(() => {
+    if (!marineUndo) return;
+    if (toast?.id !== marineUndo.toastId) {
+      setMarineUndo(null);
+      return;
+    }
+    const { undo, dismiss } = stepUndo(marineUndo, {
+      semesters, gridSummerTerms, extraTerms, stash, requirementOverrides, planName,
+      majorBulletinUrl, isTransfer, externalCredits, currentSemesterTarget, completedCourseKeys,
+    });
+    if (dismiss) {
+      setMarineUndo(null);
+      setToast(null);
+    } else if (undo !== marineUndo) {
+      setMarineUndo(undo);
+    }
+  }, [marineUndo, toast, semesters, gridSummerTerms, extraTerms, stash, requirementOverrides, planName, majorBulletinUrl, isTransfer, externalCredits, currentSemesterTarget, completedCourseKeys]);
 
   // "Save and reload" (UpdateBanner): sends the pending plan edit and the
   // pending profile write with the same flushes the leave paths use, and
@@ -1576,7 +1640,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   // Fetch credits from sections (batched)
   async function fetchCredits(courseKeys, courseDocs = {}) {
-    const missing = courseKeys.filter((k) => !(k in creditsMap));
+    const missing = courseKeys.filter((k) => !(k in fetchedCreditsMap));
     if (missing.length === 0) return;
     const newCredits = {};
     for (let i = 0; i < missing.length; i += 30) {
@@ -1667,18 +1731,14 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     // needed to be planned. Non-locked entries are dropped; everything else
     // (stash, externalCredits, extraTerms, requirementOverrides, GPA
     // fields, major) still starts blank, same as before.
-    // A special-term block in a past term (already done, like a completed
-    // course) carries over too.
-    const carriesOver = (entry, target) => completedCourseKeySet.has(entryCourseKey(entry))
-      || (isBlockEntry(entry) && getSemesterStatus(target, currentSemesterTarget) === 'past');
-    const seedSemesters = semesters.map((entries, i) =>
-      entries.filter((entry) => carriesOver(entry, i)),
+    const seedSemesters = semesters.map((entries) =>
+      entries.filter((entry) => completedCourseKeySet.has(entryCourseKey(entry))),
     );
     const seedGridSummerTerms = Object.fromEntries(
       Object.entries(gridSummerTerms)
         .map(([year, entries]) => [
           year,
-          entries.filter((entry) => carriesOver(entry, `summer:${year}`)),
+          entries.filter((entry) => completedCourseKeySet.has(entryCourseKey(entry))),
         ])
         // Drop years with nothing left to seed rather than toggle on an
         // empty Summer column in an otherwise-blank plan.
@@ -1782,26 +1842,74 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     return null;
   }
 
-  // The one exclusivity check for every new add or drop (handleAddCourse,
-  // handleMoveCourse, handleAddNote): a slot holding an exclusive special
-  // term's block (e.g. the Marine Semester) refuses it and says why. Entries
-  // already in that slot are never touched.
-  function rejectIfTermFilled(target) {
-    const term = exclusiveTermOf(entriesAtTarget(target));
-    if (!term) return false;
-    setToast({ id: Date.now(), message: exclusiveTermMessage(term) });
-    return true;
+  // Bottom toast for a placement outcome: a refusal in the dark notice
+  // style, a confirmation ('added' / 'created') in the neutral one.
+  function showPlacementToast(reason, termLabel, replaced) {
+    setToast({
+      id: Date.now(),
+      message: placementMessage(reason, termLabel, replaced),
+      tone: CONFIRMATION_REASONS.includes(reason) ? 'confirm' : 'notice',
+    });
+  }
+
+  // The one placement check for every new add or move (handleAddCourse,
+  // handleMoveCourse, so drag, click-add, the term picker and the Marine
+  // card's "+" all share it): placeCourse applies the Marine Semester rules
+  // to the slot's current entries. A refusal shows its toast and returns
+  // null, having changed nothing. Entries already in a slot are never touched.
+  function placeOrExplain(course, target) {
+    const placed = placeCourse(entriesAtTarget(target), course, target);
+    if (placed.ok) return placed;
+    showPlacementToast(placed.reason);
+    return null;
+  }
+
+  // The toast for a successful placement, when it needs one. A placement
+  // that started a Marine Semester (`snapshot`: `semesters` from before it)
+  // gets the Undo toast; adding to an existing Marine term, the neutral one.
+  function confirmPlacement(placed, target, snapshot) {
+    if (placed.created && snapshot) showMarineUndoToast(target, snapshot);
+    else if (placed.created) showPlacementToast('created', semesterLabel(target), placed.replaced);
+    else if (placed.intoMarine) showPlacementToast('added');
+  }
+
+  // "Year N Fall is now your Marine Semester…" with Undo, ~8 seconds (Toast
+  // pauses it on hover/focus). Undo puts the snapshot back; the toast
+  // dismisses itself on any other plan edit (the effect near the top), so Undo
+  // can never overwrite later changes.
+  function showMarineUndoToast(target, snapshot) {
+    const id = Date.now();
+    setMarineUndo(createUndo(id, snapshot));
+    setToast({
+      id,
+      message: `Year ${Math.floor(Number(target) / 2) + 1} Fall is now your Marine Semester: BU places you in four courses (16 credits), and no other courses can be added to this term.`,
+      tone: 'confirm',
+      duration: 8000,
+      action: { label: 'Undo', onClick: () => undoMarineCreation(id) },
+    });
+  }
+
+  function undoMarineCreation(toastId) {
+    const undo = marineUndoRef.current;
+    if (!undo || undo.toastId !== toastId) return;
+    setSemesters(restoreSemesters(undo.snapshot));
+    setIsDirty(true);
+    setMarineUndo(null);
+    setToast(null);
   }
 
   function handleAddCourse(courseKey, target) {
     const alreadyPlaced = findCourseTarget(courseKey) !== null;
     if (alreadyPlaced) return;
     // Refused: stay where the student is (no jump to the mobile board).
-    if (rejectIfTermFilled(target)) return;
-    setEntriesAtTarget(target, (entries) => [
-      ...entries,
-      { courseKey, locked: false, source: 'manual' },
-    ]);
+    const placed = placeOrExplain(courseKey, target);
+    if (!placed) return;
+    const snapshot = snapshotSemesters(semesters);
+    setEntriesAtTarget(target, (entries) => {
+      const next = placeCourse(entries, courseKey, target);
+      return next.ok ? next.entries : entries;
+    });
+    confirmPlacement(placed, target, snapshot);
     setIsDirty(true);
     if (!courseMap[courseKey]) fetchCourseData([courseKey]);
     // On mobile the board is a separate tab from search — jump over so the
@@ -1818,17 +1926,144 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   function handleMoveCourse(courseKey, fromTarget, toTarget) {
-    if (rejectIfTermFilled(toTarget)) return;
     const entry = entriesAtTarget(fromTarget).find((e) => entryCourseKey(e) === courseKey);
     if (!entry) return;
-    setEntriesAtTarget(fromTarget, (entries) => entries.filter((e) => entryCourseKey(e) !== courseKey));
-    setEntriesAtTarget(toTarget, (entries) => [...entries, entry]);
+    const placed = placeOrExplain(entry, toTarget);
+    if (!placed) return;
+    // Both terms are in the snapshot, so Undo restores the one it left too.
+    confirmPlacement(placed, toTarget, snapshotSemesters(semesters));
+    setEntriesAtTarget(fromTarget, (entries) => removeCourse(entries, courseKey, fromTarget));
+    setEntriesAtTarget(toTarget, (entries) => {
+      const next = placeCourse(entries, entry, toTarget);
+      return next.ok ? next.entries : [...entries, entry];
+    });
     setIsDirty(true);
   }
 
   function handleRemoveCourse(courseKey, target) {
-    setEntriesAtTarget(target, (entries) => entries.filter((e) => entryCourseKey(e) !== courseKey));
+    setEntriesAtTarget(target, (entries) => removeCourse(entries, courseKey, target));
     setIsDirty(true);
+  }
+
+  // ── Marine Semester (see src/data/marineSemester.js, courseEntry.js) ───────
+  // Every handler below only changes `semesters` (setSemesters /
+  // setEntriesAtTarget) and calls setIsDirty, so the normal autosave covers it.
+
+  // Fall slots with no courses (plain placeholders there get replaced).
+  function emptyFallOptions() {
+    return semesters
+      .map((entries, i) => ({ value: i, label: semesterLabel(i), entries }))
+      .filter(({ value, entries }) => targetSeason(value) === 'fall' && !entries.some((e) => entryCourseKey(e) != null))
+      .map(({ value, label }) => ({ value, label }));
+  }
+
+  // The plan's Marine term a Marine course should go to: the first one with
+  // room, else the first one (so a full term explains itself), else null.
+  function findMarineTarget() {
+    const targets = semesters.map((_, i) => i).filter((i) => isMarineTerm(semesters[i], i));
+    return targets.find((i) => marineSlotCounts(semesters[i]).courses < 4) ?? targets[0] ?? null;
+  }
+
+  // Makes an empty Fall the Marine Semester (marker + four placeholders).
+  // `courseKey` (optional) is a Marine course to put in it right away.
+  function handleCreateMarineTerm(target, courseKey = null) {
+    const entries = entriesAtTarget(target);
+    if (targetSeason(target) !== 'fall') { showPlacementToast('not-fall'); return; }
+    const started = startMarineTerm(entries);
+    if (!started) { showPlacementToast('non-empty-fall'); return; }
+    const { replaced } = started;
+    if (courseKey) {
+      if (findCourseTarget(courseKey) !== null) return;
+      const placed = placeCourse(started.entries, courseKey, target);
+      if (!placed.ok) { showPlacementToast(placed.reason); return; }
+    }
+    const snapshot = snapshotSemesters(semesters);
+    setEntriesAtTarget(target, (current) => {
+      const fresh = startMarineTerm(current);
+      if (!fresh) return current;
+      if (!courseKey) return fresh.entries;
+      const placed = placeCourse(fresh.entries, courseKey, target);
+      return placed.ok ? placed.entries : fresh.entries;
+    });
+    // With a course (a term picker, the card's "+"): the Undo toast. Without
+    // one ("Add my Marine Semester to the plan", the pinned row): the neutral toast.
+    if (courseKey) showMarineUndoToast(target, snapshot);
+    else showPlacementToast('created', semesterLabel(target), replaced);
+    setIsDirty(true);
+    if (courseKey && !courseMap[courseKey]) fetchCourseData([courseKey]);
+    setMobileView('board');
+  }
+
+  // "Remove Marine Semester". With no real courses in the term it just goes
+  // (marker and placeholders). With courses, a dialog first asks what to do
+  // with them (performMarineRemoval). A stray marker outside a Marine term is
+  // removed alone.
+  function handleRemoveMarineSemester(target) {
+    const entries = entriesAtTarget(target);
+    const courseKeys = entriesCourseKeys(entries);
+    if (courseKeys.length > 0 && isMarineTerm(entries, target)) {
+      setMarineRemove({ target, count: courseKeys.length, allMarine: courseKeys.every((key) => marineKind(key) !== null) });
+      return;
+    }
+    setEntriesAtTarget(target, (current) => removeMarineSemester(current, target).entries);
+    setIsDirty(true);
+    setToast({ id: Date.now(), message: 'Marine Semester removed', tone: 'confirm' });
+  }
+
+  // `mode`: 'stash' puts the term's courses in Paw-tential Courses (skipping
+  // any already there), 'delete' drops them. Either way marker, placeholders
+  // and courses all leave the term, so it is a normal empty Fall afterwards
+  // (entries of unknown kinds stay). Nothing leaves without one of the two.
+  function performMarineRemoval(target, mode) {
+    const keys = entriesCourseKeys(entriesAtTarget(target));
+    setMarineRemove(null);
+    setEntriesAtTarget(target, (current) => removeMarineSemester(current, target).entries.filter((e) => entryCourseKey(e) == null));
+    let message = 'Marine Semester removed';
+    if (mode === 'stash') {
+      const added = keys.filter((key) => !stash.includes(key));
+      setStash((prev) => [...prev, ...keys.filter((key) => !prev.includes(key))]);
+      message = `Marine Semester removed. ${keys.length} course${keys.length === 1 ? '' : 's'} moved to Paw-tential Courses${added.length < keys.length ? ' (some were already saved)' : ''}.`;
+    } else if (keys.length > 0) {
+      message = `Marine Semester removed. ${keys.length} course${keys.length === 1 ? '' : 's'} deleted.`;
+    }
+    setIsDirty(true);
+    setToast({ id: Date.now(), message, tone: 'confirm' });
+  }
+
+  // "Move to another Fall…": the whole term (marker, placeholders, courses,
+  // everything) to an empty Fall, in one setSemesters call.
+  function handleMoveMarineTerm(from, to) {
+    if (from === to || targetSeason(to) !== 'fall' || (semesters[to] || []).length > 0
+      || !isMarineTerm(semesters[from], from)) return;
+    setSemesters((prev) => {
+      if ((prev[to] || []).length > 0 || !isMarineTerm(prev[from], from)) return prev;
+      const next = prev.map((entries) => [...entries]);
+      next[to] = next[from];
+      next[from] = [];
+      return next;
+    });
+    setIsDirty(true);
+  }
+
+  // The "+" on a Marine card row: into the plan's Marine term, or — with
+  // none — pick an empty Fall to start one with this course.
+  function handleAddMarineCourse(courseKey) {
+    if (findCourseTarget(courseKey) !== null) return;
+    const target = findMarineTarget();
+    if (target != null) handleAddCourse(courseKey, target);
+    else setMarinePicker({ kind: 'course', courseKey });
+  }
+
+  // The Marine Semester pickers (empty Falls only; Move: strictly empty
+  // Falls other than the source). One of null | { kind: 'create' } |
+  // { kind: 'course', courseKey } | { kind: 'move', from }.
+  function pickMarineFall(target) {
+    const picker = marinePicker;
+    setMarinePicker(null);
+    if (!picker) return;
+    if (picker.kind === 'move') handleMoveMarineTerm(picker.from, target);
+    else if (picker.kind === 'course') handleCreateMarineTerm(target, picker.courseKey);
+    else handleCreateMarineTerm(target);
   }
 
   // Free-text planning placeholders (see isNoteEntry in courseEntry.js) —
@@ -1836,7 +2071,6 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // the course handlers above (entryCourseKey is null for a note).
   // Returns the new note's id so the column can open it in edit mode.
   function handleAddNote(target) {
-    if (rejectIfTermFilled(target)) return null;
     const note = createNoteEntry();
     setEntriesAtTarget(target, (entries) => [...entries, note]);
     setIsDirty(true);
@@ -1851,34 +2085,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   function handleRemoveNote(noteId, target) {
-    setEntriesAtTarget(target, (entries) => entries.filter((e) => !(isNoteEntry(e) && e.id === noteId)));
-    setIsDirty(true);
-  }
-
-  // Special-term blocks (see src/data/specialTerms.js): added to an empty
-  // slot of the right season, within the type's per-plan limit (never
-  // depends on the plan's major); removed by id.
-  function handleAddSpecialTerm(blockType, target) {
-    if (!canAddSpecialTerm(blockType, target, entriesAtTarget(target), planBlockTypes(semesters, gridSummerTerms))) return;
-    setEntriesAtTarget(target, (entries) => [...entries, createBlockEntry(blockType)]);
-    setIsDirty(true);
-  }
-
-  function handleRemoveBlock(blockId, target) {
-    setEntriesAtTarget(target, (entries) => entries.filter((e) => !(isBlockEntry(e) && e.id === blockId)));
-    setIsDirty(true);
-  }
-
-  // Opt-in only: turns a lone placeholder that an older app version made out
-  // of a block (see degradedSpecialTerm) back into that block, same id.
-  function handleUpgradeNote(noteId, blockType, target) {
-    const entries = entriesAtTarget(target);
-    const note = entries.find((e) => isNoteEntry(e) && e.id === noteId);
-    const term = note ? degradedSpecialTerm(note, target, entries, planBlockTypes(semesters, gridSummerTerms)) : null;
-    if (term?.id !== blockType) return;
-    setEntriesAtTarget(target, (current) => current.map((e) => (
-      isNoteEntry(e) && e.id === noteId ? { ...createBlockEntry(blockType), id: noteId } : e
-    )));
+    // A Marine marker left alone (every placeholder deleted) goes with them.
+    setEntriesAtTarget(target, (entries) => dropLoneMarker(entries.filter((e) => !(isNoteEntry(e) && e.id === noteId)), target));
     setIsDirty(true);
   }
 
@@ -2054,6 +2262,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         courseMap,
         creditsMap,
         totalCredits,
+        externalCreditTotal,
       });
       setPlanPdfStatus('idle');
     } catch (err) {
@@ -2345,26 +2554,43 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     return map;
   }, [semesters, gridSummerTerms, extraTerms, currentSemesterTarget, completedCourseKeySet]);
 
-  // blockTypes of the plan's special-term blocks (one per block), for the
-  // requirements engine's filledByBlock nodes. Memoized: RequirementTree's
-  // evaluation depends on it.
-  const planBlocks = useMemo(() => planBlockTypes(semesters, gridSummerTerms), [semesters, gridSummerTerms]);
+  // Marine Semester terms in the plan (Fall slots only; see isMarineTerm):
+  // the course slots they still hold (placeholders and research-in-lieu
+  // courses) for the requirements tracker's numerator, and the credits of
+  // their placeholders in past terms, which count as completed (the same
+  // semester status the trackers use). Every other placeholder stays planned.
+  // Memoized: RequirementTree's evaluation depends on marineSlots.
+  const marineSlots = useMemo(
+    () => semesters.reduce((sum, entries, i) => sum + marineTrackerSlots(entries, i), 0),
+    [semesters],
+  );
+  const completedNoteCredits = useMemo(
+    () => semesters.reduce(
+      (sum, entries, i) => (getSemesterStatus(i, currentSemesterTarget) === 'past'
+        ? sum + marinePlaceholderCredits(entries, i)
+        : sum),
+      0,
+    ),
+    [semesters, currentSemesterTarget],
+  );
 
-  // Special-term block credits, split like the trackers split courses: a
-  // block in a past term is completed, anything else is planned. Counted
-  // only here (entriesBlockCredits), never through the placeholder credits.
-  const planBlockCredits = useMemo(() => {
-    const split = { completed: 0, planned: 0 };
-    const add = (entries, target) => {
-      const credits = entriesBlockCredits(entries);
-      if (credits === 0) return;
-      if (getSemesterStatus(target, currentSemesterTarget) === 'past') split.completed += credits;
-      else split.planned += credits;
-    };
-    semesters.forEach((entries, i) => add(entries, i));
-    Object.entries(gridSummerTerms).forEach(([year, entries]) => add(entries, `summer:${year}`));
-    return split;
-  }, [semesters, gridSummerTerms, currentSemesterTarget]);
+  // What the Marine Semester UI needs from the plan (see marineContext.js).
+  const marineContext = {
+    hasTerm: semesters.some((entries, i) => isMarineTerm(entries, i)),
+    slots: marineSlots,
+    onOpenCreatePicker: () => setMarinePicker({ kind: 'create' }),
+    onAddCourse: handleAddMarineCourse,
+    onMoveTerm: (from) => setMarinePicker({ kind: 'move', from }),
+    onRemoveTerm: handleRemoveMarineSemester,
+  };
+  const marinePickerOptions = !marinePicker
+    ? []
+    : marinePicker.kind === 'move'
+      ? semesters
+        .map((entries, i) => ({ value: i, label: semesterLabel(i), entries }))
+        .filter(({ value, entries }) => value !== marinePicker.from && targetSeason(value) === 'fall' && entries.length === 0)
+        .map(({ value, label }) => ({ value, label }))
+      : emptyFallOptions();
 
   // Unlike HUB (which excludes externalCredits entirely), the requirements
   // engine should see transfer/AP-equivalent courses too — they can satisfy
@@ -2391,25 +2617,17 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const planNoteCredits = semesters.reduce((sum, sem) => sum + entriesNoteCredits(sem), 0)
     + Object.values(gridSummerTerms).reduce((sum, entries) => sum + entriesNoteCredits(entries), 0);
   const planCourseCredits = [...gridCourseKeys, ...extraCourseKeys]
-    .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0) + planNoteCredits + planBlockCredits.completed + planBlockCredits.planned;
+    .reduce((sum, key) => sum + (creditsMap[key] ?? 0), 0) + planNoteCredits;
 
   // Options for "add to" targets — grid semesters plus any toggled-on Summer
   // slots — shared by CourseSearch's dropdown, the SemesterPickerModal
   // fallback picker, and the "I am currently in" selector.
-  // `blockedBy`: the label of a special term filling that slot — the add
-  // pickers show it disabled (the "I am currently in" selector ignores it).
   const semesterOptions = [
-    ...semesters.map((entries, i) => ({
-      value: i, label: semesterLabel(i), blockedBy: exclusiveTermOf(entries)?.label ?? null,
-    })),
+    ...semesters.map((_, i) => ({ value: i, label: semesterLabel(i) })),
     ...Object.keys(gridSummerTerms)
       .map(Number)
       .sort((a, b) => a - b)
-      .map((year) => ({
-        value: `summer:${year}`,
-        label: `Year ${year + 1} – Summer`,
-        blockedBy: exclusiveTermOf(gridSummerTerms[year])?.label ?? null,
-      })),
+      .map((year) => ({ value: `summer:${year}`, label: `Year ${year + 1} – Summer` })),
   ];
 
   const externalCreditTotal = (externalCredits || []).reduce((sum, credit) => {
@@ -2559,6 +2777,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   return (
+    <MarineSemesterContext.Provider value={marineContext}>
     <div className="planner-layout" onClickCapture={handleInternalLinkClick}>
       {/* ── Header ── */}
       <AppHeader
@@ -2630,9 +2849,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         onDragCancel={handleDragCancel}
       >
         <div
-          className={`planner-body${rightResizing ? ' is-resizing-right' : ''}`}
+          className={`planner-body${rightResizing ? ' is-resizing-right' : ''}${leftResizing ? ' is-resizing-left' : ''}`}
           data-mobile-view={mobileView}
-          style={rightPanelWidth != null ? { '--planner-right-width': `${rightPanelWidth}px` } : undefined}
+          style={{
+            ...(rightPanelWidth != null ? { '--planner-right-width': `${rightPanelWidth}px` } : {}),
+            ...(leftPanelWidth != null ? { '--planner-left-width': `${leftPanelWidth}px` } : {}),
+          }}
         >
           {/* Left: search */}
           <aside ref={leftPanelRef} className={`planner-left${leftCollapsed ? ' is-collapsed' : ''}`}>
@@ -2663,6 +2885,21 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               onActiveTabChange={setLeftTab}
             />
           </aside>
+
+          {/* Desktop only, and only while the search panel is open. */}
+          {isDesktopLayout && !leftCollapsed && (
+            <PanelResizeHandle
+              panelRef={leftPanelRef}
+              panelSide="left"
+              width={leftPanelWidth}
+              min={LEFT_PANEL_MIN}
+              max={getLeftPanelMax()}
+              onResize={setLeftPanelWidth}
+              onReset={resetLeftPanelWidth}
+              onDraggingChange={setLeftResizing}
+              label="Resize the search panel"
+            />
+          )}
 
           {/* Center: semester board */}
           <main className="planner-center">
@@ -2724,9 +2961,6 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                   onAddNote={handleAddNote}
                   onUpdateNote={handleUpdateNote}
                   onRemoveNote={handleRemoveNote}
-                  onAddSpecialTerm={handleAddSpecialTerm}
-                  onRemoveBlock={handleRemoveBlock}
-                  onUpgradeNote={handleUpgradeNote}
                   draggingId={draggingId}
                   semesterOptions={semesterOptions}
                   currentSemesterTarget={currentSemesterTarget}
@@ -2785,12 +3019,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               creditsMap={creditsMap}
               lockStatusMap={lockStatusMap}
               noteCredits={planNoteCredits}
-              blockCredits={planBlockCredits}
+              completedNoteCredits={completedNoteCredits}
               isTransfer={isTransfer}
               onToggleTransfer={handleToggleTransfer}
               majorBulletinUrl={majorBulletinUrl}
               planCourseKeys={requirementsCourseKeys}
-              planBlocks={planBlocks}
+              marineSlots={marineSlots}
               onMajorSelect={handleMajorSelect}
               activeSemIndex={activeSemIndex}
               semesterOptions={semesterOptions}
@@ -2828,7 +3062,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         <RequirementsFullView
           majorBulletinUrl={majorBulletinUrl}
           planCourseKeys={requirementsCourseKeys}
-          planBlocks={planBlocks}
+          marineSlots={marineSlots}
           onMajorSelect={handleMajorSelect}
           courseMap={courseMap}
           activeSemIndex={activeSemIndex}
@@ -3000,6 +3234,27 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           </div>
         </div>
       )}
+
+      {marineRemove && (
+        <MarineRemoveDialog
+          count={marineRemove.count}
+          allMarine={marineRemove.allMarine}
+          onMove={() => performMarineRemoval(marineRemove.target, 'stash')}
+          onDelete={() => performMarineRemoval(marineRemove.target, 'delete')}
+          onCancel={() => setMarineRemove(null)}
+        />
+      )}
+
+      <SemesterPickerModal
+        title={marinePicker
+          ? (marinePicker.kind === 'move' ? 'Move your Marine Semester to:' : 'Marine Semester in:')
+          : undefined}
+        emptyText={marinePicker?.kind === 'move' ? 'No empty Fall to move to.' : 'No empty Fall. Clear a Fall first.'}
+        semesterOptions={marinePickerOptions}
+        onPick={pickMarineFall}
+        onClose={() => setMarinePicker(null)}
+      />
     </div>
+    </MarineSemesterContext.Provider>
   );
 }

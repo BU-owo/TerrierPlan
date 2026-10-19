@@ -5,6 +5,8 @@ import { getOfferingWarning } from '../../utils/offeringPattern';
 import { isProfessionalCareer } from '../../utils/courseQuery';
 import useUpcomingSeasons from '../../hooks/useUpcomingSeasons';
 
+const MARINE_WARNING_TEXT = 'Marine Semester course: it is only offered in the fall, as part of the Marine Semester.';
+
 export default function CourseCard({
   courseKey,
   data,
@@ -20,6 +22,8 @@ export default function CourseCard({
   compact = false,
   // Compact only: every course in this card's semester is locked.
   semesterLocked = false,
+  // A Marine Semester course (ONLY) outside a Marine Semester term.
+  marineWarning = false,
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: courseKey,
@@ -64,6 +68,7 @@ export default function CourseCard({
       [courseName, creditStr, hubUnits.length ? `HUB: ${hubUnits.join(', ')}` : null].filter(Boolean).join(' · '),
       data?.studyAbroad ? 'Study abroad' : null,
       offeringWarning?.text,
+      marineWarning ? MARINE_WARNING_TEXT : null,
     ].filter(Boolean).join('\n');
     // A fully locked semester shows its lock in the header, so skip the
     // per-card one there; a card locked on its own keeps it.
@@ -115,6 +120,11 @@ export default function CourseCard({
             <span aria-hidden="true">⚠</span>
           </span>
         )}
+        {marineWarning && (
+          <span className="course-card-offering-warning is-warning is-icon" aria-label={MARINE_WARNING_TEXT}>
+            <span aria-hidden="true">⚠</span>
+          </span>
+        )}
         <span className="course-card-credits">{creditStr}</span>
       </div>
     );
@@ -153,6 +163,13 @@ export default function CourseCard({
       )}
       {isProfessionalCareer(data?.career) && (
         <span className="offering-badge offering-badge-career course-card-career">{data.career}</span>
+      )}
+      {marineWarning && (
+        <div className="course-card-offering-warning is-warning" title={MARINE_WARNING_TEXT}>
+          <span className="course-card-offering-warning-text">
+            <span aria-hidden="true">⚠</span> Marine Semester course
+          </span>
+        </div>
       )}
       {showOfferingWarning && (
         <div

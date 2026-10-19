@@ -2,7 +2,7 @@ import { semesterLabel } from './hubConstants';
 import { normalizeExternalCredits, normalizeExternalCredit } from './externalCredits';
 import { resolveApHubFromScore } from './apScoreResolution';
 import { getApHub, isApScoreDependent } from '../data/apIbHubCredit';
-import { entryCourseKey, exclusiveTermOf } from './courseEntry';
+import { entryCourseKey, placeImportedCourse } from './courseEntry';
 
 // BU's unofficial-transcript export sometimes prints generic block-credit
 // placeholder rows (bulk transfer/test credit not tied to a specific BU
@@ -106,15 +106,9 @@ export function buildImportPreview(parsed, existingSemesters, existingExtraTerms
 
   for (const t of fallSpring) {
     if (slotIndex < semesterCount && !t.isPostDegree) {
-      // A term already holding an exclusive special-term block (e.g. the
-      // Marine Semester) keeps it; applyImport skips this term's courses.
-      const blockTerm = exclusiveTermOf((existingSemesters || [])[slotIndex]);
       slotAssignments.push({
         slotIndex,
         slotLabel: semesterLabel(slotIndex),
-        keptBlock: blockTerm
-          ? { label: blockTerm.label, skipped: t.courses.filter((c) => !isPlaceholderCreditRow(c)).length }
-          : null,
         term: t.term,
         season: t.season,
         isPostDegree: false,
@@ -258,13 +252,7 @@ export function applyImport(preview, existingSemesters, existingExtraTerms = [],
     addFn(course.courseKey);
   }
 
-  let blockSkipped = 0;
   for (const a of preview.slotAssignments || []) {
-    // The term holds an exclusive block: keep it, import none of its courses.
-    if (exclusiveTermOf(semesters[a.slotIndex])) {
-      blockSkipped += a.courses.filter((c) => !isPlaceholderCreditRow(c)).length;
-      continue;
-    }
     for (const course of a.courses) {
       // Block-credit placeholder rows (e.g. "TFR GEN CRDT") aren't real
       // courses — the credit itself is already captured as an
@@ -277,7 +265,13 @@ export function applyImport(preview, existingSemesters, existingExtraTerms = [],
           // grade, not W/AU/I/IP/N/NG/MG or a TX/transfer row) — so it's
           // safe to auto-lock rather than asking the student to re-confirm
           // something their own transcript already verified.
-          semesters[a.slotIndex].push({ courseKey: key, locked: true, source: 'transcript' });
+          // A planned Marine Semester gives a placeholder up for the real
+          // course; otherwise it is appended (see placeImportedCourse).
+          semesters[a.slotIndex] = placeImportedCourse(
+            semesters[a.slotIndex],
+            { courseKey: key, locked: true, source: 'transcript' },
+            a.slotIndex,
+          );
           coursesAdded += 1;
         }
       });
@@ -392,7 +386,6 @@ export function applyImport(preview, existingSemesters, existingExtraTerms = [],
       transferAdded,
       transferIncomplete,
       skipped,
-      blockSkipped,
     },
   };
   debugImport('applyImport-output', {

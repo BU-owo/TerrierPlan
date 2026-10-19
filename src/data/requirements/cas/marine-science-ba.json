@@ -201,10 +201,9 @@
         "type": "COUNT",
         "label": "Marine Semester Courses (4 total)",
         "min": 4,
-        "note": "The BU Marine Program places you in four month-long courses, so you don't choose them. Add the Marine Semester to a Fall term in your plan, or use ⋯ → Substitute a course for each course you've taken.",
-        "filledByBlock": "marine",
-        "pool": [],
-        "devNote": "No course list: the BU Marine Program places students into four month-long courses, one per block, and offerings change every year (the bulletin's 'currently include' list is not maintained here). filledByBlock: 'marine' — a Marine Semester block in the plan (src/data/specialTerms.js) fills all four slots. A student who took the courses another way (e.g. from a transcript) uses ⋯ → Substitute a course four times. 'In lieu of one of the four Marine Semester block courses, students may enroll in 4 units of Research for Units' (prearranged, approved by the Marine Program Director) is also a substitution."
+        "note": "The BU Marine Program places you in four month-long courses, so you don't choose them. Add your Marine Semester to a Fall term in your plan, or use ⋯ → Substitute a course for each course you've taken.",
+        "poolFrom": "marineSemester",
+        "devNote": "poolFrom: 'marineSemester' — the pool is the bulletin's Marine Semester list, read from src/data/marineSemester.js by the engine (marinePool: ONLY courses plus EE 557 and MR 500, cross-listed twins count once; not BI/EE 423 or EE 623, which are in the Marine Breadth pool). Offerings change every year, so the list is refreshed there, not here. Numerator = min(4, real pool courses in the plan + the plan's remaining Marine Semester slots: placeholders and research-in-lieu courses (MR 391/392/491/492) in a Marine Semester term, options.marineSlots). A student who took the courses another way (e.g. from a transcript) uses ⋯ → Substitute a course for each. 'In lieu of one of the four Marine Semester block courses, students may enroll in 4 units of Research for Units' (prearranged, approved by the Marine Program Director) is a research course in the Marine term, or a substitution."
       }
     ]
   }

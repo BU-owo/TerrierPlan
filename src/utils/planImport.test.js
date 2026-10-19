@@ -356,70 +356,90 @@ test('no valid courses or placeholders: not importable, dropped list kept', () =
   assert.equal(onlyNote.summary.placeholderCount, 1);
 });
 
-const marine = (extra = {}) => ({ kind: 'note', id: 'same', text: 'Marine Semester', credits: 4, blockType: 'marine', ...extra });
+const marker = (extra = {}) => ({ kind: 'note', id: 'same', text: 'Marine Semester', credits: 0, blockType: 'marine', ...extra });
+const legacyNote = (extra = {}) => marker({ credits: 16, ...extra });
 const blockOnly = (semesters, gridSummerTerms = {}) => validBlob({ semesters, gridSummerTerms, extraTerms: [], stash: [] });
 const plainNote = (e) => e.kind === 'note' && !('blockType' in e);
+const isMarkerEntry = (e) => e.kind === 'note' && e.blockType === 'marine';
 
-test('a Marine block on an empty Fall slot imports with a fresh id, its text and 16 credits', () => {
-  const r = sanitizePlanBlob(blockOnly({ 2: [marine({ text: 'whatever' })] }), ctx);
+test('a Marine marker on a Fall slot imports with a fresh id, its text and 0 credits', () => {
+  const r = sanitizePlanBlob(blockOnly({ 2: [marker({ text: 'whatever', credits: 9 }), { kind: 'note', text: 'Marine Semester course', credits: 4 }] }), ctx);
   assert.deepEqual(r.errors, []);
   assert.deepEqual(r.dropped, []);
-  assert.equal(r.plan.semesters[2].length, 1);
-  const [block] = r.plan.semesters[2];
-  assert.deepEqual({ ...block, id: 'x' }, { kind: 'note', id: 'x', text: 'Marine Semester', credits: 16, blockType: 'marine' });
-  assert.notEqual(block.id, 'same');
-  // A plan with only a block is importable.
-  assert.equal(r.summary.blockCount, 1);
-  assert.equal(r.summary.placeholderCount, 0);
+  const [m, placeholder] = r.plan.semesters[2];
+  assert.deepEqual({ ...m, id: 'x' }, { kind: 'note', id: 'x', text: 'Marine Semester', credits: 0, blockType: 'marine' });
+  assert.notEqual(m.id, 'same');
+  assert.ok(plainNote(placeholder));
+  // The marker isn't a placeholder in the summary.
+  assert.equal(r.summary.placeholderCount, 1);
   assert.equal(r.summary.courseCount, 0);
 });
 
-test("step 1's { kind: 'block' } shape imports the same way", () => {
-  const r = sanitizePlanBlob(blockOnly({ 0: [{ kind: 'block', blockType: 'marine', id: 'b', credits: 16 }] }), ctx);
-  assert.equal(r.plan.semesters[0][0].blockType, 'marine');
-  assert.equal(r.plan.semesters[0][0].credits, 16);
-  assert.equal(r.summary.blockCount, 1);
+test('a plan holding only a marker is importable', () => {
+  const r = sanitizePlanBlob(blockOnly({ 0: [marker()] }), ctx);
+  assert.ok(r.plan);
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.plan.semesters[0].length, 1);
 });
 
-test('a block on a Spring or Summer slot imports as a plain placeholder', () => {
+test('a marker shares its Fall with courses and placeholders: nothing is enforced on import', () => {
+  const r = sanitizePlanBlob(blockOnly({ 0: [marker(), 'CASCS111', { kind: 'note', text: 'x', credits: 4 }] }), ctx);
+  assert.deepEqual(r.dropped, []);
+  assert.deepEqual(r.plan.semesters[0].map((e) => e.courseKey ?? e.text), ['Marine Semester', 'CASCS111', 'x']);
+  assert.ok(isMarkerEntry(r.plan.semesters[0][0]));
+});
+
+test('a marker on a Spring or Summer slot imports as a plain placeholder, blockType dropped', () => {
   const r = sanitizePlanBlob(validBlob({
-    semesters: { 0: ['CASCS111'], 1: [marine()] },
-    gridSummerTerms: { 0: [marine()] }, extraTerms: [], stash: [],
+    semesters: { 0: ['CASCS111'], 1: [marker()] },
+    gridSummerTerms: { 0: [marker()] }, extraTerms: [], stash: [],
   }), ctx);
   assert.deepEqual(r.dropped, []);
   for (const entry of [r.plan.semesters[1][0], r.plan.gridSummerTerms['0'][0]]) {
     assert.ok(plainNote(entry));
     assert.equal(entry.text, 'Marine Semester');
-    assert.equal(entry.credits, 4);
+    assert.equal(entry.credits, 0);
   }
-  assert.equal(r.summary.blockCount, 0);
   assert.equal(r.summary.placeholderCount, 2);
 });
 
-test('a block sharing a Fall slot imports as a plain placeholder; the others stay', () => {
-  const r = sanitizePlanBlob(blockOnly({ 0: [marine(), 'CASCS111'], 2: [{ kind: 'note', text: 'x', credits: 4 }, marine()] }), ctx);
-  assert.deepEqual(r.plan.semesters[0].map((e) => e.courseKey ?? e.text), ['Marine Semester', 'CASCS111']);
-  assert.ok(plainNote(r.plan.semesters[0][0]));
-  assert.ok(r.plan.semesters[2].every(plainNote));
-  assert.equal(r.plan.semesters[2].length, 2);
-  assert.equal(r.summary.blockCount, 0);
+test('a second marker in one Fall slot is dropped; other Falls keep theirs (no per-plan limit)', () => {
+  const r = sanitizePlanBlob(blockOnly({ 2: [marker(), marker()], 4: [marker()], 6: [marker()] }), ctx);
+  assert.equal(r.plan.semesters[2].length, 1);
+  assert.ok(isMarkerEntry(r.plan.semesters[2][0]));
+  assert.ok(isMarkerEntry(r.plan.semesters[4][0]));
+  assert.ok(isMarkerEntry(r.plan.semesters[6][0]));
+  assert.deepEqual(r.dropped.map((d) => [d.what, d.reason]), [['Marine Semester', 'already in this semester']]);
 });
 
-test('only invalid entries beside it: the block still counts as alone', () => {
-  const r = sanitizePlanBlob(blockOnly({ 0: ['ZZZZZ999', marine()] }), ctx);
+test("step 1's { kind: 'block' } shape and the 16-credit note import as marker + four placeholders", () => {
+  for (const legacy of [{ kind: 'block', blockType: 'marine', id: 'b', credits: 16 }, legacyNote()]) {
+    const r = sanitizePlanBlob(blockOnly({ 0: [legacy] }), ctx);
+    assert.deepEqual(r.dropped, []);
+    const term = r.plan.semesters[0];
+    assert.equal(term.length, 5);
+    assert.ok(isMarkerEntry(term[0]));
+    assert.equal(term[0].credits, 0);
+    assert.deepEqual(term.slice(1).map((e) => [e.text, e.credits, plainNote(e)]), Array(4).fill(['Marine Semester course', 4, true]));
+    assert.equal(term.reduce((sum, e) => sum + e.credits, 0), 16, 'credits count once');
+    assert.equal(r.summary.placeholderCount, 4);
+  }
+});
+
+test('a legacy Marine block outside a Fall imports as a plain placeholder with its credits', () => {
+  const r = sanitizePlanBlob(blockOnly({ 1: [legacyNote()] }, { 0: [{ kind: 'block', blockType: 'marine', credits: 16 }] }), ctx);
+  assert.ok(plainNote(r.plan.semesters[1][0]));
+  assert.equal(r.plan.semesters[1].length, 1);
+  assert.equal(r.plan.semesters[1][0].credits, 16);
+  assert.ok(plainNote(r.plan.gridSummerTerms['0'][0]));
+  assert.equal(r.plan.gridSummerTerms['0'].length, 1);
+});
+
+test('only invalid entries beside it: the marker is kept, the rest dropped and listed', () => {
+  const r = sanitizePlanBlob(blockOnly({ 0: ['ZZZZZ999', marker()] }), ctx);
   assert.equal(r.plan.semesters[0].length, 1);
-  assert.equal(r.plan.semesters[0][0].blockType, 'marine');
+  assert.ok(isMarkerEntry(r.plan.semesters[0][0]));
   assert.deepEqual(droppedWhat(r), ['ZZZZZ999']);
-});
-
-test('only one block per plan: the earliest Fall wins, the rest are placeholders', () => {
-  const r = sanitizePlanBlob(blockOnly({ 4: [marine()], 2: [marine()], 6: [marine(), marine()] }), ctx);
-  assert.equal(r.plan.semesters[2][0].blockType, 'marine');
-  assert.ok(plainNote(r.plan.semesters[4][0]));
-  assert.ok(r.plan.semesters[6].every(plainNote));
-  assert.equal(r.summary.blockCount, 1);
-  assert.equal(r.summary.placeholderCount, 3);
-  assert.deepEqual(r.dropped, []);
 });
 
 test('an unknown blockType imports as a plain placeholder; unknown kinds are dropped', () => {
@@ -438,13 +458,10 @@ test('an unknown blockType imports as a plain placeholder; unknown kinds are dro
   ]);
 });
 
-test('the import summary lists the kept blocks by type (shown in the import preview)', () => {
-  const r = sanitizePlanBlob(blockOnly({ 0: [marine()], 2: [marine()] }), ctx);
-  assert.deepEqual(r.summary.blockTypes, ['marine']);
-  assert.equal(r.summary.blockCount, 1);
-  const none = sanitizePlanBlob(validBlob(), ctx);
-  assert.deepEqual(none.summary.blockTypes, []);
-  assert.equal(none.summary.blockCount, 0);
+test('the summary no longer carries block fields', () => {
+  const r = sanitizePlanBlob(blockOnly({ 0: [marker()] }), ctx);
+  assert.ok(!('blockCount' in r.summary));
+  assert.ok(!('blockTypes' in r.summary));
 });
 
 test('never throws on hostile input', () => {

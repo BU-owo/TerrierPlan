@@ -9,7 +9,6 @@ import { BU_SCHOOLS, findProgramByUrl } from '../../data/bu-programs';
 import { REQUIREMENT_PROGRAMS } from '../requirements/programs';
 import { BuEquivalentField } from './ExternalCreditsPanel';
 import { isValidCourseKeyFormat } from '../../utils/courseKey';
-import { getSpecialTerm } from '../../data/specialTerms';
 
 const STEPS = ['Upload', 'Review', 'Confirm'];
 const DEBUG_IMPORT = import.meta.env.DEV;
@@ -339,9 +338,8 @@ export default function ImportTranscriptModal({
     : planImportBlockedReason;
   const planMajor = findProgramByUrl(planPreview?.summary?.majorBulletinUrl);
 
-  // Terms kept as a special-term block (see keptBlock) import no courses.
   const regularCount = (preview?.slotAssignments || []).reduce(
-    (n, a) => n + (a.keptBlock ? 0 : a.courses.length),
+    (n, a) => n + a.courses.length,
     0,
   );
   const extraCount = (preview?.extraTermAssignments || []).reduce(
@@ -486,11 +484,6 @@ export default function ImportTranscriptModal({
                     <div className="import-term-heading">
                       {a.term} → {a.slotLabel}
                     </div>
-                    {a.keptBlock && (
-                      <p className="import-muted">
-                        {a.keptBlock.label} block kept; {a.keptBlock.skipped} transcript course{a.keptBlock.skipped === 1 ? '' : 's'} not imported for this term.
-                      </p>
-                    )}
                     <ul className="import-list compact">
                       {a.courses.map((c) => (
                         <li key={`${c.courseKey}-${c.term}`}>
@@ -634,9 +627,6 @@ export default function ImportTranscriptModal({
                   <li>{planPreview.summary.years} year{planPreview.summary.years === 1 ? '' : 's'}</li>
                   <li>{planPreview.summary.courseCount} course{planPreview.summary.courseCount === 1 ? '' : 's'}</li>
                   <li>{planPreview.summary.placeholderCount} placeholder{planPreview.summary.placeholderCount === 1 ? '' : 's'}</li>
-                  {(planPreview.summary.blockTypes || []).map((type, i) => (
-                    <li key={`${type}-${i}`}>{getSpecialTerm(type)?.label ?? 'Special term'}</li>
-                  ))}
                   {planPreview.summary.stashCount > 0 && <li>{planPreview.summary.stashCount} saved for later</li>}
                   {planPreview.summary.extraTermCount > 0 && <li>{planPreview.summary.extraTermCount} Summer/Winter term{planPreview.summary.extraTermCount === 1 ? '' : 's'}</li>}
                   {planPreview.summary.overrideCount > 0 && <li>{planPreview.summary.overrideCount} requirement exception{planPreview.summary.overrideCount === 1 ? '' : 's'}</li>}

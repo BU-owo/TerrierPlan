@@ -6,7 +6,9 @@
 //    the file is spread into app state or written to Firestore as-is.
 // pdfjs is imported lazily inside readPlanAttachment so this module (and its
 // tests) load without a browser, and so it never pulls in pdf-lib.
-import { normalizeCourseEntry, createNoteEntry, createBlockEntry, targetSeason, DEFAULT_NOTE_CREDITS } from './courseEntry.js';
+import {
+  normalizeCourseEntry, createNoteEntry, createMarkerEntry, withMarinePlaceholders, targetSeason, DEFAULT_NOTE_CREDITS,
+} from './courseEntry.js';
 import { getSpecialTerm } from '../data/specialTerms.js';
 import { normalizeCourseKey, cleanSubstituteLabel } from './courseKey.js';
 
@@ -200,20 +202,21 @@ function sanitize(blob, catalogIds, programs) {
   const dropped = [];
   const drop = (where, what, reason) => dropped.push({ where, what, reason });
   const seen = new Set(); // course keys already placed in the plan
-  const counts = { courses: 0, placeholders: 0, blocks: 0 };
-  const blockTypes = []; // one per block kept, for the import summary
+  const counts = { courses: 0, placeholders: 0, markers: 0 };
 
-  // Course/placeholder/block entries for one slot. `slotIndex` is the grid
-  // index (null for a Summer slot). A block is a placeholder with a
-  // blockType (see isBlockEntry); one of a known special term
-  // (src/data/specialTerms.js) is kept as a block only in a slot of one of
-  // its seasons with nothing else in it, within its maxPerPlan, with a fresh
-  // id (text and credits forced by the normalizer). Anywhere else, or of an
-  // unknown type, it imports as a plain placeholder, blockType dropped.
-  // Step 1's { kind: 'block' } shape is read the same way.
+  // Course/placeholder entries for one slot. `slotIndex` is the grid index
+  // (null for a Summer slot). The Marine Semester marker (a note with
+  // blockType 'marine') is kept, with a fresh id and 0 credits, only in a
+  // Fall slot (one per slot); anywhere else it imports as a plain
+  // placeholder, blockType dropped. A legacy Marine block (Step 1's
+  // { kind: 'block' }, or the 16-credit note) in a Fall slot becomes a
+  // marker plus placeholders. Term rules (what may share a Marine term) are
+  // NOT enforced on import. Unknown blockTypes import as plain placeholders.
   function processEntries(rawEntries, where, slotIndex = null) {
     const out = [];
-    const candidates = []; // known blockTypes of this slot's placeholders
+    const isFall = slotIndex != null && targetSeason(slotIndex) === 'fall';
+    let hasMarker = false;
+    let legacyMarine = false;
     if (!Array.isArray(rawEntries)) {
       if (rawEntries !== undefined && rawEntries !== null) drop(where, 'entries', 'not a list');
       return out;
@@ -223,7 +226,8 @@ function sanitize(blob, catalogIds, programs) {
         if (i === MAX_ENTRIES_PER_SLOT) drop(where, `${rawEntries.length - MAX_ENTRIES_PER_SLOT} more entries`, 'too many in one semester');
         return;
       }
-      if (isPlainObject(raw) && raw.kind === 'block') {
+      const fromBlockKind = isPlainObject(raw) && raw.kind === 'block';
+      if (fromBlockKind) {
         raw = {
           kind: 'note',
           text: getSpecialTerm(raw.blockType)?.label ?? 'Special term',
@@ -236,7 +240,17 @@ function sanitize(blob, catalogIds, programs) {
         return;
       }
       if (isPlainObject(raw) && raw.kind === 'note') {
-        if (getSpecialTerm(raw.blockType)) candidates.push(raw.blockType);
+        if (raw.blockType === 'marine' && isFall) {
+          if (hasMarker) {
+            drop(where, 'Marine Semester', 'already in this semester');
+            return;
+          }
+          hasMarker = true;
+          legacyMarine = fromBlockKind || Number(raw.credits) > 0;
+          out.push(createMarkerEntry());
+          counts.markers += 1;
+          return;
+        }
         const credits = Number(raw.credits);
         out.push(normalizeCourseEntry({
           kind: 'note',
@@ -263,17 +277,10 @@ function sanitize(blob, catalogIds, programs) {
       out.push(normalizeCourseEntry({ courseKey: resolved.key }));
       counts.courses += 1;
     });
-    // The slot's only entry is that special-term placeholder: upgrade it to a block.
-    const term = candidates.length === 1 && out.length === 1 ? getSpecialTerm(candidates[0]) : null;
-    const season = slotIndex == null ? 'summer' : targetSeason(slotIndex);
-    if (term && term.seasons.includes(season)
-      && blockTypes.filter((type) => type === term.id).length < term.maxPerPlan) {
-      out[0] = createBlockEntry(term.id);
-      counts.placeholders -= 1;
-      counts.blocks += 1;
-      blockTypes.push(term.id);
-    }
-    return out;
+    if (!legacyMarine) return out;
+    const expanded = withMarinePlaceholders(out);
+    counts.placeholders += expanded.length - out.length;
+    return expanded;
   }
 
   // ── semesters: object keyed by slot index (an array is tolerated) ──
@@ -473,15 +480,13 @@ function sanitize(blob, catalogIds, programs) {
     years: slotCount / 2,
     courseCount: counts.courses,
     placeholderCount: counts.placeholders,
-    blockCount: counts.blocks,
-    blockTypes,
     stashCount: stash.length,
     extraTermCount: extraTerms.length,
     overrideCount: Object.keys(requirementOverrides).length,
     majorBulletinUrl,
   };
 
-  if (counts.courses === 0 && counts.placeholders === 0 && counts.blocks === 0) {
+  if (counts.courses === 0 && counts.placeholders === 0 && counts.markers === 0) {
     return { plan: null, summary, dropped, errors: [{ code: 'no-courses', message: ERRORS.noCourses }] };
   }
 
