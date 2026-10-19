@@ -57,7 +57,7 @@ const argv = process.argv.slice(2);
 const outIdx = argv.indexOf('--meetings-out');
 const MEETINGS_OUT = outIdx !== -1 ? argv[outIdx + 1] : null;
 // CSV paths = everything that isn't a flag or the --meetings-out value.
-const csvPaths = argv.filter((a, i) => !a.startsWith('--') && i !== outIdx + 1);
+const csvPaths = argv.filter((a, i) => !a.startsWith('--') && (outIdx === -1 || i !== outIdx + 1));
 
 function toInt(val) {
   const n = parseInt(val, 10);
