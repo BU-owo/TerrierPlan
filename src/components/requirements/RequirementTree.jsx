@@ -28,6 +28,9 @@ export default function RequirementTree({
   density = 'compact',
   majorBulletinUrl,
   planCourseKeys = [],
+  // Remaining Marine Semester course slots in the plan (placeholders and
+  // research courses in a Marine term), for `poolFrom: "marineSemester"` nodes.
+  marineSlots = 0,
   onMajorSelect,
   onSummaryChange,
   courseMap = {},
@@ -57,8 +60,8 @@ export default function RequirementTree({
   );
 
   const result = useMemo(
-    () => (programDef ? evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides) : null),
-    [programDef, planCourseKeys, requirementOverrides]
+    () => (programDef ? evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides, { marineSlots }) : null),
+    [programDef, planCourseKeys, requirementOverrides, marineSlots]
   );
 
   const flatNodes = useMemo(() => (result ? collectAllNodes(result.tree) : []), [result]);

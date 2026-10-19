@@ -6,7 +6,10 @@
 //    the file is spread into app state or written to Firestore as-is.
 // pdfjs is imported lazily inside readPlanAttachment so this module (and its
 // tests) load without a browser, and so it never pulls in pdf-lib.
-import { normalizeCourseEntry, createNoteEntry, DEFAULT_NOTE_CREDITS } from './courseEntry.js';
+import {
+  normalizeCourseEntry, createNoteEntry, createMarkerEntry, withMarinePlaceholders, targetSeason, DEFAULT_NOTE_CREDITS,
+} from './courseEntry.js';
+import { getSpecialTerm } from '../data/specialTerms.js';
 import { normalizeCourseKey, cleanSubstituteLabel } from './courseKey.js';
 
 export const PLAN_FORMAT = 'terrierplan-plan';
@@ -199,11 +202,21 @@ function sanitize(blob, catalogIds, programs) {
   const dropped = [];
   const drop = (where, what, reason) => dropped.push({ where, what, reason });
   const seen = new Set(); // course keys already placed in the plan
-  const counts = { courses: 0, placeholders: 0 };
+  const counts = { courses: 0, placeholders: 0, markers: 0 };
 
-  // Course/placeholder entries for one slot.
-  function processEntries(rawEntries, where) {
+  // Course/placeholder entries for one slot. `slotIndex` is the grid index
+  // (null for a Summer slot). The Marine Semester marker (a note with
+  // blockType 'marine') is kept, with a fresh id and 0 credits, only in a
+  // Fall slot (one per slot); anywhere else it imports as a plain
+  // placeholder, blockType dropped. A legacy Marine block (Step 1's
+  // { kind: 'block' }, or the 16-credit note) in a Fall slot becomes a
+  // marker plus placeholders. Term rules (what may share a Marine term) are
+  // NOT enforced on import. Unknown blockTypes import as plain placeholders.
+  function processEntries(rawEntries, where, slotIndex = null) {
     const out = [];
+    const isFall = slotIndex != null && targetSeason(slotIndex) === 'fall';
+    let hasMarker = false;
+    let legacyMarine = false;
     if (!Array.isArray(rawEntries)) {
       if (rawEntries !== undefined && rawEntries !== null) drop(where, 'entries', 'not a list');
       return out;
@@ -213,7 +226,31 @@ function sanitize(blob, catalogIds, programs) {
         if (i === MAX_ENTRIES_PER_SLOT) drop(where, `${rawEntries.length - MAX_ENTRIES_PER_SLOT} more entries`, 'too many in one semester');
         return;
       }
+      const fromBlockKind = isPlainObject(raw) && raw.kind === 'block';
+      if (fromBlockKind) {
+        raw = {
+          kind: 'note',
+          text: getSpecialTerm(raw.blockType)?.label ?? 'Special term',
+          credits: raw.credits,
+          blockType: raw.blockType,
+        };
+      }
+      if (isPlainObject(raw) && raw.kind != null && raw.kind !== 'note') {
+        drop(where, shortLabel(raw.kind), 'unknown entry type');
+        return;
+      }
       if (isPlainObject(raw) && raw.kind === 'note') {
+        if (raw.blockType === 'marine' && isFall) {
+          if (hasMarker) {
+            drop(where, 'Marine Semester', 'already in this semester');
+            return;
+          }
+          hasMarker = true;
+          legacyMarine = fromBlockKind || Number(raw.credits) > 0;
+          out.push(createMarkerEntry());
+          counts.markers += 1;
+          return;
+        }
         const credits = Number(raw.credits);
         out.push(normalizeCourseEntry({
           kind: 'note',
@@ -240,7 +277,10 @@ function sanitize(blob, catalogIds, programs) {
       out.push(normalizeCourseEntry({ courseKey: resolved.key }));
       counts.courses += 1;
     });
-    return out;
+    if (!legacyMarine) return out;
+    const expanded = withMarinePlaceholders(out);
+    counts.placeholders += expanded.length - out.length;
+    return expanded;
   }
 
   // ── semesters: object keyed by slot index (an array is tolerated) ──
@@ -280,7 +320,7 @@ function sanitize(blob, catalogIds, programs) {
 
   const semesters = Array.from({ length: slotCount }, () => []);
   [...rawSlots.keys()].sort((a, b) => a - b).forEach((index) => {
-    semesters[index] = processEntries(rawSlots.get(index), slotLabel(index));
+    semesters[index] = processEntries(rawSlots.get(index), slotLabel(index), index);
   });
 
   const gridSummerTerms = {};
@@ -446,7 +486,7 @@ function sanitize(blob, catalogIds, programs) {
     majorBulletinUrl,
   };
 
-  if (counts.courses === 0 && counts.placeholders === 0) {
+  if (counts.courses === 0 && counts.placeholders === 0 && counts.markers === 0) {
     return { plan: null, summary, dropped, errors: [{ code: 'no-courses', message: ERRORS.noCourses }] };
   }
 

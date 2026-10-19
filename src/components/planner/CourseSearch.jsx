@@ -1,5 +1,7 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useContext } from 'react';
 import { useDraggable } from '@dnd-kit/core';
+import { MarineSemesterContext } from './marineContext';
+import { matchesMarineQuery } from '../../data/marineSemester';
 import { parseCourseKey, normalizeCourseKey, compareByCatalogNumber } from '../../utils/courseKey';
 import {
   loadAllCoursesWhenRequested,
@@ -9,7 +11,7 @@ import {
 } from '../../utils/courseQuery';
 import { aliasFor } from '../../utils/grsAlias';
 import SemesterPickerModal from './SemesterPickerModal';
-import { HubUnitTags, OfferingBadge, OfferedFilterToggle } from './CourseTags';
+import { HubUnitTags, MarineSemesterPill, OfferingBadge, OfferedFilterToggle } from './CourseTags';
 
 // Stash toggle glyph — filled paw = stashed, outline paw = not. `currentColor`
 // so it inherits the button's own color (scarlet / stashed-amber / hover
@@ -87,17 +89,19 @@ function SearchResultCard({
           {course.courseNumber ?? course.id}
         </div>
         <div className="search-result-name-row">
-          <span className="search-result-name">{course.name ?? '—'}</span>
+          <span className="search-result-name" title={course.name ?? undefined}>{course.name ?? '—'}</span>
+        </div>
+        {/* Badges line (below the title, so none squeezes it): study-abroad /
+            career flags, HUB tags, then the offering badge. */}
+        <div className="search-result-hub">
           {course.studyAbroad && (
             <span className="offering-badge offering-badge-abroad">Study abroad</span>
           )}
           {isProfessionalCareer(course.career) && (
             <span className="offering-badge offering-badge-career">{course.career}</span>
           )}
-        </div>
-        {/* Tags line: HUB tags, then the offering badge (hidden when empty). */}
-        <div className="search-result-hub">
           <HubUnitTags units={course.hubUnits} />
+          <MarineSemesterPill courseKey={course.id} />
           <OfferingBadge
             offeringPattern={course.offeringPattern}
             upcomingSeasons={course.upcomingSeasons}
@@ -334,6 +338,11 @@ export default function CourseSearch({
   }, [searchQuery, rangeFilter, coursesLoaded, searchableCourses, subjectPrefixes, offeredOnly]);
 
   const hasActiveQuery = Boolean(searchQuery.trim()) || Boolean(rangeFilter);
+  // A pinned "Marine Semester" row when the RAW query mentions "marine" (the
+  // normalized course-key query drops spaces, so it can't be used). It is not
+  // a course: no drag data, no courseKey, click-only.
+  const marine = useContext(MarineSemesterContext);
+  const showMarinePinned = !rangeFilter && matchesMarineQuery(searchQuery) && Boolean(marine.onOpenCreatePicker);
   const stashSet = useMemo(() => new Set(stash), [stash]);
 
   // A search started some other way than the search box (HUB filter, or
@@ -417,7 +426,21 @@ export default function CourseSearch({
           <div className="search-loading" role="status">Loading courses…</div>
         )}
 
-        {!loading && hasActiveQuery && coursesLoaded && results.length === 0 && (
+        {showMarinePinned && (
+          <button
+            type="button"
+            className="search-result-card search-pinned-marine"
+            onClick={marine.onOpenCreatePicker}
+            title="Pick an empty Fall to make your Marine Semester"
+          >
+            <span className="search-result-info">
+              <span className="search-result-code">Marine Semester</span>
+              <span className="search-result-name">Add it to an empty Fall in your plan</span>
+            </span>
+          </button>
+        )}
+
+        {!loading && hasActiveQuery && coursesLoaded && results.length === 0 && !showMarinePinned && (
           <div className="search-empty">
             <img
               className="search-empty-paw"

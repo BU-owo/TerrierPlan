@@ -99,6 +99,8 @@ export function describeRequirement(node, visibility = null) {
       // An authored subtitle replaces the generated "Pick N of M" line.
       if (typeof node.subtitle === 'string' && node.subtitle) return node.subtitle;
       const pool = node.pool || [];
+      // No course list (e.g. filled by a special-term block, or by petitions).
+      if (pool.length === 0) return null;
       if (pool.some(isRangeEntry)) return `Pick ${node.min}: ${pool.map(describePoolEntryShort).join(', ')}`;
       // Pick-one nodes count every selectable course (a sequence bundle is one).
       if (node.min === 1) {

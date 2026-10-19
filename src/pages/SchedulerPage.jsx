@@ -56,6 +56,7 @@ import useOneTimeHint from '../hooks/useOneTimeHint';
 import useDesktopLayout from '../hooks/useDesktopLayout';
 import { BU_LINKS } from '../data/officialLinks';
 import { ART_ALT, CREDIT_SHORT, ART_MASCOT_SRC } from '../constants/credits';
+import { registerPendingWriteFlush } from '../utils/pendingWrites';
 import './planner.css';
 import './scheduler.css';
 import '../App.css';
@@ -1783,6 +1784,9 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       flushDraft();
     };
   }, [flushDraft]);
+
+  // "Save and reload" (UpdateBanner) writes the still-debounced draft first.
+  useEffect(() => registerPendingWriteFlush(flushDraft), [flushDraft]);
 
   // The stepper hint clears on the 2nd navigation, not the first.
   const stepperNavCountRef = useRef(0);

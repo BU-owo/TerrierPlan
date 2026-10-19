@@ -1,4 +1,5 @@
 import { normalizeCourseKey, parseCourseKey, cleanSubstituteLabel } from './courseKey.js';
+import { marinePool } from '../data/marineSemester.js';
 
 function describeEntry(entry) {
   if (typeof entry === 'string') return entry;
@@ -333,7 +334,7 @@ function claimWithSubsets(node, mainPools, required, ctx) {
 function evaluateCount(node, ctx) {
   const required = node.min;
   const { matched, missing, satisfiedCount, subsets } = claimWithSubsets(node, [node.pool || []], required, ctx);
-  return {
+  return fillFromMarineSlots(node, {
     ...node,
     status: satisfiedCount >= required ? 'satisfied' : 'unsatisfied',
     matched,
@@ -341,6 +342,54 @@ function evaluateCount(node, ctx) {
     subsets,
     satisfiedCount,
     required,
+  }, ctx);
+}
+
+const MARINE_POOL_SOURCE = 'marineSemester';
+
+// `poolFrom: "marineSemester"` on a COUNT: its pool is the Marine Semester
+// course list from src/data/marineSemester.js (twins as one OR_EQUIVALENT
+// slot), resolved here so the sweep test and the UI see the same pool. An
+// authored non-empty `pool` wins. Any other poolFrom value is ignored.
+export function resolvePoolFrom(node) {
+  if (node?.poolFrom !== MARINE_POOL_SOURCE || (node.pool || []).length > 0) return node;
+  return { ...node, pool: marinePool() };
+}
+
+
+// The program with every `poolFrom` resolved, for code that reads the
+// authored JSON directly (tests, tooling). The engine resolves per node.
+export function resolveProgramPools(programDef) {
+  const walk = (node) => {
+    const resolved = resolvePoolFrom(node);
+    return Array.isArray(resolved.children) ? { ...resolved, children: resolved.children.map(walk) } : resolved;
+  };
+  return { ...programDef, tree: walk(programDef.tree) };
+}
+
+// Numerator for a `poolFrom: "marineSemester"` COUNT: real pool courses in
+// the plan (claimed through the pool, cross-listed twins once) plus the
+// plan's Marine Semester slots (ctx.marineSlots, from
+// evaluateRequirementTree's options.marineSlots: remaining placeholders and
+// research-in-lieu courses in Marine terms), capped at `required`. Those
+// slots are filled through synthetic claimed keys (never real courseKeys, so
+// nothing else can match them). `required` (and so the program total) doesn't
+// change. Runs before substitutions, which then find no open slot and stay
+// inert. The fill is reported in `matched` as { marineSlots: n, courseKeys: [] }.
+function fillFromMarineSlots(node, result, ctx) {
+  if (node.poolFrom !== MARINE_POOL_SOURCE || !(ctx.marineSlots > 0)) return result;
+  const fill = Math.min(result.required - result.satisfiedCount, ctx.marineSlots);
+  if (fill <= 0) return result;
+  for (let i = 0; i < fill; i += 1) ctx.claimed.add(outsideKey(node, `marine-slot-${i}`));
+  const satisfiedCount = result.satisfiedCount + fill;
+  return {
+    ...result,
+    status: satisfiedCount >= result.required ? 'satisfied' : 'unsatisfied',
+    matched: [
+      ...result.matched,
+      { label: 'Marine Semester course', entryLabel: null, courseKeys: [], entryIndex: null, fallback: false, marineSlots: fill },
+    ],
+    satisfiedCount,
   };
 }
 
@@ -734,7 +783,8 @@ function evaluateUnresolvedSubstituted(node, ctx, sub, override) {
   };
 }
 
-function evaluateNode(node, ctx, meta) {
+function evaluateNode(rawNode, ctx, meta) {
+  const node = resolvePoolFrom(rawNode);
   const override = ctx.overrides?.[node.id];
   if (override?.type === 'waive') return evaluateWholeWaived(node, ctx, meta, override);
   const substitutions = normalizeSubstitutions(override);
@@ -801,13 +851,20 @@ export function deriveRequiredTotal(node) {
   }
 }
 
-export function evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides = {}) {
+// `options.marineSlots`: how many Marine Semester course slots the plan still
+// holds (see fillFromMarineSlots); 0 or absent = none.
+export function evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides = {}, options = {}) {
   const planSet = new Set(
     Array.from(planCourseKeys)
       .filter(Boolean)
       .map((key) => normalizeCourseKey(key))
   );
-  const ctx = { planCourseKeys: planSet, claimed: new Set(), overrides: requirementOverrides || {} };
+  const ctx = {
+    planCourseKeys: planSet,
+    claimed: new Set(),
+    overrides: requirementOverrides || {},
+    marineSlots: Number.isFinite(options?.marineSlots) ? Math.max(0, Math.floor(options.marineSlots)) : 0,
+  };
   const tree = evaluateNode(programDef.tree, ctx);
   const derivedTotal = deriveRequiredTotal(tree);
   const totalCoursesRequired = Number.isFinite(derivedTotal) && derivedTotal > 0

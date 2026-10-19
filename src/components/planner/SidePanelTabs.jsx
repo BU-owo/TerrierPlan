@@ -30,12 +30,16 @@ export default function SidePanelTabs({
   creditsMap,
   lockStatusMap,
   noteCredits,
+  // Part of noteCredits already completed (past Marine Semester placeholders).
+  completedNoteCredits,
   isTransfer,
   onToggleTransfer,
   majorBulletinUrl,
   onMajorSelect,
   // Requirements tab (compact RequirementTree) — see RequirementsSidebar.
   planCourseKeys,
+  // Remaining Marine Semester course slots in the plan (requirements engine).
+  marineSlots,
   onEnsureCourseData,
   requirementOverrides,
   onSetRequirementOverride,
@@ -150,6 +154,7 @@ export default function SidePanelTabs({
             majorBulletinUrl={majorBulletinUrl}
             onMajorSelect={onMajorSelect}
             planCourseKeys={planCourseKeys}
+            marineSlots={marineSlots}
             courseMap={courseMap}
             onEnsureCourseData={onEnsureCourseData}
             requirementOverrides={requirementOverrides}
@@ -173,6 +178,7 @@ export default function SidePanelTabs({
             externalCredits={externalCredits}
             lockStatusMap={lockStatusMap}
             noteCredits={noteCredits}
+            completedNoteCredits={completedNoteCredits}
             onSummaryChange={makeSummaryHandler('credits')}
           />
         </div>

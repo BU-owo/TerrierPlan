@@ -322,13 +322,13 @@ function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash
       <div className="search-result-info" style={shaded ? { opacity: 0.55 } : undefined}>
         <div className="search-result-code">{label}</div>
         <div className="search-result-name-row">
-          <span className="search-result-name">{course.name ?? '—'}</span>
+          <span className="search-result-name" title={course.name ?? undefined}>{course.name ?? '—'}</span>
+        </div>
+        {/* Badges line: study-abroad flag, HUB tags, then the offering badge (hidden when empty). */}
+        <div className="search-result-hub">
           {course.studyAbroad && (
             <span className="offering-badge offering-badge-abroad">Study abroad</span>
           )}
-        </div>
-        {/* Tags line: HUB tags, then the offering badge (hidden when empty). */}
-        <div className="search-result-hub">
             {course.hubUnits?.map((unit) => {
               if (!neededUnitCodes) {
                 return (

@@ -1,6 +1,7 @@
 import { HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { getOfferingBadge } from '../../utils/offeringPattern';
 import { CURRENT_TERM_LABEL } from '../../utils/term';
+import { marineKind } from '../../data/marineSemester';
 
 // The HUB unit tags and season-agnostic offering badge shared by search
 // results, the Paw-tential Courses tab, and requirement course rows — one
@@ -72,4 +73,17 @@ export function OfferedFilterToggle({ checked, onChange }) {
       {checked && <span className="offered-filter-note">{SNAPSHOT_NOTE}</span>}
     </div>
   );
+}
+
+const MARINE_PILL_TITLE = {
+  only: 'Taught as part of the Marine Semester. Requires admission to the Marine Semester.',
+  also: 'Also taught in the Marine Semester. Open to students another way too.',
+};
+
+// "Marine Semester" pill on a course the Marine Semester lists as ONLY or
+// ALSO (src/data/marineSemester.js); nothing for any other course.
+export function MarineSemesterPill({ courseKey }) {
+  const kind = marineKind(courseKey);
+  if (!kind) return null;
+  return <span className="marine-pill" title={MARINE_PILL_TITLE[kind]}>Marine Semester</span>;
 }

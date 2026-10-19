@@ -13,6 +13,10 @@ export default function CreditsPanel({
   // Plan-wide note-placeholder credits (Fall/Spring + Summer slots), summed
   // by PlannerPage — the same figure its header credit badge adds in.
   noteCredits = 0,
+  // The part of noteCredits that is completed: a past Marine Semester term's
+  // placeholders (the same semester status the trackers use). Every other
+  // placeholder stays planned. Included in noteCredits, never added to it.
+  completedNoteCredits = 0,
   onSummaryChange,
 }) {
   // Same completed/current/planned split as the Requirements and HUB
@@ -22,17 +26,17 @@ export default function CreditsPanel({
   // progress" bucket, just completed vs. everything still ahead).
   const { completedCredits, plannedCredits } = useMemo(() => {
     const allKeys = [...semesters.flatMap((sem) => entriesCourseKeys(sem)), ...extraCourseKeys];
-    let completed = 0;
-    // Note placeholders (no courseKey) aren't real courses, so they're never
-    // "completed" — their own credits always count as planned.
-    let planned = noteCredits;
+    let completed = completedNoteCredits;
+    // Note placeholders (no courseKey) aren't real courses, so their credits
+    // count as planned — except a past Marine Semester term's (see above).
+    let planned = noteCredits - completedNoteCredits;
     for (const key of allKeys) {
       const credit = creditsMap[key] ?? 0;
       if (describeLockStatus(lockStatusMap[key]).variant === 'completed') completed += credit;
       else planned += credit;
     }
     return { completedCredits: completed, plannedCredits: planned };
-  }, [semesters, extraCourseKeys, creditsMap, lockStatusMap, noteCredits]);
+  }, [semesters, extraCourseKeys, creditsMap, lockStatusMap, noteCredits, completedNoteCredits]);
 
   const planCourseCredits = completedCredits + plannedCredits;
 

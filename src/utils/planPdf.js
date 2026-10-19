@@ -4,13 +4,17 @@
 // back yet. Loaded with a dynamic import() on click so pdf-lib stays out of
 // the main chunk.
 import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
-import { entryCourseKey, isNoteEntry } from './courseEntry';
+import {
+  blockEntryLabel, entryCourseKey, isCourseEntry, isNoteEntry,
+} from './courseEntry';
+import {
+  PLAN_PDF_FORMAT, PLAN_PDF_VERSION, PLAN_PDF_ATTACHMENT_NAME, buildPlanPayload, creditLabel, extraTermsCredits,
+  summarizeTerm, termTitle, termsCreditTotal, totalsFootnote, yearMinHeight,
+} from './planPdfModel';
 import { BU_SCHOOLS } from '../data/bu-programs';
 import { COURSE_KEY_PATTERN } from './courseKey';
 
-export const PLAN_PDF_FORMAT = 'terrierplan-plan';
-export const PLAN_PDF_VERSION = 1;
-export const PLAN_PDF_ATTACHMENT_NAME = 'terrierplan-plan.json';
+export { PLAN_PDF_FORMAT, PLAN_PDF_VERSION, PLAN_PDF_ATTACHMENT_NAME };
 
 const PAGE_W = 792;
 const PAGE_H = 612;
@@ -174,33 +178,6 @@ function lastUsedYear(semesters, gridSummerTerms) {
   return last;
 }
 
-function knownCredit(value) {
-  if (value == null || value === '') return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
-// The one place per-entry credits and the semester total are decided; the
-// rows are drawn from `rows` and the header from `known`/`unknown`, so they
-// can't drift apart. `credits: null` = unknown (no creditsMap entry).
-function summarizeEntries(entries, creditsMap) {
-  let known = 0;
-  let unknown = 0;
-  const rows = (entries || []).map((entry) => {
-    const credits = isNoteEntry(entry)
-      ? knownCredit(entry.credits)
-      : knownCredit(creditsMap?.[entryCourseKey(entry)]);
-    if (credits == null) unknown += 1;
-    else known += credits;
-    return { entry, credits };
-  });
-  return { rows, known, unknown };
-}
-
-function creditLabel(known, unknown) {
-  return `${known}${unknown > 0 ? '+' : ''} cr`;
-}
-
 export async function buildPlanPdf({
   planName,
   majorBulletinUrl,
@@ -216,6 +193,7 @@ export async function buildPlanPdf({
   courseMap,
   creditsMap,
   totalCredits,
+  externalCreditTotal,
 }) {
   const now = new Date();
   const dateLabel = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -234,26 +212,33 @@ export async function buildPlanPdf({
 
   // Any course (grid, Summer column or Summer/Winter list) with no credit
   // data makes the page-header total a lower bound.
-  const planUnknown = [
-    ...plainSemesters,
-    ...Object.values(gridSummerTerms || {}),
-  ].reduce((n, entries) => n + summarizeEntries(entries, creditsMap).unknown, 0)
+  const termsTotal = termsCreditTotal(plainSemesters, gridSummerTerms, creditsMap);
+  const planUnknown = termsTotal.unknown
     + (extraTerms || []).reduce(
-      (n, term) => n + (term.courseKeys || []).filter((k) => knownCredit(creditsMap?.[k]) == null).length,
+      (n, term) => n + (term.courseKeys || []).filter((k) => creditsMap?.[k] == null || creditsMap[k] === '' || !Number.isFinite(Number(creditsMap[k]))).length,
       0,
     );
+  // Header total vs term totals: a footnote when they differ (external
+  // credit, or Summer/Winter courses that aren't drawn).
+  const footnote = totalsFootnote({
+    totalCredits,
+    termsKnown: termsTotal.known,
+    termsUnknown: termsTotal.unknown,
+    extraKnown: extraTermsCredits(extraTerms, creditsMap),
+    externalTotal: externalCreditTotal,
+  });
 
   // ── Layout (measure only; drawing happens later, per page) ──
   const colW = (PAGE_W - MARGIN * 2 - GUTTER_W) / 2;
   const maxPageBody = PAGE_H - MARGIN - CONT_BAR_H - 8 - CONTENT_BOTTOM;
 
-  function buildRows(entries, s) {
+  function buildRows(entries, s, slotIndex) {
     const size = 8.6 * s;
     const lh = 10.4 * s;
     const rowGap = 3 * s;
     const nameX = CELL_PAD + CODE_W + 6;
     const nameW = colW - nameX - CREDIT_W - CELL_PAD - 4;
-    const summary = summarizeEntries(entries, creditsMap);
+    const summary = summarizeTerm(entries, creditsMap, slotIndex);
     const rows = summary.rows.map(({ entry, credits }) => {
       let code;
       let name;
@@ -262,6 +247,10 @@ export async function buildPlanPdf({
         isNote = true;
         code = 'Placeholder';
         name = entry.text || '';
+      } else if (!isCourseEntry(entry)) {
+        isNote = true;
+        code = 'Other';
+        name = blockEntryLabel(entry);
       } else {
         const key = entryCourseKey(entry);
         const info = courseMap?.[key];
@@ -283,8 +272,8 @@ export async function buildPlanPdf({
     return { rows, summary, size, lh, nameX };
   }
 
-  function layoutColumn(entries, s) {
-    const built = buildRows(entries, s);
+  function layoutColumn(entries, s, slotIndex) {
+    const built = buildRows(entries, s, slotIndex);
     let { rows } = built;
     let hidden = 0;
     // A column taller than a whole page keeps what fits and says how many
@@ -306,8 +295,8 @@ export async function buildPlanPdf({
 
   function layoutYear(year, s) {
     const headH = 14 * s;
-    const fall = layoutColumn(plainSemesters[year * 2], s);
-    const spring = layoutColumn(plainSemesters[year * 2 + 1], s);
+    const fall = layoutColumn(plainSemesters[year * 2], s, year * 2);
+    const spring = layoutColumn(plainSemesters[year * 2 + 1], s, year * 2 + 1);
     const gridBodyH = Math.max(fall.bodyH, spring.bodyH);
 
     let summer = null;
@@ -322,12 +311,14 @@ export async function buildPlanPdf({
       summer = {
         left,
         right,
-        summary: summarizeEntries(entries, creditsMap),
+        summary: summarizeTerm(entries, creditsMap),
         headH: 12 * s,
         bodyH: Math.max(left.bodyH, right.bodyH),
       };
     }
-    const height = headH + gridBodyH + (summer ? summer.headH + summer.bodyH : 0);
+    // Never shorter than the rotated "YEAR n" tab, so an empty year's label fits.
+    const tabW = bold.widthOfTextAtSize(`YEAR ${year + 1}`, 8.5 * s);
+    const height = Math.max(headH + gridBodyH + (summer ? summer.headH + summer.bodyH : 0), yearMinHeight(tabW, s));
     return { year, s, headH, fall, spring, gridBodyH, summer, height };
   }
 
@@ -458,12 +449,23 @@ export async function buildPlanPdf({
     page.drawRectangle({ x, y: topY - headH, width, height: headH, color: fill });
     const size = 8 * s;
     const y = topY - headH + (headH - size) / 2 + 1;
-    page.drawText(clean(title.toUpperCase()), { x: x + CELL_PAD, y, size, font: bold, color: INK });
-    if (summary.rows.length > 0) {
-      const text = creditLabel(summary.known, summary.unknown);
-      page.drawText(text, { x: x + width - CELL_PAD - bold.widthOfTextAtSize(text, size), y, size, font: bold, color: INK });
-      if (summary.unknown > 0) pageHasPlus[pageHasPlus.length - 1] = true;
+    const { name, label } = termTitle(title, summary.marine);
+    const nameText = clean(name);
+    page.drawText(nameText, { x: x + CELL_PAD, y, size, font: bold, color: INK });
+    // "FALL · Marine Semester": the muted label, as on the board.
+    if (label) {
+      page.drawText(clean(` ·  ${label}`), {
+        x: x + CELL_PAD + bold.widthOfTextAtSize(nameText, size),
+        y,
+        size: size * 0.95,
+        font: italic,
+        color: MUTED,
+      });
     }
+    // Always printed, "0 cr" for an empty term (the board shows it too).
+    const text = creditLabel(summary.known, summary.unknown);
+    page.drawText(text, { x: x + width - CELL_PAD - bold.widthOfTextAtSize(text, size), y, size, font: bold, color: INK });
+    if (summary.unknown > 0) pageHasPlus[pageHasPlus.length - 1] = true;
   }
 
   // Dev-only: the number in a semester header must equal the sum of the
@@ -540,8 +542,13 @@ export async function buildPlanPdf({
       p.drawText(text, { x: MARGIN, y: FOOTER_TEXT_Y, size: 8, font, color: MUTED });
       const label = `Page ${i + 1} of ${pages.length}`;
       p.drawText(label, { x: PAGE_W - MARGIN - font.widthOfTextAtSize(label, 8), y: FOOTER_TEXT_Y, size: 8, font, color: MUTED });
+      // Page 1 (where the header total is): how the total adds up.
+      if (i === 0 && footnote) {
+        p.drawText(clean(footnote), { x: MARGIN, y: FOOTNOTE_Y, size: 7, font: italic, color: MUTED });
+      }
       if (pageHasPlus[i]) {
-        p.drawText('+ = some courses have no credit data', { x: MARGIN, y: FOOTNOTE_Y, size: 7, font: italic, color: MUTED });
+        const note = '+ = some courses have no credit data';
+        p.drawText(note, { x: PAGE_W - MARGIN - italic.widthOfTextAtSize(note, 7), y: FOOTNOTE_Y, size: 7, font: italic, color: MUTED });
       }
     });
   }
@@ -559,27 +566,10 @@ export async function buildPlanPdf({
   // ── Machine-readable attachment ──
   // Built field by field, so nothing account-specific (uid, email, name) can
   // leak in. advisorNote is student-entered free text, left out on purpose.
-  const payload = {
-    format: PLAN_PDF_FORMAT,
-    version: PLAN_PDF_VERSION,
-    exportedAt: now.toISOString(),
-    name: planName ?? null,
-    majorBulletinUrl: majorBulletinUrl ?? null,
-    isTransfer: Boolean(isTransfer),
-    semesters: serializedSemesters,
-    gridSummerTerms: gridSummerTerms || {},
-    extraTerms: extraTerms || [],
-    stash: stash || [],
-    requirementOverrides: requirementOverrides || {},
-    student: {
-      completedCourseKeys: completedCourseKeys || [],
-      externalCredits: (externalCredits || []).map((credit) => {
-        // eslint-disable-next-line no-unused-vars
-        const { advisorNote, ...rest } = credit || {};
-        return rest;
-      }),
-    },
-  };
+  const payload = buildPlanPayload({
+    now, planName, majorBulletinUrl, isTransfer, serializedSemesters, gridSummerTerms, extraTerms, stash,
+    requirementOverrides, completedCourseKeys, externalCredits,
+  });
   await doc.attach(
     new TextEncoder().encode(JSON.stringify(payload)),
     PLAN_PDF_ATTACHMENT_NAME,

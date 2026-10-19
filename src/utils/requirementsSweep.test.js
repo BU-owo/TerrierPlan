@@ -34,7 +34,8 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { evaluateRequirementTree, poolEntryCandidateKeys } from './requirementsEngine.js';
+import { evaluateRequirementTree, poolEntryCandidateKeys, resolveProgramPools } from './requirementsEngine.js';
+import { normalizeSemesters, marineTrackerSlots } from './courseEntry.js';
 import { normalizeCourseKey } from './courseKey.js';
 
 const REQUIREMENTS_DIR = fileURLToPath(new URL('../data/requirements/', import.meta.url));
@@ -49,7 +50,7 @@ function findJson(dir) {
 
 const programs = findJson(REQUIREMENTS_DIR)
   .sort()
-  .map((file) => ({ file: relative(REQUIREMENTS_DIR, file), def: JSON.parse(readFileSync(file, 'utf8')) }));
+  .map((file) => ({ file: relative(REQUIREMENTS_DIR, file), def: resolveProgramPools(JSON.parse(readFileSync(file, 'utf8'))) }));
 
 // ── Synthetic plan ──────────────────────────────────────────────────────────
 
@@ -192,8 +193,26 @@ function findResultNode(tree, id) {
   return allNodes(tree).find((n) => n.id === id);
 }
 
-for (const { file, def } of programs) {
-  test(`petition sweep: ${file}`, (t) => {
+// Every program runs three times: no Marine Semester term in the plan, a
+// Marine term (4 placeholder slots), and a plan holding the legacy Marine
+// shapes (Step 1's block and the 16-credit note, expanded on read).
+// `poolFrom` nodes fill from the slots; everything else must be unaffected.
+// The total never depends on a Marine term. (The programs are resolved with
+// resolveProgramPools so the synthetic plan sees the data module's pool.)
+const legacySemesters = normalizeSemesters([
+  [{ kind: 'block', blockType: 'marine', id: 'b1', credits: 16 }],
+  [],
+  [{ kind: 'note', id: 'w1', text: 'Marine Semester', credits: 16, blockType: 'marine' }],
+]);
+const MARINE_VARIANTS = [
+  { name: 'no Marine term', marineSlots: 0 },
+  { name: 'Marine term', marineSlots: 4 },
+  { name: 'legacy Marine shapes', marineSlots: legacySemesters.reduce((sum, entries, i) => sum + marineTrackerSlots(entries, i), 0) },
+];
+
+for (const { file, def } of programs) for (const variant of MARINE_VARIANTS) {
+  test(`petition sweep: ${file} (${variant.name})`, (t) => {
+    const options = { marineSlots: variant.marineSlots };
     const plan = [...syntheticPlan(def), ...IN_PLAN];
     const failures = [];
     const fail = (nodeId, kind, message) => failures.push(`${nodeId} [${kind}]: ${message}`);
@@ -206,7 +225,11 @@ for (const { file, def } of programs) {
     assert.ok(ids.every((id) => typeof id === 'string' && id), `${file}: every node needs an id`);
     assert.equal(new Set(ids).size, ids.length, `${file}: node ids must be unique`);
 
-    const base = evaluateRequirementTree(def, plan, {});
+    const base = evaluateRequirementTree(def, plan, {}, options);
+    const noBlockTotal = evaluateRequirementTree(def, plan, {}).totalCoursesRequired;
+    if (base.totalCoursesRequired !== noBlockTotal) {
+      fail('(no override)', 'baseline', `a Marine term changed the total ${noBlockTotal} -> ${base.totalCoursesRequired}`);
+    }
     const baseClaimed = new Set(claimedList(base.tree));
     for (const oneOf of allNodes(base.tree).filter((n) => n.type === 'ONE_OF')) {
       if (oneOf.children.some((c) => c.status === 'satisfied' && !c.waived)) continue;
@@ -222,7 +245,7 @@ for (const { file, def } of programs) {
       for (const [kind, override] of overridesFor(findResultNode(base.tree, node.id))) {
         let result;
         try {
-          result = evaluateRequirementTree(def, plan, { [node.id]: override });
+          result = evaluateRequirementTree(def, plan, { [node.id]: override }, options);
         } catch (err) {
           fail(node.id, kind, `threw ${err.message}`);
           continue;

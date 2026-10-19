@@ -2,15 +2,15 @@ import { useContext, useId } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { PawIcon } from '../planner/CourseSearch';
 import { RequirementDragContext } from './requirementDrag';
-import { HubUnitTags, OfferingBadge } from '../planner/CourseTags';
+import { HubUnitTags, MarineSemesterPill, OfferingBadge } from '../planner/CourseTags';
 import useUpcomingSeasons from '../../hooks/useUpcomingSeasons';
 import useCurrentTermCourseKeys from '../../hooks/useCurrentTermCourseKeys';
 import { shortCourseCode } from './treeHelpers';
 
 // The one row used for every selectable course in the requirements view
-// (pool groups, range lists, sequence options): a single compact line of
-// paw toggle + short code + title (ellipsized, full title on hover) + HUB
-// tags + offering badge + (i). `course` is the catalog/courseMap data, if
+// (pool groups, range lists, sequence options): code, title (two lines then
+// an ellipsis), then the HUB tags and badges on their own line, paw + (i)
+// top right. `course` is the catalog/courseMap data, if
 // any. `inPlan` swaps the paw for a green ✓ and tints the row (claimed /
 // in-plan courses); `statusLabel` ("Completed", "Planned", …) is its
 // tooltip. `compact` (sequence cards) drops the HUB tags and shows only the
@@ -60,18 +60,32 @@ export default function RequirementCourseRow({
     disabled: !canDrag,
   });
 
+  const countOf = (...flags) => flags.filter(Boolean).length;
+
+  // Label-only substitute (transfer, study abroad, ...): ✎, the free text, and
+  // the "Substituted for" pill — no buttons.
   if (substituted && substituteLabel) {
     return (
       <div className="req-course-row is-substituted">
         <span className="req-course-row-check req-course-row-sub-mark" title="Substituted" aria-label="Substituted">✎</span>
-        <span className="req-course-row-code req-course-row-sub-label" title={substituteLabel}>{substituteLabel}</span>
-        <span className="req-course-row-meta">
-          <span className="req-course-row-pill">{replacesLabel ? `Substituted for ${replacesLabel}` : 'Substituted'}</span>
-        </span>
+        <div className="req-stacked-body">
+          <span className="req-stacked-code is-wrap" title={substituteLabel}>{substituteLabel}</span>
+          <div className="req-stacked-badges">
+            <span className="req-course-row-pill">{replacesLabel ? `Substituted for ${replacesLabel}` : 'Substituted'}</span>
+          </div>
+        </div>
       </div>
     );
   }
 
+  const showPaw = !substituted && !inPlan;
+  const actionCount = countOf(showPaw, onShowCourseInfo);
+
+  // The shared course-row anatomy (also MarineCourseRow, and the search/stash
+  // cards in planner.css): line 1 the bold code, line 2 the title (two lines,
+  // then an ellipsis; the full title on hover), line 3 every badge, wrapping
+  // below the title so none squeezes it. A ✓ / ✎ state mark sits on the left;
+  // the paw (save for later) and "i" sit top right.
   return (
     <div
       ref={canDrag ? setNodeRef : undefined}
@@ -87,62 +101,66 @@ export default function RequirementCourseRow({
         >✎</span>
       ) : inPlan ? (
         <span className="req-course-row-check" title={statusLabel} aria-label={statusLabel}>✓</span>
-      ) : (
-        <button
-          type="button"
-          className={`search-result-stash-btn${isStashed ? ' is-stashed' : ''}`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleStash(courseKey);
-          }}
-          aria-label={isStashed ? `Remove ${code} from Paw-tential Courses` : `Save ${code} to Paw-tential Courses (saved for later, not on your plan)`}
-          title={isStashed ? 'Remove from Paw-tential Courses' : 'Save to Paw-tential Courses (saved for later, not on your plan)'}
-        >
-          <PawIcon filled={isStashed} />
-        </button>
-      )}
-      <span className="req-course-row-code">{code}</span>
-      <span className="req-course-row-title" title={name ? `${code} — ${name}` : code}>{name ?? ''}</span>
-      {/* display: contents normally (one line); narrow sidebar rows put
-          this on a second line (planner.css). */}
-      <span className="req-course-row-meta">
-        {substituted && (
-          <span className="req-course-row-pill">{replacesLabel ? `Substituted for ${replacesLabel}` : 'Substituted'}</span>
-        )}
-        {tag && <span className="req-course-row-pill">{tag}</span>}
-        {compact ? (
-          <OfferingBadge inCurrentTerm={course?.inCurrentTerm ?? currentTermKeys?.has(courseKey)} />
-        ) : (
-          <>
-            <span className="req-course-row-tags">
+      ) : null}
+      <div className="req-stacked-body">
+        <span className="req-stacked-code">{code}</span>
+        {name && <span className="req-stacked-title" title={`${code} — ${name}`}>{name}</span>}
+        <div className="req-stacked-badges">
+          <MarineSemesterPill courseKey={courseKey} />
+          {substituted && (
+            <span className="req-course-row-pill">{replacesLabel ? `Substituted for ${replacesLabel}` : 'Substituted'}</span>
+          )}
+          {tag && <span className="req-course-row-pill">{tag}</span>}
+          {compact ? (
+            <OfferingBadge inCurrentTerm={course?.inCurrentTerm ?? currentTermKeys?.has(courseKey)} />
+          ) : (
+            <>
               <HubUnitTags units={course?.hubUnits} />
-            </span>
-            <OfferingBadge
-              offeringPattern={course?.offeringPattern}
-              upcomingSeasons={course?.upcomingSeasons ?? catalogSeasons}
-              inCurrentTerm={course?.inCurrentTerm ?? currentTermKeys?.has(courseKey)}
-            />
-          </>
-        )}
-        {subsetLabel && (
-          <span className="req-subset-marker" title={subsetLabel} aria-label={subsetLabel}>✱</span>
-        )}
-      </span>
-      {onShowCourseInfo && (
-        <button
-          type="button"
-          className="search-result-info-btn req-course-row-info"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onShowCourseInfo(courseKey);
-          }}
-          aria-label={`View details for ${code}`}
-          title="Course details"
-        >
-          i
-        </button>
+              <OfferingBadge
+                offeringPattern={course?.offeringPattern}
+                upcomingSeasons={course?.upcomingSeasons ?? catalogSeasons}
+                inCurrentTerm={course?.inCurrentTerm ?? currentTermKeys?.has(courseKey)}
+              />
+            </>
+          )}
+          {subsetLabel && (
+            <span className="req-subset-marker" title={subsetLabel} aria-label={subsetLabel}>✱</span>
+          )}
+        </div>
+      </div>
+      {actionCount > 0 && (
+        <div className={`req-stacked-actions${actionCount > 2 ? ' is-three' : ''}`}>
+          {showPaw && (
+            <button
+              type="button"
+              className={`search-result-stash-btn${isStashed ? ' is-stashed' : ''}`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleStash(courseKey);
+              }}
+              aria-label={isStashed ? `Remove ${code} from Paw-tential Courses` : `Save ${code} to Paw-tential Courses (saved for later, not on your plan)`}
+              title={isStashed ? 'Remove from Paw-tential Courses' : 'Save to Paw-tential Courses (saved for later, not on your plan)'}
+            >
+              <PawIcon filled={isStashed} />
+            </button>
+          )}
+          {onShowCourseInfo && (
+            <button
+              type="button"
+              className="search-result-info-btn"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowCourseInfo(courseKey);
+              }}
+              aria-label={`View details for ${code}`}
+              title="Course details"
+            >
+              i
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

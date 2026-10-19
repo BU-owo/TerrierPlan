@@ -1,0 +1,210 @@
+{
+  "programName": "Marine Science",
+  "degree": "BA",
+  "school": "CAS",
+  "bulletinUrl": "https://www.bu.edu/academics/cas/programs/marine-science/ba/",
+  "minGrade": "C",
+  "totalCoursesRequired": 17,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "id": "marine-ba-root",
+    "type": "ALL",
+    "label": "Marine Science BA — Major Requirements",
+    "children": [
+      {
+        "id": "marine-ba-min-grade",
+        "type": "UNRESOLVED",
+        "label": "Grade minimum",
+        "note": "You need a C or higher in all required courses. This isn't checked automatically.",
+        "devNote": "Bulletin: 'A grade of C or higher is required in all of the aforementioned courses to receive units in the major. All required courses are 4 unit hours.' Honors in the Major (MR 401/402, GPA 3.25/3.5), the Undergraduate Research Options (MR 291/292, 391/392, 491/492) and the 'maximum of 12 research units may be counted as elective courses' cap are not modeled: the major has no elective slot for them to fill."
+      },
+      {
+        "id": "marine-ba-core",
+        "type": "ALL",
+        "label": "Core Introductory Courses (2)",
+        "courses": [
+          "CASBI260",
+          "CASEE144"
+        ],
+        "devNote": "CAS MR 144 ('Intro to Oceanography Disc') is EE 144's discussion, not a twin; CAS ES 144 is the inactive old subject code. Neither is listed."
+      },
+      {
+        "id": "marine-ba-related",
+        "type": "ALL",
+        "label": "Related Courses (8 total)",
+        "children": [
+          {
+            "id": "marine-ba-related-bio",
+            "type": "ALL",
+            "label": "Biology",
+            "courses": [
+              "CASBI107",
+              "CASBI108"
+            ],
+            "devNote": "Bulletin lists only BI 107 and BI 108 (no CGS NS 201 / BI 116 equivalents, unlike the Biology BA)."
+          },
+          {
+            "id": "marine-ba-related-chem",
+            "type": "SEQUENCE_GROUP",
+            "label": "Chemistry",
+            "options": [
+              {
+                "label": "CH 101 + CH 102",
+                "courses": [
+                  "CASCH101",
+                  "CASCH102"
+                ]
+              },
+              {
+                "label": "CH 109 + CH 110",
+                "courses": [
+                  "CASCH109",
+                  "CASCH110"
+                ]
+              },
+              {
+                "label": "CH 111 + CH 112",
+                "courses": [
+                  "CASCH111",
+                  "CASCH112"
+                ]
+              },
+              {
+                "label": "CH 171 + CH 172",
+                "courses": [
+                  "CASCH171",
+                  "CASCH172"
+                ]
+              }
+            ],
+            "devNote": "Bulletin order. No CH 101 + CH 116 option here (the Biology BA has one). MET CH 101/102/171/172 exist in the catalog but are MET courses, not cross-listings; not included."
+          },
+          {
+            "id": "marine-ba-related-physics",
+            "type": "COUNT",
+            "label": "Physics",
+            "min": 1,
+            "pool": [
+              {
+                "type": "OR_EQUIVALENT",
+                "options": [
+                  "CASPY105",
+                  "CASPY211"
+                ]
+              }
+            ],
+            "devNote": "Bulletin: 'CAS PY 105 or 211'. One course, not a two-term sequence."
+          },
+          {
+            "id": "marine-ba-related-math",
+            "type": "COUNT",
+            "label": "Mathematics, Statistics, and Computer Science",
+            "min": 3,
+            "pool": [
+              {
+                "type": "OR_EQUIVALENT",
+                "label": "One calculus course",
+                "options": [
+                  "CASMA121",
+                  "CASMA123"
+                ]
+              },
+              {
+                "type": "OR_EQUIVALENT",
+                "label": "One statistics course",
+                "options": [
+                  "CASMA115",
+                  "CASMA213"
+                ]
+              },
+              {
+                "type": "OR_EQUIVALENT",
+                "label": "One calculus, statistics, or computer science course",
+                "options": [
+                  "CASMA122",
+                  "CASMA124",
+                  "CASMA115",
+                  "CASMA213",
+                  "CASCS105",
+                  "CASCS108",
+                  "CASCS111"
+                ]
+              }
+            ],
+            "devNote": "Three named slots (pool.length === min, like the Economics core). Pool order is claim order: the statistics slot claims before the 'one more' slot, so MA 115/213 (in both) go to statistics first and only a second stats course falls through to 'one more'. Greedy is optimal here because the calculus slot shares no keys with the others. CAS MA 213E (study abroad) is left out."
+          }
+        ]
+      },
+      {
+        "id": "marine-ba-breadth",
+        "type": "COUNT",
+        "label": "Marine Breadth Courses (3 total)",
+        "min": 3,
+        "note": "It's recommended that you cover a variety of areas (BO, MB, PO, CO, MG, MSD).",
+        "pool": [
+          {
+            "type": "OR_EQUIVALENT",
+            "options": [
+              "CASAR518",
+              "CASAN518"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "courses": [
+              "CASBI303",
+              "CASBI410",
+              "CASBI413",
+              "CASBI500",
+              "CASBI509",
+              "CASBI519",
+              "CASBI550",
+              "CASBI586"
+            ],
+            "continues": true
+          },
+          {
+            "type": "COURSE_LIST",
+            "courses": [
+              "CASEE142",
+              "CASEE310",
+              "CASEE351",
+              "CASEE360",
+              "CASEE371",
+              "CASEE422"
+            ],
+            "continues": true
+          },
+          {
+            "type": "OR_EQUIVALENT",
+            "options": [
+              "CASEE423",
+              "CASBI423"
+            ],
+            "continues": true
+          },
+          {
+            "type": "COURSE_LIST",
+            "courses": [
+              "CASEE505",
+              "CASEE507",
+              "CASEE533"
+            ],
+            "continues": true
+          }
+        ],
+        "devNote": "19 courses in bulletin order. Area codes (BO, MB, PO, CO, MG, MSD) are a recommendation only and not modeled. Cross-listed twins found in public/courses.json (not named in the bulletin): AR 518 = AN 518 (Zooarchaeology), EE 423 = BI 423 (Marine Biogeochemistry); each is one OR_EQUIVALENT slot so both keys can't count. Plain runs are COURSE_LISTs (no twins inside, so they count the same as plain keys) with continues: true so the whole list draws as one box; the BI and EE runs are split so neither passes the 12-row list limit (which adds a filter box and hides rows behind Show more). Graduate twins (BI 610, BI 613, BI/EE 623) and inactive ES/GE old-code keys left out."
+      },
+      {
+        "id": "marine-ba-semester",
+        "type": "COUNT",
+        "label": "Marine Semester Courses (4 total)",
+        "min": 4,
+        "note": "The BU Marine Program places you in four month-long courses, so you don't choose them. Add your Marine Semester to a Fall term in your plan, or use ⋯ → Substitute a course for each course you've taken.",
+        "poolFrom": "marineSemester",
+        "devNote": "poolFrom: 'marineSemester' — the pool is the bulletin's Marine Semester list, read from src/data/marineSemester.js by the engine (marinePool: ONLY courses plus EE 557 and MR 500, cross-listed twins count once; not BI/EE 423 or EE 623, which are in the Marine Breadth pool). Offerings change every year, so the list is refreshed there, not here. Numerator = min(4, real pool courses in the plan + the plan's remaining Marine Semester slots: placeholders and research-in-lieu courses (MR 391/392/491/492) in a Marine Semester term, options.marineSlots). A student who took the courses another way (e.g. from a transcript) uses ⋯ → Substitute a course for each. 'In lieu of one of the four Marine Semester block courses, students may enroll in 4 units of Research for Units' (prearranged, approved by the Marine Program Director) is a research course in the Marine term, or a substitution."
+      }
+    ]
+  }
+}

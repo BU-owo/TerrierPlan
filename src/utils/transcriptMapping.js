@@ -2,7 +2,7 @@ import { semesterLabel } from './hubConstants';
 import { normalizeExternalCredits, normalizeExternalCredit } from './externalCredits';
 import { resolveApHubFromScore } from './apScoreResolution';
 import { getApHub, isApScoreDependent } from '../data/apIbHubCredit';
-import { entryCourseKey } from './courseEntry';
+import { entryCourseKey, placeImportedCourse } from './courseEntry';
 
 // BU's unofficial-transcript export sometimes prints generic block-credit
 // placeholder rows (bulk transfer/test credit not tied to a specific BU
@@ -265,7 +265,13 @@ export function applyImport(preview, existingSemesters, existingExtraTerms = [],
           // grade, not W/AU/I/IP/N/NG/MG or a TX/transfer row) — so it's
           // safe to auto-lock rather than asking the student to re-confirm
           // something their own transcript already verified.
-          semesters[a.slotIndex].push({ courseKey: key, locked: true, source: 'transcript' });
+          // A planned Marine Semester gives a placeholder up for the real
+          // course; otherwise it is appended (see placeImportedCourse).
+          semesters[a.slotIndex] = placeImportedCourse(
+            semesters[a.slotIndex],
+            { courseKey: key, locked: true, source: 'transcript' },
+            a.slotIndex,
+          );
           coursesAdded += 1;
         }
       });

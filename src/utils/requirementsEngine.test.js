@@ -2,7 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { evaluateRequirementTree, normalizeSubstitutions } from './requirementsEngine.js';
+import { evaluateRequirementTree, normalizeSubstitutions, resolvePoolFrom, resolveProgramPools } from './requirementsEngine.js';
+import { marinePool } from '../data/marineSemester.js';
 
 const biology = JSON.parse(readFileSync(new URL('../data/requirements/cas/biology-ba.json', import.meta.url), 'utf8'));
 const econ = JSON.parse(readFileSync(new URL('../data/requirements/cas/economics-ba.json', import.meta.url), 'utf8'));
@@ -490,4 +491,115 @@ test('Applied focus areas: pool is the five labeled areas in the bulletin order,
   assert.equal(focus.subtitle, 'Choose two areas below and take at least two courses in each.');
   assert.equal(focus.noteStyle, 'caption');
   assert.equal(focus.required, 4);
+});
+
+// ── poolFrom: "marineSemester" (the Marine Semester card) ───────────────────
+
+const marineBa = JSON.parse(readFileSync(new URL('../data/requirements/cas/marine-science-ba.json', import.meta.url), 'utf8'));
+const marineSemester = (result) => child(result, 'marine-ba-semester');
+const subs = (...items) => ({ type: 'substitute', substitutions: items, createdAt: '2026-03-01T00:00:00.000Z' });
+
+test('poolFrom: the pool is the data module list, twins as one slot; the JSON has no pool of its own', () => {
+  const authored = marineBa.tree.children.find((c) => c.id === 'marine-ba-semester');
+  assert.equal(authored.poolFrom, 'marineSemester');
+  assert.ok(!('pool' in authored));
+  assert.ok(!('filledByBlock' in authored));
+  const node = marineSemester(evaluateRequirementTree(marineBa, []));
+  assert.deepEqual(node.pool, marinePool());
+  assert.deepEqual(resolveProgramPools(marineBa).tree.children.find((c) => c.id === 'marine-ba-semester').pool, marinePool());
+  // A node with an authored pool, or no poolFrom, is left alone.
+  const own = { id: 'x', type: 'COUNT', min: 1, poolFrom: 'marineSemester', pool: ['CASCS111'] };
+  assert.equal(resolvePoolFrom(own), own);
+  const plain = { id: 'y', type: 'COUNT', min: 1, pool: [] };
+  assert.equal(resolvePoolFrom(plain), plain);
+  assert.equal(resolvePoolFrom({ ...plain, poolFrom: 'nope' }).pool.length, 0);
+});
+
+test('poolFrom: nothing in the plan -> 0/4, total 17', () => {
+  const r = evaluateRequirementTree(marineBa, []);
+  const node = marineSemester(r);
+  assert.equal(node.status, 'unsatisfied');
+  assert.equal(node.satisfiedCount, 0);
+  assert.equal(node.required, 4);
+  assert.equal(r.totalCoursesRequired, 17);
+  assert.equal(r.totalCoursesClaimed, 0);
+  // marineSlots of 0 / junk changes nothing.
+  for (const marineSlots of [0, -3, NaN, 'x', undefined]) {
+    assert.equal(marineSemester(evaluateRequirementTree(marineBa, [], {}, { marineSlots })).satisfiedCount, 0);
+  }
+});
+
+test('poolFrom: real pool courses count, a cross-listed twin pair counts once', () => {
+  const two = marineSemester(evaluateRequirementTree(marineBa, ['CASBI511', 'CASBI569']));
+  assert.equal(two.satisfiedCount, 2);
+  const twins = marineSemester(evaluateRequirementTree(marineBa, ['CASBI578', 'CASEE578']));
+  assert.equal(twins.satisfiedCount, 1);
+  const withBoth = marineSemester(evaluateRequirementTree(marineBa, ['CASBI523', 'CASEE523', 'CASBI511']));
+  assert.equal(withBoth.satisfiedCount, 2);
+  // EE 557 and MR 500 are in the bulletin list; BI/EE 423 are Breadth courses, not Marine Semester ones.
+  assert.equal(marineSemester(evaluateRequirementTree(marineBa, ['CASEE557', 'CASMR500'])).satisfiedCount, 2);
+  const breadth = evaluateRequirementTree(marineBa, ['CASBI423']);
+  assert.equal(marineSemester(breadth).satisfiedCount, 0);
+  assert.equal(child(breadth, 'marine-ba-breadth').satisfiedCount, 1);
+});
+
+test('poolFrom: marineSlots fill the unmet slots, capped at 4; total stays 17', () => {
+  const full = evaluateRequirementTree(marineBa, [], {}, { marineSlots: 4 });
+  const node = marineSemester(full);
+  assert.equal(node.status, 'satisfied');
+  assert.equal(node.satisfiedCount, 4);
+  assert.equal(node.required, 4);
+  assert.equal(full.totalCoursesRequired, 17);
+  assert.equal(full.totalCoursesClaimed, 4);
+  assert.deepEqual(node.matched.map((m) => [m.marineSlots, m.courseKeys.length]), [[4, 0]]);
+
+  // 1 real + 3 placeholders (the planner's count) = 4; 2 real + 2 placeholders = 4.
+  const one = marineSemester(evaluateRequirementTree(marineBa, ['CASBI511'], {}, { marineSlots: 3 }));
+  assert.equal(one.satisfiedCount, 4);
+  assert.equal(one.status, 'satisfied');
+  const partial = marineSemester(evaluateRequirementTree(marineBa, ['CASBI511'], {}, { marineSlots: 2 }));
+  assert.equal(partial.satisfiedCount, 3);
+  assert.equal(partial.status, 'unsatisfied');
+  // More slots than needed: capped, never over 4.
+  const over = evaluateRequirementTree(marineBa, ['CASBI511', 'CASBI569'], {}, { marineSlots: 9 });
+  assert.equal(marineSemester(over).satisfiedCount, 4);
+  assert.equal(over.totalCoursesClaimed, 4);
+  assert.equal(over.totalCoursesRequired, 17);
+});
+
+test('poolFrom: substitutions fill open slots, and go inert once the slots are held', () => {
+  const four = subs({ label: 'BI 539 (transcript)' }, { label: 'BI 541' }, { label: 'EE 544' }, { label: 'MR 500' });
+  const without = evaluateRequirementTree(marineBa, [], { 'marine-ba-semester': four });
+  assert.equal(marineSemester(without).satisfiedCount, 4);
+  assert.equal(marineSemester(without).status, 'satisfied');
+  assert.equal(without.totalCoursesClaimed, 4);
+
+  const two = subs({ label: 'BI 539' }, { label: 'BI 541' });
+  const partial = evaluateRequirementTree(marineBa, [], { 'marine-ba-semester': two });
+  assert.equal(marineSemester(partial).satisfiedCount, 2);
+  assert.equal(marineSemester(partial).openSlots.reduce((n, o) => n + o.count, 0), 2);
+
+  const withSlots = evaluateRequirementTree(marineBa, ['CASBI541'], { 'marine-ba-semester': four }, { marineSlots: 3 });
+  const node = marineSemester(withSlots);
+  assert.equal(node.satisfiedCount, 4);
+  assert.ok(node.substitutions.every((s) => s.status === 'no-open-slot'));
+  assert.equal(withSlots.totalCoursesClaimed, 4);
+  assert.equal(withSlots.totalCoursesRequired, 17);
+});
+
+test('poolFrom: a full 17-course plan with a Marine term', () => {
+  const plan = ['CASBI260', 'CASEE144', 'CASBI107', 'CASBI108', 'CASCH171', 'CASCH172', 'CASPY211',
+    'CASMA121', 'CASMA213', 'CASCS108', 'CASAN518', 'CASEE360', 'CASBI423'];
+  const r = evaluateRequirementTree(marineBa, plan, {}, { marineSlots: 4 });
+  assert.equal(r.status, 'satisfied');
+  assert.equal(r.totalCoursesClaimed, 17);
+  assert.equal(r.totalCoursesRequired, 17);
+});
+
+test('poolFrom: programs without it are unchanged by marineSlots', () => {
+  const plan = ['CASBI107', 'CASBI108', 'CASBI203'];
+  const a = evaluateRequirementTree(biology, plan);
+  const b = evaluateRequirementTree(biology, plan, {}, { marineSlots: 4 });
+  assert.equal(b.totalCoursesClaimed, a.totalCoursesClaimed);
+  assert.equal(b.totalCoursesRequired, a.totalCoursesRequired);
 });

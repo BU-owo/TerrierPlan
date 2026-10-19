@@ -133,6 +133,34 @@ pool — a course is still only claimed once. The evaluated node gets
 `atLeast` order (always present, `[]` when there are none); subset claims
 are also in the node's `matched`, tagged with `subsetIndex`.
 
+#### `poolFrom` (optional, `COUNT`)
+```jsonc
+{ "type": "COUNT", "min": 4, "poolFrom": "marineSemester" }
+```
+For a requirement whose course list changes every year and lives in code, not
+in the JSON. The only value today is `"marineSemester"`: the engine fills the
+node's `pool` from `marinePool()` in `src/data/marineSemester.js` (the
+bulletin's Marine Semester list; cross-listed twins are one `OR_EQUIVALENT`
+slot so a pair counts once; not the Marine Breadth courses). Resolution happens
+inside the engine (`resolvePoolFrom` per node; `resolveProgramPools` for tests
+and tooling that read the JSON directly), so the evaluated node, the UI and the
+sweep test all see the same pool. An authored non-empty `pool` wins; an
+unknown `poolFrom` is ignored. Don't author a `pool` next to `poolFrom`.
+
+`evaluateRequirementTree`'s fourth argument `{ marineSlots }` is the number of
+Marine Semester course slots the plan still holds: the placeholders and the
+research-in-lieu courses (MR 391/392/491/492) in its Marine Semester terms
+(a real pool course has replaced its placeholder and counts through the pool).
+The node's numerator is `min(required, real pool courses claimed + marineSlots)`:
+after the pool claims, the unmet slots are filled through synthetic claimed
+keys (`OUTSIDE|…`, never real courseKeys), reported in `matched` as
+`{ marineSlots: n, courseKeys: [] }`, which the UI shows as one "n Marine
+Semester courses (from your plan)" row. `required`, and so the program total
+(17 for Marine Science), never changes. Fills run before substitutions, so with
+the slots held a substitution finds no open slot (`no-open-slot`, inert);
+without them, an open slot of `min` stays for petitions (⋯ → Substitute a
+course once per course). `marineSlots` absent or 0 changes nothing.
+
 ### `ONE_OF`
 ```jsonc
 { "id": "...", "type": "ONE_OF", "label": "Chemistry track", "children": [...nodes] }
@@ -336,8 +364,8 @@ earlier group didn't need it, it's still unclaimed and available.
 
 ## Manual overrides
 
-`evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides)`
-takes an optional third argument: the plan's `requirementOverrides` map (see
+`evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides, options)`
+(`options.marineSlots`: see `poolFrom` above) takes an optional third argument: the plan's `requirementOverrides` map (see
 root `SCHEMA.md`), keyed by node `id`. This is entirely plan-scoped — it's
 never written back to the program JSON, and it's student-reported, not
 verified. Before evaluating a node, the engine checks

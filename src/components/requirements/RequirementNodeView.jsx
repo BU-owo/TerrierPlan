@@ -12,6 +12,7 @@ import CoursePool from './CoursePool';
 import PetitionActiveDisplay from './PetitionActiveDisplay';
 import SequenceGroupDetail from './SequenceGroupDetail';
 import RequirementNodeMenu from './RequirementNodeMenu';
+import MarinePoolList from './MarinePoolList';
 import { HubProgressRing } from '../planner/HubFullView';
 import { deriveRequiredTotal } from '../../utils/requirementsEngine';
 import { unresolvedLast } from '../../utils/unresolvedLast';
@@ -187,6 +188,7 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
 
     // Overridden nodes skip normal course tracking — the override supersedes it.
     const pool = isUnresolved || isOverridden ? null : collectPoolGroups(node, planCourseKeySet);
+    const isMarineCard = node.poolFrom === 'marineSemester' && !isUnresolved && !isOverridden;
     return (
       <>
         {noteLine}
@@ -203,9 +205,19 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
             inactiveKeys={inactiveKeys}
           />
         )}
+        {isMarineCard && (
+          <MarinePoolList
+            courseMap={courseMap}
+            planCourseKeySet={planCourseKeySet}
+            stashSet={stashSet}
+            onToggleStash={onToggleStash}
+            onShowCourseInfo={onShowCourseInfo}
+            onRowClick={onAddFromRow}
+          />
+        )}
         {pool && (
           <CoursePool
-            pool={pool}
+            pool={isMarineCard ? { ...pool, groups: [] } : pool}
             subsets={node.subsets}
             subsetLabels={collectSubsetLabels(node)}
             fallbackNote={

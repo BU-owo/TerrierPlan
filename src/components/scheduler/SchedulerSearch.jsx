@@ -195,14 +195,18 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, theme = 
               <div className="search-result-info">
                 <div className="search-result-code">{course.courseNumber ?? course.id}</div>
                 <div className="search-result-name-row">
-                  <span className="search-result-name">{course.name ?? '—'}</span>
-                  {course.studyAbroad && (
-                    <span className="offering-badge offering-badge-abroad">Study abroad</span>
-                  )}
-                  {isProfessionalCareer(course.career) && (
-                    <span className="offering-badge offering-badge-career">{course.career}</span>
-                  )}
+                  <span className="search-result-name" title={course.name ?? undefined}>{course.name ?? '—'}</span>
                 </div>
+                {(course.studyAbroad || isProfessionalCareer(course.career)) && (
+                  <div className="search-result-hub">
+                    {course.studyAbroad && (
+                      <span className="offering-badge offering-badge-abroad">Study abroad</span>
+                    )}
+                    {isProfessionalCareer(course.career) && (
+                      <span className="offering-badge offering-badge-career">{course.career}</span>
+                    )}
+                  </div>
+                )}
                 {noCurrentTerm && !added && (
                   <div className="sched-search-no-term">
                     <span className="offering-badge offering-badge-neutral">No {CURRENT_TERM_LABEL} sections</span>

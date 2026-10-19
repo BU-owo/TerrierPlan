@@ -1,8 +1,17 @@
-import { useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import CourseCard from './CourseCard';
 import NoteCard from './NoteCard';
-import { entryCourseKey, entriesNoteCredits, isNoteEntry } from '../../utils/courseEntry';
+import TermBlockCard from './TermBlockCard';
+import { MarineSemesterContext } from './marineContext';
+import {
+  entryCourseKey, entriesNoteCredits, hasMisplacedMarker, isBlockEntry, isMarineTerm, isMarker, isMixedMarineTerm,
+  isNoteEntry, isOnlyCourseOutsideMarine, isPlainNoteEntry,
+} from '../../utils/courseEntry';
+
+// A course card needs a courseKey; unknown kinds, notes with an unknown
+// blockType and a keyless course object render as a read-only TermBlockCard.
+const isCourseCardEntry = (entry) => entryCourseKey(entry) != null;
 
 // Generic semester-shaped column — used both for the fixed Fall/Spring grid
 // slots and for a year's optional Summer slot (see SemesterBoard). `dropId`
@@ -10,6 +19,9 @@ import { entryCourseKey, entriesNoteCredits, isNoteEntry } from '../../utils/cou
 // their slot (`col-3` for grid slots, `col-summer-1` for a Summer slot).
 export default function SemesterColumn({
   dropId,
+  // This slot's target (a grid index, or `summer:{year}`) — the Marine
+  // Semester rules and handlers are keyed by it.
+  target,
   label,
   season,
   courses,
@@ -43,12 +55,47 @@ export default function SemesterColumn({
   compact = false,
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: dropId });
+  const marine = useContext(MarineSemesterContext);
+  // A Marine Semester term is derived from its contents (courseEntry.js). Its
+  // header gets a badge and a ⋯ menu; the "+ Add placeholder" row is hidden
+  // (its placeholders are the course slots); mixed or misplaced cases get a
+  // plain inline warning. Nothing is ever hidden, moved or removed for them.
+  const isMarine = isMarineTerm(courses, target);
+  const isMixed = isMixedMarineTerm(courses, target);
+  const misplacedMarker = hasMisplacedMarker(courses, target);
+  const hasMarineParts = courses.some((entry) => isMarker(entry) || (isMarine && isPlainNoteEntry(entry)));
+  const warning = isMixed
+    ? "This term also has courses that aren't Marine Semester courses. The Marine Semester fills the whole term."
+    : misplacedMarker
+      ? 'This term has a Marine Semester marker, but a Marine Semester only works in a Fall.'
+      : null;
+  // (A degraded marker — an old tab dropped its blockType — is hidden too once
+  // the term is a Marine Semester; elsewhere it is just a placeholder.)
+  const otherEntries = courses.filter((entry) => !(isMarker(entry) && (isBlockEntry(entry) || isMarine)));
+  const showMarineMenu = (isMarine || misplacedMarker) && (marine.onMoveTerm || marine.onRemoveTerm);
+  // The one open Marine popover: 'info' (the badge's "About the Marine
+  // Semester") or 'menu' (the ⋯ menu); closes on Esc or a click elsewhere.
+  const [panel, setPanel] = useState(null);
+  const marineRef = useRef(null);
+  const menuRef = useRef(null);
+  useEffect(() => {
+    if (!panel) return undefined;
+    const close = (e) => {
+      if (e.type === 'keydown' ? e.key === 'Escape' : !marineRef.current?.contains(e.target) && !menuRef.current?.contains(e.target)) setPanel(null);
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, [panel]);
   // Id of a note this column just added, so it mounts in edit mode.
   const [newNoteId, setNewNoteId] = useState(null);
 
   // Notes have no lock, so the lock toggle and "all locked" check only look
   // at real course entries — a column holding only notes is never "locked".
-  const courseEntries = courses.filter((entry) => !isNoteEntry(entry));
+  const courseEntries = courses.filter(isCourseCardEntry);
   const totalCredits = courseEntries.reduce(
     (sum, entry) => sum + (creditsMap[entryCourseKey(entry)] ?? 0),
     0,
@@ -95,10 +142,82 @@ export default function SemesterColumn({
               Completed
             </span>
           )}
+          {(isMarine || misplacedMarker) && (
+            <span className="semester-marine-wrap" ref={marineRef}>
+              <button
+                type="button"
+                className={`semester-marine-badge${warning ? ' is-warn' : ''}`}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setPanel((open) => (open === 'info' ? null : 'info')); }}
+                aria-haspopup="dialog"
+                aria-expanded={panel === 'info'}
+                title="About the Marine Semester"
+              >
+                <span className="semester-marine-badge-text">{compact ? 'Marine' : 'Marine Semester'}</span>
+                {warning ? ' ⚠' : ''}
+              </button>
+              {panel === 'info' && (
+                <div className="semester-marine-popover" role="dialog" aria-label="About the Marine Semester" onClick={(e) => e.stopPropagation()}>
+                  <strong>About the Marine Semester</strong>
+                  <p>BU places you in four month-long courses (16 credits).</p>
+                  <p>Only Marine Semester courses, and research in lieu of one block course, can go in this term.</p>
+                  <p>Requires admission to the Marine Semester.</p>
+                  {warning && <p className="semester-marine-popover-warn">{warning}</p>}
+                  {hasMarineParts && marine.onRemoveTerm && (
+                    <button
+                      type="button"
+                      className="semester-marine-popover-link"
+                      onClick={() => { setPanel(null); marine.onRemoveTerm(target); }}
+                    >
+                      Remove Marine Semester
+                    </button>
+                  )}
+                </div>
+              )}
+            </span>
+          )}
           {(courses.length > 0 || compact) && (
             <span className="semester-credits">{totalCredits || (compact ? 0 : '—')} cr</span>
           )}
-          {compact && onAddNote && (
+          {showMarineMenu && (
+            <span className="semester-marine-menu-wrap" ref={menuRef}>
+              <button
+                type="button"
+                className="semester-marine-menu-btn"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setPanel((open) => (open === 'menu' ? null : 'menu')); }}
+                aria-label="Marine Semester options"
+                aria-haspopup="menu"
+                aria-expanded={panel === 'menu'}
+                title="Marine Semester options"
+              >
+                ⋯
+              </button>
+              {panel === 'menu' && (
+                <div className="semester-marine-menu" role="menu" onClick={(e) => e.stopPropagation()}>
+                  {isMarine && marine.onMoveTerm && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { setPanel(null); marine.onMoveTerm(target); }}
+                    >
+                      Move to another Fall…
+                    </button>
+                  )}
+                  {hasMarineParts && marine.onRemoveTerm && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { setPanel(null); marine.onRemoveTerm(target); }}
+                    >
+                      Remove Marine Semester
+                    </button>
+                  )}
+                </div>
+              )}
+            </span>
+          )}
+          {compact && onAddNote && !isMarine && (
             <button
               type="button"
               className="semester-add-note"
@@ -138,7 +257,11 @@ export default function SemesterColumn({
       </div>
 
       <div ref={compact ? undefined : setNodeRef} className="semester-courses">
-        {courses.map((entry) => {
+        {warning && !compact && <p className="special-term-warning">{warning}</p>}
+        {otherEntries.map((entry, index) => {
+          if (isBlockEntry(entry)) {
+            return <TermBlockCard key={entry.id} entry={entry} compact={compact} />;
+          }
           if (isNoteEntry(entry)) {
             return (
               <NoteCard
@@ -150,6 +273,9 @@ export default function SemesterColumn({
                 onRemove={() => onRemoveNote(entry.id)}
               />
             );
+          }
+          if (!isCourseCardEntry(entry)) {
+            return <TermBlockCard key={entry.id ?? `block-${index}`} entry={entry} compact={compact} />;
           }
           const key = entryCourseKey(entry);
           const locked = completedCourseKeys.has(key);
@@ -167,6 +293,7 @@ export default function SemesterColumn({
               onRemove={locked ? undefined : () => onRemoveCourse(key)}
               onToggleLock={() => onToggleLock(key)}
               onShowInfo={onShowCourseInfo ? () => onShowCourseInfo(key) : undefined}
+              marineWarning={isOnlyCourseOutsideMarine(key, courses, target)}
             />
           );
         })}
@@ -177,7 +304,7 @@ export default function SemesterColumn({
         )}
         {/* Last row of the list (inside the droppable, so dropping onto it
             still lands in this column). */}
-        {onAddNote && !compact && (
+        {onAddNote && !compact && !isMarine && (
           <button
             type="button"
             className="add-placeholder-row"

@@ -3,18 +3,25 @@
 // single add-flow picker rather than growing a second one per call site.
 // `semesterOptions` is [{ value, label }], grid slots plus any toggled-on
 // Summer slots — built once in PlannerPage and threaded down to every caller.
-export default function SemesterPickerModal({ course, semesterOptions, onPick, onClose }) {
-  if (!course) return null;
+// `title` replaces the "Add to semester: {course}" heading for pickers that
+// aren't about one course (the Marine Semester ones), with no `course`;
+// `emptyText` shows when `semesterOptions` is empty.
+export default function SemesterPickerModal({ course, title, emptyText, semesterOptions, onPick, onClose }) {
+  if (!course && !title) return null;
 
   return (
     <div className="search-picker-overlay" onClick={onClose}>
       <div className="search-picker-modal" onClick={(e) => e.stopPropagation()}>
         <div className="search-picker-header">
           <h3>
-            Add to semester:{' '}
-            <span className="search-picker-course-code">
-              {course.courseNumber ?? course.id}
-            </span>
+            {title ?? (
+              <>
+                Add to semester:{' '}
+                <span className="search-picker-course-code">
+                  {course.courseNumber ?? course.id}
+                </span>
+              </>
+            )}
           </h3>
           <button
             className="search-picker-close"
@@ -25,6 +32,7 @@ export default function SemesterPickerModal({ course, semesterOptions, onPick, o
           </button>
         </div>
         <div className="search-picker-options">
+          {semesterOptions.length === 0 && emptyText && <p className="search-picker-empty">{emptyText}</p>}
           {semesterOptions.map(({ value, label }) => (
             <button
               key={value}

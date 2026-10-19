@@ -190,6 +190,7 @@ export default function SemesterBoard({
             <div className="year-semesters">
               <SemesterColumn
                 dropId={`col-${fallIndex}`}
+                target={fallIndex}
                 label="Fall"
                 season="fall"
                 courses={semesters[fallIndex] || []}
@@ -209,6 +210,7 @@ export default function SemesterBoard({
               />
               <SemesterColumn
                 dropId={`col-${springIndex}`}
+                target={springIndex}
                 label="Spring"
                 season="spring"
                 courses={semesters[springIndex] || []}
@@ -229,6 +231,7 @@ export default function SemesterBoard({
               {hasSummer ? (
                 <SemesterColumn
                   dropId={`col-summer-${year}`}
+                  target={summerTarget(year)}
                   label="Summer"
                   season="summer"
                   courses={summerCourses}
