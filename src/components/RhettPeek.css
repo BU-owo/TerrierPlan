@@ -1,0 +1,15 @@
+/* Rhett peeking above the "all done" banner text (RhettPeek.jsx). Tweak
+   --rhett-peek-height to show more or less of him. */
+.rhett-peek {
+  --rhett-peek-height: 140px;
+  width: 140px;
+  max-width: 100%;
+  height: var(--rhett-peek-height);
+  margin: 0 auto 6px;
+  overflow: hidden;
+}
+.rhett-peek img {
+  display: block;
+  width: 100%;
+  height: auto;
+}

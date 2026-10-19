@@ -7,6 +7,7 @@ import MajorPicker from '../planner/MajorPicker';
 import RequirementNodeView from './RequirementNodeView';
 import ExceptionModal from './ExceptionModal';
 import EstimateNote from '../EstimateNote';
+import RhettPeek from '../RhettPeek';
 import { BU_LINKS } from '../../data/officialLinks';
 import { RequirementDragContext } from './requirementDrag';
 import { unresolvedLast } from '../../utils/unresolvedLast';
@@ -364,6 +365,7 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
 
           {result.status === 'satisfied' && (
             <div className="panel-all-fulfilled">
+              {density === 'compact' && <RhettPeek />}
               <p>All requirements satisfied!</p>
             </div>
           )}

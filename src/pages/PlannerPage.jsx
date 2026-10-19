@@ -74,6 +74,10 @@ import {
 } from '../utils/courseEntry';
 import { semesterLabel } from '../utils/hubConstants';
 import { useHubProgress } from '../hooks/useHubProgress';
+import { useCelebration } from '../hooks/useCelebration';
+import { evaluateRequirementTree } from '../utils/requirementsEngine';
+import { REQUIREMENT_PROGRAMS } from '../components/requirements/programs';
+import CelebrationCard from '../components/CelebrationCard';
 import { CURRENT_TERM } from '../utils/term';
 import { aliasFor } from '../utils/grsAlias';
 import { registerPendingWriteFlush } from '../utils/pendingWrites';
@@ -88,6 +92,13 @@ import './planner.css';
 import '../App.css';
 
 const EMPTY_SEMESTERS = () => Array.from({ length: 8 }, () => []);
+// At least one real (non-UNRESOLVED) leaf. An UNRESOLVED-only tree evaluates
+// as satisfied with nothing in it, so it never counts for the celebration.
+function hasRealRequirement(node) {
+  if (!node) return false;
+  if (Array.isArray(node.children)) return node.children.some(hasRealRequirement);
+  return node.type !== 'UNRESOLVED';
+}
 // "+ Add Year" stops here (see handleAddYear/SemesterBoard).
 const MAX_PLAN_YEARS = 8;
 const LOCAL_STORAGE_KEY = 'terrierplan_session';
@@ -2624,6 +2635,35 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     ),
   ];
 
+  // ── Milestone celebrations (see useCelebration / CelebrationCard) ──────
+  // Plan loaded: same signal as the `?view=` effect. HUB also waits for every
+  // plan course's catalog data, or its count would climb while loading.
+  // Requirements are evaluated here too (RequirementTree evaluates its own
+  // copy for display) so this works whatever view is open.
+  const planReady = hasAppliedInitialView && (!user || Boolean(activePlanId));
+  const hubReady = planReady && [...coursesInPlan].every((key) => courseMap[key]);
+  const hubComplete = coursesInPlan.size > 0 && hubFulfilled === hubTotal;
+  const requirementsKeysSig = requirementsCourseKeys.join('|');
+  const reqsComplete = useMemo(() => {
+    const programDef = REQUIREMENT_PROGRAMS.find((p) => p.bulletinUrl === majorBulletinUrl);
+    if (!programDef || !hasRealRequirement(programDef.tree)) return false;
+    const result = evaluateRequirementTree(programDef, requirementsKeysSig.split('|'), requirementOverrides, { marineSlots });
+    return result.status === 'satisfied';
+  }, [majorBulletinUrl, requirementsKeysSig, requirementOverrides, marineSlots]);
+  const [showHubCelebration, dismissHubCelebration] = useCelebration({
+    milestoneKey: 'hub',
+    isComplete: hubComplete,
+    ready: hubReady,
+    planId: activePlanId,
+  });
+  const [showReqsCelebration, dismissReqsCelebration] = useCelebration({
+    milestoneKey: 'reqs',
+    isComplete: coursesInPlan.size > 0 && reqsComplete,
+    ready: planReady,
+    planId: activePlanId,
+    majorBulletinUrl,
+  });
+
   // Note placeholders have no courseKey, so they're absent from the key
   // lists above (and so from HUB/requirements) — only their own credits
   // are added here, to the plan credit total.
@@ -3131,6 +3171,22 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       />
 
       {showPathCard && <PickYourPath onChoose={handlePathChoice} onDismiss={dismissPathCard} />}
+
+      {/* One at a time: HUB first, then requirements after it's dismissed. */}
+      {showHubCelebration ? (
+        <CelebrationCard
+          title="HUB's covered"
+          subtitle="Your plan hits every HUB requirement."
+          onDismiss={dismissHubCelebration}
+        />
+      ) : showReqsCelebration ? (
+        <CelebrationCard
+          title="Requirements covered"
+          subtitle="Your plan covers every requirement for this major."
+          note="Double-check with your advisor."
+          onDismiss={dismissReqsCelebration}
+        />
+      ) : null}
 
       <HelpSupportModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
       <Toast toast={toast} onDismiss={() => setToast(null)} />

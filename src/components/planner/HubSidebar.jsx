@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { HUB_GROUPS, describeRequirementLabels } from '../../utils/hubConstants';
 import { useHubProgress, satisfiedCountForRequirement } from '../../hooks/useHubProgress';
+import RhettPeek from '../RhettPeek';
 import HubYearToggle from './HubYearToggle';
 import EstimateNote from '../EstimateNote';
 import { BU_LINKS } from '../../data/officialLinks';
@@ -104,6 +105,7 @@ export default function HubSidebar({
 
       {allFulfilled && (
         <div className="panel-all-fulfilled">
+          <RhettPeek />
           <p>All HUB requirements fulfilled!</p>
         </div>
       )}
