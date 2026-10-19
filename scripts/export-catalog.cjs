@@ -117,15 +117,17 @@ async function loadUpcomingTerms() {
     .get();
   const byKey = new Map();
   const currentKeys = new Set();
+  let activeDocs = 0;
   for (const doc of snap.docs) {
     const { courseKey, term, classStat } = doc.data();
+    if (classStat !== 'Cancelled') activeDocs += 1;
     const label = termLabel(String(term ?? ''));
     if (!courseKey || !label || classStat === 'Cancelled') continue;
     if (String(term) === CURRENT_TERM) currentKeys.add(courseKey);
     if (!byKey.has(courseKey)) byKey.set(courseKey, new Set());
     byKey.get(courseKey).add(label);
   }
-  return { byKey, currentKeys, sectionDocs: snap.size };
+  return { byKey, currentKeys, sectionDocs: snap.size, activeDocs };
 }
 
 // Last year a course could have been offered without counting as active:
@@ -243,7 +245,7 @@ async function main() {
   console.log(`Gzipped: ${kb(gzipBytes)} (${gzipBytes} bytes)`);
   console.log(
     `upcomingSeasons: ${courses.filter((c) => c.upcomingSeasons).length} courses ` +
-      `(from ${upcoming.sectionDocs} sections at or after ${CURRENT_TERM})`,
+      `(from ${upcoming.sectionDocs} sections at or after ${CURRENT_TERM}, ${upcoming.activeDocs} not Cancelled)`,
   );
   console.log(`inCurrentTerm:   ${courses.filter((c) => c.inCurrentTerm).length} courses`);
 
