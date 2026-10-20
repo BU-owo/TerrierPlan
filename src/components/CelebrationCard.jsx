@@ -5,7 +5,7 @@ import './CelebrationCard.css';
 // beta overlay as its scrim, like PickYourPath. Rhett sits on the card's
 // bottom edge; the card clips him so his arms read as popping up from behind
 // it. Closes on the button, Escape, or a backdrop click.
-export default function CelebrationCard({ title, subtitle, note, onDismiss }) {
+export default function CelebrationCard({ title, subtitle, note, buttonLabel = 'Nice!', onDismiss }) {
   const dismissRef = useRef(null);
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export default function CelebrationCard({ title, subtitle, note, onDismiss }) {
         <p id="celebration-card-subtitle" className="celebration-card-subtitle">{subtitle}</p>
         {note && <p className="celebration-card-note">{note}</p>}
         <button ref={dismissRef} type="button" className="beta-dismiss-btn" onClick={onDismiss}>
-          Nice!
+          {buttonLabel}
         </button>
         <img
           className="celebration-card-mascot"

@@ -7,6 +7,9 @@ import {
   collectMatchedKeys,
   countCounted,
   shortCourseCode,
+  nodeProgressState,
+  nodeShown,
+  poolOfferCount,
 } from './treeHelpers';
 import CoursePool from './CoursePool';
 import PetitionActiveDisplay from './PetitionActiveDisplay';
@@ -16,6 +19,10 @@ import MarinePoolList from './MarinePoolList';
 import { HubProgressRing } from '../planner/HubFullView';
 import { deriveRequiredTotal } from '../../utils/requirementsEngine';
 import { unresolvedLast } from '../../utils/unresolvedLast';
+import { completedCountOf, lockStatusVariant, plannedSuffix, startsCollapsed } from '../../utils/completion';
+
+// Per-course marks in a collapsed row's course list (split on only).
+const STATUS_MARK = { completed: '✓', current: '•', planned: '◉' };
 
 // One requirement node, in bulletin order. depth 0 (the root's direct
 // children) renders as a HubFullView-style card with a progress ring.
@@ -33,6 +40,10 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
     courseMap,
     density = 'compact',
     lockStatusMap,
+    // lockStatusMap when the done-vs-planned split applies, else undefined
+    // (see planSplitEnabled): drives the planned rows, ring and pool cards.
+    splitStatusMap,
+    viewFilter = 'all',
     stashSet,
     onToggleStash,
     onShowCourseInfo,
@@ -49,6 +60,11 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
 
   // Which ONE_OF option is on screen; null = follow node.activeChildIndex.
   const [oneOfView, setOneOfView] = useState(null);
+  // "Browse options": show every alternative, even once this is satisfied.
+  const [browsing, setBrowsing] = useState(false);
+
+  // Full view's All / Still to do / Done filter (RequirementTree).
+  if (!nodeShown(node, viewFilter, splitStatusMap)) return null;
 
   // A waived container has no evaluated children to recurse into, since
   // evaluation was skipped entirely for it — it renders like a leaf.
@@ -58,13 +74,23 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
   const isUnresolved = node.type === 'UNRESOLVED';
   const isOverridden = Boolean(node.waived || node.substituted);
   const satisfied = node.status === 'satisfied';
+  // 'done' | 'planned' | 'todo' (nodeProgressState; satisfied = done with the split off).
+  const progressState = nodeProgressState(node, splitStatusMap);
   // Compact (sidebar) top-level cards start collapsed to one line; elsewhere
-  // only satisfied nodes do.
+  // only fully done nodes do (startsCollapsed, same as RequirementTree's
+  // isCollapsed). A manual toggle (collapsedOverrides) always wins.
   const compact = density === 'compact';
-  const collapsed = collapsedOverrides[node.id] ?? (compact && depth === 0 ? true : satisfied);
+  const collapsed = collapsedOverrides[node.id] ?? startsCollapsed(progressState, { compactTopLevel: compact && depth === 0 });
   const statusClass = isOverridden
     ? 'petitioned'
     : isUnresolved ? 'needs-review' : satisfied ? 'fulfilled' : 'pending';
+  // Satisfied, but some course counting toward it is only planned/current
+  // (nodeProgressState): hollow ✓ and "· planned". Petitioned and
+  // needs-review nodes keep their own look.
+  const planned = progressState === 'planned';
+  const plannedClass = planned ? ' is-planned' : '';
+  // " · planned" when every counted course is still ahead, " · 1 planned" when mixed.
+  const plannedText = planned ? plannedSuffix(collectMatchedKeys(node), splitStatusMap) : '';
 
   let indicatorSymbol;
   if (node.waived) indicatorSymbol = '✎';
@@ -93,7 +119,11 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
   const subtitle = [headerText, substitutedCount > 0 ? `${substitutedCount} substituted` : null].filter(Boolean).join(' · ');
   let collapsedSummary = null;
   if (collapsed && satisfied) {
-    const codes = collectMatchedKeys(node).map(shortCourseCode);
+    // With the split on, each course gets its own mark (✓ done, • in
+    // progress, ○ planned) instead of a second "planned" label.
+    const codes = collectMatchedKeys(node).map((key) => (splitStatusMap
+      ? `${shortCourseCode(key)} ${STATUS_MARK[lockStatusVariant(splitStatusMap[key])]}`
+      : shortCourseCode(key)));
     collapsedSummary = codes.length > 0 ? `— ${codes.join(', ')}` : '';
   }
 
@@ -187,8 +217,13 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
     }
 
     // Overridden nodes skip normal course tracking — the override supersedes it.
-    const pool = isUnresolved || isOverridden ? null : collectPoolGroups(node, planCourseKeySet);
+    const normalPool = isUnresolved || isOverridden ? null : collectPoolGroups(node, planCourseKeySet);
     const isMarineCard = node.poolFrom === 'marineSemester' && !isUnresolved && !isOverridden;
+    // Browse mode: the same pool with nothing hidden for being satisfied or
+    // full. The toggle shows only when that reveals more to pick from.
+    const browsePool = normalPool && !isMarineCard ? collectPoolGroups(node, planCourseKeySet, { browse: true }) : null;
+    const canBrowse = Boolean(browsePool) && poolOfferCount(browsePool) > poolOfferCount(normalPool);
+    const pool = canBrowse && browsing ? browsePool : normalPool;
     return (
       <>
         {noteLine}
@@ -215,6 +250,16 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
             onRowClick={onAddFromRow}
           />
         )}
+        {canBrowse && (
+          <button
+            type="button"
+            className="req-browse-toggle"
+            aria-expanded={browsing}
+            onClick={(e) => { e.stopPropagation(); setBrowsing((open) => !open); }}
+          >
+            {browsing ? 'Hide options' : 'Browse options'}
+          </button>
+        )}
         {pool && (
           <CoursePool
             pool={isMarineCard ? { ...pool, groups: [] } : pool}
@@ -225,6 +270,7 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
             }
             courseMap={courseMap}
             lockStatusMap={lockStatusMap}
+            splitStatusMap={splitStatusMap}
             planCourseKeySet={planCourseKeySet}
             stashSet={stashSet}
             onToggleStash={onToggleStash}
@@ -250,8 +296,18 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
     // text and "⋯" menu show once expanded.
     const oneLine = compact && collapsed;
     const percent = needCount > 0 ? Math.min(100, Math.round((doneCount / needCount) * 100)) : 0;
+    // Solid share = completed courses, the rest of `percent` dashed (only
+    // when the split applies; see HubProgressRing's completedPercent).
+    const completedPercent = splitStatusMap && needCount > 0
+      ? Math.min(100, Math.round((completedCountOf(
+        doneCount,
+        isContainer ? countCounted(node) : node.satisfiedCount,
+        collectMatchedKeys(node),
+        splitStatusMap,
+      ) / needCount) * 100))
+      : undefined;
     return (
-      <section className={`hub-full-group req-card req-card--${statusClass}${collapsed ? '' : ' is-expanded'}${compact ? ' req-card--compact' : ''}`}>
+      <section className={`hub-full-group req-card req-card--${statusClass}${plannedClass}${collapsed ? '' : ' is-expanded'}${compact ? ' req-card--compact' : ''}`}>
         <div
           className="hub-full-group-header"
           role="button"
@@ -264,6 +320,7 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
             <span className={`hub-ring-wrap req-ring${satisfied ? ' is-satisfied' : ''}`}>
               <HubProgressRing
                 percent={percent}
+                completedPercent={completedPercent}
                 fulfilled={doneCount}
                 total={needCount}
                 size={compact ? 28 : 38}
@@ -285,7 +342,7 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
           </div>
           {compact && showRing && (
             <span className={`req-card-count${satisfied ? ' satisfied' : ''}`}>
-              {doneCount}/{needCount}
+              {doneCount}/{needCount}{plannedText}
             </span>
           )}
           {badge}
@@ -310,12 +367,12 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
   // collapsible row: its leaves are the collapsible things.
   if (isContainer) {
     return (
-      <div className={`req-section ${statusClass}`}>
+      <div className={`req-section ${statusClass}${plannedClass}`}>
         <div className="req-section-header">
           <span className="req-section-label">{node.label}</span>
           {badge ?? (
             <span className={`req-section-count${satisfied ? ' satisfied' : ''}`}>
-              {doneCount}/{needCount}
+              {doneCount}/{needCount}{plannedText}
             </span>
           )}
         </div>
@@ -330,7 +387,7 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
   }
 
   return (
-    <div className={`hub-full-requirement req-row ${statusClass}`}>
+    <div className={`hub-full-requirement req-row ${statusClass}${plannedClass}`}>
       <div
         className="hub-full-requirement-header req-row-header"
         role="button"
@@ -348,7 +405,7 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
         )}
         {badge ?? (
           <span className={`hub-full-requirement-count${satisfied ? ' satisfied' : ''}`}>
-            {doneCount}/{needCount}
+            {doneCount}/{needCount}{plannedText}
           </span>
         )}
         {menu}

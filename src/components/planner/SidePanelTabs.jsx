@@ -29,6 +29,8 @@ export default function SidePanelTabs({
   courseMap,
   creditsMap,
   lockStatusMap,
+  // lockStatusMap gated by planSplitEnabled (undefined = no done/planned split).
+  splitStatusMap,
   noteCredits,
   // Part of noteCredits already completed (past Marine Semester placeholders).
   completedNoteCredits,
@@ -150,6 +152,7 @@ export default function SidePanelTabs({
             stash={stash}
             onShowStash={onShowStash}
             onSummaryChange={makeSummaryHandler('hub')}
+            splitStatusMap={splitStatusMap}
             onOpenFullView={onOpenHubFullView}
           />
         </div>
@@ -165,6 +168,7 @@ export default function SidePanelTabs({
             onSetRequirementOverride={onSetRequirementOverride}
             onRemoveRequirementOverride={onRemoveRequirementOverride}
             lockStatusMap={lockStatusMap}
+            splitStatusMap={splitStatusMap}
             stash={stash}
             onAddToStash={onAddToStash}
             onRemoveFromStash={onRemoveFromStash}

@@ -2,7 +2,12 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { evaluateRequirementTree } from '../../utils/requirementsEngine';
 import { normalizeCourseKey } from '../../utils/courseKey';
 import { REQUIREMENT_PROGRAMS } from './programs';
-import { collectAllNodes, collectAllCourseKeys, collectMatchedKeys, segmentCards } from './treeHelpers';
+import {
+  collectAllNodes, collectAllCourseKeys, collectMatchedKeys, segmentCards, nodeShown, nodeProgressState,
+} from './treeHelpers';
+import {
+  courseTally, countNeedsReview, startsCollapsed, requirementsProgressView, progressHeaderText, progressSummaryText,
+} from '../../utils/completion';
 import MajorPicker from '../planner/MajorPicker';
 import RequirementNodeView from './RequirementNodeView';
 import ExceptionModal from './ExceptionModal';
@@ -40,6 +45,9 @@ export default function RequirementTree({
   onSetRequirementOverride,
   onRemoveRequirementOverride,
   lockStatusMap,
+  // lockStatusMap when the done-vs-planned split applies, else undefined
+  // (see planSplitEnabled): planned rows, split rings, pool card states.
+  splitStatusMap,
   onOpenFullView,
   stash = [],
   onAddToStash,
@@ -54,15 +62,24 @@ export default function RequirementTree({
   // { nodeId, mode: 'waive' | 'substitute' } while the exception form is open
   // ('waive' is only "Mark as done" on an UNRESOLVED node).
   const [exception, setException] = useState(null);
+  // Full view's All / Still to do / Done filter — view state only.
+  const [viewFilter, setViewFilter] = useState('all');
+  const activeFilter = density === 'full' ? viewFilter : 'all';
 
   const programDef = useMemo(
     () => REQUIREMENT_PROGRAMS.find((p) => p.bulletinUrl === majorBulletinUrl) || null,
     [majorBulletinUrl]
   );
 
+  // A track tab the student picked is evaluated as the active track
+  // (forcedTracks), so every total, the banner, the summary and the cards
+  // follow the tab. No pick = the engine's own best match. Celebrations
+  // (PlannerPage) use their own unforced evaluation.
   const result = useMemo(
-    () => (programDef ? evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides, { marineSlots }) : null),
-    [programDef, planCourseKeys, requirementOverrides, marineSlots]
+    () => (programDef
+      ? evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides, { marineSlots, forcedTracks: trackViews })
+      : null),
+    [programDef, planCourseKeys, requirementOverrides, marineSlots, trackViews]
   );
 
   const flatNodes = useMemo(() => (result ? collectAllNodes(result.tree) : []), [result]);
@@ -79,10 +96,6 @@ export default function RequirementTree({
   // Long-unoffered courses, hidden from requirement choice lists (see hideInactive).
   const inactiveKeys = useInactiveCourseKeys();
 
-  const percentComplete = result && result.totalCoursesRequired > 0
-    ? Math.min(100, Math.round((result.totalCoursesClaimed / result.totalCoursesRequired) * 100))
-    : 0;
-
   useEffect(() => {
     onSummaryChange?.({
       badge: result ? `${result.totalCoursesClaimed}/${result.totalCoursesRequired}` : '—',
@@ -98,8 +111,10 @@ export default function RequirementTree({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
 
+  // Same default as RequirementNodeView: only fully done rows start
+  // collapsed (startsCollapsed); a manual toggle always wins.
   function isCollapsed(node) {
-    return collapsedOverrides[node.id] ?? node.status === 'satisfied';
+    return collapsedOverrides[node.id] ?? startsCollapsed(nodeProgressState(node, splitStatusMap));
   }
 
   function toggleNode(id, currentlyCollapsed) {
@@ -193,6 +208,8 @@ export default function RequirementTree({
     courseMap,
     density,
     lockStatusMap,
+    splitStatusMap,
+    viewFilter: activeFilter,
     stashSet,
     onToggleStash: toggleStash,
     onShowCourseInfo,
@@ -248,9 +265,56 @@ export default function RequirementTree({
   );
   // Collapsed cards share grid rows in full density (same as HubFullView);
   // the narrow compact sidebar just stacks them.
+  const shownTopNodes = topNodes.filter((node) => nodeShown(node, activeFilter, splitStatusMap));
   const segments = density === 'full'
-    ? segmentCards(topNodes, isCollapsed)
-    : topNodes.map((item) => ({ type: 'solo', item }));
+    ? segmentCards(shownTopNodes, isCollapsed)
+    : shownTopNodes.map((item) => ({ type: 'solo', item }));
+  // "Courses: 12 done · 3 planned · 2 to go" — the header's own course
+  // totals (engine's active track) split by status; advisor items on top.
+  // Independent of the All / Still to do / Done filter.
+  const tally = result
+    ? courseTally({
+      claimedTotal: result.totalCoursesClaimed,
+      requiredTotal: result.totalCoursesRequired,
+      countedKeys: collectMatchedKeys(result.tree),
+      statusMap: splitStatusMap,
+      toCheck: countNeedsReview(result.tree),
+    })
+    : null;
+  // Header %, the bar's solid (done) + dashed (planned) shares, and which
+  // banner shows — never "complete" / confetti while courses are only planned.
+  const progress = result
+    ? requirementsProgressView({
+      satisfied: result.status === 'satisfied',
+      claimed: result.totalCoursesClaimed,
+      required: result.totalCoursesRequired,
+      planned: tally.planned,
+    })
+    : null;
+  const banner = progress?.banner ?? null;
+  // Split on: "6 of 15 courses done · 9 planned (· N to add)". Split off:
+  // the original "X of Y courses counted" wording, unchanged.
+  const headerNumbers = tally && result
+    ? { done: tally.done, planned: tally.planned, toGo: tally.toGo, required: result.totalCoursesRequired }
+    : null;
+  const progressBar = progress && (
+    <div
+      className="req-progress-bar"
+      role="progressbar"
+      aria-valuenow={progress.donePercent}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuetext={progress.plannedPercent > 0 ? `${progress.donePercent}% done, ${progress.plannedPercent}% planned` : undefined}
+    >
+      <div className="req-progress-bar-fill" style={{ width: `${progress.donePercent}%` }} />
+      {progress.plannedPercent > 0 && (
+        <div
+          className="req-progress-bar-planned"
+          style={{ width: `${progress.plannedPercent}%`, marginLeft: progress.donePercent > 0 ? 2 : 0 }}
+        />
+      )}
+    </div>
+  );
 
   return (
     <RequirementDragContext.Provider value={density === 'compact' && dragEnabled}>
@@ -312,35 +376,23 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
           {density === 'full' ? (
             <div className="req-progress-summary">
               <p className="req-progress-summary-text">
-                {result.totalCoursesClaimed} of {result.totalCoursesRequired} courses counted — {percentComplete}% complete
+                {splitStatusMap
+                  ? progressHeaderText(headerNumbers)
+                  : `${result.totalCoursesClaimed} of ${result.totalCoursesRequired} courses counted — ${progress.countedPercent}% complete`}
               </p>
-              <div
-                className="req-progress-bar"
-                role="progressbar"
-                aria-valuenow={percentComplete}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <div className="req-progress-bar-fill" style={{ width: `${percentComplete}%` }} />
-              </div>
+              {progressBar}
               <p className="req-progress-summary-sub">{result.programName} {result.degree}</p>
               {bulletinLink}
             </div>
           ) : (
             <div className="req-compact-summary">
               <p className="panel-summary-line">
-                {result.totalCoursesClaimed} of {result.totalCoursesRequired} courses counted
+                {splitStatusMap
+                  ? progressHeaderText(headerNumbers, { compact: true })
+                  : `${result.totalCoursesClaimed} of ${result.totalCoursesRequired} courses counted`}
                 <span className="req-beta-tag">Beta</span>
               </p>
-              <div
-                className="req-progress-bar"
-                role="progressbar"
-                aria-valuenow={percentComplete}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <div className="req-progress-bar-fill" style={{ width: `${percentComplete}%` }} />
-              </div>
+              {progressBar}
               {bulletinLink}
             </div>
           )}
@@ -363,15 +415,48 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
             </div>
           )}
 
-          {result.status === 'satisfied' && (
+          {/* Celebrates whenever the plan covers everything; the copy never
+              says "complete" while counted courses are still only planned.
+              Split off: the original "All requirements satisfied!". */}
+          {banner && (
             <div className="panel-all-fulfilled">
               {density === 'compact' && <RhettPeek />}
-              <p>All requirements satisfied!</p>
+              <p>
+                {banner === 'covered'
+                  ? 'Your plan covers every requirement!'
+                  : splitStatusMap ? 'All requirements complete!' : 'All requirements satisfied!'}
+              </p>
+              {banner === 'covered' && (
+                <p className="panel-all-fulfilled-sub">
+                  {tally.planned} course{tally.planned === 1 ? '' : 's'} still to take
+                </p>
+              )}
             </div>
           )}
 
           {density === 'full' && (
             <div className="hub-full-overview-toolbar req-toolbar">
+              <div className="hub-year-toggle-group req-filter-toggle" role="group" aria-label="Show requirements">
+                {[['all', 'All'], ['todo', 'Still to do'], ['done', 'Done']].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`hub-year-toggle-btn${viewFilter === value ? ' active' : ''}`}
+                    aria-pressed={viewFilter === value}
+                    onClick={() => setViewFilter(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <span className="req-filter-summary">
+                {splitStatusMap ? progressSummaryText(tally) : (
+                  <>
+                    Courses: {tally.done} done · {tally.planned} planned · {tally.toGo} to go
+                    {tally.toCheck > 0 ? ` · ${tally.toCheck} to check with advisor` : ''}
+                  </>
+                )}
+              </span>
               <button type="button" className="panel-open-full-btn" onClick={toggleAll}>
                 {anyCollapsed ? 'Expand all' : 'Collapse all'}
               </button>
@@ -379,6 +464,11 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
           )}
 
           <div className="hub-full-groups req-tree">
+            {segments.length === 0 && activeFilter !== 'all' && (
+              <p className="req-filter-empty">
+                {activeFilter === 'done' ? 'Nothing done yet.' : 'Nothing left to do here!'}
+              </p>
+            )}
             {segments.map((segment, i) =>
               segment.type === 'solo' ? (
                 <RequirementNodeView key={segment.item.id} node={segment.item} {...shared} />

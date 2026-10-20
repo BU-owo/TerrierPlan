@@ -3,6 +3,7 @@
 // compact sidebar and the full-screen view import the exact same logic.
 import { normalizeCourseKey, parseCourseKeyLoose } from '../../utils/courseKey';
 import { poolEntryCandidateKeys } from '../../utils/requirementsEngine';
+import { completionState, isNodeShown, lockStatusVariant } from '../../utils/completion';
 
 // "CASCS" -> "CS". Subjects are a 3-letter school plus the department.
 export function displaySubject(subject) {
@@ -38,15 +39,35 @@ export function formatCourseLabel(courseKey, courseMap = {}, density = 'compact'
 // semester marker is the source of truth for "already happened". `locked`
 // is only consulted as a fallback (e.g. a manually self-marked AP-style
 // course with no current semester set), and no longer gets its own label.
+const LOCK_STATUS_LABELS = { completed: 'Completed', current: 'In progress', planned: 'Planned' };
 export function describeLockStatus(lockStatus) {
-  if (!lockStatus) return { variant: 'planned', label: 'Planned' };
-  if (lockStatus.locked || lockStatus.semesterStatus === 'past') {
-    return { variant: 'completed', label: 'Completed' };
-  }
-  if (lockStatus.semesterStatus === 'current') {
-    return { variant: 'current', label: 'Current' };
-  }
-  return { variant: 'planned', label: 'Planned' };
+  const variant = lockStatusVariant(lockStatus);
+  return { variant, label: LOCK_STATUS_LABELS[variant] };
+}
+
+// One requirement node's state for the done-vs-planned UI: 'todo' (not
+// satisfied), 'done', or 'planned' (satisfied, but some counted course is
+// only planned/current — see completion.js). Petitioned and needs-review
+// nodes that are satisfied count as done. No `statusMap` (split off) means
+// satisfied = done.
+export function nodeProgressState(node, statusMap) {
+  if (node?.status !== 'satisfied') return 'todo';
+  if (node.waived || node.substituted || node.type === 'UNRESOLVED') return 'done';
+  return completionState(true, collectMatchedKeys(node), statusMap);
+}
+
+// A node whose children render as their own rows (same test as
+// RequirementNodeView's isContainer).
+export function isContainerNode(node) {
+  return node?.type === 'ALL' && Array.isArray(node.children) && !node.waived;
+}
+
+// Whether the full view's All / Still to do / Done filter shows `node`.
+export function nodeShown(node, filter, statusMap) {
+  if (filter === 'all') return true;
+  const anyChildShown = filter === 'done' && isContainerNode(node)
+    && node.children.some((child) => nodeShown(child, filter, statusMap));
+  return isNodeShown(filter, nodeProgressState(node, statusMap), anyChildShown);
 }
 
 function isRangeEntry(entry) {
@@ -180,15 +201,19 @@ const toSubstituted = (sub) => ({
   replaces: sub.replaces,
 });
 
-export function collectPoolGroups(node, planCourseKeySet) {
+// `browse: true` ("Browse options" on a requirement row) skips the hiding
+// below — satisfied nodes, filled either/or slots and full entries still
+// offer every alternative not already in the plan. Default unchanged.
+export function collectPoolGroups(node, planCourseKeySet, { browse = false } = {}) {
   const satisfied = node.status === 'satisfied';
+  const hideWhenSatisfied = satisfied && !browse;
   // Petitions the engine applied to this node (see applySlotSubstitutions).
   const appliedSubs = (node.substitutions || []).filter((sub) => sub.status === 'applied');
   const offerable = (keys, claimedSet) =>
     keys.filter((key) => !planCourseKeySet.has(key) && !claimedSet.has(key));
   const finish = (groups) => groups
     .map((group) => ({ ...group, open: !satisfied && group.claimed.length === 0 && !group.substituted?.length }))
-    .filter((group) => !satisfied || group.claimed.length > 0 || group.substituted?.length > 0);
+    .filter((group) => !hideWhenSatisfied || group.claimed.length > 0 || group.substituted?.length > 0);
 
   if (node.type === 'ALL' && !Array.isArray(node.children)) {
     const keys = (node.courses || []).map(normalizeCourseKey);
@@ -207,7 +232,7 @@ export function collectPoolGroups(node, planCourseKeySet) {
         required: true,
         claimed,
         substituted,
-        options: satisfied ? [] : offerable(keys.filter((key) => !replacedSet.has(key)), claimedSet),
+        options: hideWhenSatisfied ? [] : offerable(keys.filter((key) => !replacedSet.has(key)), claimedSet),
         textIfEmpty: keys.map(shortCourseCode).join(', '),
       }]),
       fallback: [],
@@ -232,7 +257,7 @@ export function collectPoolGroups(node, planCourseKeySet) {
     if (typeof entry === 'string') {
       const key = normalizeCourseKey(entry);
       const substituted = subsForEntry(i);
-      const options = satisfied || claimed.length > 0 || substituted.length > 0 ? [] : offerable([key], claimedSet);
+      const options = !browse && (satisfied || claimed.length > 0 || substituted.length > 0) ? [] : offerable([key], claimedSet);
       const prev = groups[groups.length - 1];
       if (prev?.plainKeys) {
         prev.claimed = [...prev.claimed, ...claimed];
@@ -259,7 +284,7 @@ export function collectPoolGroups(node, planCourseKeySet) {
     // keep claiming until the node (or the entry's cap) is full.
     const singleSlot = isAlternativesEntry(entry) || kind === 'sequence';
     const capReached = entry.cap != null && claimed.length >= entry.cap;
-    const hasRoom = !satisfied && !capReached && !(singleSlot && (claimed.length > 0 || subsForEntry(i).length > 0));
+    const hasRoom = browse || (!satisfied && !capReached && !(singleSlot && (claimed.length > 0 || subsForEntry(i).length > 0)));
     const exclude = isRangeEntry(entry) ? (entry.exclude || []).map(normalizeCourseKey) : [];
     const include = entry.type === 'COURSE_RANGE'
       ? (entry.include || []).map(normalizeCourseKey).filter((key) => !exclude.includes(key))
@@ -300,6 +325,16 @@ export function collectPoolGroups(node, planCourseKeySet) {
   });
   const fallback = satisfied ? [] : (node.missing || []).filter((entry) => entry.fallback);
   return { groups: finish(groups), fallback, substituted: openSubstituted };
+}
+
+// How many things a pool offers to pick from (courses, range/sequence
+// browsers) — used to show "Browse options" only when browse mode reveals more.
+export function poolOfferCount(pool) {
+  return (pool?.groups || []).reduce((sum, group) => sum
+    + (group.options?.length ?? 0)
+    + (group.includeOptions?.length ?? 0)
+    + (group.sequenceOptions?.length ?? 0)
+    + (group.showRange ? 1 : 0), 0);
 }
 
 // Drops long-unoffered (inactive) courses from a list of choices, except

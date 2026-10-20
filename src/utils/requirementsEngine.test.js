@@ -603,3 +603,83 @@ test('poolFrom: programs without it are unchanged by marineSlots', () => {
   assert.equal(b.totalCoursesClaimed, a.totalCoursesClaimed);
   assert.equal(b.totalCoursesRequired, a.totalCoursesRequired);
 });
+
+// ── options.forcedTracks: pin a ONE_OF's active child (the selected track tab) ──
+// root: [tracks (ONE_OF: A = leaf [A1 A2], B = COUNT 2 of [B1 B2 S]), later (COUNT 1 of [S L1])]
+// S fits track B and the later group, so whichever runs first claims it.
+const trackProgram = {
+  programName: 'T', degree: 'BA', totalCoursesRequired: 99,
+  tree: {
+    id: 'root', type: 'ALL', label: 'Root',
+    children: [
+      {
+        id: 'tracks', type: 'ONE_OF', label: 'Tracks', presentation: 'tracks',
+        children: [
+          { id: 'A', type: 'ALL', label: 'Track A', courses: ['CASXX101', 'CASXX102'] },
+          { id: 'B', type: 'COUNT', label: 'Track B', min: 2, pool: ['CASXX201', 'CASXX202', 'CASXX900'] },
+        ],
+      },
+      { id: 'later', type: 'COUNT', label: 'Later', min: 1, pool: ['CASXX900', 'CASXX300'] },
+    ],
+  },
+};
+const trackPlan = ['CASXX101', 'CASXX102', 'CASXX900', 'CASXX201'];
+
+test('forcedTracks: forcing the auto-picked track is identical to no override', () => {
+  const auto = evaluateRequirementTree(trackProgram, trackPlan, {});
+  assert.equal(child(auto, 'tracks').activeChildIndex, 0);
+  assert.equal(child(auto, 'tracks').autoChildIndex, 0);
+  assert.deepEqual(evaluateRequirementTree(trackProgram, trackPlan, {}, { forcedTracks: { tracks: 0 } }), auto);
+  // Same on a real tracks program, for whichever track it auto-picks.
+  const mathPlan = ['CASMA123', 'CASMA124', 'CASMA225', 'CASMA242'];
+  const mathAuto = evaluateRequirementTree(math, mathPlan, {});
+  const hoisted = mathAuto.tree.children.find((n) => n.presentation === 'tracks');
+  assert.ok(hoisted, 'mathematics-ba has a tracks ONE_OF');
+  assert.deepEqual(
+    evaluateRequirementTree(math, mathPlan, {}, { forcedTracks: { [hoisted.id]: hoisted.activeChildIndex } }),
+    mathAuto,
+  );
+});
+
+test('forcedTracks: a non-active track gives that track\'s totals', () => {
+  const auto = evaluateRequirementTree(trackProgram, trackPlan, {});
+  assert.equal(auto.status, 'satisfied');
+  assert.equal(auto.totalCoursesRequired, 3);
+  assert.equal(auto.totalCoursesClaimed, 3);
+
+  const forced = evaluateRequirementTree(trackProgram, trackPlan, {}, { forcedTracks: { tracks: 1 } });
+  const tracks = child(forced, 'tracks');
+  assert.equal(tracks.activeChildIndex, 1);
+  assert.equal(tracks.autoChildIndex, 0); // still reports the best match
+  assert.equal(forced.totalCoursesRequired, 3); // B needs 2 + later 1
+  assert.equal(forced.totalCoursesClaimed, 2); // B1 + S; later finds nothing left
+  assert.equal(forced.status, 'unsatisfied');
+});
+
+test('forcedTracks: a course claimed by the forced track is not claimed again later', () => {
+  const auto = evaluateRequirementTree(trackProgram, trackPlan, {});
+  assert.equal(child(auto, 'later').status, 'satisfied'); // track A active: S goes to "later"
+  const forced = evaluateRequirementTree(trackProgram, trackPlan, {}, { forcedTracks: { tracks: 1 } });
+  const trackB = child(forced, 'tracks').children[1];
+  assert.ok(JSON.stringify(trackB.matched).includes('CASXX900'));
+  const later = child(forced, 'later');
+  assert.equal(later.status, 'unsatisfied');
+  assert.ok(!JSON.stringify(later.matched).includes('CASXX900'));
+});
+
+test('forcedTracks: invalid values are ignored; waived tracks behave as before', () => {
+  const auto = evaluateRequirementTree(trackProgram, trackPlan, {});
+  for (const bad of [-1, 2, 1.5, '1', null]) {
+    assert.deepEqual(evaluateRequirementTree(trackProgram, trackPlan, {}, { forcedTracks: { tracks: bad } }), auto);
+  }
+  assert.deepEqual(evaluateRequirementTree(trackProgram, trackPlan, {}, { forcedTracks: { nope: 1 } }), auto);
+  // Waiving track B while A is genuinely complete: auto still picks A...
+  const waivedB = { B: waive() };
+  const autoWaived = evaluateRequirementTree(trackProgram, trackPlan, waivedB);
+  assert.equal(child(autoWaived, 'tracks').activeChildIndex, 0);
+  // ...and forcing B shows the waived track as the active one, satisfied.
+  const forcedWaived = evaluateRequirementTree(trackProgram, trackPlan, waivedB, { forcedTracks: { tracks: 1 } });
+  assert.equal(child(forcedWaived, 'tracks').activeChildIndex, 1);
+  assert.equal(child(forcedWaived, 'tracks').children[1].waived, true);
+  assert.equal(child(forcedWaived, 'tracks').status, 'satisfied');
+});

@@ -33,6 +33,13 @@ export default function RequirementCourseRow({
   // does that). Not wired on in-plan rows.
   onRowClick,
   statusLabel = 'In your plan',
+  // In-plan rows only, when the done-vs-planned split applies: 'completed'
+  // (green ✓, the default look), 'current' (blue-gray •) or 'planned'
+  // (dashed, hollow ○). null keeps the plain green in-plan row.
+  planStatus = null,
+  // Where a planned / in-progress course sits ("Fall 2026"): its "In plan ·
+  // …" tag. Absent (Summer & Winter list, external credit) → "In plan".
+  planSlotLabel,
   compact = false,
   // Long-unoffered course shown only because nothing else is left.
   dimmed = false,
@@ -89,7 +96,7 @@ export default function RequirementCourseRow({
   return (
     <div
       ref={canDrag ? setNodeRef : undefined}
-      className={`req-course-row${isStashed ? ' is-stashed' : ''}${compact ? ' is-compact' : ''}${inPlan ? ' is-in-plan' : ''}${clickable ? ' is-clickable' : ''}${dimmed ? ' is-dimmed' : ''}${tag ? ' is-alt' : ''}${substituted ? ' is-substituted' : ''}${canDrag ? ' is-draggable' : ''}${isDragging ? ' is-dragging' : ''}`}
+      className={`req-course-row${isStashed ? ' is-stashed' : ''}${compact ? ' is-compact' : ''}${inPlan ? ' is-in-plan' : ''}${inPlan && planStatus ? ` is-plan-${planStatus}` : ''}${clickable ? ' is-clickable' : ''}${dimmed ? ' is-dimmed' : ''}${tag ? ' is-alt' : ''}${substituted ? ' is-substituted' : ''}${canDrag ? ' is-draggable' : ''}${isDragging ? ' is-dragging' : ''}`}
       onClick={clickable ? () => onRowClick(courseKey) : undefined}
       {...(canDrag ? { ...attributes, ...listeners } : {})}
     >
@@ -100,13 +107,19 @@ export default function RequirementCourseRow({
           aria-label="Substituted"
         >✎</span>
       ) : inPlan ? (
-        <span className="req-course-row-check" title={statusLabel} aria-label={statusLabel}>✓</span>
+        <span className="req-course-row-check" title={statusLabel} aria-label={statusLabel}>
+          {planStatus === 'current' ? '•' : planStatus === 'planned' ? '◉' : '✓'}
+        </span>
       ) : null}
       <div className="req-stacked-body">
         <span className="req-stacked-code">{code}</span>
         {name && <span className="req-stacked-title" title={`${code} — ${name}`}>{name}</span>}
         <div className="req-stacked-badges">
           <MarineSemesterPill courseKey={courseKey} />
+          {inPlan && planStatus === 'current' && <span className="req-course-row-pill is-in-progress">In progress</span>}
+          {inPlan && (planStatus === 'planned' || planStatus === 'current') && (
+            <span className="req-course-row-pill is-plan-term">{planSlotLabel ? `In plan · ${planSlotLabel}` : 'In plan'}</span>
+          )}
           {substituted && (
             <span className="req-course-row-pill">{replacesLabel ? `Substituted for ${replacesLabel}` : 'Substituted'}</span>
           )}

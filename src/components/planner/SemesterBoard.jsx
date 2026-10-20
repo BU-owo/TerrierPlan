@@ -5,6 +5,7 @@ import {
 } from '../../utils/courseEntry';
 import { semesterLabel } from '../../utils/hubConstants';
 import { termFromSlot, termLabel } from '../../utils/term';
+import { hubProgressText } from '../../utils/completion';
 
 // Target encoding shared with PlannerPage: a plain number is a grid slot
 // index (Fall/Spring), the string `summer:{year}` is that year's optional
@@ -167,12 +168,21 @@ export default function SemesterBoard({
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+            {/* Nudges old-select users to a start term. Switching changes
+                how statuses work, so it asks first; Cancel leaves the select
+                on its placeholder and nothing else changes. */}
+            <label htmlFor="legacy-start-term-select">Start term</label>
             <StartTermSelect
+              id="legacy-start-term-select"
               today={today}
               placeholder="Set start term"
-              ariaLabel="Set start term"
-              onChange={onSetStartTerm}
+              onChange={(code) => {
+                if (window.confirm('Switch to your start term? Completed vs planned will follow the calendar, and the lock buttons go away.')) {
+                  onSetStartTerm(code);
+                }
+              }}
             />
+            <span className="start-term-helper">Set this and past semesters mark themselves complete. No more locking.</span>
           </>
         )}
         {onBoardViewChange && (
@@ -201,7 +211,7 @@ export default function SemesterBoard({
             className={`hub-tracker-pill${hubSummary.fulfilled < hubSummary.total ? ' is-incomplete' : ''}`}
             onClick={onOpenHubFullView}
             title="Open HUB tracker & course finder"
-            aria-label={`Open HUB tracker and course finder: ${hubSummary.fulfilled} of ${hubSummary.total} units complete`}
+            aria-label={`Open HUB tracker and course finder: ${hubProgressText(hubSummary, { hubWord: false })}`}
           >
             <span className="hub-tracker-pill-label">
               HUB <span className="hub-tracker-pill-count">{hubSummary.fulfilled}/{hubSummary.total}</span>

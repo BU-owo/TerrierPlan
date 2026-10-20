@@ -80,9 +80,15 @@ import { useHubProgress } from '../hooks/useHubProgress';
 import { useCelebration } from '../hooks/useCelebration';
 import { evaluateRequirementTree } from '../utils/requirementsEngine';
 import { REQUIREMENT_PROGRAMS } from '../components/requirements/programs';
+import { collectMatchedKeys } from '../components/requirements/treeHelpers';
 import CelebrationCard from '../components/CelebrationCard';
-import { CURRENT_TERM, normalizeStartTerm, mergeStartTerm } from '../utils/term';
+import {
+  CURRENT_TERM, normalizeStartTerm, mergeStartTerm, termFromSlot, termLabel as termCodeLabel,
+} from '../utils/term';
 import { normalizeIncompleteCourseKeys, mergeIncompleteCourseKeys, pastTermsSeed } from '../utils/pastTerms';
+import {
+  planSplitEnabled, courseTally, requirementsCelebrationReady, completedHubInputs, hubBannerState,
+} from '../utils/completion';
 import { aliasFor } from '../utils/grsAlias';
 import { registerPendingWriteFlush } from '../utils/pendingWrites';
 import { CONFIRMATION_REASONS, placementMessage } from '../data/specialTerms';
@@ -144,6 +150,15 @@ const LEFT_PANEL_MAX = 480;
 // new one, instead of being reset per-plan like semesters/gridSummerTerms/
 // etc. are.
 const PROFILE_STORAGE_KEY = 'terrierplan_profile';
+
+// Where a slot sits, for the requirement cards' "In plan · …" tag: the real
+// term ("Fall 2026") once a start term is set, else the legacy slot label
+// ("Year 3 – Spring", "Year 2 – Summer").
+function slotLabelFor(target, startTerm) {
+  const code = startTerm ? termFromSlot(startTerm, target) : null;
+  if (code) return termCodeLabel(code);
+  return isSummerTarget(target) ? `Year ${Number(summerYearFromTarget(target)) + 1} – Summer` : semesterLabel(target);
+}
 
 // Backward compat: a guest who used the app before externalCredits moved
 // into the shared profile still has it sitting only in the legacy per-plan
@@ -2593,7 +2608,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     isTransfer,
   });
 
-  // courseKey -> { locked, semesterStatus } — display-only lookup for the
+  // courseKey -> { locked, semesterStatus, slotLabel? } (slotLabel: where a
+  // grid/Summer course sits, see slotLabelFor) — display-only lookup for the
   // Requirements/HUB tracker's completed/current/planned chip distinction
   // (never fed into evaluateRequirementTree, which only ever sees flat
   // courseKeys). `locked` comes from completedCourseKeySet — the student's
@@ -2619,12 +2635,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const map = {};
     semesters.forEach((sem, i) => {
       entriesCourseKeys(sem).forEach((key) => {
-        map[key] = getCourseStatus(key, i, ctx);
+        map[key] = { ...getCourseStatus(key, i, ctx), slotLabel: slotLabelFor(i, activeStartTerm) };
       });
     });
     Object.entries(gridSummerTerms).forEach(([year, entries]) => {
       entriesCourseKeys(entries).forEach((key) => {
-        map[key] = getCourseStatus(key, `summer:${year}`, ctx);
+        map[key] = { ...getCourseStatus(key, `summer:${year}`, ctx), slotLabel: slotLabelFor(`summer:${year}`, activeStartTerm) };
       });
     });
     extraTerms.forEach((term) => {
@@ -2634,6 +2650,24 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     });
     return map;
   }, [semesters, gridSummerTerms, extraTerms, currentSemesterTarget, activeStartTerm, today, completedCourseKeySet]);
+  // The same map for the trackers' done-vs-planned split (planned rows,
+  // split rings, pool cards) — undefined while the student has no way to
+  // have completed anything yet (planSplitEnabled), so nothing reads
+  // "planned". Chips keep using lockStatusMap.
+  const splitStatusMap = planSplitEnabled({ startTerm: activeStartTerm, currentSemesterTarget, completedCourseKeys })
+    ? lockStatusMap
+    : undefined;
+  // Completed-only HUB count, for the "HUB's covered" popup copy (how many
+  // units still lean on planned courses). Same as hubFulfilled with the split off.
+  // (extraCourseKeys is rebuilt every render, like for the hubFulfilled call above.)
+  const hubCompletedInputs = completedHubInputs(semesters, extraCourseKeys, splitStatusMap);
+  const { fulfilled: hubCompletedFulfilled } = useHubProgress({
+    semesters: hubCompletedInputs.semesters,
+    extraCourseKeys: hubCompletedInputs.extraCourseKeys,
+    externalCredits,
+    courseMap,
+    isTransfer,
+  });
 
   // Marine Semester terms in the plan (Fall slots only; see isMarineTerm):
   // the course slots they still hold (placeholders and research-in-lieu
@@ -2701,12 +2735,27 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const hubReady = planReady && [...coursesInPlan].every((key) => courseMap[key]);
   const hubComplete = coursesInPlan.size > 0 && hubFulfilled === hubTotal;
   const requirementsKeysSig = requirementsCourseKeys.join('|');
-  const reqsComplete = useMemo(() => {
+  // Unforced evaluation (no track tab pinned), so browsing tabs in the
+  // Requirements view never triggers this. It celebrates whenever the plan
+  // covers every requirement; `variant`/`planned` pick the copy (the same
+  // course tally as the Requirements header; planned is 0 with the split off).
+  const reqsCelebration = useMemo(() => {
     const programDef = REQUIREMENT_PROGRAMS.find((p) => p.bulletinUrl === majorBulletinUrl);
-    if (!programDef || !hasRealRequirement(programDef.tree)) return false;
+    if (!programDef || !hasRealRequirement(programDef.tree)) return { celebrate: false, variant: null, planned: 0 };
     const result = evaluateRequirementTree(programDef, requirementsKeysSig.split('|'), requirementOverrides, { marineSlots });
-    return result.status === 'satisfied';
-  }, [majorBulletinUrl, requirementsKeysSig, requirementOverrides, marineSlots]);
+    const { planned } = courseTally({
+      claimedTotal: result.totalCoursesClaimed,
+      requiredTotal: result.totalCoursesRequired,
+      countedKeys: collectMatchedKeys(result.tree),
+      statusMap: splitStatusMap,
+    });
+    return { ...requirementsCelebrationReady(result.status === 'satisfied', planned), planned };
+  }, [majorBulletinUrl, requirementsKeysSig, requirementOverrides, marineSlots, splitStatusMap]);
+  const hubCelebration = hubBannerState({
+    allFulfilled: hubFulfilled === hubTotal,
+    fulfilled: hubFulfilled,
+    completedFulfilled: hubCompletedFulfilled,
+  });
   const [showHubCelebration, dismissHubCelebration] = useCelebration({
     milestoneKey: 'hub',
     isComplete: hubComplete,
@@ -2715,7 +2764,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   });
   const [showReqsCelebration, dismissReqsCelebration] = useCelebration({
     milestoneKey: 'reqs',
-    isComplete: coursesInPlan.size > 0 && reqsComplete,
+    isComplete: coursesInPlan.size > 0 && reqsCelebration.celebrate,
     ready: planReady,
     planId: activePlanId,
     majorBulletinUrl,
@@ -3084,7 +3133,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                   onClearStartTerm={handleClearStartTerm}
                   completedCourseKeys={completedCourseKeySet}
                   onShowCourseInfo={setInfoCourseKey}
-                  hubSummary={{ fulfilled: hubFulfilled, total: hubTotal }}
+                  hubSummary={{ fulfilled: hubFulfilled, completedFulfilled: hubCompletedFulfilled, total: hubTotal }}
                   onOpenHubFullView={openHubFullView}
                   overview={overviewActive}
                   boardView={boardView}
@@ -3135,6 +3184,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               courseMap={courseMap}
               creditsMap={creditsMap}
               lockStatusMap={lockStatusMap}
+              splitStatusMap={splitStatusMap}
               noteCredits={planNoteCredits}
               completedNoteCredits={completedNoteCredits}
               hasStartTerm={Boolean(activeStartTerm)}
@@ -3192,6 +3242,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           onSetRequirementOverride={handleSetRequirementOverride}
           onRemoveRequirementOverride={handleRemoveRequirementOverride}
           lockStatusMap={lockStatusMap}
+          splitStatusMap={splitStatusMap}
           stash={stash}
           onAddToStash={handleAddToStash}
           onRemoveFromStash={handleRemoveFromStash}
@@ -3214,6 +3265,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           isTransfer={isTransfer}
           onToggleTransfer={handleToggleTransfer}
           lockStatusMap={lockStatusMap}
+          splitStatusMap={splitStatusMap}
           stash={stash}
           onAddToStash={handleAddToStash}
           onRemoveFromStash={handleRemoveFromStash}
@@ -3248,15 +3300,20 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       {/* One at a time: HUB first, then requirements after it's dismissed. */}
       {showHubCelebration ? (
         <CelebrationCard
-          title="HUB's covered"
-          subtitle="Your plan hits every HUB requirement."
+          title={hubCelebration.variant === 'covered' ? 'Your plan covers every HUB requirement!' : "HUB's covered"}
+          subtitle={hubCelebration.variant === 'covered'
+            ? `${hubCelebration.plannedUnits} unit${hubCelebration.plannedUnits === 1 ? '' : 's'} still to take.`
+            : 'Your plan hits every HUB requirement.'}
           onDismiss={dismissHubCelebration}
         />
       ) : showReqsCelebration ? (
         <CelebrationCard
-          title="Requirements covered"
-          subtitle="Your plan covers every requirement for this major."
+          title={reqsCelebration.variant === 'covered' ? 'Your plan covers every requirement' : 'Requirements covered'}
+          subtitle={reqsCelebration.variant === 'covered'
+            ? `${reqsCelebration.planned} course${reqsCelebration.planned === 1 ? '' : 's'} still ahead.`
+            : 'Your plan covers every requirement for this major.'}
           note="Double-check with your advisor."
+          buttonLabel="Yippee!"
           onDismiss={dismissReqsCelebration}
         />
       ) : null}

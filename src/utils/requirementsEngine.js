@@ -426,20 +426,27 @@ function evaluateOneOf(node, ctx) {
   // waiving a track while another is genuinely complete changes nothing. With
   // no genuinely complete child, a waived child wins (the student excused that
   // track); otherwise the child with the most progress.
-  let activeChildIndex = attempts.findIndex(({ result }) => result.status === 'satisfied' && !result.waived);
-  if (activeChildIndex === -1) activeChildIndex = attempts.findIndex(({ result }) => result.waived);
-  if (activeChildIndex === -1) {
-    activeChildIndex = 0;
+  let autoChildIndex = attempts.findIndex(({ result }) => result.status === 'satisfied' && !result.waived);
+  if (autoChildIndex === -1) autoChildIndex = attempts.findIndex(({ result }) => result.waived);
+  if (autoChildIndex === -1) {
+    autoChildIndex = 0;
     attempts.forEach((attempt, i) => {
-      if (ratio(attempt) > ratio(attempts[activeChildIndex])) activeChildIndex = i;
+      if (ratio(attempt) > ratio(attempts[autoChildIndex])) autoChildIndex = i;
     });
   }
+  // `options.forcedTracks` (see evaluateRequirementTree) can pin the child,
+  // e.g. the track tab the student is looking at; everything after this
+  // point treats it exactly like an auto-picked one.
+  const forced = ctx.forcedTracks?.[node.id];
+  const activeChildIndex = Number.isInteger(forced) && forced >= 0 && forced < attempts.length ? forced : autoChildIndex;
   attempts[activeChildIndex].claimed.forEach((key) => ctx.claimed.add(key));
   const satisfied = attempts[activeChildIndex].result.status === 'satisfied';
   return {
     ...node,
     children: attempts.map(({ result }) => result),
     activeChildIndex,
+    // The child the engine would pick on its own (the "best match").
+    autoChildIndex,
     status: satisfied ? 'satisfied' : 'unsatisfied',
     matched: [],
     missing: [],
@@ -853,6 +860,9 @@ export function deriveRequiredTotal(node) {
 
 // `options.marineSlots`: how many Marine Semester course slots the plan still
 // holds (see fillFromMarineSlots); 0 or absent = none.
+// `options.forcedTracks`: { [ONE_OF node id]: childIndex } — use that child
+// as the ONE_OF's active child instead of the auto-pick (out-of-range values
+// are ignored). Absent = today's behavior.
 export function evaluateRequirementTree(programDef, planCourseKeys, requirementOverrides = {}, options = {}) {
   const planSet = new Set(
     Array.from(planCourseKeys)
@@ -864,6 +874,7 @@ export function evaluateRequirementTree(programDef, planCourseKeys, requirementO
     claimed: new Set(),
     overrides: requirementOverrides || {},
     marineSlots: Number.isFinite(options?.marineSlots) ? Math.max(0, Math.floor(options.marineSlots)) : 0,
+    forcedTracks: options?.forcedTracks || null,
   };
   const tree = evaluateNode(programDef.tree, ctx);
   const derivedTotal = deriveRequiredTotal(tree);

@@ -4,6 +4,7 @@ import { useHubProgress, contributorsForRequirement, satisfiedCountForRequiremen
 import { loadAllCourses, queryCourses, collectDepartmentPrefixes, HUB_MATCH_MODES, isProfessionalCareer } from '../../utils/courseQuery';
 import { normalizeCourseKey } from '../../utils/courseKey';
 import { entryCourseKey } from '../../utils/courseEntry';
+import { completedHubInputs, hubBannerState } from '../../utils/completion';
 import { formatCourseLabel } from '../requirements/treeHelpers';
 import HubYearToggle from './HubYearToggle';
 import EstimateNote from '../EstimateNote';
@@ -62,12 +63,18 @@ function describeArcSegment(cx, cy, r, startPct, endPct) {
 }
 
 // `hideLabel` drops the center count (tiny rings that show it beside instead).
-export function HubProgressRing({ percent, fulfilled, total, potentialPercent, size = 56, strokeWidth = 6, hideLabel = false }) {
+// `completedPercent`, when given and lower than `percent`, splits the real
+// fill: solid up to completedPercent (completed courses), then a dashed
+// "planned" arc (.hub-ring-planned) up to `percent`. The center count and
+// the stash arc beyond `percent` are unchanged.
+export function HubProgressRing({ percent, fulfilled, total, potentialPercent, completedPercent, size = 56, strokeWidth = 6, hideLabel = false }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const cx = size / 2;
   const cy = size / 2;
-  const offset = circumference * (1 - Math.min(100, Math.max(0, percent)) / 100);
+  const solidPercent = completedPercent != null ? Math.min(percent, completedPercent) : percent;
+  const showPlanned = solidPercent < percent;
+  const offset = circumference * (1 - Math.min(100, Math.max(0, solidPercent)) / 100);
   const label = `${fulfilled}/${total}`;
   const fontSize = Math.round(size * (label.length > 3 ? 0.18 : 0.24));
   const showPotential = potentialPercent != null && potentialPercent > percent;
@@ -85,10 +92,25 @@ export function HubProgressRing({ percent, fulfilled, total, potentialPercent, s
   // 72px overview ring, rather than a fixed pixel dash looking chunky on
   // one and disappearing into a blur on the other.
   const dashPattern = `${(strokeWidth * 0.7).toFixed(1)} ${(strokeWidth * 0.6).toFixed(1)}`;
+  // The planned arc, same dashed drawing as the stash arc below (and the
+  // same full-circle fallback when nothing is completed yet).
+  const plannedArc = !showPlanned ? null : solidPercent <= 0 && percent >= 100 ? (
+    <circle className="hub-ring-planned" cx={cx} cy={cy} r={radius} strokeWidth={strokeWidth} fill="none" strokeDasharray={dashPattern} />
+  ) : (
+    <path
+      className="hub-ring-planned"
+      d={describeArcSegment(cx, cy, radius, solidPercent, percent)}
+      strokeWidth={strokeWidth}
+      fill="none"
+      strokeDasharray={dashPattern}
+      strokeLinecap="round"
+    />
+  );
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="hub-ring" aria-hidden="true">
       <circle className="hub-ring-track" cx={cx} cy={cy} r={radius} strokeWidth={strokeWidth} fill="none" />
+      {plannedArc}
       {showPotential && isFullPotentialCircle && (
         <circle
           className="hub-ring-potential"
@@ -430,6 +452,9 @@ export default function HubFullView({
   isTransfer,
   onToggleTransfer,
   lockStatusMap,
+  // lockStatusMap when the done-vs-planned split applies, else undefined
+  // (see planSplitEnabled): the solid/dashed ring split and planned rows.
+  splitStatusMap,
   stash = [],
   onAddToStash,
   onRemoveFromStash,
@@ -458,7 +483,7 @@ export default function HubFullView({
   // useHubProgress) — they render in the same requirement rows as real
   // contributors below, but never affect counts/progress/fulfilled/
   // groupSummaries.satisfied, which stay computed from real courses only.
-  const { groupSummaries, contributorsByUnit, counts, openRequirements, allFulfilled } = useHubProgress({
+  const { groupSummaries, contributorsByUnit, counts, openRequirements, allFulfilled, fulfilled } = useHubProgress({
     semesters,
     extraCourseKeys,
     externalCredits,
@@ -486,6 +511,33 @@ export default function HubFullView({
   const potentialPercentByGroupId = useMemo(
     () => Object.fromEntries(potentialGroupSummaries.map((g) => [g.group.id, g.percent])),
     [potentialGroupSummaries],
+  );
+
+  // Completed-only progress — the same computation again with only the
+  // courses that count as done (see completion.js): the solid part of each
+  // ring, and which satisfied requirements are done vs. only planned.
+  const completedInputs = useMemo(
+    () => completedHubInputs(semesters, extraCourseKeys, splitStatusMap),
+    [semesters, extraCourseKeys, splitStatusMap],
+  );
+  const { groupSummaries: completedGroupSummaries, fulfilled: completedFulfilled } = useHubProgress({
+    semesters: completedInputs.semesters,
+    extraCourseKeys: completedInputs.extraCourseKeys,
+    externalCredits,
+    courseMap,
+    isTransfer,
+  });
+  // Same banner rules as HubSidebar (hubBannerState).
+  const hubBanner = hubBannerState({ allFulfilled, fulfilled, completedFulfilled });
+  const completedPercentByGroupId = useMemo(
+    () => Object.fromEntries(completedGroupSummaries.map((g) => [g.group.id, g.percent])),
+    [completedGroupSummaries],
+  );
+  const completedSatisfiedIds = useMemo(
+    () => new Set(completedGroupSummaries.flatMap((g) => g.requirements
+      .filter(({ isSatisfied }) => isSatisfied)
+      .map(({ requirement }) => requirement.id))),
+    [completedGroupSummaries],
   );
 
   // Search panel state. Courses load once into memory via the shared cache
@@ -651,6 +703,7 @@ export default function HubFullView({
               fulfilled={groupFulfilled}
               total={groupTotal}
               potentialPercent={potentialPercentByGroupId[group.id]}
+              completedPercent={completedPercentByGroupId[group.id]}
               size={38}
               strokeWidth={4}
             />
@@ -677,9 +730,11 @@ export default function HubFullView({
               const contributors = contributorsForRequirement(requirement, contributorsByUnit).filter(
                 (c) => c.type !== 'staged' || !isSatisfied,
               );
+              // Satisfied, but not by completed courses alone.
+              const planned = isSatisfied && !completedSatisfiedIds.has(requirement.id);
 
               return (
-                <div key={requirement.id} className={`hub-full-requirement ${isSatisfied ? 'fulfilled' : 'pending'}`}>
+                <div key={requirement.id} className={`hub-full-requirement ${isSatisfied ? 'fulfilled' : 'pending'}${planned ? ' is-planned' : ''}`}>
                   <div className="hub-full-requirement-header">
                     <span className="hub-full-requirement-indicator" aria-hidden="true">
                       {isSatisfied ? '✓' : '○'}
@@ -695,7 +750,7 @@ export default function HubFullView({
                       </span>
                     )}
                     <span className={`hub-full-requirement-count${isSatisfied ? ' satisfied' : ''}`}>
-                      {satisfiedCount}/{requirement.required}
+                      {satisfiedCount}/{requirement.required}{planned ? ' · planned' : ''}
                     </span>
                   </div>
                   <div className="hub-full-requirement-chips">
@@ -733,7 +788,7 @@ export default function HubFullView({
                             <span className="req-pool-chip-text">
                               {formatCourseLabel(contributor.courseKey, courseMap, 'full')}
                             </span>
-                            <span className="req-pool-chip-status">Staged</span>
+                            <span className="req-pool-chip-status">Paw-tential</span>
                           </span>
                         );
                       }
@@ -974,7 +1029,7 @@ export default function HubFullView({
               viewports rather than scrolling horizontally. */}
           {potentialHintVisible && (
             <OneTimeHint onDismiss={dismissPotentialHint} onSeen={markPotentialSeen}>
-              Dashed = what your Paw-tential Courses would add to HUB.
+              Yellow dashed = what your Paw-tential courses would add. Gray dashed = planned, not done yet.
             </OneTimeHint>
           )}
 
@@ -997,6 +1052,7 @@ export default function HubFullView({
                       fulfilled={fulfilled}
                       total={total}
                       potentialPercent={potentialPercentByGroupId[group.id]}
+                      completedPercent={completedPercentByGroupId[group.id]}
                       size={72}
                       strokeWidth={6}
                     />
@@ -1007,9 +1063,14 @@ export default function HubFullView({
             })}
           </div>
 
-          {allFulfilled && (
+          {hubBanner.celebrate && (
             <div className="panel-all-fulfilled">
-              <p>All HUB requirements fulfilled!</p>
+              <p>{hubBanner.variant === 'covered' ? 'Your plan covers every HUB requirement!' : 'All HUB requirements fulfilled!'}</p>
+              {hubBanner.variant === 'covered' && (
+                <p className="panel-all-fulfilled-sub">
+                  {hubBanner.plannedUnits} unit{hubBanner.plannedUnits === 1 ? '' : 's'} still to take
+                </p>
+              )}
             </div>
           )}
 

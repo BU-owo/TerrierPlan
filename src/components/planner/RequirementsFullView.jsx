@@ -21,6 +21,7 @@ export default function RequirementsFullView({
   onSetRequirementOverride,
   onRemoveRequirementOverride,
   lockStatusMap,
+  splitStatusMap,
   stash,
   onAddToStash,
   onRemoveFromStash,
@@ -62,6 +63,7 @@ export default function RequirementsFullView({
             onSetRequirementOverride={onSetRequirementOverride}
             onRemoveRequirementOverride={onRemoveRequirementOverride}
             lockStatusMap={lockStatusMap}
+            splitStatusMap={splitStatusMap}
             stash={stash}
             onAddToStash={onAddToStash}
             onRemoveFromStash={onRemoveFromStash}

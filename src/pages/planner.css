@@ -861,13 +861,16 @@
   border: 0;
   background: transparent;
   padding: 0;
-  color: var(--scarlet);
+  /* --scarlet-text is dark-mode only; light mode falls back to --scarlet. */
+  color: var(--scarlet-text, var(--scarlet));
   font: inherit;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
 .start-term-link:hover { text-decoration: underline; }
+/* One-line explainer beside the legacy "Start term" picker. */
+.start-term-helper { font-size: 11px; color: var(--text-muted); }
 /* "HUB tracker 12/26 ⤢" — opens the full HUB view from the planner toolbar.
    A real secondary button (cream fill, border, label + live count + expand
    icon), pushed to the right of the row and wrapping under it on narrow
@@ -982,8 +985,7 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   transition: box-shadow .15s, border-color .15s, opacity .15s;
 }
 .course-card:hover { border-color: #c9c3bb; box-shadow: var(--shadow-sm); }
-.course-card:active { cursor: grabbing; }
-.course-card.is-source { opacity: .35; }
+.course-card:active { cursor: grabbing; }.course-card.is-source { opacity: .35; }
 .course-card.is-overlay {
   cursor: grabbing;
   box-shadow: var(--shadow-md);
@@ -1420,6 +1422,8 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   color: var(--success-text);
   margin: 0;
 }
+/* "N courses / units still to take" under a covered-but-planned banner. */
+.panel-all-fulfilled .panel-all-fulfilled-sub { margin-top: 2px; font-weight: 500; }
 .panel-empty-state {
   font-size: 11px;
   color: var(--text-secondary);
@@ -2305,15 +2309,27 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   color: var(--text);
 }
 .req-progress-bar {
+  display: flex;
   height: 10px;
   border-radius: 999px;
   background: var(--cream-dark);
   overflow: hidden;
 }
 .req-progress-bar-fill {
+  flex: none;
   height: 100%;
   background: var(--success-strong);
   border-radius: 999px;
+  transition: width .3s ease;
+}
+/* Counted but only planned: a solid blue-gray segment after the done
+   share, with a 2px gap of track between them (marginLeft, set inline only
+   when there's a done share). It may shrink by those 2px at 100%. */
+.req-progress-bar-fill:not(:last-child) { border-radius: 999px 0 0 999px; }
+.req-progress-bar-planned {
+  flex: 0 1 auto;
+  height: 100%;
+  background: var(--status-planned-bar);
   transition: width .3s ease;
 }
 /* "View official bulletin ↗" under the progress summary (sidebar + full view). */
@@ -2384,18 +2400,28 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   border-radius: 999px;
   margin-left: 2px;
 }
-.req-pool-chip--completed .req-pool-chip-status { background: var(--success-strong); color: #fff; }
-/* Courses in the student's chosen current semester — blue, distinct from
-   completed (green) and planned (dashed/neutral). */
-.req-pool-chip--current {
-  background: var(--badge-cool-bg);
-  color: var(--badge-cool-text);
+/* Soft status colors (the --status-* tokens). Full chips always also carry
+   .claimed, so each state needs the 3-class selector to beat the base
+   `.req-pool-chip.claimed` green (same reason as --staged below).
+   Completed: light green fill, thin border. */
+.req-pool-chip.claimed.req-pool-chip--completed {
+  background: var(--status-completed-bg);
+  border: 1px solid var(--status-completed-border);
+  color: var(--status-completed-text);
 }
-.req-pool-chip--current .req-pool-chip-status { background: var(--badge-cool-text); color: #fff; }
-.req-pool-chip--planned {
+.req-pool-chip--completed .req-pool-chip-status { background: var(--status-completed-border); color: var(--status-completed-text); }
+/* Courses in the current semester — a quiet blue-gray, distinct from
+   completed (green) and planned (dashed). */
+.req-pool-chip.claimed.req-pool-chip--current {
+  background: var(--status-current-bg);
+  border: 1px solid var(--status-current-border);
+  color: var(--status-current-text);
+}
+.req-pool-chip--current .req-pool-chip-status { background: var(--status-current-border); color: var(--status-current-text); }
+.req-pool-chip.claimed.req-pool-chip--planned {
   background: transparent;
-  border: 1.5px dashed var(--border);
-  color: var(--text-secondary);
+  border: 1.5px dashed var(--status-planned-border);
+  color: var(--status-planned-text);
 }
 .req-pool-chip--planned .req-pool-chip-status { background: var(--cream-dark); color: var(--text-muted); }
 /* A course staged in Paw-tential Courses, not yet on the plan — same
@@ -2446,6 +2472,16 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
    .hub-full-requirement styles (see RequirementNodeView); only the bits
    those don't cover live here. */
 .hub-full-overview-toolbar.req-toolbar { justify-content: flex-end; margin: 0 0 10px; }
+/* All / Still to do / Done filter + its "12 done · 3 planned · 2 to go"
+   summary on the left; Expand/Collapse all stays on the right. */
+.hub-full-overview-toolbar.req-toolbar { justify-content: flex-start; flex-wrap: wrap; }
+.req-toolbar .panel-open-full-btn { margin-left: auto; }
+/* The filter keeps each label on one line; if the row is too narrow the
+   control scrolls sideways and the summary wraps under it. */
+.req-filter-toggle { flex: 0 0 auto; max-width: 100%; margin-bottom: 0; overflow-x: auto; }
+.req-filter-toggle .hub-year-toggle-btn { flex: 0 0 auto; white-space: nowrap; padding: 4px 10px; }
+.req-filter-summary { font-size: 12px; color: var(--text-secondary); }
+.req-filter-empty { margin: 8px 0; font-size: 13px; color: var(--text-secondary); }
 
 /* Sidebar (compact) Requirements tab. */
 .req-compact-summary .panel-summary-line { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
@@ -2631,6 +2667,39 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   color: var(--success-strong);
 }
 .req-course-row.is-in-plan { background: var(--success-surface); border-color: transparent; }
+/* Done vs. planned on claimed rows (RequirementCourseRow's planStatus);
+   is-plan-completed keeps the green look above. Planned and in-progress
+   cards are filled with a SOLID border so they stand apart from the plain
+   not-in-plan cards (paw) — dashed is reserved for group boxes and ranges. */
+.req-course-row.is-in-plan.is-plan-planned {
+  background: var(--status-planned-card-bg);
+  border: 1px solid var(--status-planned-card-border);
+}
+.req-course-row.is-in-plan.is-plan-planned .req-course-row-check { color: var(--status-current-text); font-weight: 800; }
+.req-course-row.is-in-plan.is-plan-current {
+  background: var(--status-current-card-bg);
+  border: 1px solid var(--status-current-card-border);
+}
+.req-course-row.is-in-plan.is-plan-current .req-course-row-check { color: var(--status-current-text); }
+/* "In progress" pill on a current-semester claimed row (same blue-gray as
+   the row and the In progress chip). */
+.req-course-row-pill.is-in-progress { background: var(--status-current-border); border-color: var(--status-current-border); color: var(--status-current-text); }
+/* "In plan · Fall 2026" on a planned / in-progress claimed row. */
+.req-course-row-pill.is-plan-term { background: transparent; border-color: var(--status-planned-border); color: var(--status-planned-text); }
+/* "Browse options" / "Hide options" on a requirement row's body. */
+.req-browse-toggle {
+  display: block;
+  margin: 2px 0 6px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--scarlet-text, var(--scarlet));
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.req-browse-toggle:hover { text-decoration: underline; }
 .req-course-row-code { flex-shrink: 0; font-weight: 700; color: var(--text); white-space: nowrap; }
 /* Tags + badge + ✱ wrapper: invisible to layout (one-line rows) unless a
    narrow sidebar row puts it on its own second line. */
@@ -3028,11 +3097,33 @@ html[data-theme='dark'] .hub-stash-link { color: var(--warning-border); }
      than a plain gold specifically so it doesn't sit too close to
      --hub-div (Diversity, Civic, Global's amber-orange, #C77B2E) — this
      is deliberately more toward true yellow and lighter, not just the
-     same gold at lower opacity. */
-  stroke: #E6D26A;
+     same gold at lower opacity. --stash-arc has its own dark value. */
+  stroke: var(--stash-arc);
   opacity: .8;
 }
-.hub-ring-philosophical .hub-ring-fill { stroke: var(--hub-phi); }
+/* The planned share of a ring (HubProgressRing's completedPercent): dashed
+   like the stash arc above, in its own neutral color. */
+.hub-ring-planned { stroke: var(--status-planned-arc); }
+
+/* Done vs. only planned (see completion.js): a satisfied requirement that
+   still leans on planned/current courses gets a hollow, muted ✓ and a muted
+   count with "· planned". Child combinators keep a planned parent from
+   restyling its done children. */
+.hub-requirement.fulfilled.is-planned .hub-requirement-indicator {
+  background: transparent;
+  border: 1.5px solid var(--status-planned-text);
+  color: var(--status-planned-text);
+}
+.hub-requirement.fulfilled.is-planned .hub-requirement-count,
+.hub-group-progress.satisfied.is-planned,
+.hub-full-requirement.fulfilled.is-planned > .hub-full-requirement-header > .hub-full-requirement-indicator,
+.hub-full-requirement.fulfilled.is-planned > .hub-full-requirement-header > .hub-full-requirement-count.satisfied,
+.req-section.fulfilled.is-planned > .req-section-header > .req-section-label,
+.req-section.fulfilled.is-planned > .req-section-header > .req-section-count.satisfied,
+.req-card.req-card--fulfilled.is-planned > .hub-full-group-header .hub-full-group-label,
+.req-card.req-card--fulfilled.is-planned > .hub-full-group-header > .req-card-count.satisfied {
+  color: var(--status-planned-text);
+}.hub-ring-philosophical .hub-ring-fill { stroke: var(--hub-phi); }
 .hub-ring-scientific .hub-ring-fill    { stroke: var(--hub-sci); }
 .hub-ring-quantitative .hub-ring-fill  { stroke: var(--hub-qr); }
 .hub-ring-diversity .hub-ring-fill     { stroke: var(--hub-div); }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { HUB_GROUPS, describeRequirementLabels } from '../../utils/hubConstants';
 import { useHubProgress, satisfiedCountForRequirement } from '../../hooks/useHubProgress';
+import { completedHubInputs, hubBannerState, hubProgressText } from '../../utils/completion';
 import RhettPeek from '../RhettPeek';
 import HubYearToggle from './HubYearToggle';
 import EstimateNote from '../EstimateNote';
@@ -20,6 +21,10 @@ export default function HubSidebar({
   stash = [],
   // Switches the planner's left panel to the Paw-tential Courses tab.
   onShowStash,
+  // courseKey -> { locked, semesterStatus } when the done-vs-planned split
+  // applies (PlannerPage, see planSplitEnabled); splits satisfied requirements
+  // into done vs. only planned. Without it, everything reads as done.
+  splitStatusMap,
 }) {
   // Groups the student has already finished collapse to a one-line summary
   // by default so the groups that still need attention stand out; explicit
@@ -48,6 +53,28 @@ export default function HubSidebar({
     courseMap,
     isTransfer,
   });
+  // Completed-only progress (see completion.js): which satisfied
+  // requirements are done vs. still only planned.
+  const completedInputs = useMemo(
+    () => completedHubInputs(semesters, extraCourseKeys, splitStatusMap),
+    [semesters, extraCourseKeys, splitStatusMap],
+  );
+  const { requirementsByGroup: completedRequirementsByGroup, fulfilled: completedFulfilled } = useHubProgress({
+    semesters: completedInputs.semesters,
+    extraCourseKeys: completedInputs.extraCourseKeys,
+    externalCredits,
+    courseMap,
+    isTransfer,
+  });
+  const completedSatisfiedIds = useMemo(
+    () => new Set(Object.values(completedRequirementsByGroup).flat()
+      .filter(({ isSatisfied }) => isSatisfied)
+      .map(({ requirement }) => requirement.id)),
+    [completedRequirementsByGroup],
+  );
+  // Celebrates whenever the plan covers every unit; the copy says how many
+  // units still lean on planned courses (see hubBannerState).
+  const hubBanner = hubBannerState({ allFulfilled, fulfilled, completedFulfilled });
   const stashedHubCount = stash.filter((key) => (courseMap[key]?.hubUnits?.length ?? 0) > 0).length;
   const couldAddUnits = Math.max(0, potentialFulfilled - fulfilled);
 
@@ -97,16 +124,21 @@ export default function HubSidebar({
       )}
 
       <p className="panel-summary-line">
-        {fulfilled} of {totalRequired} HUB units complete
+        {hubProgressText({ fulfilled, completedFulfilled, total: totalRequired })}
       </p>
       <EstimateNote link={BU_LINKS.myBU} lead="For planning only. Confirm on" label="MyBU" />
 
       <HubYearToggle isTransfer={isTransfer} onToggleTransfer={onToggleTransfer} />
 
-      {allFulfilled && (
+      {hubBanner.celebrate && (
         <div className="panel-all-fulfilled">
           <RhettPeek />
-          <p>All HUB requirements fulfilled!</p>
+          <p>{hubBanner.variant === 'covered' ? 'Your plan covers every HUB requirement!' : 'All HUB requirements fulfilled!'}</p>
+          {hubBanner.variant === 'covered' && (
+            <p className="panel-all-fulfilled-sub">
+              {hubBanner.plannedUnits} unit{hubBanner.plannedUnits === 1 ? '' : 's'} still to take
+            </p>
+          )}
         </div>
       )}
 
@@ -121,6 +153,8 @@ export default function HubSidebar({
           );
           const groupTotal = groupReqs.reduce((sum, { requirement }) => sum + requirement.required, 0);
           const groupSatisfied = groupFulfilled === groupTotal;
+          const groupPlanned = groupSatisfied
+            && groupReqs.some(({ requirement }) => !completedSatisfiedIds.has(requirement.id));
           const collapsed = collapsedOverrides[group.label] ?? groupSatisfied;
 
           const groupStyle = {
@@ -139,8 +173,8 @@ export default function HubSidebar({
               >
                 <span className="panel-group-caret">{collapsed ? '▸' : '▾'}</span>
                 <span className="hub-group-label">{group.label}</span>
-                <span className={`hub-group-progress${groupSatisfied ? ' satisfied' : ''}`}>
-                  {groupFulfilled}/{groupTotal}
+                <span className={`hub-group-progress${groupSatisfied ? ' satisfied' : ''}${groupPlanned ? ' is-planned' : ''}`}>
+                  {groupFulfilled}/{groupTotal}{groupPlanned ? ' · planned' : ''}
                 </span>
               </div>
 
@@ -150,11 +184,12 @@ export default function HubSidebar({
                     const { displayLabel, shortLabel } = describeRequirementLabels(requirement);
                     const satisfiedCount = satisfiedCountForRequirement(requirement, counts);
                     const needsMultiple = requirement.required > 1;
+                    const planned = isSatisfied && !completedSatisfiedIds.has(requirement.id);
 
                     return (
                       <div
                         key={requirement.id}
-                        className={`hub-requirement ${isSatisfied ? 'fulfilled' : 'pending'}`}
+                        className={`hub-requirement ${isSatisfied ? 'fulfilled' : 'pending'}${planned ? ' is-planned' : ''}`}
                       >
                         <div className="hub-requirement-indicator">
                           {isSatisfied ? '✓' : '○'}
@@ -176,7 +211,7 @@ export default function HubSidebar({
                           )}
                         </div>
                         <span className={`hub-requirement-count ${isSatisfied ? 'satisfied' : ''}`}>
-                          {satisfiedCount}/{requirement.required}
+                          {satisfiedCount}/{requirement.required}{planned ? ' · planned' : ''}
                         </span>
                       </div>
                     );

@@ -34,6 +34,29 @@
   --badge-success-bg: #DCEFE3;
   --badge-success-text: #1B5E3A;
 
+  /* Soft plan-status colors: the completed/current/planned chips in the
+     Requirements and HUB trackers */
+  --status-completed-bg: #E6F4EA;
+  --status-completed-border: #B7DEC4;
+  --status-completed-text: #195C34;
+  --status-current-bg: #EEF1F5;
+  --status-current-border: #D3DAE3;
+  --status-current-text: #3E4C5E;
+  --status-planned-border: #D9D3C7;
+  --status-planned-text: #6F675C;
+  /* Dashed "planned" part of a HUB ring (distinct from the stash arc) */
+  --status-planned-arc: #7D8899;
+  /* Requirement pool cards for courses already in the plan: planned
+     (future) and in progress — solid border, blue-gray fill */
+  --status-planned-card-bg: #F2F5F9;
+  --status-planned-card-border: #7F8DA0;
+  --status-current-card-bg: #E3E9F1;
+  --status-current-card-border: #6A7A8F;
+  /* Planned share of the Requirements progress bar (>= 3:1 on the track) */
+  --status-planned-bar: #76849A;
+  /* Paw-tential (stash) preview arc on the HUB rings */
+  --stash-arc: #E6D26A;
+
   /* Semantic interaction */
   --drag-over-bg: #F5F3FF;
   --drag-over-border: #7C3AED;
@@ -96,6 +119,21 @@ html[data-theme='dark'] {
   --badge-cool-text: #C9D8F8;
   --badge-success-bg: #224033;
   --badge-success-text: #A8DCC0;
+  --status-completed-bg: #1A3326;
+  --status-completed-border: #2E5A43;
+  --status-completed-text: #A8E6C7;
+  --status-current-bg: #222C3A;
+  --status-current-border: #3A475A;
+  --status-current-text: #C4CEDB;
+  --status-planned-border: #4A5A70;
+  --status-planned-text: #A9B5C4;
+  --status-planned-arc: #8FA0B8;
+  --status-planned-card-bg: #223047;
+  --status-planned-card-border: #7C8CA4;
+  --status-current-card-bg: #2A3A52;
+  --status-current-card-border: #8E9DB4;
+  --status-planned-bar: #8494AB;
+  --stash-arc: #E3CF63;
   --drag-over-bg: #2E2746;
   --drag-over-border: #A78BFA;
   --hub-phi-bg: #41282d;

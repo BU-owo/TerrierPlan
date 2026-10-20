@@ -4,6 +4,7 @@ import RequirementCourseRow from './RequirementCourseRow';
 import RangeCourseList from './RangeCourseList';
 import { SequenceOptionCards } from './SequenceGroupDetail';
 import { shortCourseCode, describeLockStatus, hideInactive } from './treeHelpers';
+import { lockStatusVariant } from '../../utils/completion';
 
 // Pool view for one leaf node: atLeast subset legend lines ("✱ At least 1
 // calculus or statistics course ✓ — MA 123"), then one group per pool entry
@@ -19,6 +20,9 @@ export default function CoursePool({
   fallbackNote,
   courseMap,
   lockStatusMap,
+  // Set when the done-vs-planned split applies: claimed rows then show
+  // completed / current / planned instead of one green "in plan" look.
+  splitStatusMap,
   planCourseKeySet,
   stashSet,
   onToggleStash,
@@ -66,6 +70,8 @@ export default function CoursePool({
         course={courseMap[key]}
         inPlan
         statusLabel={describeLockStatus(lockStatusMap?.[key]).label}
+        planStatus={splitStatusMap ? lockStatusVariant(splitStatusMap[key]) : null}
+        planSlotLabel={splitStatusMap?.[key]?.slotLabel}
         onShowCourseInfo={onShowCourseInfo}
         subsetLabel={subsetLabels?.get(key)}
         tag={optionTags?.[key]}
