@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import StartTermSelect from './StartTermSelect';
 
 // First-visit "how do you want to start?" card, shown by PlannerPage once, on
 // an empty plan (replaces the old app-wide beta modal). Each button has a label
@@ -12,7 +13,9 @@ const CHOICES = [
   { id: 'scratch', label: 'Start from scratch', caption: 'Search courses and build it yourself.' },
 ];
 
-export default function PickYourPath({ onChoose, onDismiss }) {
+// The optional start-term question sets it as soon as one is picked (and can
+// be changed after); "Skip for now" leaves it unset.
+export default function PickYourPath({ onChoose, onDismiss, startTerm = null, today, onSetStartTerm }) {
   useEffect(() => {
     function onKeyDown(e) {
       if (e.key === 'Escape') onDismiss();
@@ -40,6 +43,17 @@ export default function PickYourPath({ onChoose, onDismiss }) {
           />
         </div>
         <h2 id="path-card-title">Welcome to TerrierPlan!</h2>
+        {onSetStartTerm && (
+          <label className="path-card-start">
+            When did you start at BU?
+            <StartTermSelect
+              value={startTerm || ''}
+              today={today}
+              placeholder="Select when you started"
+              onChange={onSetStartTerm}
+            />
+          </label>
+        )}
         <div className="path-card-choices">
           {CHOICES.map((choice) => (
             <button key={choice.id} type="button" className="path-card-btn" onClick={() => onChoose(choice.id)}>

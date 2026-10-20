@@ -1,6 +1,10 @@
 import SemesterColumn from './SemesterColumn';
-import { getSemesterStatus, isSummerTarget, summerYearFromTarget } from '../../utils/courseEntry';
+import StartTermSelect from './StartTermSelect';
+import {
+  getSlotStatus, isBeforeStartTerm, isSummerTarget, showsCurrentSemesterSelect, summerYearFromTarget,
+} from '../../utils/courseEntry';
 import { semesterLabel } from '../../utils/hubConstants';
+import { termFromSlot, termLabel } from '../../utils/term';
 
 // Target encoding shared with PlannerPage: a plain number is a grid slot
 // index (Fall/Spring), the string `summer:{year}` is that year's optional
@@ -37,6 +41,13 @@ export default function SemesterBoard({
   semesterOptions = [],
   currentSemesterTarget = null,
   onSetCurrentSemester,
+  // Valid Fall/Spring start-term code or null. When set, it (with `today`)
+  // decides every column's status and replaces the "I am currently in"
+  // select; see getSlotStatus.
+  startTerm = null,
+  today,
+  onSetStartTerm,
+  onClearStartTerm,
   // Set<courseKey> — the student's own global "completed" list (shared
   // across every plan, see PlannerPage), not scoped to this board.
   completedCourseKeys,
@@ -54,6 +65,19 @@ export default function SemesterBoard({
   const yearCount = Math.max(4, Math.ceil(semesters.length / 2));
   const years = Array.from({ length: yearCount }, (_, i) => i);
   const atYearCap = yearCount >= maxYears;
+
+  // Card/header lock controls for one slot: the per-card and per-semester
+  // locks without a start term (legacy, unchanged); none with one.
+  function lockProps(target) {
+    if (startTerm) return {};
+    return { onToggleLock, onToggleSemesterLock: () => onToggleSemesterLock(target) };
+  }
+  const slotStatus =(target) => getSlotStatus(target, { startTerm, currentSemesterTarget, today });
+  // "Fall 2024" once a start term is set, else the plain season.
+  function slotLabel(target, season) {
+    const code = startTerm ? termFromSlot(startTerm, target) : null;
+    return code ? termLabel(code) : season;
+  }
 
   // Note handlers bound to one slot target (see handleAddNote & co. in
   // PlannerPage) — notes are matched by their own id, never courseKey.
@@ -101,25 +125,56 @@ export default function SemesterBoard({
           a one-way door. Purely a self-report; nothing here enforces which
           courses "should" be done by when. */}
       <div className="current-semester-control">
-        <label htmlFor="current-semester-select">I am currently in</label>
-        <select
-          id="current-semester-select"
-          className="search-sem-select"
-          value={currentSemesterTarget ?? ''}
-          onChange={(e) => {
-            const raw = e.target.value;
-            if (raw === '') {
-              onSetCurrentSemester(currentSemesterTarget);
-              return;
-            }
-            onSetCurrentSemester(/^\d+$/.test(raw) ? Number(raw) : raw);
-          }}
-        >
-          <option value="">Not set</option>
-          {displayedSemesterOptions.map(({ value, label }) => (
-            <option key={value} value={value}>{label}</option>
-          ))}
-        </select>
+        {startTerm ? (
+          <>
+            <label htmlFor="start-term-select">Started:</label>
+            <StartTermSelect
+              id="start-term-select"
+              value={startTerm}
+              today={today}
+              onChange={onSetStartTerm}
+            />
+            <button type="button" className="start-term-link" onClick={onClearStartTerm}>Clear</button>
+          </>
+        ) : !showsCurrentSemesterSelect(startTerm, currentSemesterTarget) ? (
+          <>
+            <label htmlFor="start-term-select">When did you start at BU?</label>
+            <StartTermSelect
+              id="start-term-select"
+              today={today}
+              placeholder="Select term"
+              onChange={onSetStartTerm}
+            />
+          </>
+        ) : (
+          <>
+            <label htmlFor="current-semester-select">I am currently in</label>
+            <select
+              id="current-semester-select"
+              className="search-sem-select"
+              value={currentSemesterTarget ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === '') {
+                  onSetCurrentSemester(currentSemesterTarget);
+                  return;
+                }
+                onSetCurrentSemester(/^\d+$/.test(raw) ? Number(raw) : raw);
+              }}
+            >
+              <option value="">Not set</option>
+              {displayedSemesterOptions.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <StartTermSelect
+              today={today}
+              placeholder="Set start term"
+              ariaLabel="Set start term"
+              onChange={onSetStartTerm}
+            />
+          </>
+        )}
         {onBoardViewChange && (
           <div className="board-view-toggle" role="group" aria-label="Board view">
             <button
@@ -178,10 +233,10 @@ export default function SemesterBoard({
         const springIndex = year * 2 + 1;
         const hasSummer = Object.prototype.hasOwnProperty.call(gridSummerTerms, year);
         const summerCourses = gridSummerTerms[year] || [];
-        const fallStatus = getSemesterStatus(fallIndex, currentSemesterTarget);
-        const springStatus = getSemesterStatus(springIndex, currentSemesterTarget);
+        const fallStatus = slotStatus(fallIndex);
+        const springStatus = slotStatus(springIndex);
         const summerStatus = hasSummer
-          ? getSemesterStatus(summerTarget(year), currentSemesterTarget)
+          ? slotStatus(summerTarget(year))
           : null;
 
         return (
@@ -191,7 +246,8 @@ export default function SemesterBoard({
               <SemesterColumn
                 dropId={`col-${fallIndex}`}
                 target={fallIndex}
-                label="Fall"
+                label={slotLabel(fallIndex, 'Fall')}
+                beforeStart={isBeforeStartTerm(fallIndex, startTerm)}
                 season="fall"
                 courses={semesters[fallIndex] || []}
                 courseMap={courseMap}
@@ -199,9 +255,8 @@ export default function SemesterBoard({
                 isActive={activeTarget === fallIndex}
                 onColumnClick={() => onSemesterClick(fallIndex)}
                 onRemoveCourse={(key) => onRemoveCourse(key, fallIndex)}
-                onToggleLock={onToggleLock}
                 onShowCourseInfo={onShowCourseInfo}
-                onToggleSemesterLock={() => onToggleSemesterLock(fallIndex)}
+                {...lockProps(fallIndex)}
                 {...noteProps(fallIndex)}
                 draggingId={draggingId}
                 status={fallStatus}
@@ -211,7 +266,7 @@ export default function SemesterBoard({
               <SemesterColumn
                 dropId={`col-${springIndex}`}
                 target={springIndex}
-                label="Spring"
+                label={slotLabel(springIndex, 'Spring')}
                 season="spring"
                 courses={semesters[springIndex] || []}
                 courseMap={courseMap}
@@ -219,9 +274,8 @@ export default function SemesterBoard({
                 isActive={activeTarget === springIndex}
                 onColumnClick={() => onSemesterClick(springIndex)}
                 onRemoveCourse={(key) => onRemoveCourse(key, springIndex)}
-                onToggleLock={onToggleLock}
                 onShowCourseInfo={onShowCourseInfo}
-                onToggleSemesterLock={() => onToggleSemesterLock(springIndex)}
+                {...lockProps(springIndex)}
                 {...noteProps(springIndex)}
                 draggingId={draggingId}
                 status={springStatus}
@@ -232,7 +286,7 @@ export default function SemesterBoard({
                 <SemesterColumn
                   dropId={`col-summer-${year}`}
                   target={summerTarget(year)}
-                  label="Summer"
+                  label={slotLabel(summerTarget(year), 'Summer')}
                   season="summer"
                   courses={summerCourses}
                   courseMap={courseMap}
@@ -240,9 +294,8 @@ export default function SemesterBoard({
                   isActive={activeTarget === summerTarget(year)}
                   onColumnClick={() => onSemesterClick(summerTarget(year))}
                   onRemoveCourse={(key) => onRemoveCourse(key, summerTarget(year))}
-                  onToggleLock={onToggleLock}
                   onShowCourseInfo={onShowCourseInfo}
-                  onToggleSemesterLock={() => onToggleSemesterLock(summerTarget(year))}
+                  {...lockProps(summerTarget(year))}
                   {...noteProps(summerTarget(year))}
                   onRemoveColumn={
                     summerCourses.length === 0

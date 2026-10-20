@@ -32,6 +32,8 @@ export default function SidePanelTabs({
   noteCredits,
   // Part of noteCredits already completed (past Marine Semester placeholders).
   completedNoteCredits,
+  // A start term is set: no locks, so the Credits hint doesn't mention them.
+  hasStartTerm = false,
   isTransfer,
   onToggleTransfer,
   majorBulletinUrl,
@@ -132,7 +134,9 @@ export default function SidePanelTabs({
         )}
         {creditsHintShow && (
           <OneTimeHint onDismiss={dismissCreditsHint} onSeen={markCreditsSeen}>
-            Completed is courses in past or locked semesters; planned is everything still ahead.
+            {hasStartTerm
+              ? 'Completed is courses from past semesters; planned is everything still ahead.'
+              : 'Completed is courses in past or locked semesters; planned is everything still ahead.'}
           </OneTimeHint>
         )}
         <div className={activeTab === 'hub' ? '' : 'side-panel-hidden'}>

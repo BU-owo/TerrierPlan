@@ -47,6 +47,9 @@ export default function SemesterColumn({
   // button, so a semester is never more than a set of individually-lockable
   // cards.
   status = null,
+  // A Spring starter's slot 0 (the Fall before they started, see
+  // isBeforeStartTerm): shows "Before BU" in place of the status badge.
+  beforeStart = false,
   // Set<courseKey> — the student's global "completed" list (see
   // PlannerPage/SemesterBoard); this is what actually drives each card's
   // locked state, not anything stored on the entry itself.
@@ -114,7 +117,7 @@ export default function SemesterColumn({
         'semester-column',
         isActive ? 'is-active' : '',
         isOver ? 'is-drag-over' : '',
-        status === 'current' ? 'is-current' : '',
+        status === 'current' && !beforeStart ? 'is-current' : '',
         compact ? 'is-compact' : '',
         season ? `is-${season}` : '',
       ]
@@ -126,7 +129,15 @@ export default function SemesterColumn({
       <div className="semester-header">
         <span className="semester-name">{label}</span>
         <div className="semester-header-right">
-          {status === 'current' && (
+          {beforeStart && (
+            <span
+              className="semester-status-badge is-past"
+              title="Before you started at BU"
+            >
+              Before BU
+            </span>
+          )}
+          {!beforeStart && status === 'current' && (
             <span
               className="semester-status-badge is-current"
               title="Your current semester"
@@ -134,7 +145,7 @@ export default function SemesterColumn({
               Current
             </span>
           )}
-          {status === 'past' && (
+          {!beforeStart && status === 'past' && (
             <span
               className="semester-status-badge is-past"
               title="Marked as completed"
@@ -278,7 +289,10 @@ export default function SemesterColumn({
             return <TermBlockCard key={entry.id ?? `block-${index}`} entry={entry} compact={compact} />;
           }
           const key = entryCourseKey(entry);
-          const locked = completedCourseKeys.has(key);
+          // Locks are legacy (no start term): with a start term SemesterBoard
+          // passes no onToggleLock, nothing locks, and cards stay
+          // draggable/removable.
+          const locked = Boolean(onToggleLock) && completedCourseKeys.has(key);
           return (
             <CourseCard
               key={key}
@@ -291,7 +305,7 @@ export default function SemesterColumn({
               semesterLocked={allLocked}
               isDragging={draggingId === key}
               onRemove={locked ? undefined : () => onRemoveCourse(key)}
-              onToggleLock={() => onToggleLock(key)}
+              onToggleLock={onToggleLock ? () => onToggleLock(key) : undefined}
               onShowInfo={onShowCourseInfo ? () => onShowCourseInfo(key) : undefined}
               marineWarning={isOnlyCourseOutsideMarine(key, courses, target)}
             />

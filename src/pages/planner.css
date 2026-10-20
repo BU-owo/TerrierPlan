@@ -856,6 +856,18 @@
   font-weight: 600;
   white-space: nowrap;
 }
+/* "Clear" next to the start-term select — a plain text button. */
+.start-term-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--scarlet);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.start-term-link:hover { text-decoration: underline; }
 /* "HUB tracker 12/26 ⤢" — opens the full HUB view from the planner toolbar.
    A real secondary button (cream fill, border, label + live count + expand
    icon), pushed to the right of the row and wrapping under it on narrow
@@ -3479,6 +3491,15 @@ html[data-theme='dark'] .path-card { background: var(--white); }
   cursor: pointer;
 }
 .path-card-skip:hover { color: var(--scarlet); }
+.path-card-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
 .path-card-beta {
   margin: 0;
   font-size: 11px;

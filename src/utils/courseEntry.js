@@ -38,6 +38,7 @@
 // plus placeholders.
 import { getSpecialTerm, SPECIAL_TERMS } from '../data/specialTerms.js';
 import { fillsMarineSlot, isMarineResearch, marineKind, twinGroup } from '../data/marineSemester.js';
+import { normalizeStartTerm, termChronoValue, termForDate } from './term.js';
 
 export const DEFAULT_NOTE_CREDITS = 4;
 export const MARINE_BLOCK_TYPE = 'marine';
@@ -487,4 +488,54 @@ export function getSemesterStatus(target, currentTarget) {
   if (value < currentValue) return 'past';
   if (value === currentValue) return 'current';
   return 'upcoming';
+}
+
+// Like getSemesterStatus, but "now" comes from today's date and the
+// student's startTerm (see termForDate/termChronoValue in term.js) instead
+// of a student-picked slot. null when startTerm is unset or invalid: callers
+// then fall back to getSemesterStatus(target, currentSemesterTarget). In a
+// Summer with no column of its own, no slot is 'current' (the Spring before
+// is past, the Fall after upcoming).
+export function getTermStatus(target, startTerm, today) {
+  const nowValue = termChronoValue(startTerm, termForDate(today));
+  if (nowValue == null) return null;
+  const value = targetChronoValue(target);
+  if (value < nowValue) return 'past';
+  if (value === nowValue) return 'current';
+  return 'upcoming';
+}
+
+// The one place that picks where a slot's status comes from: today's date
+// and the student's startTerm when it's set (getTermStatus), else the
+// student-picked currentSemesterTarget (getSemesterStatus).
+export function getSlotStatus(target, { startTerm, currentSemesterTarget, today }) {
+  return getTermStatus(target, startTerm, today) ?? getSemesterStatus(target, currentSemesterTarget);
+}
+
+// Whether the board shows the legacy "I am currently in" select: no start
+// term, and a current semester already picked (SemesterBoard's header). The
+// `current_sem` hint uses the same check so the two can't drift.
+export function showsCurrentSemesterSelect(startTerm, currentSemesterTarget) {
+  return !normalizeStartTerm(startTerm) && currentSemesterTarget != null;
+}
+
+// A placed course's tracker status { locked, semesterStatus } (see
+// describeLockStatus: past or locked = completed), built in one place.
+// `target` is its slot, or null for an extraTerms course (always past and
+// locked, as it only ever comes from a transcript). completedKeys counts as
+// completed whatever the slot.
+export function getCourseStatus(courseKey, target, { startTerm, currentSemesterTarget, today, completedKeys }) {
+  return {
+    locked: target == null || completedKeys.has(courseKey),
+    semesterStatus: target == null ? 'past' : getSlotStatus(target, { startTerm, currentSemesterTarget, today }),
+  };
+}
+
+// Whether a slot comes before the student's startTerm — only ever a Spring
+// starter's slot 0 (the Fall before they started). false if startTerm is
+// unset or invalid.
+export function isBeforeStartTerm(target, startTerm) {
+  const startValue = termChronoValue(startTerm, startTerm);
+  if (startValue == null) return false;
+  return targetChronoValue(target) < startValue;
 }

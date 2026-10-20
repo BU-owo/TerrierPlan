@@ -71,6 +71,9 @@ import {
   isSummerTarget,
   summerYearFromTarget,
   getSemesterStatus,
+  getSlotStatus,
+  getCourseStatus,
+  showsCurrentSemesterSelect,
 } from '../utils/courseEntry';
 import { semesterLabel } from '../utils/hubConstants';
 import { useHubProgress } from '../hooks/useHubProgress';
@@ -78,7 +81,8 @@ import { useCelebration } from '../hooks/useCelebration';
 import { evaluateRequirementTree } from '../utils/requirementsEngine';
 import { REQUIREMENT_PROGRAMS } from '../components/requirements/programs';
 import CelebrationCard from '../components/CelebrationCard';
-import { CURRENT_TERM } from '../utils/term';
+import { CURRENT_TERM, normalizeStartTerm, mergeStartTerm } from '../utils/term';
+import { normalizeIncompleteCourseKeys, mergeIncompleteCourseKeys, pastTermsSeed } from '../utils/pastTerms';
 import { aliasFor } from '../utils/grsAlias';
 import { registerPendingWriteFlush } from '../utils/pendingWrites';
 import { CONFIRMATION_REASONS, placementMessage } from '../data/specialTerms';
@@ -167,14 +171,16 @@ function loadLocalProfile() {
       currentSemesterTarget: parsed?.currentSemesterTarget ?? null,
       completedCourseKeys: Array.isArray(parsed?.completedCourseKeys) ? parsed.completedCourseKeys : [],
       externalCredits,
+      startTerm: normalizeStartTerm(parsed?.startTerm),
+      incompleteCourseKeys: normalizeIncompleteCourseKeys(parsed?.incompleteCourseKeys),
     };
   } catch (err) {
     console.error('Error loading local profile:', err);
-    return { currentSemesterTarget: null, completedCourseKeys: [], externalCredits: [] };
+    return { currentSemesterTarget: null, completedCourseKeys: [], externalCredits: [], startTerm: null, incompleteCourseKeys: [] };
   }
 }
 
-// `profile` is { currentSemesterTarget, completedCourseKeys, externalCredits }.
+// `profile` is { currentSemesterTarget, completedCourseKeys, externalCredits, startTerm, incompleteCourseKeys }.
 function saveLocalProfile(profile) {
   localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
 }
@@ -327,6 +333,16 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // other plan of this student's. See getSemesterStatus in courseEntry.js.
   const [currentSemesterTarget, setCurrentSemesterTarget] = useState(null);
   const [completedCourseKeys, setCompletedCourseKeys] = useState([]);
+  // Fall/Spring term code the student started in ("2248"), or null — also a
+  // fact about the student, saved with the profile. Nothing reads it yet
+  // (see getTermStatus in courseEntry.js).
+  const [startTerm, setStartTerm] = useState(null);
+  // Only a valid code counts as set ("Clear" stores '' — see
+  // handleClearStartTerm). Today is fixed per page load.
+  const activeStartTerm = normalizeStartTerm(startTerm);
+  const [today] = useState(() => new Date());
+  // courseKey[] — reserved, unused: only loaded/saved/merged with the profile.
+  const [incompleteCourseKeys, setIncompleteCourseKeys] = useState([]);
   const completedCourseKeySet = useMemo(
     () => new Set(completedCourseKeys),
     [completedCourseKeys],
@@ -625,6 +641,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       setCurrentSemesterTarget(localProfile.currentSemesterTarget);
       setCompletedCourseKeys(localProfile.completedCourseKeys);
       setExternalCredits(normalizeExternalCredits(localProfile.externalCredits));
+      setStartTerm(localProfile.startTerm);
+      setIncompleteCourseKeys(localProfile.incompleteCourseKeys);
       isInitialLoad.current = false;
     }
 
@@ -973,7 +991,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // pending setTimeout via this effect's own per-dependency cleanup before
   // it ever fires. pendingProfileWriteRef tracks the latest not-yet-sent
   // write — as one { uid, profile } object, profile being the full
-  // { currentSemesterTarget, completedCourseKeys, externalCredits } shape —
+  // { currentSemesterTarget, completedCourseKeys, externalCredits, startTerm } shape —
   // so the unmount-only effect and pagehide listener below can flush it
   // even though the timer itself got cleared.
   const profileSaveTimeoutRef = useRef(null);
@@ -982,7 +1000,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     if (isInitialLoad.current) return;
 
     if (!user) {
-      if (!authLoading) saveLocalProfile({ currentSemesterTarget, completedCourseKeys, externalCredits });
+      if (!authLoading) saveLocalProfile({ currentSemesterTarget, completedCourseKeys, externalCredits, startTerm, incompleteCourseKeys });
       return;
     }
 
@@ -992,7 +1010,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     if (profileLoadedForUid.current !== user.uid) return;
 
     const uid = user.uid;
-    const profile = { currentSemesterTarget, completedCourseKeys, externalCredits };
+    const profile = { currentSemesterTarget, completedCourseKeys, externalCredits, startTerm, incompleteCourseKeys };
     pendingProfileWriteRef.current = { uid, profile };
     setProfileUnsaved(true);
 
@@ -1017,7 +1035,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     // and flush this write. Clearing it here would defeat the debounce.
     return () => clearTimeout(profileSaveTimeoutRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSemesterTarget, completedCourseKeys, externalCredits, user, authLoading]);
+  }, [currentSemesterTarget, completedCourseKeys, externalCredits, startTerm, incompleteCourseKeys, user, authLoading]);
 
   // Flushes a still-pending signed-in profile write (see
   // pendingProfileWriteRef above) when the component unmounts within the
@@ -1329,14 +1347,25 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       }
     }
 
+    // --- startTerm: the account's wins; a guest's only fills in an account
+    // without one. A guest-only value reaches Firestore through the persist
+    // below (any local profile sets needsPersist) before the local copy goes.
+    const startTerm = mergeStartTerm(data?.startTerm, local?.startTerm);
+    // --- incompleteCourseKeys: the union, persisted the same way. ---
+    const incompleteCourseKeys = mergeIncompleteCourseKeys(data?.incompleteCourseKeys, local?.incompleteCourseKeys);
+
     setCurrentSemesterTarget(target);
     setCompletedCourseKeys(keys);
     setExternalCredits(externalCredits);
+    setStartTerm(startTerm);
+    setIncompleteCourseKeys(incompleteCourseKeys);
 
     if (needsPersist) {
       // Persist the merged/migrated result before dropping the local copy —
       // if the write fails, leave the guest data in place rather than lose it.
-      const persisted = await persistProfile(uid, { currentSemesterTarget: target, completedCourseKeys: keys, externalCredits });
+      const persisted = await persistProfile(uid, {
+        currentSemesterTarget: target, completedCourseKeys: keys, externalCredits, startTerm, incompleteCourseKeys,
+      });
       if (persisted && hasLocalProfile) {
         localStorage.removeItem(PROFILE_STORAGE_KEY);
       }
@@ -1344,7 +1373,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     profileLoadedForUid.current = uid;
   }
 
-  // `profile` is { currentSemesterTarget, completedCourseKeys, externalCredits }.
+  // `profile` is { currentSemesterTarget, completedCourseKeys, externalCredits, startTerm, incompleteCourseKeys }.
+  // startTerm is only written when set, so an unset one never nulls out the
+  // account's saved value (setDoc merge leaves absent fields alone).
+  // incompleteCourseKeys is written whenever it's an array, [] included.
   async function persistProfile(uid, profile) {
     try {
       await setDoc(
@@ -1353,6 +1385,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           currentSemesterTarget: profile.currentSemesterTarget,
           completedCourseKeys: profile.completedCourseKeys,
           externalCredits: profile.externalCredits,
+          ...(profile.startTerm != null ? { startTerm: profile.startTerm } : {}),
+          ...(Array.isArray(profile.incompleteCourseKeys) ? { incompleteCourseKeys: profile.incompleteCourseKeys } : {}),
         }, 'profile'),
         { merge: true },
       );
@@ -1747,6 +1781,21 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   async function handleNewPlan() {
     // Same as handleSelectPlan: save the open plan's last edits first.
     if (!(await flushPendingPlanWrite())) return;
+    // With a start term set, the new plan instead starts from everything in
+    // this plan's past and current terms (see pastTermsSeed); nothing there → blank.
+    if (activeStartTerm) {
+      const pastSeed = pastTermsSeed({ semesters, gridSummerTerms, extraTerms }, { startTerm: activeStartTerm, today });
+      if (pastSeed) {
+        fetchCourseData([
+          ...pastSeed.semesters.flatMap((entries) => entriesCourseKeys(entries)),
+          ...Object.values(pastSeed.gridSummerTerms).flatMap((entries) => entriesCourseKeys(entries)),
+          ...pastSeed.extraTerms.flatMap((term) => term.courseKeys),
+        ]);
+      }
+      await createDefaultPlan(user.uid, pastSeed);
+      loadPlans(user.uid);
+      return;
+    }
     // Carry the student's already-completed (locked) courses into the new
     // plan, at the same slot they occupy in the plan currently open —
     // locking is global (completedCourseKeySet), but a brand-new plan
@@ -2204,6 +2253,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     });
   }
 
+  // "Clear" in the board header. Stores '' rather than null: persistProfile
+  // skips a null startTerm (so an unset one never overwrites the account's),
+  // but '' is written, and reads back as unset (normalizeStartTerm).
+  function handleClearStartTerm() {
+    setStartTerm('');
+  }
+
   // Adds one more Fall/Spring pair below the grid — see "VARIABLE YEAR COUNT".
   // Capped at MAX_PLAN_YEARS; plans already past the cap are left as-is.
   function handleAddYear() {
@@ -2552,31 +2608,32 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // plain courseKey strings — see courseEntry.js), but they only ever come
   // from a parsed transcript, so every course in there is functionally
   // already-completed.
+  // Built per course by getCourseStatus.
   const lockStatusMap = useMemo(() => {
+    const ctx = {
+      startTerm: activeStartTerm,
+      currentSemesterTarget,
+      today,
+      completedKeys: completedCourseKeySet,
+    };
     const map = {};
     semesters.forEach((sem, i) => {
       entriesCourseKeys(sem).forEach((key) => {
-        map[key] = {
-          locked: completedCourseKeySet.has(key),
-          semesterStatus: getSemesterStatus(i, currentSemesterTarget),
-        };
+        map[key] = getCourseStatus(key, i, ctx);
       });
     });
     Object.entries(gridSummerTerms).forEach(([year, entries]) => {
       entriesCourseKeys(entries).forEach((key) => {
-        map[key] = {
-          locked: completedCourseKeySet.has(key),
-          semesterStatus: getSemesterStatus(`summer:${year}`, currentSemesterTarget),
-        };
+        map[key] = getCourseStatus(key, `summer:${year}`, ctx);
       });
     });
     extraTerms.forEach((term) => {
       (term.courseKeys || []).forEach((key) => {
-        map[key] = { locked: true, semesterStatus: 'past' };
+        map[key] = getCourseStatus(key, null, ctx);
       });
     });
     return map;
-  }, [semesters, gridSummerTerms, extraTerms, currentSemesterTarget, completedCourseKeySet]);
+  }, [semesters, gridSummerTerms, extraTerms, currentSemesterTarget, activeStartTerm, today, completedCourseKeySet]);
 
   // Marine Semester terms in the plan (Fall slots only; see isMarineTerm):
   // the course slots they still hold (placeholders and research-in-lieu
@@ -2590,12 +2647,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   );
   const completedNoteCredits = useMemo(
     () => semesters.reduce(
-      (sum, entries, i) => (getSemesterStatus(i, currentSemesterTarget) === 'past'
+      (sum, entries, i) => (getSlotStatus(i, { startTerm: activeStartTerm, currentSemesterTarget, today }) === 'past'
         ? sum + marinePlaceholderCredits(entries, i)
         : sum),
       0,
     ),
-    [semesters, currentSemesterTarget],
+    [semesters, currentSemesterTarget, activeStartTerm, today],
   );
 
   // What the Marine Semester UI needs from the plan (see marineContext.js).
@@ -2742,9 +2799,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   });
   const [currentSemHintVisible, dismissCurrentSemHint, markCurrentSemSeen] = useOneTimeHint('current_sem', {
     priority: 11,
-    when: hintsEnabled && boardVisible && hasPlacedCourse && currentSemesterTarget == null,
+    // Only while SemesterBoard actually shows the "I am currently in" select.
+    when: hintsEnabled && boardVisible && hasPlacedCourse && showsCurrentSemesterSelect(activeStartTerm, currentSemesterTarget),
   });
-  const [lockHintVisible, dismissLockHint, markLockSeen] = useOneTimeHint('lock', { priority: 15, when: hintsEnabled && boardVisible && hasPlacedCourse });
+  // Both lock-era hints are legacy-only: with a start term set there's no
+  // current-semester select or lock button for them to point at.
+  const [lockHintVisible, dismissLockHint, markLockSeen] = useOneTimeHint('lock', { priority: 15, when: hintsEnabled && boardVisible && hasPlacedCourse && !activeStartTerm });
   // Signed in but no plan loaded yet (same signal as the `?view=` effect
   // above) — either still loading or planLoadError. Guests never hit this.
   const plansPending = Boolean(user) && !activePlanId;
@@ -3018,6 +3078,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                   semesterOptions={semesterOptions}
                   currentSemesterTarget={currentSemesterTarget}
                   onSetCurrentSemester={handleSetCurrentSemester}
+                  startTerm={activeStartTerm}
+                  today={today}
+                  onSetStartTerm={setStartTerm}
+                  onClearStartTerm={handleClearStartTerm}
                   completedCourseKeys={completedCourseKeySet}
                   onShowCourseInfo={setInfoCourseKey}
                   hubSummary={{ fulfilled: hubFulfilled, total: hubTotal }}
@@ -3073,6 +3137,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               lockStatusMap={lockStatusMap}
               noteCredits={planNoteCredits}
               completedNoteCredits={completedNoteCredits}
+              hasStartTerm={Boolean(activeStartTerm)}
               isTransfer={isTransfer}
               onToggleTransfer={handleToggleTransfer}
               majorBulletinUrl={majorBulletinUrl}
@@ -3170,7 +3235,15 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         variant={importVariant}
       />
 
-      {showPathCard && <PickYourPath onChoose={handlePathChoice} onDismiss={dismissPathCard} />}
+      {showPathCard && (
+        <PickYourPath
+          onChoose={handlePathChoice}
+          onDismiss={dismissPathCard}
+          startTerm={activeStartTerm}
+          today={today}
+          onSetStartTerm={setStartTerm}
+        />
+      )}
 
       {/* One at a time: HUB first, then requirements after it's dismissed. */}
       {showHubCelebration ? (
