@@ -44,11 +44,21 @@ function AppRoutes({ theme, onToggleTheme }) {
 export default function App() {
   const { loading } = useAuth();
 
-  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) || 'light');
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem(THEME_STORAGE_KEY) || 'light';
+    } catch {
+      return 'light';
+    }
+  });
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+      // storage blocked: theme still applies for this session
+    }
   }, [theme]);
 
   // Past the auth loading screen: from here on, uncaught window errors just

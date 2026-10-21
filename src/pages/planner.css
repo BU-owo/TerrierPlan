@@ -1689,14 +1689,6 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   margin-bottom: 12px;
 }
 
-/* Temporary bulletin-only stand-in for the Requirements tab — see
-   RequirementsBulletinTab.jsx. Same 12px padding as the other tabs'
-   panels (.hub-panel, etc.) since this doesn't reuse .req-panel. */
-.req-bulletin-tab {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-}
 .req-bulletin-open-btn {
   display: block;
   margin-top: 4px;
@@ -1710,12 +1702,6 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   text-decoration: none;
 }
 .req-bulletin-open-btn:hover { background: var(--scarlet-dark); }
-.req-bulletin-note {
-  margin-top: 12px;
-  font-size: 10.5px;
-  line-height: 1.4;
-  color: var(--text-muted);
-}
 
 .req-tree {
   display: flex;

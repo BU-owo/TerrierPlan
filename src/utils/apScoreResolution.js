@@ -24,7 +24,3 @@ export function isKnownApExam(testSubject) {
   }
   return Array.isArray(getApHub(testSubject, null));
 }
-
-export function isKnownScoreDependentAp(testSubject) {
-  return getApHub(testSubject, null) === null && isKnownApExam(testSubject);
-}

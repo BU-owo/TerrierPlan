@@ -3,11 +3,7 @@
  * Uses word bounding boxes and left/right column splitting — never naive
  * sequential text extraction (two-column layouts interleave incorrectly).
  */
-import * as pdfjs from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { normalizeCourseKey } from './courseKey';
-
-pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 const TERM_RE = /^(Fall|Spring|Summer|Winter)\s+(\d{4})$/i;
 const LETTER_GRADE_RE = /^(A|B|C|D)[+-]?$|^P$|^F$/i;
@@ -251,6 +247,10 @@ function parseMetaFromLines(lines) {
  * }}
  */
 export async function parseTranscriptPdf(source) {
+  // Lazy: keeps pdfjs (and its worker) out of the main bundle.
+  const pdfjs = await import('pdfjs-dist');
+  const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
   const data = source instanceof ArrayBuffer ? source : await source.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data }).promise;
 

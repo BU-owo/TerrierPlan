@@ -28,3 +28,6 @@ dist-ssr
 # Python
 __pycache__/
 public/.catalog-swapped
+
+# Firebase CLI local cache
+.firebase/

@@ -529,15 +529,6 @@ export function missingGroupsForCourse(course, sections, sectionsById) {
   });
 }
 
-// A course is ready to generate once every distinct component it actually
-// has sections for (however many that turns out to be — one for an
-// independent-study-only course, three for LEC+DIS+LAB, ...) has at least
-// one locked or considered option.
-export function isCourseReady(course, sections, sectionsById) {
-  const missing = missingGroupsForCourse(course, sections, sectionsById);
-  return missing !== null && missing.length === 0;
-}
-
 // Canonical identity for a generated combination — order-independent, so
 // the same combination flags/unflags consistently even if backtracking
 // would ever visit its sections in a different order across runs (e.g.

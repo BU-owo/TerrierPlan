@@ -53,7 +53,12 @@ export default function useSiteStats() {
   // double-render. The actual localStorage WRITE (claiming a freshly
   // generated id) happens in the bootstrap effect below, not here.
   const [{ visitorId, isFirstEverVisit }] = useState(() => {
-    const existing = localStorage.getItem(VISITOR_ID_KEY);
+    let existing = null;
+    try {
+      existing = localStorage.getItem(VISITOR_ID_KEY);
+    } catch {
+      // storage blocked: fall through to an in-memory id
+    }
     if (existing) return { visitorId: existing, isFirstEverVisit: false };
     return { visitorId: createVisitorId(), isFirstEverVisit: true };
   });
@@ -62,7 +67,11 @@ export default function useSiteStats() {
   useEffect(() => {
     if (!isFirstEverVisit || hasBootstrappedRef.current) return;
     hasBootstrappedRef.current = true;
-    localStorage.setItem(VISITOR_ID_KEY, visitorId);
+    try {
+      localStorage.setItem(VISITOR_ID_KEY, visitorId);
+    } catch {
+      // storage blocked: id stays in memory only
+    }
 
     const statsRef = doc(db, 'siteStats', 'global');
     runTransaction(db, async (tx) => {
