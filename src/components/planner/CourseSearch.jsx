@@ -338,6 +338,12 @@ export default function CourseSearch({
   }, [searchQuery, rangeFilter, coursesLoaded, searchableCourses, subjectPrefixes, offeredOnly]);
 
   const hasActiveQuery = Boolean(searchQuery.trim()) || Boolean(rangeFilter);
+  // The empty-state example link: same update as typing it, then focus the box.
+  function fillQuery(text) {
+    setSearchQuery(text);
+    if (coursesLoaded) setLoading(true);
+    document.getElementById('course-search-input')?.focus();
+  }
   // A pinned "Marine Semester" row when the RAW query mentions "marine" (the
   // normalized course-key query drops spaces, so it can't be used). It is not
   // a course: no drag data, no courseKey, click-only.
@@ -360,7 +366,7 @@ export default function CourseSearch({
             id="course-search-input"
             className="search-input"
             type="text"
-            placeholder="e.g. CAS CS 111 or Calculus"
+            placeholder="e.g. CAS CS 111 or calculus"
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -373,6 +379,12 @@ export default function CourseSearch({
             spellCheck={false}
           />
         </div>
+        {!loading && subjectModeInfo && results.length > 0 && (
+          <div className="search-hint" style={{ color: 'var(--text)', fontSize: 12 }}>
+            Showing all <strong>{subjectModeInfo.count}</strong> {subjectModeInfo.label} course
+            {subjectModeInfo.count === 1 ? '' : 's'}
+          </div>
+        )}
         {hasCurrentTermData && <OfferedFilterToggle checked={offeredOnly} onChange={setOfferedOnly} />}
         {onOpenHubFullView && (
           <button type="button" className="search-hub-finder-btn" onClick={onOpenHubFullView}>
@@ -468,15 +480,9 @@ export default function CourseSearch({
               width={28}
               height={28}
             />
-            Search by course code or name, then click a result to add it to a
-            semester.
-          </div>
-        )}
-
-        {!loading && subjectModeInfo && results.length > 0 && (
-          <div className="search-subject-mode-banner">
-            Showing all {subjectModeInfo.count} {subjectModeInfo.label} course
-            {subjectModeInfo.count === 1 ? '' : 's'}
+            Try a department, like{' '}
+            <button type="button" className="hub-stash-link" onClick={() => fillQuery('CAS CS')}>CAS CS</button>
+            , to see all its courses.
           </div>
         )}
 
