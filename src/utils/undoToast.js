@@ -31,10 +31,12 @@ export function planEditChanged(baseline, current) {
   return false;
 }
 
-// The undo state: { toastId, snapshot, baseline }. `baseline` is filled in by
-// armUndoBaseline on the first render after the change.
-export function createUndo(toastId, snapshot) {
-  return { toastId, snapshot: snapshotSemesters(snapshot), baseline: null };
+// The undo state: { toastId, snapshot, stash, baseline }. `baseline` is filled
+// in by armUndoBaseline on the first render after the change. `stash` (optional)
+// is the Paw-tential Courses list from before the change, for changes that
+// touch it too (the standard-plan fill); null leaves the stash alone on Undo.
+export function createUndo(toastId, snapshot, stash = null) {
+  return { toastId, snapshot: snapshotSemesters(snapshot), stash: Array.isArray(stash) ? [...stash] : null, baseline: null };
 }
 
 // One step of the dismiss-on-edit check, run whenever plan state may have

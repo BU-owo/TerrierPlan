@@ -49,7 +49,8 @@ import AppHeader from '../components/AppHeader';
 import GuestSignInButton from '../components/GuestSignInButton';
 import HelpSupportModal from '../components/HelpSupportModal';
 import { requestCatalogLoad } from '../utils/courseQuery';
-import { normalizeExternalCredits, normalizeExternalCredit, externalCreditCourseKeys } from '../utils/externalCredits';
+import { normalizeExternalCredits, normalizeExternalCredit } from '../utils/externalCredits';
+import { requirementsPlanKeys } from '../utils/requirementsKeys';
 import {
   normalizeSemesters,
   normalizeGridSummerTerms,
@@ -64,7 +65,7 @@ import {
   marineSlotCounts,
   marineTrackerSlots,
   placeCourse,
-  removeCourse,
+  isBeforeStartTerm,
   removeMarineSemester,
   startMarineTerm,
   targetSeason,
@@ -81,7 +82,7 @@ import { useHubProgress } from '../hooks/useHubProgress';
 import { useCelebration } from '../hooks/useCelebration';
 import { evaluateRequirementTree } from '../utils/requirementsEngine';
 import { REQUIREMENT_PROGRAMS } from '../components/requirements/programs';
-import { collectMatchedKeys } from '../components/requirements/treeHelpers';
+import { collectMatchedKeys, shortCourseCode } from '../components/requirements/treeHelpers';
 import CelebrationCard from '../components/CelebrationCard';
 import {
   CURRENT_TERM, normalizeStartTerm, mergeStartTerm, termFromSlot, termLabel as termCodeLabel,
@@ -95,6 +96,9 @@ import { registerPendingWriteFlush } from '../utils/pendingWrites';
 import { CONFIRMATION_REASONS, placementMessage } from '../data/specialTerms';
 import { marineKind, withMarineCreditFallback } from '../data/marineSemester';
 import { createUndo, restoreSemesters, snapshotSemesters, stepUndo } from '../utils/undoToast';
+import {
+  seedSequence, seedMessage, sequenceSlots, placeWithTakeover, removeCourseGivingBack, withoutFills,
+} from '../utils/sequenceSeed';
 import { MarineRemoveDialog } from '../components/planner/MarineDialogs';
 import { MarineSemesterContext } from '../components/planner/marineContext';
 import { NeededHubContext } from '../components/planner/neededHubContext';
@@ -313,6 +317,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [gridSummerTerms, setGridSummerTerms] = useState({});
   const [isTransfer, setIsTransfer] = useState(false);
   const [majorBulletinUrl, setMajorBulletinUrl] = useState(null);
+  // The program JSON for the selected major (null if it has none yet): the
+  // standard-plan button and the placeholder takeover read its `sequence`.
+  const activeProgramDef = useMemo(
+    () => REQUIREMENT_PROGRAMS.find((p) => p.bulletinUrl === majorBulletinUrl) || null,
+    [majorBulletinUrl],
+  );
   const [extraTerms, setExtraTerms] = useState([]);
   const [externalCredits, setExternalCredits] = useState([]);
   const [cumulativeGpa, setCumulativeGpa] = useState(null);
@@ -1970,10 +1980,26 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     });
   }
 
+  // The same Undo toast for a plan-level change that isn't a Marine Semester
+  // (the standard-plan fill, a placeholder takeover): same snapshot, same
+  // dismiss-on-any-other-edit rule, same Undo.
+  function showPlanUndoToast(message, snapshot, { stashBefore = null, duration = 8000 } = {}) {
+    const id = Date.now();
+    setMarineUndo(createUndo(id, snapshot, stashBefore));
+    setToast({
+      id,
+      message,
+      tone: 'confirm',
+      duration,
+      action: { label: 'Undo', onClick: () => undoMarineCreation(id) },
+    });
+  }
+
   function undoMarineCreation(toastId) {
     const undo = marineUndoRef.current;
     if (!undo || undo.toastId !== toastId) return;
     setSemesters(restoreSemesters(undo.snapshot));
+    if (undo.stash) setStash(undo.stash);
     setIsDirty(true);
     setMarineUndo(null);
     setToast(null);
@@ -1986,11 +2012,14 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     const placed = placeOrExplain(courseKey, target);
     if (!placed) return;
     const snapshot = snapshotSemesters(semesters);
+    const takeover = takeoverContext(courseKey);
+    const withTakeover = placeWithTakeover(entriesAtTarget(target), courseKey, target, takeover);
     setEntriesAtTarget(target, (entries) => {
-      const next = placeCourse(entries, courseKey, target);
+      const next = placeWithTakeover(entries, courseKey, target, takeover);
       return next.ok ? next.entries : entries;
     });
     confirmPlacement(placed, target, snapshot);
+    if (withTakeover.took) showTakeoverToast(courseKey, withTakeover.took, snapshot);
     setIsDirty(true);
     if (!courseMap[courseKey]) fetchCourseData([courseKey]);
     // On mobile the board is a separate tab from search — jump over so the
@@ -2007,23 +2036,80 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   function handleMoveCourse(courseKey, fromTarget, toTarget) {
-    const entry = entriesAtTarget(fromTarget).find((e) => entryCourseKey(e) === courseKey);
-    if (!entry) return;
+    const found = entriesAtTarget(fromTarget).find((e) => entryCourseKey(e) === courseKey);
+    if (!found) return;
+    // A moved course no longer fills the placeholder it took over (that one
+    // comes back in the term it leaves); it may take one in the new term.
+    const entry = withoutFills(found);
     const placed = placeOrExplain(entry, toTarget);
     if (!placed) return;
     // Both terms are in the snapshot, so Undo restores the one it left too.
-    confirmPlacement(placed, toTarget, snapshotSemesters(semesters));
-    setEntriesAtTarget(fromTarget, (entries) => removeCourse(entries, courseKey, fromTarget));
+    const snapshot = snapshotSemesters(semesters);
+    confirmPlacement(placed, toTarget, snapshot);
+    const takeover = takeoverContext(courseKey);
+    const withTakeover = placeWithTakeover(entriesAtTarget(toTarget), entry, toTarget, takeover);
+    setEntriesAtTarget(fromTarget, (entries) => removeCourseGivingBack(entries, courseKey, fromTarget, activeProgramDef));
     setEntriesAtTarget(toTarget, (entries) => {
-      const next = placeCourse(entries, entry, toTarget);
+      const next = placeWithTakeover(entries, entry, toTarget, takeover);
       return next.ok ? next.entries : [...entries, entry];
     });
+    if (withTakeover.took) showTakeoverToast(courseKey, withTakeover.took, snapshot);
     setIsDirty(true);
   }
 
   function handleRemoveCourse(courseKey, target) {
-    setEntriesAtTarget(target, (entries) => removeCourse(entries, courseKey, target));
+    setEntriesAtTarget(target, (entries) => removeCourseGivingBack(entries, courseKey, target, activeProgramDef));
     setIsDirty(true);
+  }
+
+  // What the placeholder takeover needs to know about a course being placed:
+  // the program (its `sequence` and requirement pools) and whether the course
+  // has HUB units (courseMap, once its data is loaded).
+  function takeoverContext(courseKey) {
+    return { programDef: activeProgramDef, hasHubUnits: (courseMap[courseKey]?.hubUnits?.length ?? 0) > 0 };
+  }
+
+  function showTakeoverToast(courseKey, took, snapshot) {
+    showPlanUndoToast(`${shortCourseCode(courseKey)} now fills your ${took.label}.`, snapshot);
+  }
+
+  // "Fill my plan with the standard 4-year plan" (Requirements tab). Only
+  // adds what's missing — see utils/sequenceSeed.js. It changes `semesters`
+  // through the normal setter and setIsDirty, so the usual autosave covers it.
+  function handleSeedSequence() {
+    if (!activeProgramDef || !sequenceSlots(activeProgramDef)) return;
+    const result = seedSequence({
+      programDef: activeProgramDef,
+      semesters,
+      gridSummerTerms,
+      extraTerms,
+      externalCredits,
+      stash,
+      overrides: requirementOverrides,
+      marineSlots,
+      // Past terms are left as they are; so is a term before the start term.
+      isSlotSeedable: (slot) => getSlotStatus(slot, { startTerm: activeStartTerm, currentSemesterTarget, today }) !== 'past'
+        && !isBeforeStartTerm(slot, activeStartTerm),
+    });
+    const message = seedMessage(result, {
+      slotLabel: (slot) => slotLabelFor(slot, activeStartTerm),
+      codeOf: shortCourseCode,
+      whyText: (slot) => (isBeforeStartTerm(slot, activeStartTerm) ? 'before your start' : 'already past'),
+    });
+    if (!result.changed) {
+      setToast({ id: Date.now(), message, tone: 'notice' });
+      return;
+    }
+    const snapshot = snapshotSemesters(semesters);
+    const stashBefore = [...stash];
+    setSemesters(result.semesters);
+    // Courses whose term was skipped but whose requirement is still open go to
+    // Paw-tential Courses instead of vanishing (deduped inside the util).
+    if (result.stashAdd.length > 0) setStash((prev) => [...prev, ...result.stashAdd.filter((key) => !prev.includes(key))]);
+    setIsDirty(true);
+    const missing = [...result.addedCourses.map((c) => c.courseKey), ...result.stashAdd].filter((key) => !courseMap[key]);
+    if (missing.length > 0) fetchCourseData(missing);
+    showPlanUndoToast(message, snapshot, { stashBefore, duration: 12000 });
   }
 
   // ── Marine Semester (see src/data/marineSemester.js, courseEntry.js) ───────
@@ -2720,11 +2806,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // came back courseNote-only with no courseKey, e.g. AP Biology — without
   // this fallback, a confirmed override was invisible to every requirement
   // node even though it displayed correctly in the External Credit panel.
-  const requirementsCourseKeys = [
-    ...gridCourseKeys,
-    ...extraCourseKeys,
-    ...externalCredits.flatMap(externalCreditCourseKeys),
-  ];
+  const requirementsCourseKeys = requirementsPlanKeys({ semesters, gridSummerTerms, extraTerms, externalCredits });
 
   // ── Milestone celebrations (see useCelebration / CelebrationCard) ──────
   // Plan loaded: same signal as the `?view=` effect. HUB also waits for every
@@ -3195,6 +3277,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               planCourseKeys={requirementsCourseKeys}
               marineSlots={marineSlots}
               onMajorSelect={handleMajorSelect}
+              onSeedSequence={handleSeedSequence}
               activeSemIndex={activeSemIndex}
               semesterOptions={semesterOptions}
               onAddCourse={handleAddCourse}
@@ -3233,6 +3316,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           planCourseKeys={requirementsCourseKeys}
           marineSlots={marineSlots}
           onMajorSelect={handleMajorSelect}
+          onSeedSequence={handleSeedSequence}
           courseMap={courseMap}
           activeSemIndex={activeSemIndex}
           semesterOptions={semesterOptions}

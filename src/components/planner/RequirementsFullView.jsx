@@ -15,6 +15,7 @@ export default function RequirementsFullView({
   planCourseKeys,
   marineSlots,
   onMajorSelect,
+  onSeedSequence,
   courseMap,
   onEnsureCourseData,
   requirementOverrides,
@@ -57,6 +58,7 @@ export default function RequirementsFullView({
             planCourseKeys={planCourseKeys}
             marineSlots={marineSlots}
             onMajorSelect={onMajorSelect}
+            onSeedSequence={onSeedSequence}
             courseMap={courseMap}
             onEnsureCourseData={onEnsureCourseData}
             requirementOverrides={requirementOverrides}

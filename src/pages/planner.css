@@ -1680,6 +1680,25 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   margin-bottom: 12px;
 }
 
+/* "Fill my plan with the standard 4-year plan" (RequirementTree). */
+.req-seed-btn {
+  width: 100%;
+  margin: 2px 0 8px;
+  padding: 7px 10px;
+  border: 1.5px solid var(--scarlet);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--scarlet);
+  text-align: center;
+  cursor: pointer;
+}
+.req-seed-btn:hover { background: var(--scarlet); color: #fff; }
+.req-seed-btn:focus-visible { outline: 2px solid var(--scarlet); outline-offset: 2px; }
+
 .req-bulletin-open-btn {
   display: block;
   margin-top: 4px;

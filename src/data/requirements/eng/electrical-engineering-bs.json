@@ -7,6 +7,127 @@
   "totalCoursesRequired": 31,
   "verifiedBy": null,
   "verifiedDate": null,
+  "sequence": {
+    "fillPriority": [
+      "ee-bs-core-electives",
+      "ee-bs-computer-elective",
+      "ee-bs-technical-electives",
+      "ee-bs-natural-science"
+    ],
+    "slots": [
+      {
+        "courses": [
+          "CASMA123",
+          "CASWR120",
+          "ENGEK100",
+          "ENGEK125"
+        ],
+        "placeholders": [
+          {
+            "label": "Natural Science Elective",
+            "fills": "ee-bs-natural-science"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "CASMA124",
+          "CASPY211",
+          "CASWR151",
+          "ENGEK103",
+          "ENGEK131"
+        ]
+      },
+      {
+        "courses": [
+          "CASMA225",
+          "CASPY212",
+          "ENGEK210",
+          "ENGEK307",
+          "ENGEK381"
+        ]
+      },
+      {
+        "courses": [
+          "CASMA226",
+          "CASPY313",
+          "ENGEK301"
+        ],
+        "placeholders": [
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "ENGEC311",
+          "ENGEC401",
+          "ENGEC410",
+          "ENGEC455"
+        ]
+      },
+      {
+        "placeholders": [
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          },
+          {
+            "label": "EE Core Elective",
+            "fills": "ee-bs-core-electives"
+          },
+          {
+            "label": "EE Core Elective",
+            "fills": "ee-bs-core-electives"
+          },
+          {
+            "label": "EE Core Elective",
+            "fills": "ee-bs-core-electives"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "ENGEC463"
+        ],
+        "placeholders": [
+          {
+            "label": "Computer Elective",
+            "fills": "ee-bs-computer-elective"
+          },
+          {
+            "label": "Technical Elective",
+            "fills": "ee-bs-technical-electives"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "ENGEC464"
+        ],
+        "placeholders": [
+          {
+            "label": "Technical Elective",
+            "fills": "ee-bs-technical-electives"
+          },
+          {
+            "label": "Technical Elective",
+            "fills": "ee-bs-technical-electives"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      }
+    ]
+  },
   "tree": {
     "id": "ee-bs-root",
     "type": "ALL",

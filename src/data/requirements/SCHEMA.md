@@ -32,6 +32,50 @@ counts — `required` per node, a `ONE_OF`'s active child only, a
 `UNRESOLVED` and the unmet part of (older) whole-node waives — so it follows the student's track. A substitution never changes it. The
 authored number is used only if that derivation fails.
 
+## `sequence` (optional): the standard plan
+
+A program file may carry a `sequence` — its typical term-by-term path — which
+turns on the "Fill my plan with the standard 4-year plan" button in the
+Requirements tab (shown only for programs that have one). Authored as data,
+next to the requirements; the logic lives in `src/utils/sequenceSeed.js`.
+
+```jsonc
+"sequence": {
+  "fillPriority": ["ee-bs-core-electives", "ee-bs-computer-elective"],   // optional
+  "slots": [
+    { "courses": ["CASMA123", "ENGEK100"],
+      "placeholders": [{ "label": "Natural Science Elective", "fills": "ee-bs-natural-science" }] },
+    { "courses": ["CASMA124"] },
+    ...
+  ]
+}
+```
+
+- `slots[i]` is the planner's grid slot `i`: Fall Year 1 = 0, Spring Year 1 = 1,
+  Fall Year 2 = 2, … (Fall Year 4 = 6, Spring Year 4 = 7). `courses` are plain
+  courseKeys; `placeholders` are 4-credit planning placeholders
+  (`{ label, fills? }`).
+- `fills` is the id of a node in this program's tree (a COUNT / REMAINDER /
+  ALL leaf), or `"hub"`. It lets a real course placed in that term take the
+  placeholder over (see root `SCHEMA.md`, "fills"). A placeholder without
+  `fills` is just a placeholder: added once per term and label, never taken over.
+- `fillPriority` (optional): node ids, most specific first, deciding which
+  placeholder a course takes when several in one term fit. Nodes not listed
+  follow in sequence order, `"hub"` always last.
+- Seeding only adds, never moves or deletes: a course is skipped when it is
+  already anywhere in the plan or when the engine (plan + external credits +
+  completed courses + petitions) already has its requirement slot filled
+  (so WR 152 skips WR 151). A skipped course leaves its slot empty. Per
+  elective node, only as many placeholders as the engine still has open are
+  added (minus ones already planned); Hub placeholders are added up to the
+  sequence's own count. Past terms and Marine terms are not seeded.
+- Checked by `src/utils/sequenceSeed.test.js` (`validateSequence`): every
+  courseKey exists in `public/courses.json`, every `fills` is `"hub"` or a node
+  id of the same program, every `fillPriority` entry is a node id.
+- Keep it generic: any program can add one. Don't use it for a variant slot
+  (e.g. EK 125 vs EK 121 + 122): list the course the planning sheet uses, the
+  engine's alternatives take care of the rest.
+
 ## Requirement node types
 
 Author nodes in the order the bulletin states them; the UI shows `UNRESOLVED` ("Check with advisor") nodes last among their siblings, in the same relative order. (Display only — evaluation and claim order stay as written.)

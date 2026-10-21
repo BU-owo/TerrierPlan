@@ -18,6 +18,14 @@
 // HUB, requirements, or offering warnings. Entries without a `kind` are
 // courses, unchanged.
 //
+// A plain placeholder can also carry `fills`: the id of a requirement node of
+// the plan's program (or "hub"), set by "Fill my plan with the standard plan"
+// (see utils/sequenceSeed.js). A real course placed in the same term takes one
+// matching placeholder over; the course then carries the same `fills` so
+// removing it gives the placeholder back. `fills` is optional and only kept
+// when it has the shape of a node id (isFillsId); an app version that predates
+// it drops the field on its next save, leaving an ordinary placeholder.
+//
 // A Marine Semester term (see src/data/specialTerms.js and
 // src/data/marineSemester.js) is made of ordinary entries: a zero-credit
 // MARKER note { kind: 'note', id, text: 'Marine Semester', credits: 0,
@@ -86,6 +94,18 @@ function withoutUndefinedFields(entry) {
   return Object.fromEntries(Object.entries(entry).filter(([, value]) => value !== undefined));
 }
 
+// A requirement node id (kebab-case, as authored in the program JSONs) or
+// "hub": the only values `fills` may hold.
+const FILLS_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+export function isFillsId(value) {
+  return typeof value === 'string' && FILLS_ID_PATTERN.test(value);
+}
+
+// The `fills` of a placeholder or of a course that took one over (null if none).
+export function entryFills(entry) {
+  return entry != null && typeof entry === 'object' && isFillsId(entry.fills) ? entry.fills : null;
+}
+
 export function createNoteEntry() {
   return { kind: 'note', id: newEntryId('note'), text: '', credits: DEFAULT_NOTE_CREDITS };
 }
@@ -102,7 +122,7 @@ function normalizeNote(entry) {
     text: typeof entry.text === 'string' ? entry.text : '',
     credits: normalizeNoteCredits(entry.credits),
   };
-  if (!hasBlockType(entry)) return note;
+  if (!hasBlockType(entry)) return isFillsId(entry.fills) ? { ...note, fills: entry.fills } : note;
   // The Marine marker always reads "Marine Semester", 0 credits: whatever
   // credits it was stored with (the 16-credit WIP shape, an old tab's edit)
   // are ignored, so it can never add to a total.
@@ -110,6 +130,11 @@ function normalizeNote(entry) {
     return { ...note, text: MARINE.label, credits: 0, blockType: MARINE_BLOCK_TYPE };
   }
   return { ...note, blockType: entry.blockType };
+}
+
+// A new plain placeholder that a matching real course can take over (`fills`).
+export function createFillsPlaceholder(text, fills, credits = DEFAULT_NOTE_CREDITS) {
+  return normalizeNote({ ...createNoteEntry(), text, credits, fills });
 }
 
 // A new Marine marker (fresh id).
@@ -143,6 +168,7 @@ export function normalizeCourseEntry(entry) {
     ...(entry.courseKey !== undefined ? { courseKey: entry.courseKey } : {}),
     locked: entry.locked ?? false,
     source: entry.source ?? 'manual',
+    ...(isFillsId(entry.fills) ? { fills: entry.fills } : {}),
   };
 }
 

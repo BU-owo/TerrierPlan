@@ -38,6 +38,8 @@ export default function RequirementTree({
   // research courses in a Marine term), for `poolFrom: "marineSemester"` nodes.
   marineSlots = 0,
   onMajorSelect,
+  // Fills the plan from the program's `sequence` (only offered when it has one).
+  onSeedSequence,
   onSummaryChange,
   courseMap = {},
   onEnsureCourseData,
@@ -395,6 +397,12 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
               {progressBar}
               {bulletinLink}
             </div>
+          )}
+
+          {programDef?.sequence && onSeedSequence && (
+            <button type="button" className="req-seed-btn" onClick={onSeedSequence}>
+              Fill my plan with the standard 4-year plan
+            </button>
           )}
 
           {disclaimer}

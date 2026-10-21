@@ -7,7 +7,7 @@
 // pdfjs is imported lazily inside readPlanAttachment so this module (and its
 // tests) load without a browser, and so it never pulls in pdf-lib.
 import {
-  normalizeCourseEntry, createNoteEntry, createMarkerEntry, withMarinePlaceholders, targetSeason, DEFAULT_NOTE_CREDITS,
+  normalizeCourseEntry, createNoteEntry, createMarkerEntry, withMarinePlaceholders, targetSeason, DEFAULT_NOTE_CREDITS, isFillsId,
 } from './courseEntry.js';
 import { getSpecialTerm } from '../data/specialTerms.js';
 import { normalizeCourseKey, cleanSubstituteLabel } from './courseKey.js';
@@ -259,6 +259,9 @@ function sanitize(blob, catalogIds, programs) {
           credits: Number.isFinite(credits)
             ? Math.min(MAX_NOTE_CREDITS, Math.max(0, credits))
             : DEFAULT_NOTE_CREDITS,
+          // A placeholder's `fills` is kept only when it has the shape of a
+          // requirement node id (or "hub"); anything else is dropped.
+          ...(isFillsId(raw.fills) ? { fills: raw.fills } : {}),
         }));
         counts.placeholders += 1;
         return;
@@ -274,7 +277,8 @@ function sanitize(blob, catalogIds, programs) {
         return;
       }
       seen.add(resolved.key);
-      out.push(normalizeCourseEntry({ courseKey: resolved.key }));
+      // A course that took a placeholder over keeps its `fills` (same shape rule).
+      out.push(normalizeCourseEntry({ courseKey: resolved.key, ...(isPlainObject(raw) && isFillsId(raw.fills) ? { fills: raw.fills } : {}) }));
       counts.courses += 1;
     });
     if (!legacyMarine) return out;

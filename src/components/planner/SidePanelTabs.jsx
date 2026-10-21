@@ -40,6 +40,8 @@ export default function SidePanelTabs({
   onToggleTransfer,
   majorBulletinUrl,
   onMajorSelect,
+  // "Fill my plan with the standard plan" (shown when the program has a sequence).
+  onSeedSequence,
   // Requirements tab (compact RequirementTree) — see RequirementsSidebar.
   planCourseKeys,
   // Remaining Marine Semester course slots in the plan (requirements engine).
@@ -160,6 +162,7 @@ export default function SidePanelTabs({
           <RequirementsSidebar
             majorBulletinUrl={majorBulletinUrl}
             onMajorSelect={onMajorSelect}
+            onSeedSequence={onSeedSequence}
             planCourseKeys={planCourseKeys}
             marineSlots={marineSlots}
             courseMap={courseMap}
