@@ -1,3 +1,5 @@
+import { useContext } from 'react';
+import { NeededHubContext } from './neededHubContext';
 import { HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { getOfferingBadge } from '../../utils/offeringPattern';
 import { CURRENT_TERM_LABEL } from '../../utils/term';
@@ -8,11 +10,20 @@ import { marineKind } from '../../data/marineSemester';
 // copy of the markup instead of one per list.
 
 // Up to `max` hub-chip tags, colored by HUB group. No wrapper — callers
-// place them (e.g. inside .search-result-hub).
-export function HubUnitTags({ units, max = 4 }) {
+// place them (e.g. inside .search-result-hub). A code the student no longer
+// needs (NeededHubContext) is faded like an unselected finder chip; `plain`
+// (course already on the plan) or no context keeps every chip bright.
+// `neededCodes` (a Set, or null for all bright) overrides the context.
+export function HubUnitTags({ units, max = 4, plain = false, neededCodes }) {
+  const fromContext = useContext(NeededHubContext);
+  const needed = neededCodes === undefined ? fromContext : neededCodes;
   if (!units?.length) return null;
   return units.slice(0, max).map((unit) => (
-    <span key={unit} className={`hub-chip hub-chip-${HUB_COLOR_FOR[unit]?.groupId ?? 'def'}`}>
+    <span
+      key={unit}
+      className={`hub-chip hub-chip-${HUB_COLOR_FOR[unit]?.groupId ?? 'def'}`}
+      style={needed && !plain && !needed.has(unit) ? { opacity: 0.4 } : undefined}
+    >
       {unit}
     </span>
   ));

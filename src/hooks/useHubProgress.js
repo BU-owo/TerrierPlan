@@ -4,9 +4,9 @@ import {
   FIRST_YEAR_REQUIREMENTS,
   TRANSFER_REQUIREMENTS,
   computeProgress,
+  neededUnitCodes,
 } from '../utils/hubConstants';
-import { getApHub, getIbHub } from '../data/apIbHubCredit';
-import { entryCourseKey } from '../utils/courseEntry';
+import { computeHubCounts } from '../utils/hubCounts';
 
 // The one HUB counts/progress computation — extracted verbatim from
 // HubSidebar's own useMemo (no behavior change there) so HubFullView can
@@ -29,60 +29,22 @@ export function useHubProgress({
   isTransfer,
   stashCourseKeys = [],
 }) {
-  const { counts, contributorsByUnit } = useMemo(() => {
-    const countsResult = {};
-    const contributors = {};
-
-    function addContribution(unit, contributor) {
-      countsResult[unit] = (countsResult[unit] ?? 0) + 1;
-      (contributors[unit] ??= []).push(contributor);
-    }
-
-    const gridCourseKeys = semesters.flatMap((sem) => sem.map(entryCourseKey));
-    for (const courseKey of [...gridCourseKeys, ...extraCourseKeys]) {
-      for (const unit of courseMap[courseKey]?.hubUnits ?? []) {
-        addContribution(unit, { type: 'course', courseKey });
-      }
-    }
-
-    // BU's AP/IB policy has its own HUB table. Transfer credit is
-    // deliberately omitted: it never fulfills HUB, even when equated to a
-    // BU course — same rule HubSidebar has always applied.
-    for (const credit of externalCredits) {
-      if (credit.type !== 'ap' && credit.type !== 'ib') continue;
-      const units = Array.isArray(credit.manualHubUnits)
-        ? credit.manualHubUnits
-        : credit.type === 'ib'
-          ? getIbHub(credit.testSubject, credit.score, credit.isHigherLevel)
-          : getApHub(credit.testSubject, credit.score);
-      if (!Array.isArray(units)) continue;
-      for (const unit of units) {
-        addContribution(unit, {
-          type: 'credit',
-          creditType: credit.type,
-          label: credit.sourceTitle || credit.testSubject || (credit.type === 'ib' ? 'IB exam' : 'AP exam'),
-        });
-      }
-    }
-
-    // Stashed ("Paw-tential") courses — pushed into contributorsByUnit so
-    // they render in the same requirement rows via contributorsForRequirement,
-    // but through a path that ONLY ever touches `contributors`, never
-    // `countsResult`. That's deliberate: a staged course must show up
-    // alongside real contributors without ever being able to flip a
-    // requirement to satisfied, change `counts`, `progress`, `fulfilled`, or
-    // any group's `satisfied`/`percent` — those all stay real-only.
-    for (const courseKey of stashCourseKeys) {
-      for (const unit of courseMap[courseKey]?.hubUnits ?? []) {
-        (contributors[unit] ??= []).push({ type: 'staged', courseKey });
-      }
-    }
-
-    return { counts: countsResult, contributorsByUnit: contributors };
-  }, [semesters, extraCourseKeys, externalCredits, courseMap, stashCourseKeys]);
+  const { counts, contributorsByUnit } = useMemo(
+    () => computeHubCounts({
+      semesters,
+      extraCourseKeys,
+      externalCredits,
+      hubUnitsOf: (courseKey) => courseMap[courseKey]?.hubUnits,
+      stashCourseKeys,
+    }),
+    [semesters, extraCourseKeys, externalCredits, courseMap, stashCourseKeys],
+  );
 
   const requirements = isTransfer ? TRANSFER_REQUIREMENTS : FIRST_YEAR_REQUIREMENTS;
   const progress = useMemo(() => computeProgress(counts, requirements), [counts, requirements]);
+
+  // Codes that still advance an unsatisfied requirement, from the same counts.
+  const neededHubCodes = useMemo(() => neededUnitCodes(counts, requirements), [counts, requirements]);
 
   const totalRequired = requirements.reduce((sum, req) => sum + req.required, 0);
   const fulfilled = progress.reduce(
@@ -154,6 +116,7 @@ export function useHubProgress({
     requirementsByGroup,
     groupSummaries,
     openRequirements,
+    neededHubCodes,
     totalRequired,
     fulfilled,
     allFulfilled,

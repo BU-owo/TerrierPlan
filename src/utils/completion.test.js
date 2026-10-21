@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  isCompletedStatus, isKeyDone, completionState, completedHubInputs, lockStatusVariant, planSplitEnabled,
+  isCompletedStatus, isKeyDone, completionState, completedHubInputs, satisfiedHubInputs, lockStatusVariant, planSplitEnabled,
   completedCountOf, isNodeShown, courseTally, countNeedsReview, plannedSuffix, startsCollapsed,
   requirementsProgressView, requirementsCelebrationReady, hubBannerState,
   progressHeaderText, progressSummaryText, hubProgressText,
@@ -221,4 +221,26 @@ test('hubProgressText: no "complete" while units lean on planned courses', () =>
   assert.equal(hubProgressText({ fulfilled: 26, completedFulfilled: 26, total: 26 }), '26 of 26 HUB units complete');
   assert.equal(hubProgressText({ fulfilled: 20, completedFulfilled: 20, total: 26 }, { hubWord: false }), '20 of 26 units complete');
   assert.equal(hubProgressText({ fulfilled: 20, total: 26 }), '20 of 26 HUB units complete'); // no completed count passed
+});
+
+test('satisfiedHubInputs keeps done and current courses, drops future planned', () => {
+  const status = {
+    'CAS CS 111': { locked: false, semesterStatus: 'past' },
+    'CAS CS 112': { locked: false, semesterStatus: 'current' },
+    'CAS CS 210': { locked: false, semesterStatus: 'upcoming' },
+    'CAS CS 330': { locked: true, semesterStatus: 'upcoming' },
+  };
+  const out = satisfiedHubInputs(
+    [['CAS CS 111', 'CAS CS 112'], ['CAS CS 210', 'CAS CS 330']],
+    ['CAS CS 210', 'CAS CS 111', 'CAS XX 999'],
+    status,
+  );
+  assert.deepEqual(out.semesters, [['CAS CS 111', 'CAS CS 112'], ['CAS CS 330']]);
+  assert.deepEqual(out.extraCourseKeys, ['CAS CS 111', 'CAS XX 999']);
+});
+
+test('satisfiedHubInputs with no status map keeps everything', () => {
+  const out = satisfiedHubInputs([['A', 'B']], ['C'], undefined);
+  assert.deepEqual(out.semesters, [['A', 'B']]);
+  assert.deepEqual(out.extraCourseKeys, ['C']);
 });

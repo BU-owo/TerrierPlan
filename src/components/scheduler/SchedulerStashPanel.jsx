@@ -1,8 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { loadAllCourses } from '../../utils/courseQuery';
 import { CURRENT_TERM_LABEL } from '../../utils/term';
+import { semestersFromFirestore, normalizeGridSummerTerms } from '../../utils/courseEntry';
+import { normalizeExternalCredits } from '../../utils/externalCredits';
+import { planHubNeeds, neededForStashedCourse } from '../../utils/planNeededHub';
 import SchedulerCourseRow from './SchedulerCourseRow';
 
 // Same key PlannerPage saves the guest plan under (its LOCAL_STORAGE_KEY).
@@ -37,15 +40,40 @@ function stashKeys(raw) {
 }
 
 // Signed in: every plan (one getDocs), newest-updated first, plus the two
-// stored ids the selected plan is picked from.
+// stored ids the selected plan is picked from. Each plan also keeps the bits
+// the HUB chip fading needs (planData), and the student profile is read once
+// (profile, null if it can't be) for completed courses and AP/IB credit.
 async function readAccountPlans(uid) {
-  const snap = await getDocs(collection(db, 'users', uid, 'plans'));
+  const [snap, profileSnap] = await Promise.all([
+    getDocs(collection(db, 'users', uid, 'plans')),
+    getDoc(doc(db, 'users', uid)).catch((err) => {
+      console.error('Could not load profile for HUB chips:', err);
+      return null;
+    }),
+  ]);
   const plans = snap.docs
     .map((d) => ({ id: d.id, data: d.data() }))
     .sort((a, b) => (b.data.updatedAt?.toMillis?.() ?? 0) - (a.data.updatedAt?.toMillis?.() ?? 0))
-    .map(({ id, data }) => ({ id, name: data.name || 'My Plan', keys: stashKeys(data.stash) }));
+    .map(({ id, data }) => ({
+      id,
+      name: data.name || 'My Plan',
+      keys: stashKeys(data.stash),
+      planData: {
+        semesters: semestersFromFirestore(data.semesters),
+        gridSummerTerms: normalizeGridSummerTerms(data.gridSummerTerms),
+        extraTerms: data.extraTerms ?? [],
+        isTransfer: data.isTransfer ?? false,
+      },
+    }));
+  const profileData = profileSnap?.exists() ? profileSnap.data() : null;
   return {
     plans,
+    profile: profileData && {
+      completedCourseKeys: Array.isArray(profileData.completedCourseKeys) ? profileData.completedCourseKeys : [],
+      currentSemesterTarget: profileData.currentSemesterTarget ?? null,
+      startTerm: profileData.startTerm ?? null,
+      externalCredits: normalizeExternalCredits(profileData.externalCredits),
+    },
     savedId: readPref(`${SELECTED_PLAN_KEY_PREFIX}${uid}`),
     activeId: readPref(`${ACTIVE_PLAN_KEY_PREFIX}${uid}`),
   };
@@ -190,6 +218,33 @@ export default function SchedulerStashPanel({
     else if (selectedPlan) keys = selectedPlan.keys;
   }
 
+  // Per plan: the HUB units it still needs, from the same inputs and steps as
+  // the planner's chips (see planHubNeeds). Empty until the catalog and
+  // profile are in, and for guests, so chips stay bright rather than flip.
+  // Units come from the catalog (the planner reads Firestore `courses`).
+  const needsByPlanId = useMemo(() => {
+    if (!ready || loaded.error || !uid || !loaded.profile) return null;
+    const today = new Date();
+    const out = new Map();
+    for (const plan of loaded.plans) {
+      out.set(plan.id, planHubNeeds({
+        plan: plan.planData,
+        profile: loaded.profile,
+        hubUnitsOf: (key) => courseById.get(key)?.hubUnits,
+        today,
+      }));
+    }
+    return out;
+  }, [ready, loaded, uid, courseById]);
+
+  // The plans a row's course is stashed in: the one picked, or every plan
+  // holding it in All plans.
+  function neededCodesFor(courseKey) {
+    if (!needsByPlanId) return null;
+    const holders = scope === 'all' ? plans.filter((p) => p.keys.includes(courseKey)) : [selectedPlan];
+    return neededForStashedCourse(courseKey, holders.map((p) => needsByPlanId.get(p.id)).filter(Boolean));
+  }
+
   const hiding = gateByCurrentTerm && hideUnoffered;
   // Draft courses always stay visible, same as SchedulerSearch.
   const visibleKeys = hiding
@@ -299,6 +354,7 @@ export default function SchedulerStashPanel({
             added={draftCourseKeys.has(courseKey)}
             noCurrentTerm={gateByCurrentTerm && !courseById.get(courseKey)?.inCurrentTerm}
             planNames={planNamesByKey?.[courseKey]}
+            neededCodes={neededCodesFor(courseKey)}
             onAdd={onAddCourse}
             onShowInfo={onShowCourseInfo}
           />

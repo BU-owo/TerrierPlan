@@ -194,6 +194,24 @@ export function computeProgress(counts, requirements) {
 }
 
 /**
+ * Unit codes that can still advance an unsatisfied requirement (every code
+ * of a requirement whose count is below `required`). Chips use this to tell
+ * "still needed" from "not needed".
+ * @param {Object} counts - { unitCode: number satisfied }
+ * @param {Array} requirements - array of requirement objects
+ * @returns {Set<string>}
+ */
+export function neededUnitCodes(counts, requirements) {
+  const codes = new Set();
+  for (const { requirement, isSatisfied } of computeProgress(counts, requirements)) {
+    if (isSatisfied) continue;
+    const reqCodes = requirement.units ?? (requirement.unitOptions || []).flat();
+    reqCodes.forEach((code) => codes.add(code));
+  }
+  return codes;
+}
+
+/**
  * Human-readable labels for one requirement row — extracted out of
  * HubSidebar's own inline derivation (verbatim, no behavior change) so
  * HubFullView renders the exact same label/subtitle text instead of a

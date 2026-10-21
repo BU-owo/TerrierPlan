@@ -128,7 +128,7 @@ export default function RequirementCourseRow({
             <OfferingBadge inCurrentTerm={course?.inCurrentTerm ?? currentTermKeys?.has(courseKey)} />
           ) : (
             <>
-              <HubUnitTags units={course?.hubUnits} />
+              <HubUnitTags units={course?.hubUnits} plain={inPlan} />
               <OfferingBadge
                 offeringPattern={course?.offeringPattern}
                 upcomingSeasons={course?.upcomingSeasons ?? catalogSeasons}

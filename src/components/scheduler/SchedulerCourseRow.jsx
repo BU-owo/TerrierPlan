@@ -20,6 +20,8 @@ export default function SchedulerCourseRow({
   added,
   noCurrentTerm,
   planNames = [],
+  // HUB codes still needed (Set), or null for all bright; omitted = no fading.
+  neededCodes,
   showCatalogFlags = false,
   onAdd,
   onShowInfo,
@@ -71,7 +73,7 @@ export default function SchedulerCourseRow({
           </div>
         )}
         <div className="search-result-hub">
-          <HubUnitTags units={course?.hubUnits} />
+          <HubUnitTags units={course?.hubUnits} neededCodes={neededCodes} />
           <MarineSemesterPill courseKey={courseKey} />
           <OfferingBadge
             offeringPattern={course?.offeringPattern}

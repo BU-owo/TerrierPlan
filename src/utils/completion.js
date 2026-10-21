@@ -188,3 +188,17 @@ export function completedHubInputs(semesters, extraCourseKeys, lockStatusMap) {
     extraCourseKeys: (extraCourseKeys || []).filter((key) => isKeyDone(lockStatusMap, key)),
   };
 }
+
+// The HUB inputs for "does the student still need this unit": completed
+// courses plus the current semester's (AP/IB credit is added by the hook).
+// Future planned courses are dropped. Same shape and no-map behavior as
+// completedHubInputs (no map = no split, everything stays).
+export function satisfiedHubInputs(semesters, extraCourseKeys, lockStatusMap) {
+  const counts = (key) => key == null
+    || isKeyDone(lockStatusMap, key)
+    || lockStatusMap?.[key]?.semesterStatus === 'current';
+  return {
+    semesters: (semesters || []).map((entries) => (entries || []).filter((entry) => counts(entryCourseKey(entry)))),
+    extraCourseKeys: (extraCourseKeys || []).filter(counts),
+  };
+}

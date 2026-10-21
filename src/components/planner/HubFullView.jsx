@@ -14,7 +14,7 @@ import useOneTimeHint from '../../hooks/useOneTimeHint';
 import CourseChip from '../requirements/CourseChip';
 import { PawIcon } from './CourseSearch';
 import FullViewHeader from './FullViewHeader';
-import { OfferingBadge, OfferedFilterToggle } from './CourseTags';
+import { HubUnitTags, OfferingBadge, OfferedFilterToggle } from './CourseTags';
 import useCurrentTermCourseKeys from '../../hooks/useCurrentTermCourseKeys';
 
 // Every HUB code, in HUB_GROUPS' own order (so the picker reads grouped by
@@ -332,10 +332,9 @@ function DepartmentPrefixAutocomplete({ value, onChange, allPrefixes }) {
 // stashing something doesn't erase its detail, only visually deprioritizes
 // it against courses not yet acted on. Not used in the staging section
 // below (nothing there needs deprioritizing against anything else in the
-// same list). `neededUnitCodes`, when given (the staging section passes
-// gapCodes), styles each tag as still-needed (bold + ringed) or
-// already-fulfilled (muted) instead of rendering every tag the same.
-function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash, shaded = false, neededUnitCodes }) {
+// same list). The HUB tags are the shared HubUnitTags, which fades codes the
+// student no longer needs.
+function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash, shaded = false }) {
   const label = course.courseNumber ?? course.id;
   // Staged rows come from courseMap, which has no `inCurrentTerm`.
   const currentTermKeys = useCurrentTermCourseKeys();
@@ -351,30 +350,7 @@ function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash
           {course.studyAbroad && (
             <span className="offering-badge offering-badge-abroad">Study abroad</span>
           )}
-            {course.hubUnits?.map((unit) => {
-              if (!neededUnitCodes) {
-                return (
-                  <span key={unit} className={`hub-chip hub-chip-${HUB_COLOR_FOR[unit]?.groupId ?? 'def'}`}>
-                    {unit}
-                  </span>
-                );
-              }
-              const needed = neededUnitCodes.includes(unit);
-              return (
-                <span
-                  key={unit}
-                  className={`hub-chip hub-chip-${HUB_COLOR_FOR[unit]?.groupId ?? 'def'}`}
-                  title={needed ? 'Still needed' : 'Already fulfilled'}
-                  style={{
-                    fontWeight: needed ? 800 : 700,
-                    opacity: needed ? 1 : 0.4,
-                    boxShadow: needed ? '0 0 0 1.5px currentColor' : 'none',
-                  }}
-                >
-                  {unit}
-                </span>
-              );
-            })}
+            <HubUnitTags units={course.hubUnits} max={Infinity} />
             <OfferingBadge
               offeringPattern={course.offeringPattern}
               upcomingSeasons={course.upcomingSeasons}
@@ -999,7 +975,6 @@ export default function HubFullView({
                     course={course}
                     isStashed
                     onRemoveFromStash={onRemoveFromStash}
-                    neededUnitCodes={gapCodes}
                   />
                 ))}
               </div>

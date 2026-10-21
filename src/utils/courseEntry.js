@@ -437,6 +437,15 @@ export function normalizeSemesters(raw) {
   return (raw || []).map((sem, i) => normalizeTermEntries(sem, i));
 }
 
+// A plan doc's stored `semesters` (array, or object keyed by slot index since
+// Firestore forbids nested arrays) back to the normalized entry[][].
+export function semestersFromFirestore(stored) {
+  if (Array.isArray(stored)) return normalizeSemesters(stored); // tolerate any pre-fix docs written before this migration
+  if (!stored) return Array.from({ length: 8 }, () => []);
+  const length = Math.max(8, ...Object.keys(stored).map((k) => Number(k) + 1));
+  return normalizeSemesters(Array.from({ length }, (_, i) => stored[i] ?? []));
+}
+
 // gridSummerTerms: { [year]: courseEntry[] } — a plain object keyed by
 // 0-based year index, so it needs no array<->object Firestore conversion
 // (unlike `semesters`, see semestersToFirestore/semestersFromFirestore).

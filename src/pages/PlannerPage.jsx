@@ -74,6 +74,7 @@ import {
   getSlotStatus,
   getCourseStatus,
   showsCurrentSemesterSelect,
+  semestersFromFirestore,
 } from '../utils/courseEntry';
 import { semesterLabel } from '../utils/hubConstants';
 import { useHubProgress } from '../hooks/useHubProgress';
@@ -87,7 +88,7 @@ import {
 } from '../utils/term';
 import { normalizeIncompleteCourseKeys, mergeIncompleteCourseKeys, pastTermsSeed } from '../utils/pastTerms';
 import {
-  planSplitEnabled, courseTally, requirementsCelebrationReady, completedHubInputs, hubBannerState,
+  planSplitEnabled, courseTally, requirementsCelebrationReady, completedHubInputs, satisfiedHubInputs, hubBannerState,
 } from '../utils/completion';
 import { aliasFor } from '../utils/grsAlias';
 import { registerPendingWriteFlush } from '../utils/pendingWrites';
@@ -96,6 +97,7 @@ import { marineKind, withMarineCreditFallback } from '../data/marineSemester';
 import { createUndo, restoreSemesters, snapshotSemesters, stepUndo } from '../utils/undoToast';
 import { MarineRemoveDialog } from '../components/planner/MarineDialogs';
 import { MarineSemesterContext } from '../components/planner/marineContext';
+import { NeededHubContext } from '../components/planner/neededHubContext';
 import SemesterPickerModal from '../components/planner/SemesterPickerModal';
 import Toast from '../components/Toast';
 import './planner.css';
@@ -248,13 +250,6 @@ function withoutUndefined(value, label) {
     console.warn('[profile-undefined] removed undefined at:', removed);
   }
   return out;
-}
-
-function semestersFromFirestore(stored) {
-  if (Array.isArray(stored)) return normalizeSemesters(stored); // tolerate any pre-fix docs written before this migration
-  if (!stored) return EMPTY_SEMESTERS();
-  const length = Math.max(8, ...Object.keys(stored).map((k) => Number(k) + 1));
-  return normalizeSemesters(Array.from({ length }, (_, i) => stored[i] ?? []));
 }
 
 // A guest blob with nothing in it (default name, no courses, no settings) isn't
@@ -2667,6 +2662,18 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     isTransfer,
   });
 
+  // Units the student still needs for the HUB chips: completed + current
+  // semester + AP/IB satisfy, future planned courses don't. Withheld (chips
+  // stay bright) until the plan and its course data have loaded, see hubReady.
+  const hubSatisfiedInputs = satisfiedHubInputs(semesters, extraCourseKeys, splitStatusMap);
+  const { neededHubCodes } = useHubProgress({
+    semesters: hubSatisfiedInputs.semesters,
+    extraCourseKeys: hubSatisfiedInputs.extraCourseKeys,
+    externalCredits,
+    courseMap,
+    isTransfer,
+  });
+
   // Marine Semester terms in the plan (Fall slots only; see isMarineTerm):
   // the course slots they still hold (placeholders and research-in-lieu
   // courses) for the requirements tracker's numerator, and the credits of
@@ -2938,6 +2945,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   return (
     <MarineSemesterContext.Provider value={marineContext}>
+    <NeededHubContext.Provider value={hubReady ? neededHubCodes : null}>
     <div className="planner-layout" onClickCapture={handleInternalLinkClick}>
       {/* ── Header ── */}
       <AppHeader
@@ -3450,6 +3458,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         onClose={() => setMarinePicker(null)}
       />
     </div>
+    </NeededHubContext.Provider>
     </MarineSemesterContext.Provider>
   );
 }
