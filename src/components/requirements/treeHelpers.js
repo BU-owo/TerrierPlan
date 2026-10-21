@@ -86,6 +86,15 @@ function isAlternativesEntry(entry) {
   return typeof entry !== 'string' && (entry.type === 'OR_EQUIVALENT' || entry.type === 'SUBSTITUTE_GROUP');
 }
 
+// A "take-all" COUNT: every pool entry is one required slot (a plain course,
+// an either/or, or a sequence bundle) and min equals the slot count, so
+// nothing is picked from a list — the student takes every slot. Display only.
+export function isTakeAllNode(node) {
+  const pool = node?.pool || [];
+  return node?.type === 'COUNT' && node.min > 1 && pool.length === node.min
+    && pool.every((entry) => typeof entry === 'string' || isAlternativesEntry(entry) || isSequenceEntry(entry));
+}
+
 function describeRange(entry) {
   const span = `${displaySubject(entry.subject)} ${entry.min}-${entry.max}`;
   return entry.type === 'COURSE_RANGE_CAP' ? `up to ${entry.cap} from ${span}` : span;
@@ -122,6 +131,7 @@ export function describeRequirement(node, visibility = null) {
       const pool = node.pool || [];
       // No course list (e.g. filled by a special-term block, or by petitions).
       if (pool.length === 0) return null;
+      if (isTakeAllNode(node)) return `Take all ${node.min}`;
       if (pool.some(isRangeEntry)) return `Pick ${node.min}: ${pool.map(describePoolEntryShort).join(', ')}`;
       // Pick-one nodes count every selectable course (a sequence bundle is one).
       if (node.min === 1) {
@@ -250,6 +260,7 @@ export function collectPoolGroups(node, planCourseKeySet, { browse = false } = {
   const openSubstituted = appliedSubs
     .filter((sub) => sub.entryIndex === undefined || sub.entryIndex === null)
     .map(toSubstituted);
+  const takeAll = isTakeAllNode(node);
   (node.pool || []).forEach((entry, i) => {
     const claimed = mainMatched.find((m) => m.entryIndex === i)?.courseKeys || [];
     const claimedSet = new Set(claimed);
@@ -258,18 +269,27 @@ export function collectPoolGroups(node, planCourseKeySet, { browse = false } = {
       const key = normalizeCourseKey(entry);
       const substituted = subsForEntry(i);
       const options = !browse && (satisfied || claimed.length > 0 || substituted.length > 0) ? [] : offerable([key], claimedSet);
+      // Take-all nodes: the run's rows in authored order (claimed, petition, or
+      // still-to-take), drawn as one borderless grid (see CoursePool).
+      const items = takeAll ? [
+        ...claimed.map((courseKey) => ({ type: 'claimed', key: courseKey })),
+        ...substituted.map((sub) => ({ type: 'sub', sub })),
+        ...options.map((courseKey) => ({ type: 'offer', key: courseKey })),
+      ] : null;
       const prev = groups[groups.length - 1];
       if (prev?.plainKeys) {
         prev.claimed = [...prev.claimed, ...claimed];
         prev.substituted = [...prev.substituted, ...substituted];
         prev.options = [...prev.options, ...options];
         prev.textIfEmpty += `, ${shortCourseCode(key)}`;
+        if (items) prev.items = [...prev.items, ...items];
       } else {
         groups.push({
           key: `${i}`,
           title: null,
           kind: 'courses',
           plainKeys: true,
+          ...(takeAll ? { layout: 'run', items } : {}),
           claimed,
           substituted,
           options,
@@ -291,7 +311,10 @@ export function collectPoolGroups(node, planCourseKeySet, { browse = false } = {
       : [];
     groups.push({
       key: `${i}`,
-      title: entryTitle(entry),
+      // Take-all nodes: an unlabeled either/or with a primary course is named after it.
+      title: takeAll && !entry.label && entry.type === 'SUBSTITUTE_GROUP'
+        ? `${shortCourseCode(entry.primary)} or a substitute`
+        : entryTitle(entry),
       // Display only: drawn inside the previous entry's box, without its own heading.
       continues: Boolean(entry.continues),
       // Optional authored per-course pills ("Substitute") and a student note
@@ -300,6 +323,11 @@ export function collectPoolGroups(node, planCourseKeySet, { browse = false } = {
         ? Object.fromEntries(Object.entries(entry.optionTags).map(([key, tag]) => [normalizeCourseKey(key), tag]))
         : null,
       note: entry.note ?? null,
+      // A named COURSE_LIST (an "area" of a pick-N card): CoursePool draws its
+      // label as a section heading with the cap and how many it has claimed.
+      ...(isListEntry(entry) && entry.label ? { listHeading: { cap: entry.cap ?? null } } : {}),
+      // Take-all nodes: an either/or or sequence slot is one "Choose 1" box.
+      ...(takeAll ? { layout: 'choose' } : {}),
       kind,
       // Pick-one nodes render either/or slots as a plain grid (no "or" pill).
       equivalent: isAlternativesEntry(entry) && node.min !== 1,

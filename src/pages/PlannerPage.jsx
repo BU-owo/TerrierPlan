@@ -49,7 +49,7 @@ import AppHeader from '../components/AppHeader';
 import GuestSignInButton from '../components/GuestSignInButton';
 import HelpSupportModal from '../components/HelpSupportModal';
 import { requestCatalogLoad } from '../utils/courseQuery';
-import { normalizeExternalCredits, normalizeExternalCredit } from '../utils/externalCredits';
+import { normalizeExternalCredits, normalizeExternalCredit, externalCreditCourseKeys } from '../utils/externalCredits';
 import {
   normalizeSemesters,
   normalizeGridSummerTerms,
@@ -2723,12 +2723,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const requirementsCourseKeys = [
     ...gridCourseKeys,
     ...extraCourseKeys,
-    ...externalCredits.flatMap((c) =>
-      c?.courseKey ? [c.courseKey]
-        : Array.isArray(c?.manualCourses) ? c.manualCourses
-        : c?.manualCourseKey ? [c.manualCourseKey]
-        : []
-    ),
+    ...externalCredits.flatMap(externalCreditCourseKeys),
   ];
 
   // ── Milestone celebrations (see useCelebration / CelebrationCard) ──────

@@ -2597,6 +2597,43 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   border-radius: var(--radius-xs, 3px);
 }
 .req-slot-text { font-size: 11.5px; color: var(--text-secondary); font-style: italic; }
+/* Take-all node (Required Courses): an either/or or sequence slot is one solid
+   box under a "Choose 1" header; plain required courses stay in a flat grid. */
+.req-choose {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs, 3px);
+  background: var(--cream);
+}
+.req-choose-head { flex-basis: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.req-choose-head .req-slot-title { flex-basis: auto; }
+.req-choose-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--cream-dark);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.req-choose > .req-seq-cards { flex-basis: 100%; }
+/* Named COURSE_LIST areas of a pick-N card (EE Core Electives): the label is a
+   section heading; the filter box and term pill under it stay secondary. */
+.req-pool-head { flex-basis: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.req-pool-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.req-pool-count { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+.req-pool-head ~ .req-range-list .req-pool-filter-input {
+  font-size: 11px;
+  padding: 3px 7px;
+  max-width: 200px;
+  margin: 0 0 2px;
+  color: var(--text-secondary);
+}
+.req-pool-head ~ .req-range-list .offered-filter { margin: 0 0 2px; }
+.req-pool-head ~ .req-range-list .offered-filter-chip { font-size: 10px; padding: 1px 7px; }
+.req-takeall-legend { margin-left: 6px; font-size: 11px; font-weight: 500; color: var(--text-muted); }
+.req-card-subtitle .req-choose-badge { vertical-align: baseline; }
 /* Claimed rows' grid takes the full slot width, like .req-range-list — rows
    are inline-size containers, so a content-sized grid would collapse. */
 .req-slot > .req-course-grid { flex-basis: 100%; min-width: 0; }

@@ -43,23 +43,23 @@ export default function CoursePool({
   }
 
   // Petitioned (substituted) courses render as muted ✎ rows, in the slot they fill.
+  function substitutedRow({ courseKey, label, replaces }) {
+    return (
+      <RequirementCourseRow
+        key={courseKey ?? label}
+        courseKey={courseKey}
+        course={courseKey ? courseMap[courseKey] : undefined}
+        substituted
+        substituteLabel={courseKey ? undefined : label}
+        replacesLabel={replaces ? shortCourseCode(replaces) : undefined}
+        onShowCourseInfo={onShowCourseInfo}
+      />
+    );
+  }
+
   function substitutedRows(list = []) {
     if (list.length === 0) return null;
-    return (
-      <div className="req-course-grid">
-        {list.map(({ courseKey, label, replaces }) => (
-          <RequirementCourseRow
-            key={courseKey ?? label}
-            courseKey={courseKey}
-            course={courseKey ? courseMap[courseKey] : undefined}
-            substituted
-            substituteLabel={courseKey ? undefined : label}
-            replacesLabel={replaces ? shortCourseCode(replaces) : undefined}
-            onShowCourseInfo={onShowCourseInfo}
-          />
-        ))}
-      </div>
-    );
+    return <div className="req-course-grid">{list.map(substitutedRow)}</div>;
   }
 
   function claimedRow(key, optionTags) {
@@ -88,6 +88,31 @@ export default function CoursePool({
       else folded.push({ ...group, continued: [] });
     }
     return folded;
+  }
+
+  // Take-all nodes: a run of plain required courses is one borderless grid in
+  // authored order. Same row props as CourseList, so click / stash are unchanged.
+  function renderRun(group) {
+    return (
+      <div key={group.key} className="req-course-grid">
+        {group.items.map((item) => {
+          if (item.type === 'claimed') return claimedRow(item.key, null);
+          if (item.type === 'sub') return substitutedRow(item.sub);
+          return (
+            <RequirementCourseRow
+              key={item.key}
+              courseKey={item.key}
+              course={{ id: item.key, ...(courseMap[item.key] || {}) }}
+              isStashed={stashSet.has(item.key)}
+              onToggleStash={onToggleStash}
+              onShowCourseInfo={onShowCourseInfo}
+              subsetLabel={subsetLabels?.get(item.key)}
+              onRowClick={onRowClick}
+            />
+          );
+        })}
+      </div>
+    );
   }
 
   function renderGroupBody(group) {
@@ -143,6 +168,11 @@ export default function CoursePool({
       );
     }
     if (group.options.length === 0) return null;
+    // "Choose 1" box: every authored option, same grid at 2 and 3+ (no "or"
+    // pill, no inactive hiding — these are required slots).
+    if (group.layout === 'choose') {
+      return <CourseList courses={toCourses(group.options)} optionTags={group.optionTags} {...listProps} />;
+    }
     // Required courses (ALL leaf) are never hidden — they aren't choices.
     if (group.required) return <CourseList courses={toCourses(group.options)} {...listProps} />;
     return choiceList(group.options, { equivalent: group.equivalent, optionTags: group.optionTags });
@@ -169,9 +199,30 @@ export default function CoursePool({
         const parts = [group, ...group.continued];
         const substituted = parts.some((part) => part.substituted?.length > 0);
         const open = parts.some((part) => part.open);
+        if (group.layout === 'run') return renderRun(group);
+        if (group.layout === 'choose') {
+          return (
+            <div key={group.key} className="req-slot req-choose">
+              <div className="req-choose-head">
+                <span className="req-choose-badge">Choose 1</span>
+                {group.title && <span className="req-slot-title">{group.title}</span>}
+              </div>
+              {parts.map((part) => renderGroupBody(part))}
+            </div>
+          );
+        }
+        // The cap tag is skipped when the authored label already says "(max N)".
+        const cap = group.listHeading?.cap;
+        const showCap = cap != null && !/max\s*\d/i.test(group.title || '');
         return (
           <div key={group.key} className={`req-slot${open || substituted ? ' req-slot--open' : ''}`}>
-            {group.title && <span className="req-slot-title">{group.title}</span>}
+            {group.listHeading ? (
+              <div className="req-pool-head">
+                <span className="req-pool-title">{group.title}</span>
+                {showCap && <span className="req-choose-badge">up to {cap}</span>}
+                {showCap && <span className="req-pool-count">{group.claimed.length} of {cap}</span>}
+              </div>
+            ) : group.title && <span className="req-slot-title">{group.title}</span>}
             {parts.map((part) => renderGroupBody(part))}
           </div>
         );

@@ -132,3 +132,17 @@ export function normalizeExternalCredits(rawExternalCredits) {
     .map((credit) => normalizeExternalCredit(credit))
     .filter(Boolean);
 }
+
+// Course keys an external credit contributes to the requirements engine.
+// An auto-resolved multi-course exam (e.g. AP Calc BC) is stored as one
+// "CASMA123+CASMA124" courseKey (see resolveCourseKeyForEntry in
+// ExternalCreditsPanel.jsx), so split it back into separate keys here instead
+// of changing the stored shape. Falls back to a manual override the same way
+// the requirements view always has.
+export function externalCreditCourseKeys(credit) {
+  const raw = credit?.courseKey ? String(credit.courseKey).split('+')
+    : Array.isArray(credit?.manualCourses) ? credit.manualCourses
+    : credit?.manualCourseKey ? [credit.manualCourseKey]
+    : [];
+  return raw.map((key) => normalizeCourseKey(key)).filter(Boolean);
+}

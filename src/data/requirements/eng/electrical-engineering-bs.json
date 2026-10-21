@@ -1,0 +1,304 @@
+{
+  "programName": "Electrical Engineering",
+  "degree": "BS",
+  "school": "ENG",
+  "bulletinUrl": "https://www.bu.edu/academics/eng/programs/electrical-engineering/bs/",
+  "minGrade": null,
+  "totalCoursesRequired": 31,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "id": "ee-bs-root",
+    "type": "ALL",
+    "label": "Electrical Engineering BS — Major Requirements",
+    "children": [
+      {
+        "id": "ee-bs-required",
+        "type": "COUNT",
+        "label": "Required Courses",
+        "note": "Take the ENG course unless your advisor says otherwise.",
+        "min": 23,
+        "pool": [
+          "CASMA123",
+          "CASWR120",
+          "ENGEK100",
+          {
+            "type": "SEQUENCE_GROUP",
+            "label": "Programming",
+            "note": "Classes of 2027-2028 planning sheets list EK 121 + 122; 2029 and later use EK 125.",
+            "options": [
+              {
+                "label": "EK 125",
+                "courses": [
+                  "ENGEK125"
+                ]
+              },
+              {
+                "label": "EK 121 + EK 122",
+                "courses": [
+                  "ENGEK121",
+                  "ENGEK122"
+                ]
+              }
+            ]
+          },
+          "CASMA124",
+          "CASPY211",
+          {
+            "type": "OR_EQUIVALENT",
+            "label": "Writing",
+            "options": [
+              "CASWR151",
+              "CASWR152",
+              "CASWR153"
+            ]
+          },
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "ENGEK103",
+            "substitutes": [
+              "CASMA242",
+              "CASMA442"
+            ],
+            "optionTags": {
+              "CASMA242": "Substitute",
+              "CASMA442": "Substitute"
+            }
+          },
+          "ENGEK131",
+          "CASMA225",
+          "CASPY212",
+          "ENGEK210",
+          "ENGEK307",
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "ENGEK381",
+            "substitutes": [
+              "CASMA581"
+            ],
+            "optionTags": {
+              "CASMA581": "Substitute"
+            }
+          },
+          "CASMA226",
+          "ENGEK301",
+          "CASPY313",
+          "ENGEC311",
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "ENGEC401",
+            "substitutes": [
+              "ENGBE403"
+            ],
+            "optionTags": {
+              "ENGBE403": "Substitute"
+            }
+          },
+          "ENGEC410",
+          "ENGEC455",
+          "ENGEC463",
+          "ENGEC464"
+        ],
+        "devNote": "Authored as a COUNT with one named slot per required course (min = pool length) instead of an ALL leaf, because ALL leaves take plain courseKeys only and can't carry either/or slots, optionTags or per-slot notes. Same shape as the Economics core. Order follows the typical sequence on the ENG EE planning sheets (Classes 2027-2030). Programming slot: EK 125 (2029+ sheets) or EK 121 + 122 (2027-2028 sheets). A SEQUENCE_GROUP slot counts as one slot but claims every course in its option, so totalCoursesClaimed can run one higher per bundle than the slot count. SEQUENCE_GROUP options can't take optionTags, so no 'Substitute' pill on the programming slot. PY 314 and PY 321+322 are intentionally not options because the catalog lacks them (only E-suffixed study-abroad keys exist); students use ⋯ → Substitute a course for those."
+      },
+      {
+        "id": "ee-bs-natural-science",
+        "type": "COUNT",
+        "label": "Natural Science Elective",
+        "min": 1,
+        "pool": [
+          "CASAS202",
+          "CASBI107",
+          "CASBI108",
+          "CASCH101",
+          "CASCH131",
+          "CASPY451"
+        ],
+        "devNote": "PY 451 is also in the Technical Electives list (pool a); claimed here first if it is the only natural science course."
+      },
+      {
+        "id": "ee-bs-core-electives",
+        "type": "COUNT",
+        "label": "EE Core Electives",
+        "min": 3,
+        "subtitle": "Pick 3 · at most 2 from any one area",
+        "note": "You'll draw from at least two of the three areas.",
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "label": "Systems",
+            "cap": 2,
+            "courses": [
+              "ENGEC402",
+              "ENGEC414",
+              "ENGEC415",
+              "ENGEC418",
+              "ENGEC501",
+              "ENGEC503",
+              "ENGEC505",
+              "ENGEC508",
+              "ENGEC516",
+              "ENGEC517",
+              "ENGEC519",
+              "ENGEC520",
+              "ENGEC522",
+              "ENGEC523",
+              "ENGEC524",
+              "ENGEC525",
+              "ENGEC534",
+              "ENGEC541"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "Electronics",
+            "cap": 2,
+            "courses": [
+              "ENGEC412",
+              "ENGEC571",
+              "ENGEC580",
+              "ENGEC582",
+              "ENGEC417",
+              "ENGEC583"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "Electrophysics",
+            "cap": 2,
+            "courses": [
+              "ENGEC456",
+              "ENGEC471",
+              "ENGEC491",
+              "ENGEC543",
+              "ENGEC555",
+              "ENGEC556",
+              "ENGEC560",
+              "ENGEC562",
+              "ENGEC565",
+              "ENGEC568",
+              "ENGEC570",
+              "ENGEC572",
+              "ENGEC573",
+              "ENGEC574",
+              "ENGEC575",
+              "ENGEC577",
+              "ENGEC578",
+              "ENGEC579",
+              "ENGEC585",
+              "ENGEC591",
+              "ENGEK481",
+              "ENGEC417",
+              "ENGEC583"
+            ]
+          }
+        ],
+        "devNote": "EC 417 and EC 583 are double-listed (Electronics and Electrophysics). Claiming is greedy in pool order and list order, so in Electronics they are listed last: a student with 417 plus two other Electronics courses fills Electronics with the others and 417 spills into Electrophysics. Courses over a cap stay unclaimed and can be picked up by Technical Electives."
+      },
+      {
+        "id": "ee-bs-computer-elective",
+        "type": "COUNT",
+        "label": "Computer Elective",
+        "min": 1,
+        "pool": [
+          "ENGEC327",
+          "ENGEC413",
+          "ENGEC441"
+        ]
+      },
+      {
+        "id": "ee-bs-technical-electives",
+        "type": "REMAINDER",
+        "label": "Technical Electives",
+        "totalRequired": 31,
+        "note": "Any EC course counts. Courses already used for EE Core or the Computer Elective don't count twice.",
+        "devNote": "totalRequired = 23 required slots + 1 natural science + 3 EE core + 1 computer + 3 technical = 31; engine required = totalRequired - siblingsExpected (28) = 3. The planning sheet says '300-level and above, except 600-level' for BE/EK/ME, which would also allow 700+; authored as 300-599 (no 700+ undergrad courses expected). COURSE_RANGE takes one subject per entry, hence one entry each for ENGBE/ENGEK/ENGME.",
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "courses": [
+              "CASAS414",
+              "CASCS440",
+              "CASCS480",
+              "CASCS585",
+              "CASMA511",
+              "CASMA528",
+              "CASMA531",
+              "CASMA541",
+              "CASMA583",
+              "CASPY451",
+              "CASPY452",
+              "CDSDS310",
+              "CDSDS340",
+              "CDSDS453",
+              "CDSDS563"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "cap": 2,
+            "courses": [
+              "QSTSI480",
+              "QSTSI482",
+              "HUBXC433",
+              "HUBXC438"
+            ]
+          },
+          "ENGBE209",
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGEC",
+            "min": 0,
+            "max": 999
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGBE",
+            "min": 300,
+            "max": 599
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGEK",
+            "min": 300,
+            "max": 599
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGME",
+            "min": 300,
+            "max": 599
+          }
+        ]
+      },
+      {
+        "id": "ee-bs-hub",
+        "type": "UNRESOLVED",
+        "label": "BU Hub electives",
+        "note": "Four or more Hub electives covering Philosophical Inquiry, Aesthetic Exploration, Historical Consciousness, Social Inquiry, Individual in Community, Ethical Reasoning, and Global Citizenship (twice), at least 16 units. Track these in the HUB tab. AP/IB credit counts for at most one Hub requirement and transfer credit for none, so you may need extra Hub electives.",
+        "devNote": "Hub units are tracked by the HUB tab, not by this requirements engine."
+      },
+      {
+        "id": "ee-bs-residency",
+        "type": "UNRESOLVED",
+        "label": "Upper-division residency",
+        "note": "At least 48 units of upper-division program coursework (junior/senior program requirements and electives; Hub electives and writing don't count) must be taken at BU.",
+        "devNote": "Needs per-course unit and institution data the engine doesn't have."
+      },
+      {
+        "id": "ee-bs-total-units",
+        "type": "UNRESOLVED",
+        "label": "131 total units",
+        "note": "131 total units are needed to graduate.",
+        "devNote": "Unit total, not a course count; credits are tracked in the Credits tab."
+      },
+      {
+        "id": "ee-bs-overlaps",
+        "type": "UNRESOLVED",
+        "label": "Overlapping courses",
+        "note": "Only one course from each set counts for credit: EC 402 / ME 403 / ME 404 / BE 404; ME 303 / BE 436; ME 306 / BE 425; EK 103 / MA 242 / MA 442; BE 403 / EC 401; EK 381 / MA 581; BE 428 / BE 478; PY 313 / PY 314 / PY 321 & 322.",
+        "devNote": "The engine can't flag two overlapping courses. The EK 103, EK 381 and EC 401 sets are enforced in Required Courses by sharing one slot. The rest (EC 402 / ME 403 / ME 404 / BE 404, ME 303 / BE 436, ME 306 / BE 425, BE 428 / BE 478, and PY 313 / PY 314 / PY 321 & 322) are advisory only; PY 313 is now a plain required course."
+      }
+    ]
+  }
+}

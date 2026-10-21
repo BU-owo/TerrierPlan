@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   describeRequirement,
+  isTakeAllNode,
   describeFallbackNote,
   collectPoolGroups,
   collectSubsetLabels,
@@ -116,7 +117,17 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
   const countedIn = (sub) => flatNodes.find(
     (other) => other.id !== node.id && !Array.isArray(other.children) && collectMatchedKeys(other).includes(sub.courseKey)
   )?.label;
-  const subtitle = [headerText, substitutedCount > 0 ? `${substitutedCount} substituted` : null].filter(Boolean).join(' · ');
+  const substitutedText = substitutedCount > 0 ? `${substitutedCount} substituted` : null;
+  // Take-all nodes: "Take all N" as a pill plus a one-line legend for the boxes.
+  const subtitle = isTakeAllNode(node) && headerText
+    ? (
+      <>
+        <span className="req-choose-badge">{headerText}</span>
+        <span className="req-takeall-legend">Boxed groups: choose 1</span>
+        {substitutedText && <span className="req-takeall-legend">{substitutedText}</span>}
+      </>
+    )
+    : [headerText, substitutedText].filter(Boolean).join(' · ');
   let collapsedSummary = null;
   if (collapsed && satisfied) {
     // With the split on, each course gets its own mark (✓ done, • in
