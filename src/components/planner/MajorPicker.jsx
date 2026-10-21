@@ -9,6 +9,17 @@ const TRACKED_MAJOR_COUNT = BU_SCHOOLS.flatMap((s) => s.programs).filter(
   (p) => p.degree !== 'Minor' && TRACKED_URLS.has(p.url)
 ).length;
 
+// Tracked majors (no minors) grouped by school, in bu-programs.js order — the
+// same set as "✓ Available now" in the dropdown, so the list below the count
+// line never needs its own registry.
+const TRACKED_MAJORS_BY_SCHOOL = BU_SCHOOLS
+  .map((school) => ({
+    code: school.code,
+    name: school.name,
+    programs: school.programs.filter((p) => p.degree !== 'Minor' && TRACKED_URLS.has(p.url)),
+  }))
+  .filter((school) => school.programs.length > 0);
+
 // Cascading school → program picker. Owns its own "which school is the
 // dropdown showing" state; the actual selection (a bulletin URL) is fully
 // controlled by the parent via selectedProgramUrl/onProgramSelect, so more
@@ -17,6 +28,8 @@ const TRACKED_MAJOR_COUNT = BU_SCHOOLS.flatMap((s) => s.programs).filter(
 // element ids unique when multiple pickers are mounted at once.
 export default function MajorPicker({ selectedProgramUrl = '', onProgramSelect, idPrefix = 'major-picker' }) {
   const [selectedSchoolCode, setSelectedSchoolCode] = useState('');
+  // The tracked-majors list: always open while nothing is picked, else behind a toggle.
+  const [listOpen, setListOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedProgramUrl) return;
@@ -47,6 +60,13 @@ export default function MajorPicker({ selectedProgramUrl = '', onProgramSelect, 
   function handleSchoolChange(e) {
     setSelectedSchoolCode(e.target.value);
     onProgramSelect?.('');
+  }
+
+  // One click on the list: same effect as picking that school and major in the dropdowns.
+  function handleListPick(schoolCode, url) {
+    setSelectedSchoolCode(schoolCode);
+    setListOpen(false);
+    onProgramSelect?.(url);
   }
 
   function handleProgramChange(e) {
@@ -105,6 +125,38 @@ export default function MajorPicker({ selectedProgramUrl = '', onProgramSelect, 
       <p className="bulletin-hint req-tracking-count">
         Requirement tracking is available for {TRACKED_MAJOR_COUNT} major{TRACKED_MAJOR_COUNT === 1 ? '' : 's'}. More are on the way.
       </p>
+
+      {TRACKED_MAJOR_COUNT > 0 && (
+        <div className="major-list">
+          {selectedProgramUrl && (
+            <button
+              type="button"
+              className="major-list-toggle"
+              aria-expanded={listOpen}
+              onClick={() => setListOpen((open) => !open)}
+            >
+              {listOpen ? 'Hide' : 'See'} all {TRACKED_MAJOR_COUNT} tracked major{TRACKED_MAJOR_COUNT === 1 ? '' : 's'}
+              <span aria-hidden="true"> {listOpen ? '▾' : '▸'}</span>
+            </button>
+          )}
+          {(!selectedProgramUrl || listOpen) && TRACKED_MAJORS_BY_SCHOOL.map((school) => (
+            <div key={school.code} className="major-list-school">
+              <span className="major-list-school-name">{school.code} · {school.name}</span>
+              {school.programs.map((p) => (
+                <button
+                  key={p.url}
+                  type="button"
+                  className={`major-list-row${p.url === selectedProgramUrl ? ' is-selected' : ''}`}
+                  aria-current={p.url === selectedProgramUrl ? 'true' : undefined}
+                  onClick={() => handleListPick(school.code, p.url)}
+                >
+                  {p.name} ({p.degree})
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
 
       {selectedSchool && (
         <p className="bulletin-hint">
