@@ -257,6 +257,9 @@ function DepartmentPrefixAutocomplete({ value, onChange, allPrefixes }) {
   );
 }
 
+// Search results render this many at a time (see showMoreResults).
+const RESULTS_PAGE_SIZE = 50;
+
 // One search result row — same info layout as CourseSearch's own
 // SearchResultCard (code, name, HUB unit tags) plus its exact stash-toggle
 // button/icon, reused as-is rather than rebuilt. Deliberately simpler than
@@ -500,9 +503,10 @@ export default function HubFullView({
 
   // HUB is for undergrads, who can take Undergrad and most Graduate courses
   // but not Law/Dental/Medical ones — so this search (and its prefix
-  // datalist) drops only those.
+  // datalist) drops only those. Study-abroad courses are dropped here too
+  // (finder only — planner and scheduler search still list them).
   const nonProfessionalCourses = useMemo(
-    () => allCourses.filter((course) => !isProfessionalCareer(course.career)),
+    () => allCourses.filter((course) => !isProfessionalCareer(course.career) && !course.studyAbroad),
     [allCourses],
   );
 
@@ -520,10 +524,15 @@ export default function HubFullView({
   // against other options still in the list. It stays visible, just
   // rendered with its stash button already in the "stashed" state (see
   // stashSet/HubSearchResultRow below).
-  const excludeKeys = useMemo(() => {
-    const gridCourseKeys = semesters.flatMap((sem) => sem.map(entryCourseKey));
-    return new Set([...gridCourseKeys, ...extraCourseKeys].filter(Boolean).map(normalizeCourseKey));
-  }, [semesters, extraCourseKeys]);
+  // Memoized on the keys' contents: PlannerPage passes a new extraCourseKeys
+  // array every render, which would otherwise rebuild this (and re-run the
+  // search) on unrelated planner re-renders.
+  const excludeKeysId = [...semesters.flatMap((sem) => sem.map(entryCourseKey)), ...extraCourseKeys]
+    .filter(Boolean)
+    .map(normalizeCourseKey)
+    .sort()
+    .join(',');
+  const excludeKeys = useMemo(() => new Set(excludeKeysId ? excludeKeysId.split(',') : []), [excludeKeysId]);
 
   const stashSet = useMemo(() => new Set(stash), [stash]);
   // Include codes, filled on the results' HUB tags.
@@ -598,6 +607,33 @@ export default function HubFullView({
     );
     return offeredOnly ? matches.filter((course) => course.inCurrentTerm) : matches;
   }, [searchActive, nonProfessionalCourses, trimmedPrefix, hubSearchInclude, hubSearchMode, hubSearchExclude, excludeKeys, offeredOnly]);
+
+  // Rendering every match is slow (gap-fill can match ~2.5k courses), so
+  // only the first RESULTS_PAGE_SIZE of the ranked list render, plus
+  // RESULTS_PAGE_SIZE more per "Show more". Tied to the search inputs it
+  // was grown for, so changing any of them starts back at one page (and a
+  // stash or other re-render doesn't).
+  const searchInputsId = JSON.stringify([trimmedPrefix, hubSearchInclude, hubSearchMode, hubSearchExclude, offeredOnly]);
+  const [shownResults, setShownResults] = useState({ inputsId: null, count: RESULTS_PAGE_SIZE });
+  const visibleCount = shownResults.inputsId === searchInputsId ? shownResults.count : RESULTS_PAGE_SIZE;
+  function showMoreResults() {
+    setShownResults({ inputsId: searchInputsId, count: visibleCount + RESULTS_PAGE_SIZE });
+  }
+  // Memoized so a re-render that doesn't change the results (e.g. a chip
+  // click elsewhere in the view) doesn't re-render every row.
+  const resultRows = useMemo(
+    () => searchResults.slice(0, visibleCount).map((course) => (
+      <HubSearchResultRow
+        key={course.id}
+        course={course}
+        isStashed={stashSet.has(course.id)}
+        matchCodes={includeSet}
+        onAddToStash={onAddToStash}
+        onRemoveFromStash={onRemoveFromStash}
+      />
+    )),
+    [searchResults, visibleCount, stashSet, includeSet, onAddToStash, onRemoveFromStash],
+  );
 
   // Per-category collapse state — the ONE source of truth for both the
   // overview ring row and each category's own card; same "override
@@ -978,19 +1014,14 @@ export default function HubFullView({
                       : 'No courses match those filters (already-planned courses are left out)'}
                   </div>
                 ) : (
-                  searchResults.map((course) => {
-                    const isStashed = stashSet.has(course.id);
-                    return (
-                      <HubSearchResultRow
-                        key={course.id}
-                        course={course}
-                        isStashed={isStashed}
-                        matchCodes={includeSet}
-                        onAddToStash={onAddToStash}
-                        onRemoveFromStash={onRemoveFromStash}
-                      />
-                    );
-                  })
+                  <>
+                    {resultRows}
+                    {visibleCount < searchResults.length && (
+                      <button type="button" className="hub-stash-link hub-show-more" onClick={showMoreResults}>
+                        Show more
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}

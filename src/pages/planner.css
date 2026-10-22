@@ -3080,6 +3080,8 @@ html[data-theme='dark'] .hub-browse-search .search-input { background: var(--cre
   max-height: 320px;
   overflow-y: auto;
 }
+/* "Show more" under the capped HUB finder results. */
+.hub-show-more { align-self: center; margin: 8px 0 4px; font-size: 12px; }
 
 /* Search Classes + the staging rail (only rendered once something's
    staged) share one row — align-items: stretch (the default, stated here

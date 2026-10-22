@@ -149,7 +149,8 @@ export const HUB_MATCH_MODES = { AND: 'and', OR: 'or' };
 // powers "pick a course" lists.
 //
 // Results are sorted by catalog number ascending, matching CourseSearch's
-// subject-mode ordering.
+// subject-mode ordering. With include codes in OR mode, courses matching
+// more of them come first (catalog number breaks ties).
 export function queryCourses(
   courses,
   { prefix = '', hubUnitCodes = [], mode = HUB_MATCH_MODES.OR, excludeUnitCodes = [] } = {},
@@ -178,7 +179,18 @@ export function queryCourses(
     return true;
   });
 
-  return matches.sort(compareByCatalogNumber);
+  if (includeCodes.length === 0 || mode === HUB_MATCH_MODES.AND) {
+    return matches.sort(compareByCatalogNumber);
+  }
+
+  // OR mode: courses carrying more of the include codes come first.
+  const scores = new Map(
+    matches.map((course) => {
+      const courseUnits = course.hubUnits ?? [];
+      return [course.id, includeCodes.filter((code) => courseUnits.includes(code)).length];
+    }),
+  );
+  return matches.sort((a, b) => scores.get(b.id) - scores.get(a.id) || compareByCatalogNumber(a, b));
 }
 
 // Every real school-level ("CAS") and department-level ("CAS AA") prefix
