@@ -60,6 +60,7 @@ import {
   createNoteEntry,
   dropLoneMarker,
   isNoteEntry,
+  isBlockEntry,
   isMarineTerm,
   marinePlaceholderCredits,
   marineSlotCounts,
@@ -2362,6 +2363,37 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     setIsDirty(true);
   }
 
+  // Drops the last year (Fall/Spring + its Summer key). Only years past the
+  // first 4, so semesters never goes below 8. Asks first if the year has
+  // anything in it; an enabled-but-empty Summer doesn't count. Leaves
+  // currentSemesterTarget (the board shows "(not in this plan)") and
+  // completedCourseKeys alone.
+  function handleRemoveYear() {
+    const year = Math.ceil(semesters.length / 2) - 1;
+    if (year < 4) return;
+    const entries = [
+      ...(semesters[year * 2] || []),
+      ...(semesters[year * 2 + 1] || []),
+      ...(gridSummerTerms[year] || []),
+    ];
+    if (entries.length > 0) {
+      const count = entries.filter((e) => !isBlockEntry(e)).length;
+      if (!window.confirm(`Remove Year ${year + 1} and its ${count} ${count === 1 ? 'course' : 'courses'}?`)) return;
+    }
+    setSemesters((prev) => prev.slice(0, year * 2));
+    setGridSummerTerms((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, year)) return prev;
+      const next = { ...prev };
+      delete next[year];
+      return next;
+    });
+    // Don't leave "add to semester" pointing at a slot that's gone.
+    if (activeSemIndex === year * 2 || activeSemIndex === year * 2 + 1 || activeSemIndex === `summer:${year}`) {
+      setActiveSemIndex(0);
+    }
+    setIsDirty(true);
+  }
+
   function handleDragStart({ active }) {
     const courseKey = active.data.current?.courseKey ?? active.id;
     setDraggingId(active.id);
@@ -3202,6 +3234,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                   onToggleSemesterLock={handleToggleSemesterLock}
                   onToggleSummerYear={handleToggleSummerYear}
                   onAddYear={handleAddYear}
+                  onRemoveYear={handleRemoveYear}
                   maxYears={MAX_PLAN_YEARS}
                   onAddNote={handleAddNote}
                   onUpdateNote={handleUpdateNote}

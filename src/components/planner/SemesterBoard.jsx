@@ -32,6 +32,8 @@ export default function SemesterBoard({
   onToggleSemesterLock,
   onToggleSummerYear,
   onAddYear,
+  // Shown on the last year only, and only past Year 4.
+  onRemoveYear,
   // "+ Add Year" is disabled once the plan has this many years; a plan
   // already past it (from before the cap existed) is shown as-is.
   maxYears = Infinity,
@@ -251,7 +253,20 @@ export default function SemesterBoard({
 
         return (
           <div key={year} className={overview ? 'overview-year' : 'year-row'}>
-            <div className="year-label">Year {year + 1}</div>
+            <div className="year-label">
+              Year {year + 1}
+              {onRemoveYear && year >= 4 && year === yearCount - 1 && (
+                <button
+                  type="button"
+                  className="year-remove-btn"
+                  onClick={onRemoveYear}
+                  title={`Remove Year ${year + 1}`}
+                  aria-label={`Remove Year ${year + 1}`}
+                >
+                  ×
+                </button>
+              )}
+            </div>
             <div className="year-semesters">
               <SemesterColumn
                 dropId={`col-${fallIndex}`}
@@ -323,8 +338,9 @@ export default function SemesterBoard({
                   className="add-summer-term-btn"
                   onClick={() => onToggleSummerYear(year, true)}
                   title="Add a Summer term for this year"
+                  aria-label="Add summer term"
                 >
-                  {overview ? '+ Summer' : '+ Add Summer term'}
+                  <span className="add-summer-term-label">+ Summer</span>
                 </button>
               )}
             </div>

@@ -751,11 +751,14 @@
 }
 .semester-column-remove:hover { color: var(--warning-text); }
 
-/* A year's optional Summer slot, when not yet toggled on. Sits alongside
-   Fall/Spring in .year-semesters at a narrower fixed width. */
+/* A year's optional Summer slot, when not yet toggled on: a slim rail
+   alongside Fall/Spring, label running the same way as .year-label. */
 .add-summer-term-btn {
-  flex: 0 0 92px;
+  flex: 0 0 32px;
   align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1.5px dashed var(--border);
   border-radius: var(--radius-lg);
   background: transparent;
@@ -764,9 +767,27 @@
   font-weight: 600;
   text-align: center;
   cursor: pointer;
-  padding: 6px;
+  padding: 6px 0;
   transition: border-color .15s, color .15s, background .15s;
 }
+.add-summer-term-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+}
+
+/* × beside "Year N" on the last added year. */
+.year-remove-btn {
+  margin-inline-start: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.year-remove-btn:hover { color: var(--warning-text); }
 .add-summer-term-btn:hover {
   border-color: var(--scarlet);
   color: var(--scarlet);
@@ -4054,7 +4075,7 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
     scroll-snap-align: center;
   }
   .add-summer-term-btn {
-    flex: 0 0 60px;
+    flex: 0 0 32px;
   }
 
   /* There's no hover on touch — keep the remove button visible and give
@@ -4395,6 +4416,10 @@ html[data-theme='dark'] .external-credit-add-row input { background: var(--white
   min-height: 24px;
   padding: 2px 6px;
   font-size: 10px;
+}
+.overview-year .add-summer-term-label {
+  writing-mode: horizontal-tb;
+  transform: none;
 }
 .semester-board.is-overview .add-year-btn { margin-top: 0; padding: 2px 10px; font-size: 11px; }
 .semester-add-note {
