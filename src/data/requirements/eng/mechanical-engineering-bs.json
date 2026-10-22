@@ -1,0 +1,310 @@
+{
+  "programName": "Mechanical Engineering",
+  "degree": "BS",
+  "school": "ENG",
+  "bulletinUrl": "https://www.bu.edu/academics/eng/programs/mechanical-engineering/bs/",
+  "minGrade": null,
+  "totalCoursesRequired": 33,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "sequence": {
+    "slots": [
+      {
+        "courses": [
+          "CASCH131",
+          "CASMA123",
+          "CASWR120",
+          "ENGEK100",
+          "ENGEK125"
+        ]
+      },
+      {
+        "courses": [
+          "CASMA124",
+          "CASPY211",
+          "CASWR151",
+          "ENGEK103",
+          "ENGEK131"
+        ]
+      },
+      {
+        "courses": [
+          "CASMA225",
+          "CASPY212",
+          "ENGEK307",
+          "ENGME357"
+        ],
+        "placeholders": [
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "CASMA226",
+          "ENGEK210",
+          "ENGEK301",
+          "ENGEK381"
+        ],
+        "placeholders": [
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "ENGME303",
+          "ENGME304",
+          "ENGME305",
+          "ENGME306",
+          "ENGME358"
+        ]
+      },
+      {
+        "courses": [
+          "ENGME302",
+          "ENGME310",
+          "ENGME360"
+        ],
+        "placeholders": [
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "ENGME419",
+          "ENGME460"
+        ],
+        "placeholders": [
+          {
+            "label": "Advanced Elective",
+            "fills": "me-bs-advanced-electives"
+          },
+          {
+            "label": "Advanced Elective",
+            "fills": "me-bs-advanced-electives"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "ENGME461"
+        ],
+        "placeholders": [
+          {
+            "label": "Advanced Elective",
+            "fills": "me-bs-advanced-electives"
+          },
+          {
+            "label": "Advanced Elective",
+            "fills": "me-bs-advanced-electives"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      }
+    ]
+  },
+  "tree": {
+    "id": "me-bs-root",
+    "type": "ALL",
+    "label": "Mechanical Engineering BS — Major Requirements",
+    "children": [
+      {
+        "id": "me-bs-required",
+        "type": "COUNT",
+        "label": "Required Courses",
+        "note": "Take the ENG course unless your advisor says otherwise.",
+        "min": 29,
+        "pool": [
+          "CASCH131",
+          "CASMA123",
+          "CASWR120",
+          "ENGEK100",
+          "ENGEK125",
+          "CASMA124",
+          "CASPY211",
+          {
+            "type": "OR_EQUIVALENT",
+            "label": "Writing",
+            "options": [
+              "CASWR151",
+              "CASWR152",
+              "CASWR153"
+            ]
+          },
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "ENGEK103",
+            "substitutes": [
+              "CASMA242",
+              "CASMA442"
+            ],
+            "optionTags": {
+              "CASMA242": "Substitute",
+              "CASMA442": "Substitute"
+            }
+          },
+          "ENGEK131",
+          "CASMA225",
+          "CASPY212",
+          "ENGEK307",
+          "ENGME357",
+          "CASMA226",
+          "ENGEK210",
+          "ENGEK301",
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "ENGEK381",
+            "substitutes": [
+              "CASMA581"
+            ],
+            "optionTags": {
+              "CASMA581": "Substitute"
+            }
+          },
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "ENGME303",
+            "substitutes": [
+              "ENGBE436"
+            ],
+            "optionTags": {
+              "ENGBE436": "Substitute"
+            }
+          },
+          "ENGME304",
+          "ENGME305",
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "ENGME306",
+            "substitutes": [
+              "ENGBE425"
+            ],
+            "optionTags": {
+              "ENGBE425": "Substitute"
+            }
+          },
+          "ENGME358",
+          "ENGME302",
+          "ENGME310",
+          "ENGME360",
+          "ENGME419",
+          "ENGME460",
+          "ENGME461"
+        ],
+        "devNote": "Same take-all COUNT shape as the EE BS (one named slot per required course, min = pool length = 29). Order follows the typical sequence on the ENG ME planning sheet (Class of 2030, 135 units). Programming is EK 125 only (2030 sheet), so no SEQUENCE_GROUP slot. Substitute slots: EK 103 (MA 242 / MA 442), EK 381 (MA 581), ME 303 (BE 436), ME 306 (BE 425)."
+      },
+      {
+        "id": "me-bs-advanced-electives",
+        "type": "REMAINDER",
+        "label": "Advanced Electives",
+        "totalRequired": 33,
+        "subtitle": "Pick 4 · any ENG course 300+ or a listed outside course",
+        "note": "At least two of the four must be ENG courses. Courses already used for Required Courses don't count twice.",
+        "devNote": "totalRequired = 29 required slots + 4 advanced electives = 33; engine required = totalRequired - siblingsExpected (29) = 4. 'At least 2 must be ENG 300+' can't be enforced by the engine (no per-subject minimum inside a REMAINDER); the note tells students. Pools a and b stay separate because a COURSE_LIST cap covers the whole list, so merging would cap AS 414 / PY 313 / BE 209 too. COURSE_RANGE takes one subject per entry, hence one entry per ENG subject that has 300+ courses in public/courses.json: ENGBE, ENGBF, ENGEC, ENGEK, ENGME, ENGMS, ENGSE. Left out: ENGEX (software engineering orientation/bootcamp and graduate courses), ENGXB/XE/XK/XM (E-suffixed study-abroad equivalents of specific courses) and the ENGDP/DR/GR/MP/SD 999E study-abroad placeholders. Range max 999 per the bulletin wording ('300 level or above'). PY 314 and PY 321+322 are intentionally not options because the catalog lacks them (only E-suffixed study-abroad keys exist); students use ⋯ → Substitute a course for those. BE 436 / BE 425 also match the ENGBE range, so a student who takes both ME 303 and BE 436 (or ME 306 and BE 425) gets the second one claimed here; that overlap is advisory only (see Overlapping courses).",
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "label": "Approved outside courses",
+            "courses": [
+              "CASAS414",
+              "CASPY313",
+              "ENGBE209"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "Technology & business courses",
+            "cap": 2,
+            "courses": [
+              "QSTSI480",
+              "QSTSI482",
+              "HUBXC433",
+              "HUBXC438"
+            ]
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGBE",
+            "min": 300,
+            "max": 999
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGBF",
+            "min": 300,
+            "max": 999
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGEC",
+            "min": 300,
+            "max": 999
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGEK",
+            "min": 300,
+            "max": 999
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGME",
+            "min": 300,
+            "max": 999
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGMS",
+            "min": 300,
+            "max": 999
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGSE",
+            "min": 300,
+            "max": 999
+          }
+        ]
+      },
+      {
+        "id": "me-bs-hub",
+        "type": "UNRESOLVED",
+        "label": "BU Hub electives",
+        "note": "Four or more Hub electives covering Philosophical Inquiry, Aesthetic Exploration, Historical Consciousness, Social Inquiry, Individual in Community, Ethical Reasoning, and Global Citizenship (twice), at least 16 units. Track these in the HUB tab. AP/IB credit counts for at most one Hub requirement and transfer credit for none, so you may need extra Hub electives.",
+        "devNote": "Hub units are tracked by the HUB tab, not by this requirements engine."
+      },
+      {
+        "id": "me-bs-residency",
+        "type": "UNRESOLVED",
+        "label": "Upper-division residency",
+        "note": "At least 48 units of upper-division program coursework (junior/senior program requirements and electives; Hub electives and writing don't count) must be taken at BU.",
+        "devNote": "Needs per-course unit and institution data the engine doesn't have."
+      },
+      {
+        "id": "me-bs-total-units",
+        "type": "UNRESOLVED",
+        "label": "135 total units",
+        "note": "135 total units are needed to graduate.",
+        "devNote": "Unit total, not a course count; credits are tracked in the Credits tab."
+      },
+      {
+        "id": "me-bs-overlaps",
+        "type": "UNRESOLVED",
+        "label": "Overlapping courses",
+        "note": "Only one course from each set counts for credit: ME 403 / ME 404 / EC 402 / BE 404; ME 303 / BE 436; ME 306 / BE 425; EK 103 / MA 242 / MA 442; BE 403 / EC 401; EK 381 / MA 581; BE 428 / BE 478; PY 313 / PY 314 / PY 321 & 322.",
+        "devNote": "The engine can't flag two overlapping courses. The EK 103, EK 381, ME 303 and ME 306 sets are enforced in Required Courses by sharing one slot (though for ME 303 / BE 436 and ME 306 / BE 425 the second course can still be claimed by Advanced Electives via the ENGBE / ENGME ranges). The rest (ME 403 / ME 404 / EC 402 / BE 404, BE 403 / EC 401, BE 428 / BE 478, and PY 313 / PY 314 / PY 321 & 322) are advisory only."
+      }
+    ]
+  }
+}

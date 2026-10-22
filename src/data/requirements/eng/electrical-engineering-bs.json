@@ -332,11 +332,13 @@
         "type": "REMAINDER",
         "label": "Technical Electives",
         "totalRequired": 31,
+        "subtitle": "Pick 3 · any EC course, BE 209, ENG BE/EK/ME 300-599, or a listed outside course",
         "note": "Any EC course counts. Courses already used for EE Core or the Computer Elective don't count twice.",
         "devNote": "totalRequired = 23 required slots + 1 natural science + 3 EE core + 1 computer + 3 technical = 31; engine required = totalRequired - siblingsExpected (28) = 3. The planning sheet says '300-level and above, except 600-level' for BE/EK/ME, which would also allow 700+; authored as 300-599 (no 700+ undergrad courses expected). COURSE_RANGE takes one subject per entry, hence one entry each for ENGBE/ENGEK/ENGME.",
         "pool": [
           {
             "type": "COURSE_LIST",
+            "label": "Approved outside courses",
             "courses": [
               "CASAS414",
               "CASCS440",
@@ -357,6 +359,7 @@
           },
           {
             "type": "COURSE_LIST",
+            "label": "Technology & business courses",
             "cap": 2,
             "courses": [
               "QSTSI480",

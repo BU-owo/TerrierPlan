@@ -153,7 +153,7 @@ requirement nodes (see Double-counting below). **Pool order is claim
 priority**, so put the entries you'd prefer claimed first.
 
 #### Display fields (optional, display only)
-- `"subtitle": "..."` on a `COUNT` replaces the generated line under its title
+- `"subtitle": "..."` on a `COUNT` or `REMAINDER` replaces the generated line under its title
   ("Pick N of M", "Pick N from this list"). Counting is unchanged.
 - `"noteStyle": "caption"` renders the node's `note` as normal-weight caption
   text instead of the default italic grey.

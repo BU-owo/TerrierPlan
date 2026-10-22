@@ -157,6 +157,8 @@ export function describeRequirement(node, visibility = null) {
       return `Pick ${node.min} of ${total}`;
     }
     case 'REMAINDER': {
+      // An authored subtitle replaces the generated "N more: ..." line.
+      if (typeof node.subtitle === 'string' && node.subtitle) return node.subtitle;
       const pool = node.pool || [];
       // Course lists and/or sequence bundles (no ranges): read like a COUNT over a
       // list. A sequence still shows on its own row, so it isn't named here.
