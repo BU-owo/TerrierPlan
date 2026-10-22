@@ -7,6 +7,8 @@ import RhettPeek from '../RhettPeek';
 import HubYearToggle from './HubYearToggle';
 import EstimateNote from '../EstimateNote';
 import { BU_LINKS } from '../../data/officialLinks';
+import PawLoader from '../PawLoader';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
 
 export default function HubSidebar({
   semesters,
@@ -26,7 +28,11 @@ export default function HubSidebar({
   // applies (PlannerPage, see planSplitEnabled); splits satisfied requirements
   // into done vs. only planned. Without it, everything reads as done.
   splitStatusMap,
+  // The plan or its courses' data is still loading (PlannerPage): the counts
+  // below are partial, so they dim with a small paw by the summary line.
+  hubLoading = false,
 }) {
+  const loaderVisible = useDelayedBusy(hubLoading);
   // Groups the student has already finished collapse to a one-line summary
   // by default so the groups that still need attention stand out; explicit
   // clicks here override that default either way.
@@ -129,7 +135,10 @@ export default function HubSidebar({
       )}
 
       <p className="panel-summary-line">
-        {hubProgressText({ fulfilled, completedFulfilled, total: totalRequired })}
+        {hubProgressText({ fulfilled, completedFulfilled, total: totalRequired })}{' '}
+        <span role="status">
+          {loaderVisible && <PawLoader size="small" hideLabel label="Loading your HUB progress" />}
+        </span>
       </p>
       <EstimateNote link={BU_LINKS.myBU} lead="For planning only. Confirm on" label="MyBU" />
 
@@ -147,7 +156,7 @@ export default function HubSidebar({
         </div>
       )}
 
-      <div className="hub-requirements-list">
+      <div className={`hub-requirements-list${loaderVisible ? ' paw-refreshing' : ''}`} aria-busy={loaderVisible || undefined}>
         {HUB_GROUPS.map((group) => {
           const groupReqs = requirementsByGroup[group.label] || [];
           if (groupReqs.length === 0) return null;

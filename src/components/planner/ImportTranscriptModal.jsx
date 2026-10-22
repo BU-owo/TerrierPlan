@@ -9,6 +9,8 @@ import { BU_SCHOOLS, findProgramByUrl } from '../../data/bu-programs';
 import { REQUIREMENT_PROGRAMS } from '../requirements/programs';
 import { BuEquivalentField } from './ExternalCreditsPanel';
 import { isValidCourseKeyFormat } from '../../utils/courseKey';
+import PawLoader from '../PawLoader';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
 
 const STEPS = ['Upload', 'Review', 'Confirm'];
 const DEBUG_IMPORT = import.meta.env.DEV;
@@ -142,6 +144,8 @@ export default function ImportTranscriptModal({
   const [planPreview, setPlanPreview] = useState(null);
   const [planReviewUid, setPlanReviewUid] = useState(null);
   const [planResult, setPlanResult] = useState(null);
+  const parseLoaderVisible = useDelayedBusy(parsing);
+  const importLoaderVisible = useDelayedBusy(importing);
   const inputRef = useRef(null);
 
   const resetReview = useCallback(() => {
@@ -372,7 +376,8 @@ export default function ImportTranscriptModal({
           {step === 0 && (
             <>
               <div
-                className={`import-dropzone ${dragOver ? 'drag-over' : ''}`}
+                className={`import-dropzone ${dragOver ? 'drag-over' : ''}${parsing ? ' is-parsing' : ''}`}
+                aria-busy={parsing || undefined}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={onDrop}
@@ -386,7 +391,11 @@ export default function ImportTranscriptModal({
                   onChange={(e) => handleFile(e.target.files?.[0])}
                 />
                 {parsing ? (
-                  <p>{variant === 'plan' ? 'Reading your plan…' : 'Parsing transcript…'}</p>
+                  <div className="import-dropzone-loading" role="status">
+                    {parseLoaderVisible && (
+                      <PawLoader size="small" label={variant === 'plan' ? 'Reading your plan…' : 'Parsing transcript…'} />
+                    )}
+                  </div>
                 ) : (
                   <>
                     <svg className="import-dropzone-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -704,7 +713,7 @@ export default function ImportTranscriptModal({
               onClick={handleConfirmPlanImport}
               disabled={importing}
             >
-              {importing ? 'Importing…' : 'Create new plan'}
+              {importing ? (importLoaderVisible ? <PawLoader size="small" theme="dark" label="Importing…" /> : 'Importing…') : 'Create new plan'}
             </button>
           )}
           {step === 1 && preview && (
@@ -714,7 +723,7 @@ export default function ImportTranscriptModal({
               onClick={handleImport}
               disabled={importing}
             >
-              {importing ? 'Importing…' : showIncompleteTransferWarning ? 'Import and save incomplete rows' : 'Import'}
+              {importing ? (importLoaderVisible ? <PawLoader size="small" theme="dark" label="Importing…" /> : 'Importing…') : showIncompleteTransferWarning ? 'Import and save incomplete rows' : 'Import'}
             </button>
           )}
         </div>

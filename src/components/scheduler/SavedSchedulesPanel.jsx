@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { CURRENT_TERM, CURRENT_TERM_LABEL, scheduleTerm, termLabel } from '../../utils/term';
 import { describeSectionSet, scheduleKey, overlapSummary } from '../../utils/scheduleCombos';
 import GuestSignInButton from '../GuestSignInButton';
+import PawLoader from '../PawLoader';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
 import { ART_ALT, CREDIT_SHORT, ART_MASCOT_SRC } from '../../constants/credits';
 
 // Small inline pencil glyph for the rename affordance — a real icon asset
@@ -41,7 +43,14 @@ export default function SavedSchedulesPanel({
   onDismissError = () => {},
   isGuest = false,
   saveNote = null,
+  // 'loading' | 'ready' | 'error': the signed-in list read (SchedulerPage).
+  listStatus = 'ready',
+  // Id of the saved schedule whose sections are being fetched to load it.
+  loadingScheduleId = null,
 }) {
+  const listLoaderVisible = useDelayedBusy(listStatus === 'loading');
+  const listWaiting = listStatus === 'loading' || listLoaderVisible;
+  const rowLoaderVisible = useDelayedBusy(loadingScheduleId != null);
   const [name, setName] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
@@ -179,6 +188,9 @@ export default function SavedSchedulesPanel({
                 {overlaps} overlap{overlaps === 1 ? '' : 's'}
               </span>
             )}
+            {rowLoaderVisible && loadingScheduleId === schedule.id && (
+              <span role="status"><PawLoader size="small" hideLabel label="Loading schedule" /></span>
+            )}
             <span className="sched-saved-row-count">{(schedule.selectedSectionIds || []).length} sections</span>
           </button>
         )}
@@ -270,7 +282,17 @@ export default function SavedSchedulesPanel({
                 {termLabel(term)}{term === CURRENT_TERM ? ' · current' : ''}
               </div>
             )}
-            {schedules.length === 0 && (
+            {term === CURRENT_TERM && listWaiting && (
+              <div className="search-loading" role="status" aria-busy="true">
+                {listLoaderVisible && <PawLoader size="small" label="Loading saved schedules…" />}
+              </div>
+            )}
+            {term === CURRENT_TERM && !listWaiting && listStatus === 'error' && (
+              <div className="search-empty sched-saved-empty" role="alert">
+                Couldn&apos;t load your saved schedules. Reload to try again.
+              </div>
+            )}
+            {schedules.length === 0 && !listWaiting && listStatus !== 'error' && (
               <div className="search-empty sched-saved-empty">
                 <div className="tp-art">
                   <img className="tp-art-mascot tp-art-outline" src={ART_MASCOT_SRC} alt={ART_ALT} title={CREDIT_SHORT} width={56} height={56} />

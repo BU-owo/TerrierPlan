@@ -319,6 +319,8 @@ export default function WeeklyGrid({
   // Generation is running and there's nothing to draw yet: a small loader in the empty
   // state (only if it lasts), instead of the "check sections" message.
   loading = false,
+  // A regenerate is running while this schedule is still up: it dims a little.
+  refreshing = false,
   theme = 'light',
   sectionIds,
   sectionsById,
@@ -635,7 +637,11 @@ export default function WeeklyGrid({
   }
 
   return (
-    <div ref={rootRef} className={`sched-grid-wrap${swapSlot && displaceInfo ? ' is-displacing' : ''}`}>
+    <div
+      ref={rootRef}
+      className={`sched-grid-wrap${swapSlot && displaceInfo ? ' is-displacing' : ''}${refreshing ? ' paw-refreshing' : ''}`}
+      aria-busy={refreshing || undefined}
+    >
       {incompleteLabels.length > 0 && (
         <div className="sched-grid-incomplete" role="note">
           Incomplete — left out: {incompleteLabels.join(', ')}

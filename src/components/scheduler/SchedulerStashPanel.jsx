@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { loadAllCourses } from '../../utils/courseQuery';
+import PawLoader from '../PawLoader';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
 import { CURRENT_TERM_LABEL } from '../../utils/term';
 import { semestersFromFirestore, normalizeGridSummerTerms } from '../../utils/courseEntry';
 import { normalizeExternalCredits } from '../../utils/externalCredits';
@@ -198,7 +200,9 @@ export default function SchedulerStashPanel({
     [courseById],
   );
 
-  const ready = loaded && loaded.uid === uid && courseById;
+  const loaderVisible = useDelayedBusy(!(loaded && loaded.uid === uid && courseById));
+  // Held back while the paw finishes its minimum time on screen.
+  const ready = loaded && loaded.uid === uid && courseById && !loaderVisible;
   const plans = ready && !loaded.error && uid ? loaded.plans : [];
 
   // Signed in, "One plan": this session's pick, else the saved pick, else the
@@ -319,7 +323,11 @@ export default function SchedulerStashPanel({
       </div>
 
       <div className="search-results">
-        {!ready && <div className="search-loading">Loading…</div>}
+        {!ready && (
+          <div className="search-loading" role="status" aria-busy="true">
+            {loaderVisible && <PawLoader size="small" theme={theme} label="Loading…" />}
+          </div>
+        )}
 
         {ready && loaded.error && <div className="search-empty">Couldn&apos;t load your Paw-tential courses.</div>}
 

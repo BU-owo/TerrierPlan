@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { loadAllCourses, isProfessionalCareer, isInactiveCourse } from '../../utils/courseQuery';
+import PawLoader from '../PawLoader';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
 import { parseCourseKey } from '../../utils/courseKey';
 import CourseList from './CourseList';
 
@@ -44,6 +46,9 @@ export default function RangeCourseList({
   const [expanded, setExpanded] = useState(false);
   const [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'ready' | 'error'
   const [courses, setCourses] = useState([]);
+  const loaderVisible = useDelayedBusy(status === 'loading');
+  // Held on 'loading' while the paw finishes its minimum time on screen.
+  const shownStatus = loaderVisible ? 'loading' : status;
 
   function toggle() {
     const next = !expanded;
@@ -89,11 +94,15 @@ export default function RangeCourseList({
       <button type="button" className="req-node-pool-toggle" onClick={toggle} aria-expanded={expanded}>
         Browse eligible courses {expanded ? '▾' : '▸'}
       </button>
-      {expanded && status === 'loading' && <div className="search-loading" role="status">Loading courses…</div>}
-      {expanded && status === 'error' && (
+      {expanded && shownStatus === 'loading' && (
+        <div className="search-loading" role="status" aria-busy="true">
+          {loaderVisible && <PawLoader size="small" label="Loading courses…" />}
+        </div>
+      )}
+      {expanded && shownStatus === 'error' && (
         <div className="req-pool-filter-empty">Couldn&apos;t load courses. Close and reopen to try again.</div>
       )}
-      {expanded && status === 'ready' && (
+      {expanded && shownStatus === 'ready' && (
         <CourseList
           courses={shown}
           dimmed={allInactive}

@@ -18,6 +18,8 @@ import { HUB_LABELS } from '../../utils/hubConstants';
 import { normalizeExternalCredit } from '../../utils/externalCredits';
 import { resolveApHubFromScore } from '../../utils/apScoreResolution';
 import { loadAllCourses } from '../../utils/courseQuery';
+import PawLoader from '../PawLoader';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
 import { COURSE_KEY_PATTERN, isValidCourseKeyFormat } from '../../utils/courseKey';
 
 const DEBUG_EXTERNAL_CREDITS = import.meta.env.DEV;
@@ -753,6 +755,7 @@ export function BuEquivalentField({ picked, onPick, onClear, ariaLabel }) {
   const listId = useId();
   const [courses, setCourses] = useState([]);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -760,7 +763,11 @@ export function BuEquivalentField({ picked, onPick, onClear, ariaLabel }) {
   useEffect(() => {
     let cancelled = false;
     loadAllCourses()
-      .then((all) => { if (!cancelled) setCourses(Array.isArray(all) ? all : []); })
+      .then((all) => {
+        if (cancelled) return;
+        setCourses(Array.isArray(all) ? all : []);
+        setLoaded(true);
+      })
       .catch(() => { if (!cancelled) setLoadFailed(true); });
     return () => { cancelled = true; };
   }, []);
@@ -782,6 +789,10 @@ export function BuEquivalentField({ picked, onPick, onClear, ariaLabel }) {
     }
     return out;
   }, [courses, query]);
+
+  // Typed before the catalog arrived: a small paw where the suggestions go.
+  const waitingForCatalog = open && !loaded && !loadFailed && query.trim().length >= 2;
+  const loaderVisible = useDelayedBusy(waitingForCatalog);
 
   function choose(course) {
     onPick(course);
@@ -840,7 +851,15 @@ export function BuEquivalentField({ picked, onPick, onClear, ariaLabel }) {
           }
         }}
       />
-      {open && suggestions.length > 0 && (
+      {/* A dropdown like the suggestions, so nothing below it moves. */}
+      {loaderVisible && (
+        <div className="external-credit-bu-list" role="status" aria-busy="true">
+          <div className="external-credit-bu-option">
+            <PawLoader size="small" label="Loading courses…" />
+          </div>
+        </div>
+      )}
+      {open && suggestions.length > 0 && !loaderVisible && (
         <ul className="external-credit-bu-list" id={listId} role="listbox">
           {suggestions.map((course, i) => (
             <li

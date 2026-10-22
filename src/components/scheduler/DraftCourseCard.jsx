@@ -5,6 +5,8 @@ import { matchesFilters, isGlobalFilterActive } from '../../utils/sectionFilters
 import SectionRow from './SectionRow';
 import SectionNotes from './SectionNotes';
 import SwapIcon from './SwapIcon';
+import PawLoader from '../PawLoader';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
 
 function groupStatusLabel(considering, lockedIdsInGroup, groupKey) {
   const consideringCount = considering.length;
@@ -25,7 +27,7 @@ export default function DraftCourseCard({
   courseKey,
   courseData,
   sections,
-  loading,
+  loading: sectionsLoading,
   considering,
   lockedIds,
   conflictMap,
@@ -57,6 +59,9 @@ export default function DraftCourseCard({
   // card and scroll to that component group.
   focusRequest = null,
 }) {
+  // Sections still loading, held a moment longer while the paw is up.
+  const loaderVisible = useDelayedBusy(sectionsLoading);
+  const loading = sectionsLoading || loaderVisible;
   const manual = mode === 'manual';
   // Collapse state is deliberately local (not lifted to SchedulerPage) —
   // it's a per-card view preference, not something that needs to survive
@@ -143,6 +148,13 @@ export default function DraftCourseCard({
             <span className="sched-draft-card-code">{courseLabel}</span>
             <span className="sched-draft-card-name">{courseData?.name ?? '—'}</span>
           </span>
+          {/* Collapsed while its sections load (a newly added course): the
+              small paw holds the summary's slot until "4 cr · …" replaces it. */}
+          {collapsed && loading && (
+            <span className="sched-draft-card-summary paw-loader-slot" role="status" aria-busy="true">
+              {loaderVisible && <PawLoader size="small" hideLabel label="Loading sections" />}
+            </span>
+          )}
           {collapsed && !loading && (
             <span className={`sched-draft-card-summary${isReady ? ' is-ready' : ''}`}>
               {creditsLabel && <>{creditsLabel} · </>}
@@ -197,7 +209,11 @@ export default function DraftCourseCard({
 
       {hint && !loading && !showStatus && <div className="sched-draft-card-pick-hint">{hint}</div>}
 
-      {!collapsed && loading && <div className="sched-draft-card-loading">Loading sections…</div>}
+      {!collapsed && loading && (
+        <div className="sched-draft-card-loading paw-loader-slot" role="status" aria-busy="true">
+          {loaderVisible && <PawLoader size="small" label="Loading sections…" />}
+        </div>
+      )}
 
       {!collapsed && !loading && sections.length === 0 && (
         <div className="sched-draft-card-empty">No sections found for this term.</div>

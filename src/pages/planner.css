@@ -5008,3 +5008,25 @@ html[data-theme='dark'] .course-card.is-compact:is(:hover, :focus-within) .cours
 .semester-header .semester-credits { white-space: nowrap; flex-shrink: 0; }
 .marine-dialog h2 { color: var(--text); }
 .req-course-row-title.is-wrap { white-space: normal; overflow-wrap: anywhere; }
+
+/* Import dropzone while a PDF is read: keeps roughly its idle height (icon,
+   title, button, hint) so the modal doesn't jump, with the paw centered. */
+.import-dropzone.is-parsing { min-height: 190px; justify-content: center; cursor: progress; }
+.import-dropzone-loading .paw-loader-sm { font-size: 13px; color: var(--text-secondary); }
+
+/* "Couldn't load everything" banner (PlannerPage showLoadBanner): the update
+   banner's layout (App.css) in the warning colors. */
+.update-banner.planner-load-banner {
+  background: var(--warning-surface);
+  color: var(--warning-text);
+  border-bottom-color: var(--warning-border);
+}
+
+/* A course card whose course doc hasn't arrived (CourseCard): the name line
+   keeps its height for the small paw, and "Details unavailable" stays quiet. */
+.course-card-name { min-height: 16px; }
+.course-card-name .paw-loader-sm { vertical-align: top; }
+.course-card-name.is-unavailable { color: var(--text-muted); }
+/* Compact (overview) rows are one 14px line: no min-height, a 14px paw. */
+.course-card.is-compact .course-card-name { min-height: 0; }
+.course-card.is-compact .course-card-name .paw-loader-sm .auth-loading-paw { width: 14px; height: 14px; }

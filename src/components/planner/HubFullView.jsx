@@ -17,6 +17,8 @@ import FullViewHeader from './FullViewHeader';
 import { HubChip, HubUnitTags, OfferingBadge, OFFERED_SNAPSHOT_NOTE } from './CourseTags';
 import { CURRENT_TERM_LABEL } from '../../utils/term';
 import useCurrentTermCourseKeys from '../../hooks/useCurrentTermCourseKeys';
+import PawLoader from '../PawLoader';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
 
 // Every HUB code, in HUB_GROUPS' own order (so the picker reads grouped by
 // category, same visual order the color tokens already imply) — derived
@@ -371,7 +373,11 @@ export default function HubFullView({
   onShowStash,
   // Swaps to the Requirements overlay without closing (see FullViewHeader).
   onSwitchView,
+  // The plan or its courses' data is still loading (PlannerPage), so the
+  // rings would count up from partial data: they dim with a small paw.
+  hubLoading = false,
 }) {
+  const ringsLoaderVisible = useDelayedBusy(hubLoading);
   // One-time hints for this view (they outrank the planner's behind it).
   const [finderHintVisible, dismissFinderHint, markFinderSeen] = useOneTimeHint('hub_finder', { priority: 1 });
   const [potentialHintVisible, dismissPotentialHint, markPotentialSeen] = useOneTimeHint('hub_potential', {
@@ -469,6 +475,7 @@ export default function HubFullView({
   // results list. Set on failure too, so an error doesn't read as loading
   // forever (it falls back to the empty-results message, as before).
   const [coursesLoaded, setCoursesLoaded] = useState(false);
+  const [coursesFailed, setCoursesFailed] = useState(false);
   const [searchPrefix, setSearchPrefix] = useState('');
   const [hubSearchInclude, setHubSearchInclude] = useState([]);
   const [hubSearchExclude, setHubSearchExclude] = useState([]);
@@ -482,6 +489,7 @@ export default function HubFullView({
       if (!cancelled) setAllCourses(courses);
     }).catch((err) => {
       console.error('Failed to load courses for search:', err);
+      if (!cancelled) setCoursesFailed(true);
     }).finally(() => {
       if (!cancelled) setCoursesLoaded(true);
     });
@@ -577,6 +585,7 @@ export default function HubFullView({
   // separate searches.
   const trimmedPrefix = searchPrefix.trim();
   const searchActive = Boolean(trimmedPrefix) || hubSearchInclude.length > 0 || hubSearchExclude.length > 0;
+  const catalogLoaderVisible = useDelayedBusy(searchActive && !coursesLoaded);
   // In-memory only: limit results to catalog `inCurrentTerm` courses.
   const [offeredOnly, setOfferedOnly] = useState(false);
   const hasCurrentTermData = useMemo(() => allCourses.some((c) => c.inCurrentTerm), [allCourses]);
@@ -922,10 +931,10 @@ export default function HubFullView({
 
             {/* "N courses" left, the Spring chip right. Same size on and off
                 (no ✓); the snapshot note lives in its tooltip. */}
-            {(hasCurrentTermData || (searchActive && coursesLoaded && searchResults.length > 0)) && (
+            {(hasCurrentTermData || (searchActive && coursesLoaded && !catalogLoaderVisible && searchResults.length > 0)) && (
               <div className="hub-browse-count-row">
                 <p className="hub-browse-count">
-                  {searchActive && coursesLoaded && searchResults.length > 0
+                  {searchActive && coursesLoaded && !catalogLoaderVisible && searchResults.length > 0
                     && `${searchResults.length} course${searchResults.length === 1 ? '' : 's'}`}
                 </p>
                 {hasCurrentTermData && (
@@ -941,7 +950,7 @@ export default function HubFullView({
                 )}
               </div>
             )}
-            {searchActive && coursesLoaded && searchResults.length > 0 && (
+            {searchActive && coursesLoaded && !catalogLoaderVisible && searchResults.length > 0 && (
               <>
                 {/* Chip key, rendered with the same HubChip as the results. */}
                 <p className="hub-chip-legend">
@@ -956,8 +965,12 @@ export default function HubFullView({
             )}
             {searchActive && (
               <div className="hub-browse-results">
-                {!coursesLoaded ? (
-                  <div className="search-loading" role="status">Loading courses…</div>
+                {!coursesLoaded || catalogLoaderVisible ? (
+                  <div className="search-loading" role="status" aria-busy="true">
+                    {catalogLoaderVisible && <PawLoader size="small" label="Loading courses…" />}
+                  </div>
+                ) : coursesFailed ? (
+                  <div className="search-empty" role="alert">Couldn&apos;t load courses. Reload to try again.</div>
                 ) : searchResults.length === 0 ? (
                   <div className="search-empty">
                     {hubSearchMode === HUB_MATCH_MODES.AND && hubSearchInclude.length >= 2
@@ -1022,7 +1035,12 @@ export default function HubFullView({
           />
 
           <div className="hub-full-overview-toolbar">
-            <span className="hub-full-overview-heading">HUB Categories</span>
+            <span className="hub-full-overview-heading">
+              HUB Categories{' '}
+              <span role="status">
+                {ringsLoaderVisible && <PawLoader size="small" hideLabel label="Loading your HUB progress" />}
+              </span>
+            </span>
             <button type="button" className="panel-open-full-btn" onClick={toggleAll}>
               {anyCollapsed ? 'Expand all' : 'Collapse all'}
             </button>
@@ -1039,7 +1057,7 @@ export default function HubFullView({
             </OneTimeHint>
           )}
 
-          <div className="hub-full-overview">
+          <div className={`hub-full-overview${ringsLoaderVisible ? ' paw-refreshing' : ''}`} aria-busy={ringsLoaderVisible || undefined}>
             {groupSummaries.map((groupSummary) => {
               const { group, percent, fulfilled, total } = groupSummary;
               const collapsed = isCollapsed(groupSummary);
@@ -1091,7 +1109,7 @@ export default function HubFullView({
             </div>
           )}
 
-          <div className="hub-full-groups">
+          <div className={`hub-full-groups${ringsLoaderVisible ? ' paw-refreshing' : ''}`} aria-busy={ringsLoaderVisible || undefined}>
             {segments.map((segment, i) =>
               segment.type === 'solo' ? (
                 renderGroupCard(segment.item)

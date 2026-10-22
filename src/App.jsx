@@ -73,7 +73,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="auth-loading">
+      <div className="auth-loading" role="status" aria-busy="true">
         <PawLoader theme={theme} alt="TerrierPlan" />
       </div>
     );

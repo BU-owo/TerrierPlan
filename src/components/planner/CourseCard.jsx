@@ -1,9 +1,13 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useContext } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { HUB_COLOR_FOR } from '../../utils/hubConstants';
 import { getOfferingWarning } from '../../utils/offeringPattern';
 import { isProfessionalCareer } from '../../utils/courseQuery';
 import useUpcomingSeasons from '../../hooks/useUpcomingSeasons';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
+import { formatCourseKey } from '../../utils/grsAlias';
+import PawLoader from '../PawLoader';
+import { CourseDataStatusContext } from './courseDataContext';
 
 const MARINE_WARNING_TEXT = 'Marine Semester course: it is only offered in the fall, as part of the Marine Semester.';
 
@@ -52,10 +56,22 @@ export default function CourseCard({
     return () => clearTimeout(t);
   }, [isDragging]);
 
+  // No course doc yet: the formatted key, and in the name slot a small paw
+  // while a lookup runs (only after a moment, see useDelayedBusy), or a quiet
+  // "Details unavailable" once one came back without it. Neither shows a "—".
+  const lookup = useContext(CourseDataStatusContext);
+  const unavailable = !data && lookup.unavailable.has(courseKey);
+  const loaderVisible = useDelayedBusy(!data && !unavailable && lookup.fetching);
+  const pending = loaderVisible || (!data && !unavailable);
+
   const hubUnits = data?.hubUnits ?? [];
-  const courseNumber = data?.courseNumber ?? courseKey;
-  const courseName = data?.name ?? '—';
-  const creditStr = credits != null ? `${credits} cr` : '—';
+  const courseNumber = data?.courseNumber ?? formatCourseKey(courseKey);
+  const courseName = data?.name ?? (unavailable ? 'Details unavailable' : '');
+  const creditStr = credits != null ? `${credits} cr` : data ? '—' : '';
+  const nameSlot = loaderVisible ? (
+    <span role="status"><PawLoader size="small" hideLabel label={`Loading ${courseNumber}`} /></span>
+  ) : pending ? null : courseName;
+  const nameClass = `course-card-name${unavailable && !loaderVisible ? ' is-unavailable' : ''}`;
   // Historical offering data, not a guarantee — informational only, never
   // blocks placement or feeds into HUB/requirement logic.
   // A real upcoming section (cached catalog) overrides the history.
@@ -65,7 +81,7 @@ export default function CourseCard({
 
   if (compact && !isDragOverlay) {
     const tip = [
-      [courseName, creditStr, hubUnits.length ? `HUB: ${hubUnits.join(', ')}` : null].filter(Boolean).join(' · '),
+      [courseName || courseNumber, creditStr, hubUnits.length ? `HUB: ${hubUnits.join(', ')}` : null].filter(Boolean).join(' · '),
       data?.studyAbroad ? 'Study abroad' : null,
       offeringWarning?.text,
       marineWarning ? MARINE_WARNING_TEXT : null,
@@ -111,7 +127,7 @@ export default function CourseCard({
           </button>
         )}
         <span className="course-card-code">{courseNumber}</span>
-        <span className="course-card-name">{courseName}</span>
+        <span className={nameClass}>{nameSlot}</span>
         {offeringWarning && (
           <span
             className={`course-card-offering-warning is-${offeringWarning.severity} is-icon`}
@@ -157,7 +173,7 @@ export default function CourseCard({
         </button>
       )}
       <div className="course-card-code">{courseNumber}</div>
-      <div className="course-card-name">{courseName}</div>
+      <div className={nameClass}>{nameSlot}</div>
       {data?.studyAbroad && (
         <span className="offering-badge offering-badge-abroad course-card-abroad">Study abroad</span>
       )}

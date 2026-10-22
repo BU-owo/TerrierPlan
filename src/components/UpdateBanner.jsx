@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { flushAllPendingWrites } from '../utils/pendingWrites';
+import PawLoader from './PawLoader';
+import useDelayedBusy from '../hooks/useDelayedBusy';
 
 // Slim "a new version is available" row at the top of the app shell (in
 // normal flow, so it never covers the header or the mobile tab bar). The
@@ -25,6 +27,7 @@ export default function UpdateBanner() {
   const [available, setAvailable] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [status, setStatus] = useState('idle'); // 'idle' | 'saving' | 'failed'
+  const savingLoaderVisible = useDelayedBusy(status === 'saving');
 
   useEffect(() => {
     if (import.meta.env.DEV || !BUILD_ID) return undefined;
@@ -87,7 +90,9 @@ export default function UpdateBanner() {
         onClick={handleSaveAndReload}
         disabled={status === 'saving'}
       >
-        {status === 'saving' ? 'Saving…' : 'Save and reload'}
+        {status === 'saving'
+          ? (savingLoaderVisible ? <PawLoader size="small" theme="dark" label="Saving…" /> : 'Saving…')
+          : 'Save and reload'}
       </button>
       <button
         type="button"

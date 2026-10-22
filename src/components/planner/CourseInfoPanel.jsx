@@ -13,6 +13,8 @@ import { sectionTypeLabel } from '../../utils/sectionType';
 import { groupSectionsByComponent } from '../../utils/sectionComponents';
 import { instructorLabel } from '../../utils/sectionInstructors';
 import { marineKind } from '../../data/marineSemester';
+import PawLoader from '../PawLoader';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
 import './CourseInfoPanel.css';
 
 // Past offerings ignores history before the academic year starting this year
@@ -317,7 +319,14 @@ function offeringCellTitle(year, season, count) {
 }
 
 function SectionStatus({ status, onRetry, children }) {
-  if (status === 'loading') return <p className="course-info-empty">Loading…</p>;
+  const loaderVisible = useDelayedBusy(status === 'loading');
+  if (status === 'loading' || loaderVisible) {
+    return (
+      <p className="course-info-empty paw-loader-slot" role="status" aria-busy="true">
+        {loaderVisible && <PawLoader size="small" label="Loading…" />}
+      </p>
+    );
+  }
   if (status === 'error') {
     return (
       <div className="course-info-status course-info-status-inline">
@@ -512,6 +521,8 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
     fetchFall2026,
   );
 
+  const detailsLoaderVisible = useDelayedBusy(courseFetch.status === 'loading');
+
   useEffect(() => {
     if (!courseKey) return undefined;
     function onKeyDown(e) {
@@ -523,7 +534,9 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
 
   if (!courseKey) return null;
 
-  const { status, data: course } = courseFetch;
+  const { status: fetchStatus, data: course } = courseFetch;
+  // Held on 'loading' while the paw finishes its minimum time on screen.
+  const status = detailsLoaderVisible && fetchStatus !== 'loading' ? 'loading' : fetchStatus;
   const courseNumber = course?.courseNumber ?? courseKey;
   const offeringBadge = course ? getOfferingBadge(course.offeringPattern, upcomingSeasons) : null;
   const hubUnits = course?.hubUnits ?? [];
@@ -599,7 +612,11 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
         </div>
 
         <div className="course-info-body">
-          {status === 'loading' && <p className="course-info-status">Loading course details…</p>}
+          {status === 'loading' && (
+            <div className="course-info-status paw-loader-slot" role="status" aria-busy="true">
+              {detailsLoaderVisible && <PawLoader size="small" label="Loading course details…" />}
+            </div>
+          )}
 
           {status === 'missing' && (
             <p className="course-info-status">No catalog entry found for this course.</p>

@@ -3,6 +3,8 @@ import { normalizeCourseKey, parseCourseKey, compareByCatalogNumber } from '../.
 import { loadAllCourses, isProfessionalCareer } from '../../utils/courseQuery';
 import { CURRENT_TERM_LABEL } from '../../utils/term';
 import SchedulerCourseRow from './SchedulerCourseRow';
+import PawLoader from '../PawLoader';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
 
 // Left panel: add a course to the schedule draft. Same normalization/
 // subject-prefix approach as the Planner's CourseSearch (courseKey.js is
@@ -14,6 +16,7 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, onShowCo
   const [query, setQuery] = useState('');
   const [allCourses, setAllCourses] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const debounceRef = useRef(null);
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -28,7 +31,10 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, onShowCo
       .then((courses) => {
         if (!cancelled) setAllCourses(courses);
       })
-      .catch((err) => console.error('Failed to load courses:', err))
+      .catch((err) => {
+        console.error('Failed to load courses:', err);
+        if (!cancelled) setLoadFailed(true);
+      })
       .finally(() => {
         if (!cancelled) setLoaded(true);
       });
@@ -99,6 +105,10 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, onShowCo
     return shown.slice(0, 20);
   }, [results, gateByCurrentTerm, onlyAvailable, draftCourseKeys]);
 
+  // Typed before the catalog arrived: the paw stands in for "Searching…".
+  const catalogLoaderVisible = useDelayedBusy(Boolean(query.trim()) && !loaded);
+  const catalogWaiting = (Boolean(query.trim()) && !loaded) || catalogLoaderVisible;
+
   return (
     <div className="search-panel">
       <div className="search-panel-header">
@@ -153,9 +163,17 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, onShowCo
       </div>
 
       <div className="search-results">
-        {searching && <div className="search-loading">Searching…</div>}
+        {catalogWaiting ? (
+          <div className="search-loading" role="status" aria-busy="true">
+            {catalogLoaderVisible && <PawLoader size="small" theme={theme} label="Loading courses…" />}
+          </div>
+        ) : searching && <div className="search-loading">Searching…</div>}
 
-        {!searching && query.trim() && visibleResults.length === 0 && (
+        {!searching && !catalogWaiting && query.trim() && loadFailed && (
+          <div className="search-empty" role="alert">Couldn&apos;t load courses. Reload to try again.</div>
+        )}
+
+        {!searching && !catalogWaiting && !loadFailed && query.trim() && visibleResults.length === 0 && (
           <div className="search-empty">
             No courses found for &ldquo;{query.trim()}&rdquo;
           </div>
@@ -174,7 +192,7 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, onShowCo
           </div>
         )}
 
-        {visibleResults.map((course) => (
+        {!catalogWaiting && visibleResults.map((course) => (
           <SchedulerCourseRow
             key={course.id}
             courseKey={course.id}

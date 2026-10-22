@@ -45,6 +45,7 @@ import ExtraTermsPanel from '../components/planner/ExtraTermsPanel';
 import ExternalCreditsPanel from '../components/planner/ExternalCreditsPanel';
 import CourseInfoPanel from '../components/planner/CourseInfoPanel';
 import PawLoader from '../components/PawLoader';
+import useDelayedBusy from '../hooks/useDelayedBusy';
 import AppHeader from '../components/AppHeader';
 import GuestSignInButton from '../components/GuestSignInButton';
 import HelpSupportModal from '../components/HelpSupportModal';
@@ -94,6 +95,8 @@ import {
 } from '../utils/completion';
 import { aliasFor } from '../utils/grsAlias';
 import { registerPendingWriteFlush } from '../utils/pendingWrites';
+import { buildPlanPayload } from '../utils/planPayload';
+import { isNetworkShortBatch } from '../utils/courseLookup';
 import { CONFIRMATION_REASONS, placementMessage } from '../data/specialTerms';
 import { marineKind, withMarineCreditFallback } from '../data/marineSemester';
 import { createUndo, restoreSemesters, snapshotSemesters, stepUndo } from '../utils/undoToast';
@@ -102,6 +105,7 @@ import {
 } from '../utils/sequenceSeed';
 import { MarineRemoveDialog } from '../components/planner/MarineDialogs';
 import { MarineSemesterContext } from '../components/planner/marineContext';
+import { CourseDataStatusContext } from '../components/planner/courseDataContext';
 import { NeededHubContext } from '../components/planner/neededHubContext';
 import SemesterPickerModal from '../components/planner/SemesterPickerModal';
 import Toast from '../components/Toast';
@@ -485,6 +489,22 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const [importVariant, setImportVariant] = useState('transcript');
   // 'idle' | 'busy' | 'error' — "Download plan PDF" button.
   const [planPdfStatus, setPlanPdfStatus] = useState('idle');
+  // Loading UI only: fetchCourseData calls still running (the HUB rings wait
+  // on them, see hubLoading), and a plan switch's load (handleSelectPlan).
+  const [courseFetchesInFlight, setCourseFetchesInFlight] = useState(0);
+  // courseKeys a finished lookup came back without (see CourseDataStatusContext).
+  const [unavailableCourseKeys, setUnavailableCourseKeys] = useState(() => new Set());
+  // The "Course names couldn't load" toast has shown for the current run of
+  // network failures (see showCourseNetworkToast): reset by a lookup that
+  // reaches the server, or by the browser coming back online.
+  const courseNetworkToastShownRef = useRef(false);
+  const retryUnavailableRef = useRef(null);
+  // True while a plan load window is open (see beginPlanLoad): edits are blocked.
+  const [planLoading, setPlanLoading] = useState(false);
+  // Signed in, the profile (locks, current semester, start term, external
+  // credits) failed to load: its edits are blocked and the banner shows.
+  const [profileLoadFailed, setProfileLoadFailed] = useState(false);
+  const [retryingLoad, setRetryingLoad] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [deletePlanId, setDeletePlanId] = useState(null); // non-null → confirm-delete modal open for this plan id
 
@@ -515,6 +535,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const planSavesInFlightRef = useRef(0);
   const flushPlanRef = useRef(null);
   const isInitialLoad = useRef(true);
+  // Plan load windows (loadPlan, createDefaultPlan, and the switch / new /
+  // delete flows around them). Nested windows count up; isInitialLoad (which
+  // holds autosave off) and planLoading (which blocks edits) are released only
+  // when the outermost one ends, always from a finally, so a failed load can't
+  // leave autosave off.
+  const planLoadDepthRef = useRef(0);
   // uid the profile (currentSemesterTarget/completedCourseKeys) has actually
   // finished loading for — set at the end of loadUserProfile, reset to null
   // on sign-out. Guards the profile autosave effect so it can't fire with
@@ -581,6 +607,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       // actually finishes.
       profileLoadedForUid.current = null;
       setPlanLoadError(false);
+      setProfileLoadFailed(false);
 
       // 1. Migrate guest plan BEFORE loadPlans/createDefaultPlan
       const migratedId = await migrateGuestPlanIfNeeded(uid);
@@ -599,7 +626,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         // autosave effect's guard keeps blocking writes for this uid, so
         // nothing gets clobbered, but locks/current-semester picks this
         // session won't reach Firestore until a reload retries the load.
-        console.warn('⚠️  Profile writes disabled this session — profile failed to load');
+        console.warn('⚠️  Profile writes disabled until the profile loads');
+        if (!cancelled) showProfileLoadFailed();
       }
       if (cancelled) return;
 
@@ -614,13 +642,16 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       }
       if (cancelled) return;
 
+      let result = 'loaded';
       if (migratedId) {
-        await loadPlan(uid, migratedId, list);
+        result = await loadPlan(uid, migratedId, list);
       } else if (list.length === 0) {
         await createDefaultPlan(uid);
       } else {
-        await loadPlan(uid, list[0].id, list);
+        result = await loadPlan(uid, list[0].id, list);
       }
+      // No plan on screen (doc missing): the "couldn't load" banner and board message.
+      if (result !== 'loaded' && !cancelled) setPlanLoadError(true);
     }
 
     if (user) {
@@ -804,7 +835,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // misleading for them.
   useEffect(() => {
     function handleBeforeUnload(e) {
-      if (!user || !hasUnsavedChanges.current) return;
+      // Dirty, or a plan/profile write that hasn't gone through yet.
+      const unsaved = hasUnsavedChanges.current
+        || Boolean(pendingPlanWriteRef.current)
+        || Boolean(pendingProfileWriteRef.current);
+      if (!user || !unsaved) return;
       e.preventDefault();
       e.returnValue = '';
     }
@@ -967,6 +1002,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // leave warning doesn't fire on the reload. Guests have nothing pending:
   // their plan and profile are written to localStorage on every change.
   useEffect(() => registerPendingWriteFlush(async () => {
+    // A plan is mid-load (edits blocked, autosave held): don't reload under it.
+    if (planLoadDepthRef.current > 0) return false;
     const planSaved = await (flushPlanRef.current?.() ?? true);
     const pending = pendingProfileWriteRef.current;
     const profileSaved = pending && auth.currentUser?.uid === pending.uid
@@ -1081,6 +1118,30 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     }
     window.addEventListener('pagehide', handlePageHide);
     return () => window.removeEventListener('pagehide', handlePageHide);
+  }, []);
+
+  // Back online: look up the courses still marked unavailable, once (a
+  // genuinely missing one just stays unavailable). Short wait first, so
+  // Firestore has reconnected and doesn't answer from its cache again.
+  useEffect(() => {
+    retryUnavailableRef.current = () => {
+      const keys = [...unavailableCourseKeys];
+      if (keys.length > 0) fetchCourseData(keys).catch((err) => console.error('Could not load course data:', err));
+    };
+  });
+
+  useEffect(() => {
+    let timer;
+    function handleOnline() {
+      courseNetworkToastShownRef.current = false;
+      clearTimeout(timer);
+      timer = setTimeout(() => retryUnavailableRef.current?.(), 1500);
+    }
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      clearTimeout(timer);
+    };
   }, []);
 
   // Offline badge + retry: track connectivity, and when the browser comes back
@@ -1461,16 +1522,85 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     return list;
   }
 
-  async function loadPlan(uid, planId, list) {
+  function beginPlanLoad() {
+    planLoadDepthRef.current += 1;
     isInitialLoad.current = true;
-    const snap = await getDoc(doc(db, 'users', uid, 'plans', planId));
-    // A missing doc on the initial load would otherwise leave the board on
-    // "Loading your plans…" forever; once a plan is showing, the flag has no
-    // visible effect (the error only renders while activePlanId is null).
-    if (!snap.exists()) {
-      setPlanLoadError(true);
-      return;
+    setPlanLoading(true);
+  }
+
+  function endPlanLoad() {
+    planLoadDepthRef.current = Math.max(0, planLoadDepthRef.current - 1);
+    if (planLoadDepthRef.current > 0) return;
+    isInitialLoad.current = false;
+    setPlanLoading(false);
+  }
+
+  // The profile didn't load: its edits stay blocked (profileLoadedForUid stays
+  // null) and the banner offers Try again. The values on screen are cleared so
+  // guest or default ones never pass for this account's locks and semester.
+  // Only memory: the guest's localStorage copy is left alone for the retry.
+  function showProfileLoadFailed() {
+    setProfileLoadFailed(true);
+    setCurrentSemesterTarget(null);
+    setCompletedCourseKeys([]);
+    setExternalCredits([]);
+    setStartTerm(null);
+    setIncompleteCourseKeys([]);
+  }
+
+  // The banner's Try again: re-runs whichever first-load step failed.
+  async function handleRetryLoad() {
+    if (!user || retryingLoad) return;
+    const uid = user.uid;
+    setRetryingLoad(true);
+    try {
+      if (profileLoadFailed) {
+        try {
+          await loadUserProfile(uid);
+          if (auth.currentUser?.uid === uid) setProfileLoadFailed(false);
+        } catch (err) {
+          console.error('Error loading profile:', err);
+        }
+      }
+      if (!activePlanId) {
+        setPlanLoadError(false);
+        try {
+          const list = await loadPlans(uid);
+          let result = 'loaded';
+          if (list.length === 0) await createDefaultPlan(uid);
+          else result = await loadPlan(uid, list[0].id, list);
+          if (result !== 'loaded') setPlanLoadError(true);
+        } catch (err) {
+          console.error('Error loading plan:', err);
+          setPlanLoadError(true);
+        }
+      }
+    } finally {
+      setRetryingLoad(false);
     }
+  }
+
+  // Opens a plan doc. Resolves 'loaded'; 'unsaved' (an unsent edit to the open
+  // plan couldn't be saved first, so nothing was loaded); 'missing' (no such
+  // doc); or 'stale' (the signed-in account changed while it read). Throws if
+  // the doc can't be read. Anything but 'loaded' leaves the plan on screen and
+  // its state untouched. Course data failing after the plan is showing is not
+  // a failed load: the plan stays, with a toast.
+  async function loadPlan(uid, planId, list) {
+    beginPlanLoad();
+    try {
+      return await loadPlanInner(uid, planId, list);
+    } finally {
+      endPlanLoad();
+    }
+  }
+
+  async function loadPlanInner(uid, planId, list) {
+    // Never load over an unsent edit: send it (to the plan it was made on) first.
+    if (pendingPlanWriteRef.current && !(await flushPendingPlanWrite())) return 'unsaved';
+    const snap = await getDoc(doc(db, 'users', uid, 'plans', planId));
+    if (!snap.exists()) return 'missing';
+    if (auth.currentUser?.uid !== uid) return 'stale';
     const data = snap.data();
     const semData = semestersFromFirestore(data.semesters);
     const summerData = normalizeGridSummerTerms(data.gridSummerTerms);
@@ -1504,9 +1634,14 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       ...loadedStash,
     ];
     if (allKeys.length > 0) {
-      await fetchCourseData(allKeys);
+      try {
+        await fetchCourseData(allKeys);
+      } catch (err) {
+        console.error('Could not load course data:', err);
+        showCourseNetworkToast();
+      }
     }
-    isInitialLoad.current = false;
+    return 'loaded';
   }
 
   // `seed`, when given, is { semesters, gridSummerTerms } to start the new
@@ -1519,7 +1654,19 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // (each defaulting to the blank-plan value), plus expectedUid: the account
   // it was confirmed under, re-checked right before the write.
   async function createDefaultPlan(uid, seed = null) {
-    isInitialLoad.current = true;
+    beginPlanLoad();
+    try {
+      return await createDefaultPlanInner(uid, seed);
+    } finally {
+      endPlanLoad();
+    }
+  }
+
+  async function createDefaultPlanInner(uid, seed) {
+    // Same as loadPlan: the open plan's unsent edit goes out first.
+    if (pendingPlanWriteRef.current && !(await flushPendingPlanWrite())) {
+      throw new Error("Couldn't save your open plan first. Try again.");
+    }
     const name = await uniquePlanName(uid, seed?.name ?? 'My Plan');
     const seedSemesters = seed?.semesters ?? EMPTY_SEMESTERS();
     const seedGridSummerTerms = seed?.gridSummerTerms ?? {};
@@ -1547,6 +1694,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    // Signed out or switched account while it saved: don't show it here.
+    if (auth.currentUser?.uid !== uid) return name;
     setActivePlanId(ref.id);
     rememberActivePlan(uid, ref.id);
     setPlanName(name);
@@ -1567,7 +1716,6 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     // AP/IB/transfer credits.
     setPlans([{ id: ref.id, name }]);
     setIsDirty(false);
-    isInitialLoad.current = false;
     return name;
   }
 
@@ -1598,6 +1746,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // `version` is the edit this write is a snapshot of (defaults to the latest
   // edit at call time). An edit made while it's in flight is newer: it stays
   // dirty and its own debounce timer, already scheduled, sends it.
+  // Writes ONLY what it's handed (see buildPlanPayload): a field missing from
+  // `extras` is left as it is on the doc, never filled from the plan on screen.
   async function persistPlan(uid, planId, name, semData, transfer, extras = {}, version = editVersionRef.current) {
     planSavesInFlightRef.current += 1;
     setSaving(true);
@@ -1620,24 +1770,12 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       const planRef = doc(db, 'users', uid, 'plans', planId);
       if (import.meta.env.DEV) console.log('📍 [persistPlan] Plan ref path:', planRef.path);
 
+      // externalCredits is never part of it — it's student-level now (see
+      // loadUserProfile/persistProfile). `updateDoc` only touches the fields
+      // listed, so legacy externalCredits on the doc is left alone — see the
+      // "read-only backup" note on migrateGuestPlan.
       const payload = {
-        name,
-        semesters: semestersToFirestore(semData),
-        gridSummerTerms: extras.gridSummerTerms ?? gridSummerTerms,
-        isTransfer: transfer,
-        majorBulletinUrl: extras.majorBulletinUrl ?? majorBulletinUrl,
-        extraTerms: extras.extraTerms ?? extraTerms,
-        // externalCredits deliberately omitted — it's student-level now
-        // (see loadUserProfile/persistProfile), not written per plan.
-        // `updateDoc` only touches the fields listed here, so this leaves
-        // whatever legacy externalCredits already sits on the doc alone
-        // rather than clearing it — see the "read-only backup" note on
-        // migrateGuestPlan.
-        cumulativeGpa: extras.cumulativeGpa ?? cumulativeGpa,
-        earnedCredits: extras.earnedCredits ?? earnedCredits,
-        gradePoints: extras.gradePoints ?? gradePoints,
-        requirementOverrides: extras.requirementOverrides ?? requirementOverrides,
-        stash: extras.stash ?? stash,
+        ...buildPlanPayload({ name, semesters: semestersToFirestore(semData), isTransfer: transfer }, extras),
         updatedAt: serverTimestamp(),
       };
 
@@ -1699,21 +1837,63 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       if (missing.length === 0) return;
 
       const newCourses = {};
-      for (let i = 0; i < missing.length; i += 30) {
-        const batch = missing.slice(i, i + 30);
-        const q = query(
-          collection(db, 'courses'),
-          where(documentId(), 'in', batch),
-        );
-        const snap = await getDocs(q);
-        snap.docs.forEach((d) => { newCourses[d.id] = d.data(); });
+      // Any chunk that came back short because of the network (not because
+      // the courses don't exist): one toast for the whole lookup, below.
+      let networkShort = false;
+      setCourseFetchesInFlight((n) => n + 1);
+      try {
+        for (let i = 0; i < missing.length; i += 30) {
+          const batch = missing.slice(i, i + 30);
+          const q = query(
+            collection(db, 'courses'),
+            where(documentId(), 'in', batch),
+          );
+          const snap = await getDocs(q);
+          snap.docs.forEach((d) => { newCourses[d.id] = d.data(); });
+          if (isNetworkShortBatch({
+            requested: new Set(batch).size,
+            received: snap.size,
+            fromCache: snap.metadata.fromCache,
+            online: navigator.onLine,
+          })) networkShort = true;
+        }
+      } catch (err) {
+        // Display only: these cards stop waiting. Still thrown, as before.
+        markCourseLookups(missing, {});
+        throw err;
+      } finally {
+        setCourseFetchesInFlight((n) => n - 1);
       }
+      markCourseLookups(missing, newCourses);
       setCourseMap((prev) => ({ ...prev, ...newCourses }));
+      if (networkShort) showCourseNetworkToast();
+      else courseNetworkToastShownRef.current = false;
       fetchCredits(Object.keys(newCourses), newCourses);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [courseMap],
   );
+
+  // Once per run of network failures (see courseNetworkToastShownRef), never
+  // for a course that's genuinely missing (see isNetworkShortBatch).
+  function showCourseNetworkToast() {
+    if (courseNetworkToastShownRef.current) return;
+    courseNetworkToastShownRef.current = true;
+    setToast({ id: Date.now(), message: "Course names couldn't load. Reload to try again." });
+  }
+
+  // After a lookup of `keys`: the ones `found` has no doc for are unavailable,
+  // the found ones no longer are (a later lookup can fill one in).
+  function markCourseLookups(keys, found) {
+    setUnavailableCourseKeys((prev) => {
+      const next = new Set(prev);
+      for (const key of keys) {
+        if (found[key]) next.delete(key);
+        else next.add(key);
+      }
+      return next;
+    });
+  }
 
   // Fetch credits from sections (batched)
   async function fetchCredits(courseKeys, courseDocs = {}) {
@@ -1789,17 +1969,48 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
   // ── Plan CRUD callbacks ───────────────────────────────────────────────────
 
+  // A failed switch (unsent edit couldn't save, doc missing, or read failed)
+  // stays on the open plan with its state and autosave as they were.
   async function handleSelectPlan(planId) {
-    if (planId === activePlanId) return;
-    // Save the open plan's last edits before its state is replaced; if that
-    // fails, stay on it (the error badge shows) rather than drop them.
-    if (!(await flushPendingPlanWrite())) return;
-    loadPlan(user.uid, planId, null);
+    if (planId === activePlanId || planLoadDepthRef.current > 0) return;
+    // Edits are blocked from here, so nothing can be typed against the open
+    // plan while its last edit saves (inside loadPlan) or the next one loads.
+    beginPlanLoad();
+    try {
+      const result = await loadPlan(user.uid, planId, null);
+      if (result === 'unsaved') {
+        setToast({ id: Date.now(), message: "Couldn't save your changes, so you're still on this plan." });
+      } else if (result === 'missing') {
+        setToast({ id: Date.now(), message: "Couldn't open that plan." });
+        loadPlans(user.uid).catch((err) => console.error('Error loading plans:', err));
+      }
+    } catch (err) {
+      console.error('Could not open plan:', err);
+      setToast({ id: Date.now(), message: "Couldn't open that plan." });
+    } finally {
+      endPlanLoad();
+    }
   }
 
   async function handleNewPlan() {
-    // Same as handleSelectPlan: save the open plan's last edits first.
-    if (!(await flushPendingPlanWrite())) return;
+    if (planLoadDepthRef.current > 0) return;
+    beginPlanLoad();
+    try {
+      // Same as handleSelectPlan: save the open plan's last edits first.
+      if (!(await flushPendingPlanWrite())) {
+        setToast({ id: Date.now(), message: "Couldn't save your changes, so you're still on this plan." });
+        return;
+      }
+      await createNewPlan();
+    } catch (err) {
+      console.error('Could not make a new plan:', err);
+      setToast({ id: Date.now(), message: "Couldn't make a new plan. Try again." });
+    } finally {
+      endPlanLoad();
+    }
+  }
+
+  async function createNewPlan() {
     // With a start term set, the new plan instead starts from everything in
     // this plan's past and current terms (see pastTermsSeed); nothing there → blank.
     if (activeStartTerm) {
@@ -1812,7 +2023,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         ]);
       }
       await createDefaultPlan(user.uid, pastSeed);
-      loadPlans(user.uid);
+      loadPlans(user.uid).catch((err) => console.error('Error loading plans:', err));
       return;
     }
     // Carry the student's already-completed (locked) courses into the new
@@ -1854,10 +2065,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
 
     await createDefaultPlan(user.uid, seed);
     // reload the full plan list
-    loadPlans(user.uid);
+    loadPlans(user.uid).catch((err) => console.error('Error loading plans:', err));
   }
 
   function handleRenamePlan(newName) {
+    if (planLoadDepthRef.current > 0) return;
     setPlanName(newName);
     setIsDirty(true);
     // update plans list label locally
@@ -1881,22 +2093,47 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   async function handleDeletePlan(planId) {
+    if (planLoadDepthRef.current > 0) return;
     const deletingOpenPlan = planId === activePlanId;
     // The open plan's pending edit has nowhere to go once it's deleted —
     // stop its timer now; it's dropped below once the delete succeeds.
     if (deletingOpenPlan) clearTimeout(saveTimeoutRef.current);
-    await deleteDoc(doc(db, 'users', user.uid, 'plans', planId));
-    const remaining = plans.filter((p) => p.id !== planId);
-    // Deleting some other plan leaves the open one (and its edits) alone.
-    if (!deletingOpenPlan) {
-      setPlans(remaining);
-      return;
-    }
-    discardPendingPlanWrite();
-    if (remaining.length === 0) {
-      await createDefaultPlan(user.uid);
-    } else {
-      await loadPlan(user.uid, remaining[0].id, remaining);
+    beginPlanLoad();
+    try {
+      try {
+        await deleteDoc(doc(db, 'users', user.uid, 'plans', planId));
+      } catch (err) {
+        console.error('Could not delete plan:', err);
+        setToast({ id: Date.now(), message: "Couldn't delete that plan. Try again." });
+        // Not deleted, so its edit still counts: send it now (the timer was stopped).
+        if (deletingOpenPlan) flushPendingPlanWrite();
+        return;
+      }
+      const remaining = plans.filter((p) => p.id !== planId);
+      // Deleting some other plan leaves the open one (and its edits) alone.
+      if (!deletingOpenPlan) {
+        setPlans(remaining);
+        return;
+      }
+      discardPendingPlanWrite();
+      let result = 'loaded';
+      try {
+        if (remaining.length === 0) await createDefaultPlan(user.uid);
+        else result = await loadPlan(user.uid, remaining[0].id, remaining);
+      } catch (err) {
+        console.error('Could not open the next plan:', err);
+        result = 'failed';
+      }
+      if (result !== 'loaded') {
+        // The open plan is gone and the next one didn't open, so nothing on
+        // screen can be saved: show the "couldn't load" state (Try again).
+        setPlans(remaining);
+        setActivePlanId(null);
+        setIsDirty(false);
+        setPlanLoadError(true);
+      }
+    } finally {
+      endPlanLoad();
     }
   }
 
@@ -2267,6 +2504,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // here carries straight over to every other plan of this student's that
   // also has this course, instead of being reset per-plan.
   function handleToggleLock(courseKey) {
+    if (user && profileLoadFailed) return; // profile didn't load: see showProfileLoadFailed
     setCompletedCourseKeys((prev) => (
       prev.includes(courseKey) ? prev.filter((k) => k !== courseKey) : [...prev, courseKey]
     ));
@@ -2298,6 +2536,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // unlocks all when every course is already locked, so one click always
   // does the obvious thing.
   function handleToggleSemesterLock(target) {
+    if (user && profileLoadFailed) return; // profile didn't load: see showProfileLoadFailed
     const keys = entriesCourseKeys(entriesAtTarget(target));
     if (keys.length === 0) return;
     const allLocked = keys.every((key) => completedCourseKeySet.has(key));
@@ -2321,6 +2560,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // already chose to unlock. Picking the already-current slot again clears
   // the marker without touching any locks.
   function handleSetCurrentSemester(target) {
+    if (user && profileLoadFailed) return; // profile didn't load: see showProfileLoadFailed
     const prevTarget = currentSemesterTarget;
     const nextTarget = prevTarget === target ? null : target;
     setCurrentSemesterTarget(nextTarget);
@@ -2352,7 +2592,13 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // skips a null startTerm (so an unset one never overwrites the account's),
   // but '' is written, and reads back as unset (normalizeStartTerm).
   function handleClearStartTerm() {
+    if (user && profileLoadFailed) return; // profile didn't load: see showProfileLoadFailed
     setStartTerm('');
+  }
+
+  function handleSetStartTerm(value) {
+    if (user && profileLoadFailed) return; // profile didn't load: see showProfileLoadFailed
+    setStartTerm(value);
   }
 
   // Adds one more Fall/Spring pair below the grid — see "VARIABLE YEAR COUNT".
@@ -2543,9 +2789,8 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         expectedUid: reviewUid,
       });
     } catch (err) {
-      // createDefaultPlan holds autosave off while it runs; a refusal or
-      // failed write means the open plan was never replaced, so release it.
-      isInitialLoad.current = false;
+      // createDefaultPlan releases autosave itself (its finally); a refusal
+      // or failed write means the open plan was never replaced.
       console.error('Plan import failed:', err);
       throw err instanceof Error && err.message.startsWith('Your sign-in changed')
         ? err
@@ -2559,6 +2804,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   async function handleTranscriptImport(result) {
+    // It sets profile fields (external credits, locks) too, so it needs the
+    // profile loaded; and nothing lands on a plan that's mid-load.
+    if ((user && profileLoadFailed) || planLoadDepthRef.current > 0) {
+      throw new Error('Plan or profile not loaded');
+    }
     const normalizedExternalCredits = normalizeExternalCredits(result.externalCredits);
     debugPlanner('handleTranscriptImport-result', {
       transferCredits: normalizedExternalCredits.filter((c) => c?.type === 'transfer'),
@@ -2598,11 +2848,17 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     // student-level now (see setExternalCredits above / loadUserProfile),
     // persisted through the profile autosave effect, not the plan doc.
     if (user && activePlanId) {
+      // The full snapshot of this plan, as persistPlan no longer fills gaps
+      // from state: the imported fields plus the open plan's own.
       const saved = await persistPlan(user.uid, activePlanId, planName, result.semesters, isTransfer, {
         extraTerms: result.extraTerms,
         cumulativeGpa: result.cumulativeGpa,
         earnedCredits: result.earnedCredits,
         gradePoints: result.gradePoints,
+        gridSummerTerms,
+        majorBulletinUrl,
+        requirementOverrides,
+        stash,
       });
       if (!saved) {
         // The import is already on the board (and dirty, so autosave retries
@@ -2631,6 +2887,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   function handleRemoveExternalCredit(creditIdOrIndex) {
+    if (user && profileLoadFailed) return; // profile didn't load: see showProfileLoadFailed
     setExternalCredits((prev) => {
       if (typeof creditIdOrIndex === 'number') {
         return prev.filter((_, creditIndex) => creditIndex !== creditIdOrIndex);
@@ -2641,6 +2898,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   function handleAddExternalCredit(newCredits) {
+    if (user && profileLoadFailed) return; // profile didn't load: see showProfileLoadFailed
     const normalized = normalizeExternalCredits(Array.isArray(newCredits) ? newCredits : [newCredits]);
     if (!normalized.length) return;
     setExternalCredits((prev) => [...prev, ...normalized]);
@@ -2648,6 +2906,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   }
 
   function handleUpdateExternalCredit(creditIdOrIndex, patch) {
+    if (user && profileLoadFailed) return; // profile didn't load: see showProfileLoadFailed
     setExternalCredits((prev) => prev.map((credit, creditIndex) => {
       const matches = typeof creditIdOrIndex === 'number'
         ? creditIndex === creditIdOrIndex
@@ -2863,6 +3122,10 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // copy for display) so this works whatever view is open.
   const planReady = hasAppliedInitialView && (!user || Boolean(activePlanId));
   const hubReady = planReady && [...coursesInPlan].every((key) => courseMap[key]);
+  // Loading UI for the HUB rings: the plan isn't in yet, or its courses' data
+  // is still being fetched. Ends when the fetches settle, even if some keys
+  // never resolve, so it can't spin forever.
+  const hubLoading = !planLoadError && (!planReady || (!hubReady && courseFetchesInFlight > 0));
   const hubComplete = coursesInPlan.size > 0 && hubFulfilled === hubTotal;
   const requirementsKeysSig = requirementsCourseKeys.join('|');
   // Unforced evaluation (no track tab pinned), so browsing tabs in the
@@ -3005,7 +3268,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     });
   }
 
-  const planImportBlockedReason = plansPending
+  const planImportBlockedReason = plansPending || planLoading
     ? 'Your plans are still loading. Close this and try again in a moment.'
     : !user && !guestPlanIsBlank
       ? 'Sign in to import as a new plan.'
@@ -3037,9 +3300,17 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     }
   }
   const downloadPdfDisabled = plansPending || planIsEmpty || planPdfStatus === 'busy';
+  // Transcript import also writes profile fields, so it waits for the profile.
+  const transcriptImportBlocked = planLoading || (Boolean(user) && profileLoadFailed);
   const importMenuItems = [
     { key: 'plan', label: 'Import plan PDF', onSelect: () => openImportModal('plan') },
-    { key: 'transcript', label: 'Import transcript', onSelect: () => openImportModal('transcript') },
+    {
+      key: 'transcript',
+      label: 'Import transcript',
+      disabled: transcriptImportBlocked,
+      hint: transcriptImportBlocked ? (planLoading ? 'Opening plan…' : 'Try again first') : null,
+      onSelect: () => openImportModal('transcript'),
+    },
   ];
   const pdfMenuItems = [
     ...importMenuItems,
@@ -3059,10 +3330,24 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // Offline with something still unsent: show that instead of a "Saving…"
   // that can't finish until the connection is back.
   const offlineUnsaved = Boolean(user) && !online && (isDirty || saving || profileUnsaved);
+  const switchLoaderVisible = useDelayedBusy(planLoading);
+  const retryLoaderVisible = useDelayedBusy(retryingLoad);
+  // Board, drag, search adds, locks and notes are all inside planner-body, made
+  // inert while a plan loads (or hasn't loaded); overlay actions go through guardEdit.
+  const editsBlocked = planLoading || plansPending;
+  const guardEdit = (fn) => (...args) => (
+    planLoadDepthRef.current > 0 || (user && !activePlanId) ? undefined : fn(...args)
+  );
+  const courseDataStatus = useMemo(
+    () => ({ fetching: courseFetchesInFlight > 0, unavailable: unavailableCourseKeys }),
+    [courseFetchesInFlight, unavailableCourseKeys],
+  );
+  const showLoadBanner = Boolean(user) && (profileLoadFailed || (plansPending && planLoadError));
+  const pdfLoaderVisible = useDelayedBusy(planPdfStatus === 'busy');
 
   if (authLoading) {
     return (
-      <div className="auth-loading">
+      <div className="auth-loading" role="status" aria-busy="true">
         <PawLoader theme={theme} alt="TerrierPlan" />
       </div>
     );
@@ -3071,6 +3356,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   return (
     <MarineSemesterContext.Provider value={marineContext}>
     <NeededHubContext.Provider value={hubReady ? neededHubCodes : null}>
+    <CourseDataStatusContext.Provider value={courseDataStatus}>
     <div className="planner-layout" onClickCapture={handleInternalLinkClick}>
       {/* ── Header ── */}
       <AppHeader
@@ -3097,7 +3383,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               onDeletePlan={requestDeletePlan}
             />
 
-            {totalCredits > 0 && (
+            {switchLoaderVisible ? (
+              <span className="planner-credits-badge" role="status">
+                <PawLoader size="small" theme="dark" label="Opening plan…" />
+              </span>
+            ) : totalCredits > 0 && (
               <span className="planner-credits-badge">
                 {totalCredits} cr total
               </span>
@@ -3128,10 +3418,25 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           disabled={downloadPdfDisabled}
           title={planIsEmpty ? 'Add a course first' : 'Download plan PDF'}
         >
-          {planPdfStatus === 'busy' ? 'Making PDF…' : planPdfStatus === 'error' ? "Couldn't make PDF, try again" : 'Download plan PDF'}
+          {planPdfStatus === 'busy'
+            ? (pdfLoaderVisible ? <PawLoader size="small" theme="dark" label="Making PDF…" /> : 'Making PDF…')
+            : planPdfStatus === 'error' ? "Couldn't make PDF, try again" : 'Download plan PDF'}
         </button>
         <HeaderMenu className="pdf-menu-narrow" label="PDF" items={pdfMenuItems} />
       </AppHeader>
+
+      {showLoadBanner && (
+        <div className="update-banner planner-load-banner" role="alert">
+          <span className="update-banner-text">
+            {plansPending
+              ? <>Couldn&apos;t load everything. Changes won&apos;t save until you reload.</>
+              : <>Couldn&apos;t load your settings. Locks, semester and credits won&apos;t save until you reload.</>}
+          </span>
+          <button type="button" className="update-banner-btn" onClick={handleRetryLoad} disabled={retryingLoad}>
+            {retryLoaderVisible ? <PawLoader size="small" theme="dark" label="Try again" /> : 'Try again'}
+          </button>
+        </div>
+      )}
 
       {/* ── Body ── */}
       {/* data-mobile-view lets CSS show only one panel at a time on narrow screens */}
@@ -3143,6 +3448,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
       >
         <div
           className={`planner-body${rightResizing ? ' is-resizing-right' : ''}${leftResizing ? ' is-resizing-left' : ''}`}
+          inert={editsBlocked}
           data-mobile-view={mobileView}
           style={{
             ...(rightPanelWidth != null ? { '--planner-right-width': `${rightPanelWidth}px` } : {}),
@@ -3195,14 +3501,14 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           )}
 
           {/* Center: semester board */}
-          <main className="planner-center">
+          <main className={`planner-center${switchLoaderVisible ? ' paw-refreshing' : ''}`} aria-busy={switchLoaderVisible || undefined}>
             {plansPending ? (
               planLoadError ? (
                 <div className="planner-plans-status" role="alert">
                   <p>Couldn&apos;t load your plans. Reload to try again.</p>
                 </div>
               ) : (
-                <div className="planner-plans-status" role="status" aria-live="polite">
+                <div className="planner-plans-status" role="status" aria-live="polite" aria-busy="true">
                   <PawLoader theme={theme} label="Loading your plans…" />
                 </div>
               )
@@ -3261,7 +3567,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
                   onSetCurrentSemester={handleSetCurrentSemester}
                   startTerm={activeStartTerm}
                   today={today}
-                  onSetStartTerm={setStartTerm}
+                  onSetStartTerm={handleSetStartTerm}
                   onClearStartTerm={handleClearStartTerm}
                   completedCourseKeys={completedCourseKeySet}
                   onShowCourseInfo={setInfoCourseKey}
@@ -3337,6 +3643,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
               onRemoveRequirementOverride={handleRemoveRequirementOverride}
               onOpenFullView={openRequirementsFullView}
               onOpenHubFullView={openHubFullView}
+              hubLoading={hubLoading}
               onShowStash={showStashTab}
               onAddToStash={handleAddToStash}
               onRemoveFromStash={handleRemoveFromStash}
@@ -3364,22 +3671,22 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           majorBulletinUrl={majorBulletinUrl}
           planCourseKeys={requirementsCourseKeys}
           marineSlots={marineSlots}
-          onMajorSelect={handleMajorSelect}
-          onSeedSequence={handleSeedSequence}
+          onMajorSelect={guardEdit(handleMajorSelect)}
+          onSeedSequence={guardEdit(handleSeedSequence)}
           courseMap={courseMap}
           activeSemIndex={activeSemIndex}
           semesterOptions={semesterOptions}
-          onAddCourse={handleAddCourse}
+          onAddCourse={guardEdit(handleAddCourse)}
           onEnsureCourseData={fetchCourseData}
           onBrowseRange={handleBrowseRangeFromFullView}
           requirementOverrides={requirementOverrides}
-          onSetRequirementOverride={handleSetRequirementOverride}
-          onRemoveRequirementOverride={handleRemoveRequirementOverride}
+          onSetRequirementOverride={guardEdit(handleSetRequirementOverride)}
+          onRemoveRequirementOverride={guardEdit(handleRemoveRequirementOverride)}
           lockStatusMap={lockStatusMap}
           splitStatusMap={splitStatusMap}
           stash={stash}
-          onAddToStash={handleAddToStash}
-          onRemoveFromStash={handleRemoveFromStash}
+          onAddToStash={guardEdit(handleAddToStash)}
+          onRemoveFromStash={guardEdit(handleRemoveFromStash)}
           onShowCourseInfo={setInfoCourseKey}
           onClose={closeRequirementsFullView}
           onSwitchView={switchFullView}
@@ -3397,14 +3704,15 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           externalCredits={externalCredits}
           courseMap={courseMap}
           isTransfer={isTransfer}
-          onToggleTransfer={handleToggleTransfer}
+          onToggleTransfer={guardEdit(handleToggleTransfer)}
           lockStatusMap={lockStatusMap}
           splitStatusMap={splitStatusMap}
           stash={stash}
-          onAddToStash={handleAddToStash}
-          onRemoveFromStash={handleRemoveFromStash}
+          onAddToStash={guardEdit(handleAddToStash)}
+          onRemoveFromStash={guardEdit(handleRemoveFromStash)}
           onClose={closeHubFullView}
           onSwitchView={switchFullView}
+          hubLoading={hubLoading}
         />
       )}
 
@@ -3427,7 +3735,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
           onDismiss={dismissPathCard}
           startTerm={activeStartTerm}
           today={today}
-          onSetStartTerm={setStartTerm}
+          onSetStartTerm={handleSetStartTerm}
         />
       )}
 
@@ -3586,6 +3894,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
         onClose={() => setMarinePicker(null)}
       />
     </div>
+    </CourseDataStatusContext.Provider>
     </NeededHubContext.Provider>
     </MarineSemesterContext.Provider>
   );

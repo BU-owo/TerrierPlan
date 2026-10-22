@@ -55,6 +55,7 @@ export default function SidePanelTabs({
   onRemoveFromStash,
   onShowCourseInfo,
   onOpenHubFullView,
+  hubLoading = false,
   // Switches the planner's left panel to the Paw-tential Courses tab.
   onShowStash,
 }) {
@@ -156,6 +157,7 @@ export default function SidePanelTabs({
             onSummaryChange={makeSummaryHandler('hub')}
             splitStatusMap={splitStatusMap}
             onOpenFullView={onOpenHubFullView}
+            hubLoading={hubLoading}
           />
         </div>
         <div className={activeTab === 'requirements' ? '' : 'side-panel-hidden'}>

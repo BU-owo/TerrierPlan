@@ -376,6 +376,10 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   // ── Saved/favorited schedules ───────────────────────────────────────────────
   const [savedSchedules, setSavedSchedules] = useState([]);
+  // Loading UI only: the signed-in list read ('loading' | 'ready' | 'error'),
+  // and the saved schedule whose sections are being fetched to load it.
+  const [savedListStatus, setSavedListStatus] = useState('loading');
+  const [loadingScheduleId, setLoadingScheduleId] = useState(null);
   const [activeSavedId, setActiveSavedId] = useState(null); // which saved schedule (if any) the grid mirrors exactly
   // Last failed save/rename/star/delete, shown in the saved panel until the
   // next such action or a dismiss.
@@ -564,13 +568,19 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
     if (user) {
       hasLoadedSchedulesRef.current = false;
+      setSavedListStatus('loading');
       migrateGuestSchedulesIfNeeded(user.uid)
         .then(() => loadSchedules(user.uid))
         .then(() => {
           if (!cancelled) hasLoadedSchedulesRef.current = true;
+          if (!cancelled) setSavedListStatus('ready');
         })
-        .catch((err) => console.error('Error loading schedules:', err));
+        .catch((err) => {
+          console.error('Error loading schedules:', err);
+          if (!cancelled) setSavedListStatus('error');
+        });
     } else {
+      setSavedListStatus('ready');
       guestScheduleMigrationPromise = null; // allow a future sign-in to migrate again
       loadLocalSchedules();
       hasLoadedSchedulesRef.current = true;
@@ -1615,6 +1625,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   // The loader itself only shows if that takes a moment (see useDelayedBusy).
   const [restoring, setRestoring] = useState(true);
   const restoreLoaderVisible = useDelayedBusy(restoring);
+  const genLoaderVisible = useDelayedBusy(generating);
   // The stored preview to put back once the batch is regenerated, if all its
   // sections still exist: { ids, index } | null.
   const restoredPreviewRef = useRef(null);
@@ -2268,12 +2279,21 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     if (scheduleTerm(schedule) !== CURRENT_TERM) {
       const missingForeign = ids.filter((id) => !sectionsById[id]);
       const fetched = {};
-      for (let i = 0; i < missingForeign.length; i += 30) {
-        const batch = missingForeign.slice(i, i + 30);
-        const snap = await getDocs(query(collection(db, 'sections'), where(documentId(), 'in', batch)));
-        snap.docs.forEach((d) => {
-          fetched[d.id] = withMockMeetings({ id: d.id, ...d.data() });
-        });
+      setLoadingScheduleId(schedule.id);
+      try {
+        for (let i = 0; i < missingForeign.length; i += 30) {
+          const batch = missingForeign.slice(i, i + 30);
+          const snap = await getDocs(query(collection(db, 'sections'), where(documentId(), 'in', batch)));
+          snap.docs.forEach((d) => {
+            fetched[d.id] = withMockMeetings({ id: d.id, ...d.data() });
+          });
+        }
+      } catch (err) {
+        console.error('Could not load schedule:', err);
+        setScheduleActionError("Couldn't load that schedule. Try again.");
+        return;
+      } finally {
+        setLoadingScheduleId(null);
       }
       setStandaloneSections((prev) => ({ ...prev, ...fetched }));
       const shown = ids.filter((id) => sectionsById[id] || fetched[id]);
@@ -2307,13 +2327,22 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
     const missing = ids.filter((id) => !sectionsById[id]);
     const fetchedById = {};
-    for (let i = 0; i < missing.length; i += 30) {
-      const batch = missing.slice(i, i + 30);
-      // eslint-disable-next-line no-await-in-loop
-      const snap = await getDocs(query(collection(db, 'sections'), where(documentId(), 'in', batch)));
-      snap.docs.forEach((d) => {
-        fetchedById[d.id] = withMockMeetings({ id: d.id, ...d.data() });
-      });
+    setLoadingScheduleId(schedule.id);
+    try {
+      for (let i = 0; i < missing.length; i += 30) {
+        const batch = missing.slice(i, i + 30);
+        // eslint-disable-next-line no-await-in-loop
+        const snap = await getDocs(query(collection(db, 'sections'), where(documentId(), 'in', batch)));
+        snap.docs.forEach((d) => {
+          fetchedById[d.id] = withMockMeetings({ id: d.id, ...d.data() });
+        });
+      }
+    } catch (err) {
+      console.error('Could not load schedule:', err);
+      setScheduleActionError("Couldn't load that schedule. Try again.");
+      return;
+    } finally {
+      setLoadingScheduleId(null);
     }
     const allById = { ...sectionsById, ...fetchedById };
 
@@ -2393,7 +2422,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
 
   if (authLoading) {
     return (
-      <div className="auth-loading">
+      <div className="auth-loading" role="status" aria-busy="true">
         <PawLoader theme={theme} alt="TerrierPlan" />
       </div>
     );
@@ -2627,7 +2656,9 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
         >
           <div className="sched-right-header">
             <h2>{activeSavedId && savedSchedules.find((s) => s.id === activeSavedId)?.name || 'Preview'}</h2>
-            {generating && previewIndex == null && <span className="sched-stepper-updating" role="status">Updating…</span>}
+            {genLoaderVisible && previewIndex == null && (
+              <span className="sched-stepper-updating" role="status"><PawLoader size="small" theme={theme} label="Updating…" /></span>
+            )}
             {!bookmarkSlot && holdControls}
             {previewCreditsLabel && <span className="sched-right-credits">{previewCreditsLabel}</span>}
           </div>
@@ -2746,6 +2777,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
               )}
               <WeeklyGrid
                 loading={generating && previewSectionIds.length === 0}
+                refreshing={genLoaderVisible && previewSectionIds.length > 0 && !previewHold}
                 theme={theme}
                 sectionIds={previewSectionIds}
                 sectionsById={sectionsById}
@@ -2811,6 +2843,8 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             onToggleFavorite={handleToggleFavorite}
             onDelete={handleDeleteSchedule}
             onLoad={handleLoadSchedule}
+            listStatus={savedListStatus}
+            loadingScheduleId={loadingScheduleId}
             actionError={scheduleActionError}
             onDismissError={() => setScheduleActionError(null)}
             isGuest={!user}

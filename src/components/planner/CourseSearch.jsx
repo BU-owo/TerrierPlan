@@ -11,6 +11,8 @@ import {
 } from '../../utils/courseQuery';
 import { aliasFor } from '../../utils/grsAlias';
 import SemesterPickerModal from './SemesterPickerModal';
+import PawLoader from '../PawLoader';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
 import { HubUnitTags, MarineSemesterPill, OfferingBadge, OfferedFilterToggle } from './CourseTags';
 
 // Stash toggle glyph — filled paw = stashed, outline paw = not. `currentColor`
@@ -168,6 +170,8 @@ export default function CourseSearch({
   const [selectedCourseForPicker, setSelectedCourseForPicker] = useState(null);
   const [allCourses, setAllCourses] = useState([]);
   const [coursesLoaded, setCoursesLoaded] = useState(false);
+  const [catalogFailed, setCatalogFailed] = useState(false);
+  const activeQueryRef = useRef(false);
   // { label, count } while a subject-prefix search ("CASCS", "CAS CS") is
   // active, so the results list can show "Showing all N CAS CS courses"
   // instead of a keyword-search list — see the filter effect below.
@@ -221,10 +225,16 @@ export default function CourseSearch({
         if (cancelled) return;
         setAllCourses(courses);
         setCoursesLoaded(true);
+        // A query typed while waiting reads as "Searching…" until the
+        // debounced search below runs, not "No courses found".
+        if (activeQueryRef.current) setLoading(true);
       })
       .catch((err) => {
         console.error('Failed to load courses:', err);
-        if (!cancelled) setCoursesLoaded(true); // Still mark as loaded even on error
+        if (!cancelled) {
+          setCoursesLoaded(true); // Still mark as loaded even on error
+          setCatalogFailed(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -338,6 +348,9 @@ export default function CourseSearch({
   }, [searchQuery, rangeFilter, coursesLoaded, searchableCourses, subjectPrefixes, offeredOnly]);
 
   const hasActiveQuery = Boolean(searchQuery.trim()) || Boolean(rangeFilter);
+  activeQueryRef.current = hasActiveQuery;
+  const catalogLoaderVisible = useDelayedBusy(hasActiveQuery && !coursesLoaded);
+  const catalogWaiting = (hasActiveQuery && !coursesLoaded) || catalogLoaderVisible;
   // The empty-state example link: same update as typing it, then focus the box.
   function fillQuery(text) {
     setSearchQuery(text);
@@ -430,12 +443,18 @@ export default function CourseSearch({
       </div>
 
       <div className="search-results">
-        {loading && <div className="search-loading">Searching…</div>}
+        {loading && !catalogWaiting && <div className="search-loading">Searching…</div>}
 
         {/* The filter effect bails out until the catalog arrives, so without
             this an early search would read as "no results". */}
-        {hasActiveQuery && !coursesLoaded && (
-          <div className="search-loading" role="status">Loading courses…</div>
+        {catalogWaiting && (
+          <div className="search-loading" role="status" aria-busy="true">
+            {catalogLoaderVisible && <PawLoader size="small" theme={theme} label="Loading courses…" />}
+          </div>
+        )}
+
+        {hasActiveQuery && catalogFailed && !catalogWaiting && (
+          <div className="search-empty" role="alert">Couldn&apos;t load courses. Reload to try again.</div>
         )}
 
         {showMarinePinned && (
@@ -452,7 +471,7 @@ export default function CourseSearch({
           </button>
         )}
 
-        {!loading && hasActiveQuery && coursesLoaded && results.length === 0 && !showMarinePinned && (
+        {!loading && hasActiveQuery && coursesLoaded && !catalogWaiting && !catalogFailed && results.length === 0 && !showMarinePinned && (
           <div className="search-empty">
             <img
               className="search-empty-paw"
@@ -486,7 +505,7 @@ export default function CourseSearch({
           </div>
         )}
 
-        {results.map((course) => (
+        {!catalogWaiting && results.map((course) => (
           <SearchResultCard
             key={course.id}
             course={course}

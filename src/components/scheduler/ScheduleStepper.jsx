@@ -1,5 +1,7 @@
 import { useId } from 'react';
 import FlagIcon from './FlagIcon';
+import PawLoader from '../PawLoader';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
 import { overlapSummary, scheduleStats, SCHEDULE_SORT_OPTIONS } from '../../utils/scheduleCombos';
 
 // The sort control only shows once there are at least this many schedules to
@@ -44,6 +46,8 @@ export default function ScheduleStepper({
   heldLabel = '',
   onBack,
 }) {
+  // Only after a noticeable wait, so a quick regenerate doesn't flash it.
+  const updatingVisible = useDelayedBusy(updating);
   const sortId = useId();
 
   if (!generated || generated.schedules.length === 0 || (previewIndex == null && !held)) return null;
@@ -99,7 +103,11 @@ export default function ScheduleStepper({
               {truncated && (
                 <span className="sched-stepper-truncated"> (stopped early — narrow your sections to see more)</span>
               )}
-              {updating && <span className="sched-stepper-updating" role="status"> Updating…</span>}
+              {updatingVisible && (
+                <span className="sched-stepper-updating" role="status">
+                  {' '}<PawLoader size="small" label="Updating…" />
+                </span>
+              )}
             </>
           )}
         </div>
