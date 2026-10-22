@@ -274,7 +274,7 @@ const RESULTS_PAGE_SIZE = 50;
 // Rows are never dimmed (a stashed row shows its filled paw button). The
 // HUB tags are the shared HubUnitTags, which marks codes the student no
 // longer needs.
-function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash, matchCodes }) {
+function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash, onShowInfo, matchCodes }) {
   const label = course.courseNumber ?? course.id;
   // Staged rows come from courseMap, which has no `inCurrentTerm`.
   const currentTermKeys = useCurrentTermCourseKeys();
@@ -298,15 +298,29 @@ function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash
             />
         </div>
       </div>
-      <button
-        type="button"
-        className={`search-result-stash-btn${isStashed ? ' is-stashed' : ''}`}
-        onClick={() => (isStashed ? onRemoveFromStash(course.id) : onAddToStash(course.id))}
-        aria-label={isStashed ? `Remove ${label} from Paw-tential Courses` : `Save ${label} to Paw-tential`}
-        title={isStashed ? 'Remove from Paw-tential Courses' : 'Save to Paw-tential'}
-      >
-        <PawIcon filled={isStashed} />
-      </button>
+      {/* Stash and "i" stacked, same as CourseSearch's SearchResultCard. */}
+      <div className="search-result-actions">
+        <button
+          type="button"
+          className={`search-result-stash-btn${isStashed ? ' is-stashed' : ''}`}
+          onClick={() => (isStashed ? onRemoveFromStash(course.id) : onAddToStash(course.id))}
+          aria-label={isStashed ? `Remove ${label} from Paw-tential Courses` : `Save ${label} to Paw-tential`}
+          title={isStashed ? 'Remove from Paw-tential Courses' : 'Save to Paw-tential'}
+        >
+          <PawIcon filled={isStashed} />
+        </button>
+        {onShowInfo && (
+          <button
+            type="button"
+            className="search-result-info-btn"
+            onClick={() => onShowInfo(course.id)}
+            aria-label={`View details for ${label}`}
+            title="Course details"
+          >
+            i
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -371,6 +385,10 @@ export default function HubFullView({
   stash = [],
   onAddToStash,
   onRemoveFromStash,
+  // Opens PlannerPage's CourseInfoPanel ("i" on search results).
+  onShowCourseInfo,
+  // True while CourseInfoPanel is open, so its own Escape closes just it.
+  ignoreEscape = false,
   onClose,
   // Closes this view and opens the planner's Paw-tential Courses tab.
   onShowStash,
@@ -390,11 +408,11 @@ export default function HubFullView({
 
   useEffect(() => {
     function handleKeyDown(e) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !ignoreEscape) onClose();
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, ignoreEscape]);
 
   // stashCourseKeys adds staged-only entries to contributorsByUnit (see
   // useHubProgress) — they render in the same requirement rows as real
@@ -630,9 +648,10 @@ export default function HubFullView({
         matchCodes={includeSet}
         onAddToStash={onAddToStash}
         onRemoveFromStash={onRemoveFromStash}
+        onShowInfo={onShowCourseInfo}
       />
     )),
-    [searchResults, visibleCount, stashSet, includeSet, onAddToStash, onRemoveFromStash],
+    [searchResults, visibleCount, stashSet, includeSet, onAddToStash, onRemoveFromStash, onShowCourseInfo],
   );
 
   // Per-category collapse state — the ONE source of truth for both the

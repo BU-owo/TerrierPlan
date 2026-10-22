@@ -250,12 +250,15 @@ html[data-theme='dark'] .course-info-offerings-dot { color: var(--warning-border
   }
 }
 
-/* Opened from the full-screen Requirements view's range lists ("i"), so it
-   has to sit above that view (z-index 60), not under it. Scoped with the
-   sibling selector so the HUB full view keeps covering the panel. */
-.req-full-view ~ .course-info-overlay .course-info-panel { z-index: 65; }
+/* Opened from the full-screen Requirements view's range lists or the HUB
+   view's search results ("i"), so it has to sit above that view (z-index
+   60), not under it. Scoped with the sibling selector so it only rises
+   while one of those views is open. */
+.req-full-view ~ .course-info-overlay .course-info-panel,
+.full-view ~ .course-info-overlay .course-info-panel { z-index: 65; }
 @media (max-width: 860px) {
-  .req-full-view ~ .course-info-overlay { z-index: 65; }
+  .req-full-view ~ .course-info-overlay,
+  .full-view ~ .course-info-overlay { z-index: 65; }
 }
 
 /* The 3-letter section type pill (same look as on the Scheduler's blocks). */
