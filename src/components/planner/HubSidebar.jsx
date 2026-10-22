@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { HUB_GROUPS, describeRequirementLabels } from '../../utils/hubConstants';
 import { useHubProgress, satisfiedCountForRequirement } from '../../hooks/useHubProgress';
 import { completedHubInputs, hubBannerState, hubProgressText } from '../../utils/completion';
+import { entryCourseKey } from '../../utils/courseEntry';
 import RhettPeek from '../RhettPeek';
 import HubYearToggle from './HubYearToggle';
 import EstimateNote from '../EstimateNote';
@@ -44,8 +45,12 @@ export default function HubSidebar({
   });
 
   // "What if I added everything in my stash" — the same second useHubProgress
-  // call HubFullView makes for its dashed rings.
-  const extraCourseKeysWithStash = useMemo(() => [...extraCourseKeys, ...stash], [extraCourseKeys, stash]);
+  // call HubFullView makes for its "+N" chips. Stashed courses already on
+  // the plan are dropped so they aren't counted twice.
+  const extraCourseKeysWithStash = useMemo(() => {
+    const planKeys = new Set([...semesters.flatMap((sem) => sem.map(entryCourseKey)), ...extraCourseKeys]);
+    return [...extraCourseKeys, ...stash.filter((key) => !planKeys.has(key))];
+  }, [semesters, extraCourseKeys, stash]);
   const { fulfilled: potentialFulfilled } = useHubProgress({
     semesters,
     extraCourseKeys: extraCourseKeysWithStash,

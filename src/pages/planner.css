@@ -1190,7 +1190,27 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
 /* Default and overflow */
 .hub-chip-def { color: var(--hub-def); background: var(--hub-def-bg); }
 .hub-chip-more{ color: var(--text-muted); background: var(--cream-dark); }
-
+/* HubUnitTags states. Coverage: a code completed or planned courses cover
+   is faded (.is-faded, the same fade the scheduler's neededCodes uses); one
+   a Paw-tential course covers gets a paw (.is-potential). Match (HUB finder
+   only): Include codes fill solid in their category color (.is-match). A
+   chip can be filled, faded and pawed at once. */
+.hub-chip-phi, .hub-chip-philosophical { --chip-hue: var(--hub-phi); }
+.hub-chip-sci, .hub-chip-scientific    { --chip-hue: var(--hub-sci); }
+.hub-chip-qr,  .hub-chip-quantitative  { --chip-hue: var(--hub-qr); }
+.hub-chip-div, .hub-chip-diversity     { --chip-hue: var(--hub-div); }
+.hub-chip-com, .hub-chip-communication { --chip-hue: var(--hub-com); }
+.hub-chip-tl,  .hub-chip-toolkit       { --chip-hue: var(--hub-tl); }
+.hub-chip-def                          { --chip-hue: var(--hub-def); }
+.hub-chip.is-faded { opacity: .4; }
+.hub-chip.is-covered { opacity: .55; }
+.hub-chip-glyph { margin-right: 2px; }
+.hub-chip-glyph svg { width: 1em; height: 1em; vertical-align: -.1em; }
+/* Darkened 15% so white text clears 4.4:1 on every category (amber too). */
+.hub-chip.is-match {
+  color: #fff;
+  background: color-mix(in srgb, var(--chip-hue) 85%, #000);
+}
 /* ===== OFFERING FREQUENCY BADGE ===== */
 .offering-badge {
   font-size: 9px;
@@ -2612,8 +2632,8 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
 .req-coming-soon-ask { margin: 10px 0 0; font-size: 11px; color: var(--text-muted); }
 .req-coming-soon-ask a { color: inherit; font-weight: 600; }
 .req-tracking-count { margin-top: -4px; }
-.req-ring .hub-ring-fill { stroke: var(--scarlet); }
-.req-ring.is-satisfied .hub-ring-fill { stroke: var(--success-strong); }
+.req-ring { --ring-hue: var(--scarlet); }
+.req-ring.is-satisfied { --ring-hue: var(--success-strong); }
 .req-card--fulfilled:not(.is-expanded) .hub-full-group-label { color: var(--success-strong); }
 .req-card-body { display: flex; flex-direction: column; gap: 6px; }
 .req-row-header { cursor: pointer; align-items: center; }
@@ -2955,6 +2975,99 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   flex-wrap: wrap;
   margin-top: 8px;
 }
+/* "Match:" row: the Any selected / All in one course segmented pill
+   (.hub-year-toggle-group, rounded and content-width). */
+.hub-match-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 6px 0 0;
+}
+.hub-match-pill { display: inline-flex; margin: 0; border-radius: 999px; height: var(--hub-control-h); }
+.hub-match-pill .hub-year-toggle-btn { flex: none; border-radius: 999px; padding: 4px 10px; font-size: 11px; }
+/* "Include" header: label left, Clear right. */
+.hub-include-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; margin: 8px 0 4px; min-height: 18px; }
+.hub-include-header .hub-stash-link { font-size: 12px; }
+.hub-include-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px 12px; }
+/* Exclude / Clear: quiet gray links, underlined on hover only. Three
+   classes so it also beats the dark-mode .hub-stash-link color. */
+.hub-include-header .hub-include-actions .hub-stash-link {
+  color: var(--text-muted);
+  font-weight: 500;
+  text-decoration: none;
+}
+.hub-include-header .hub-include-actions .hub-stash-link:hover {
+  color: var(--text-secondary);
+  text-decoration: underline;
+}
+/* "Exclude" while its grid is open. */
+.hub-include-header .hub-include-actions .hub-stash-link.is-open {
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: underline;
+}
+/* Exclude grid's close control, on its own EXCLUDE header row. */
+.hub-exclude-close {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.hub-exclude-close:hover { color: var(--text); }
+/* Excluded codes: solid dark gray (not the include fill) with a "−", so the
+   two grids can't be confused. --hub-def is the same gray in both themes. */
+.hub-code-toggle.is-excluded { color: #fff; background: var(--hub-def); border-color: transparent; }
+/* Include/exclude picker toggles (HubCodeChip): category tint with an
+   outline in its own color; selected fills solid (.is-match). The border is
+   always there (transparent when filled, which the fill shows through), so
+   selecting never shifts the layout. */
+.hub-code-toggle { font-family: inherit; cursor: pointer; border: 1.5px solid currentColor; }
+.hub-code-toggle.is-match { border-color: transparent; }
+/* Top of the finder: Match pill left, Gap-fill (primary) right. */
+.hub-browse-header .hub-match-row { margin: 0; }
+.hub-gapfill-btn {
+  height: var(--hub-control-h);
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--scarlet);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-left: auto;
+}
+.hub-gapfill-btn:hover:not(:disabled) { background: var(--scarlet-dark); }
+.hub-gapfill-btn:disabled { opacity: .5; cursor: default; }
+/* Department search below the top row, a normal-height full-width input. */
+.hub-browse-search { margin-top: 8px; }
+.hub-browse-search .hub-browse-input-wrap { max-width: none; }
+.hub-browse-search .search-input {
+  height: var(--hub-control-h);
+  padding: 0 10px;
+  font-size: 13px;
+  border-width: 1px;
+  background: var(--white);
+  box-shadow: none;
+}
+/* Dark cards are --white; one step lighter is --cream-dark. Light mode has
+   nothing lighter than the white card, so it stays white (border shows it). */
+html[data-theme='dark'] .hub-browse-search .search-input { background: var(--cream-dark); }
+/* "N courses" left, the Spring chip right. */
+.hub-browse-count-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+/* Active excluded codes while the Exclude picker is collapsed. */
+.hub-exclude-chip { border: none; font-family: inherit; cursor: pointer; color: #fff; background: var(--hub-def); }
+/* "N courses" above the finder's results. */
+.hub-browse-count { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+/* Chip key under the count (real .hub-chip samples). */
+.hub-chip-legend { margin: 0 0 2px; font-size: 11px; color: var(--text-muted); line-height: 1.8; }
 .hub-browse-code-picker {
   display: flex;
   flex-wrap: wrap;
@@ -2963,7 +3076,7 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
 .hub-browse-results {
   display: flex;
   flex-direction: column;
-  margin-top: 10px;
+  margin-top: 4px;
   max-height: 320px;
   overflow-y: auto;
 }
@@ -2984,12 +3097,18 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   display: flex;
   align-items: stretch;
   gap: 16px;
+  margin-top: 14px;
 }
-.hub-search-row > .hub-browse-panel { flex: 1; min-width: 0; }
+.hub-search-row > .hub-browse-panel { flex: 1; min-width: 0; margin-top: 0; }
+/* One control height for the finder's top: Match pill, Gap-fill, search. */
+.hub-browse-panel { --hub-control-h: 32px; }
 
 .hub-staging-rail {
   width: 260px;
   flex-shrink: 0;
+  /* Sizes as if empty, so the row's height comes from the finder alone and
+     the rail stretches to exactly match it (its body scrolls). */
+  contain: size;
   background: var(--white);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -3039,7 +3158,7 @@ html[data-theme='dark'] .hub-stash-link { color: var(--warning-border); }
 
 @media (max-width: 860px) {
   .hub-search-row { flex-direction: column; }
-  .hub-staging-rail { width: auto; max-height: 280px; }
+  .hub-staging-rail { width: auto; max-height: 280px; contain: none; }
 }
 
 /* Overview strip: one ring per category, small caption beneath (not
@@ -3131,33 +3250,31 @@ html[data-theme='dark'] .hub-stash-link { color: var(--warning-border); }
 .hub-ring-wrap { flex-shrink: 0; display: flex; }
 .hub-ring-track { stroke: var(--border-light); }
 .hub-ring-label { font-weight: 700; fill: var(--text); }
-/* Preview arc for "if I added my whole Paw-tential stash" (see
-   HubProgressRing's potentialPercent/describeArcSegment) — distinguished
-   from the real fill below in TWO ways, not one: a dashed stroke (drawn as
-   a <path> segment, not a <circle> — an opacity-only fade read as basically
-   invisible at the small 38px card-header ring size) AND its own uniform
-   amber "paw-tential" color instead of each ring's own hue. A same-color
-   dashed arc still reads as "more real progress, just fainter" at a
-   glance; a solid-colored ring suddenly growing a same-hued dashed tail is
-   genuinely ambiguous. One consistent amber means "staged, not real"
-   reads identically here as it does on the staged requirement chips
-   (.req-pool-chip--staged) and the stash button's own is-stashed color —
-   the same signal wherever staged content shows up, not a per-context one. */
-.hub-ring-potential {
-  /* A dedicated pale yellow rather than --badge-warm-text (used for the
-     staged chip/stash button) — that token reads as brown/olive at the
-     thin ring-stroke weight, not clearly "yellow", even though it works
-     fine on the chip's bigger filled areas. Kept paler/less saturated
-     than a plain gold specifically so it doesn't sit too close to
-     --hub-div (Diversity, Civic, Global's amber-orange, #C77B2E) — this
-     is deliberately more toward true yellow and lighter, not just the
-     same gold at lower opacity. --stash-arc has its own dark value. */
-  stroke: var(--stash-arc);
-  opacity: .8;
+.hub-ring-fill { stroke: var(--ring-hue, var(--text-secondary)); }
+/* The planned share of a ring (HubProgressRing's completedPercent): a
+   light tint of the ring's hue. Mixed toward the card in light mode and
+   toward the light text in dark mode, so it stays clear of the track
+   (--border-light) in both. */
+.hub-ring-planned { stroke: color-mix(in srgb, var(--ring-hue, var(--text-secondary)) 45%, var(--white)); }
+html[data-theme='dark'] .hub-ring-planned { stroke: color-mix(in srgb, var(--ring-hue, var(--text-secondary)) 40%, var(--text-secondary)); }
+/* One-line key under the overview rings; swatches use the ring's own
+   stroke classes (see HubFullView.jsx). */
+.hub-ring-legend { --ring-hue: var(--hub-def); margin: 4px 0 14px; font-size: 11px; color: var(--text-muted); }
+.hub-ring-legend-swatch { vertical-align: middle; margin-right: 3px; }
+/* "+N" under a category label: units the Paw-tential stash would add. */
+.hub-potential-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  width: fit-content;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--badge-warm-bg);
+  color: var(--badge-warm-text);
 }
-/* The planned share of a ring (HubProgressRing's completedPercent): dashed
-   like the stash arc above, in its own neutral color. */
-.hub-ring-planned { stroke: var(--status-planned-arc); }
+.hub-potential-chip svg { width: 10px; height: 10px; }
 
 /* Done vs. only planned (see completion.js): a satisfied requirement that
    still leans on planned/current courses gets a hollow, muted ✓ and a muted
@@ -3177,12 +3294,13 @@ html[data-theme='dark'] .hub-stash-link { color: var(--warning-border); }
 .req-card.req-card--fulfilled.is-planned > .hub-full-group-header .hub-full-group-label,
 .req-card.req-card--fulfilled.is-planned > .hub-full-group-header > .req-card-count.satisfied {
   color: var(--status-planned-text);
-}.hub-ring-philosophical .hub-ring-fill { stroke: var(--hub-phi); }
-.hub-ring-scientific .hub-ring-fill    { stroke: var(--hub-sci); }
-.hub-ring-quantitative .hub-ring-fill  { stroke: var(--hub-qr); }
-.hub-ring-diversity .hub-ring-fill     { stroke: var(--hub-div); }
-.hub-ring-communication .hub-ring-fill { stroke: var(--hub-com); }
-.hub-ring-toolkit .hub-ring-fill       { stroke: var(--hub-tl); }
+}
+.hub-ring-philosophical { --ring-hue: var(--hub-phi); }
+.hub-ring-scientific    { --ring-hue: var(--hub-sci); }
+.hub-ring-quantitative  { --ring-hue: var(--hub-qr); }
+.hub-ring-diversity     { --ring-hue: var(--hub-div); }
+.hub-ring-communication { --ring-hue: var(--hub-com); }
+.hub-ring-toolkit       { --ring-hue: var(--hub-tl); }
 
 /* Categories render in plan order top to bottom (see segmentGroups in
    HubFullView.jsx) as a stack of segments: an expanded card is its own

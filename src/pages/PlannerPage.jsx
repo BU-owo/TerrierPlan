@@ -90,7 +90,7 @@ import {
 } from '../utils/term';
 import { normalizeIncompleteCourseKeys, mergeIncompleteCourseKeys, pastTermsSeed } from '../utils/pastTerms';
 import {
-  planSplitEnabled, courseTally, requirementsCelebrationReady, completedHubInputs, satisfiedHubInputs, hubBannerState,
+  planSplitEnabled, courseTally, requirementsCelebrationReady, completedHubInputs, hubBannerState,
 } from '../utils/completion';
 import { aliasFor } from '../utils/grsAlias';
 import { registerPendingWriteFlush } from '../utils/pendingWrites';
@@ -2711,7 +2711,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   const coursesInPlan = new Set([...gridCourseKeys, ...extraCourseKeys]);
   // The same HUB count the sidebar's HUB tab shows (same hook, same inputs),
   // for the toolbar's "HUB tracker" pill — see SemesterBoard.
-  const { fulfilled: hubFulfilled, totalRequired: hubTotal } = useHubProgress({
+  const { fulfilled: hubFulfilled, totalRequired: hubTotal, neededHubCodes: hubPlanNeeded } = useHubProgress({
     semesters,
     extraCourseKeys,
     externalCredits,
@@ -2772,7 +2772,7 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // units still lean on planned courses). Same as hubFulfilled with the split off.
   // (extraCourseKeys is rebuilt every render, like for the hubFulfilled call above.)
   const hubCompletedInputs = completedHubInputs(semesters, extraCourseKeys, splitStatusMap);
-  const { fulfilled: hubCompletedFulfilled } = useHubProgress({
+  const { fulfilled: hubCompletedFulfilled, neededHubCodes: hubCompletedNeeded } = useHubProgress({
     semesters: hubCompletedInputs.semesters,
     extraCourseKeys: hubCompletedInputs.extraCourseKeys,
     externalCredits,
@@ -2780,17 +2780,33 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
     isTransfer,
   });
 
-  // Units the student still needs for the HUB chips: completed + current
-  // semester + AP/IB satisfy, future planned courses don't. Withheld (chips
-  // stay bright) until the plan and its course data have loaded, see hubReady.
-  const hubSatisfiedInputs = satisfiedHubInputs(semesters, extraCourseKeys, splitStatusMap);
-  const { neededHubCodes } = useHubProgress({
-    semesters: hubSatisfiedInputs.semesters,
-    extraCourseKeys: hubSatisfiedInputs.extraCourseKeys,
+  // Units the student still needs for the HUB chips, at three levels:
+  // completed only (+ AP/IB), the whole plan (current semester counts as
+  // planned), and the plan plus the Paw-tential stash. Withheld (chips stay
+  // bright) until the plan and its course data have loaded, see hubReady.
+  // Stashed courses already on the plan are left out (no double counting).
+  const stashOffPlan = stash.filter((key) => !coursesInPlan.has(key));
+  const { neededHubCodes: hubPotentialNeeded } = useHubProgress({
+    semesters,
+    extraCourseKeys: [...extraCourseKeys, ...stashOffPlan],
     externalCredits,
     courseMap,
     isTransfer,
   });
+  // The stash on its own, so a code the plan already covers can still show
+  // a Paw-tential course covering it too.
+  const { neededHubCodes: hubStashOnlyNeeded } = useHubProgress({
+    semesters: [],
+    extraCourseKeys: stashOffPlan,
+    courseMap,
+    isTransfer,
+  });
+  const neededHubCodes = {
+    completed: hubCompletedNeeded,
+    planned: hubPlanNeeded,
+    potential: hubPotentialNeeded,
+    stashOnly: hubStashOnlyNeeded,
+  };
 
   // Marine Semester terms in the plan (Fall slots only; see isMarineTerm):
   // the course slots they still hold (placeholders and research-in-lieu

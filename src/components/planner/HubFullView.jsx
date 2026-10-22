@@ -14,7 +14,8 @@ import useOneTimeHint from '../../hooks/useOneTimeHint';
 import CourseChip from '../requirements/CourseChip';
 import { PawIcon } from './CourseSearch';
 import FullViewHeader from './FullViewHeader';
-import { HubUnitTags, OfferingBadge, OfferedFilterToggle } from './CourseTags';
+import { HubChip, HubUnitTags, OfferingBadge, OFFERED_SNAPSHOT_NOTE } from './CourseTags';
+import { CURRENT_TERM_LABEL } from '../../utils/term';
 import useCurrentTermCourseKeys from '../../hooks/useCurrentTermCourseKeys';
 
 // Every HUB code, in HUB_GROUPS' own order (so the picker reads grouped by
@@ -35,115 +36,42 @@ const ALL_HUB_CODES = Object.keys(HUB_COLOR_FOR);
 // size scales with `size` (inline, not a CSS class per size) and steps
 // down for anything longer than 3 characters (a "10/10"-shaped group,
 // should one ever exist) rather than truncating.
-//
-// `potentialPercent`, when given and higher than `percent`, draws a second
-// arc covering just the EXTRA range from `percent` to `potentialPercent` —
-// "if I added everything in my Paw-tential stash, here's how much further
-// this ring would fill," without touching what `percent`/`fulfilled` mean.
-// A first pass tried a faded (lower-opacity) full circle stacked under the
-// real fill, but opacity alone read as basically invisible at the small
-// 38px card-header size — a dashed stroke doesn't have that problem at any
-// size, and it reuses the same "dashed = not real yet" language the staged
-// requirement chips use, so the two reinforce each other instead of using
-// two different visual vocabularies for the same idea.
-function polarToCartesian(cx, cy, r, angleDeg) {
-  const rad = ((angleDeg - 90) * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-// Draws only the [startPct, endPct] arc segment (not the whole circle), so
-// the potential arc never has to rely on stacking/z-order to hide the part
-// that overlaps the real fill — it simply doesn't cover that part at all.
-function describeArcSegment(cx, cy, r, startPct, endPct) {
-  const startAngle = (Math.min(100, Math.max(0, startPct)) / 100) * 360;
-  const endAngle = (Math.min(100, Math.max(0, endPct)) / 100) * 360;
-  const start = polarToCartesian(cx, cy, r, startAngle);
-  const end = polarToCartesian(cx, cy, r, endAngle);
-  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
-  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`;
-}
 
 // `hideLabel` drops the center count (tiny rings that show it beside instead).
-// `completedPercent`, when given and lower than `percent`, splits the real
-// fill: solid up to completedPercent (completed courses), then a dashed
-// "planned" arc (.hub-ring-planned) up to `percent`. The center count and
-// the stash arc beyond `percent` are unchanged.
-export function HubProgressRing({ percent, fulfilled, total, potentialPercent, completedPercent, size = 56, strokeWidth = 6, hideLabel = false }) {
+// `completedPercent`, when given and lower than `percent`, splits the fill:
+// the category color up to completedPercent (completed courses), then a
+// light tint of it (.hub-ring-planned) up to `percent`. Both are plain
+// circles (dash length = circumference, offset = the unfilled share), so a
+// full ring needs no special case. The center count is always `fulfilled`
+// (done + planned) over `total`.
+export function HubProgressRing({ percent, fulfilled, total, completedPercent, size = 56, strokeWidth = 6, hideLabel = false }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const cx = size / 2;
   const cy = size / 2;
   const solidPercent = completedPercent != null ? Math.min(percent, completedPercent) : percent;
-  const showPlanned = solidPercent < percent;
-  const offset = circumference * (1 - Math.min(100, Math.max(0, solidPercent)) / 100);
+  const offsetFor = (pct) => circumference * (1 - Math.min(100, Math.max(0, pct)) / 100);
   const label = `${fulfilled}/${total}`;
   const fontSize = Math.round(size * (label.length > 3 ? 0.18 : 0.24));
-  const showPotential = potentialPercent != null && potentialPercent > percent;
-  // An SVG elliptical-arc command can't represent a full 360° sweep — its
-  // start and end points land on the exact same spot (0% and 100% are the
-  // same point on the circle), which browsers render as nothing at all.
-  // That's exactly what "only staged courses, nothing real yet" looks like
-  // (percent=0, potentialPercent=100) — an empty category filled purely by
-  // stash would silently show no ring at all. Falls back to a plain dashed
-  // <circle> (no start/end ambiguity) whenever the requested span is a full
-  // circle, instead of the degenerate <path>.
-  const isFullPotentialCircle = showPotential && percent <= 0 && potentialPercent >= 100;
-  // Dash length scales with strokeWidth so the texture reads as clearly
-  // "dashed" on the small 38px card-header ring as it does on the large
-  // 72px overview ring, rather than a fixed pixel dash looking chunky on
-  // one and disappearing into a blur on the other.
-  const dashPattern = `${(strokeWidth * 0.7).toFixed(1)} ${(strokeWidth * 0.6).toFixed(1)}`;
-  // The planned arc, same dashed drawing as the stash arc below (and the
-  // same full-circle fallback when nothing is completed yet).
-  const plannedArc = !showPlanned ? null : solidPercent <= 0 && percent >= 100 ? (
-    <circle className="hub-ring-planned" cx={cx} cy={cy} r={radius} strokeWidth={strokeWidth} fill="none" strokeDasharray={dashPattern} />
-  ) : (
-    <path
-      className="hub-ring-planned"
-      d={describeArcSegment(cx, cy, radius, solidPercent, percent)}
-      strokeWidth={strokeWidth}
-      fill="none"
-      strokeDasharray={dashPattern}
-      strokeLinecap="round"
-    />
-  );
+  const arcProps = {
+    cx,
+    cy,
+    r: radius,
+    strokeWidth,
+    fill: 'none',
+    strokeDasharray: circumference,
+    transform: `rotate(-90 ${cx} ${cy})`,
+  };
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="hub-ring" aria-hidden="true">
       <circle className="hub-ring-track" cx={cx} cy={cy} r={radius} strokeWidth={strokeWidth} fill="none" />
-      {plannedArc}
-      {showPotential && isFullPotentialCircle && (
-        <circle
-          className="hub-ring-potential"
-          cx={cx}
-          cy={cy}
-          r={radius}
-          strokeWidth={strokeWidth}
-          fill="none"
-          strokeDasharray={dashPattern}
-        />
+      {solidPercent < percent && (
+        <circle className="hub-ring-planned" {...arcProps} strokeDashoffset={offsetFor(percent)} />
       )}
-      {showPotential && !isFullPotentialCircle && (
-        <path
-          className="hub-ring-potential"
-          d={describeArcSegment(cx, cy, radius, percent, potentialPercent)}
-          strokeWidth={strokeWidth}
-          fill="none"
-          strokeDasharray={dashPattern}
-          strokeLinecap="round"
-        />
+      {solidPercent > 0 && (
+        <circle className="hub-ring-fill" {...arcProps} strokeDashoffset={offsetFor(solidPercent)} />
       )}
-      <circle
-        className="hub-ring-fill"
-        cx={cx}
-        cy={cy}
-        r={radius}
-        strokeWidth={strokeWidth}
-        fill="none"
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${cx} ${cy})`}
-      />
       {!hideLabel && (
         <text
           x="50%"
@@ -157,6 +85,17 @@ export function HubProgressRing({ percent, fulfilled, total, potentialPercent, c
         </text>
       )}
     </svg>
+  );
+}
+
+// "+N" paw chip under a category label: the units the Paw-tential stash
+// would add over the plan there. Nothing when it adds none.
+function PotentialAddChip({ units }) {
+  if (!(units > 0)) return null;
+  return (
+    <span className="hub-potential-chip" title={`Would add ${units} with your Paw-tential courses.`}>
+      <PawIcon filled />+{units}
+    </span>
   );
 }
 
@@ -327,20 +266,16 @@ function DepartmentPrefixAutocomplete({ value, onChange, allPrefixes }) {
 // so the student can keep comparing/toggling it right there instead of it
 // vanishing the moment they stash it.
 //
-// `shaded` dims the row's info block (still shows the HUB tags, just faded)
-// — used for an already-stashed row in the search results list, so
-// stashing something doesn't erase its detail, only visually deprioritizes
-// it against courses not yet acted on. Not used in the staging section
-// below (nothing there needs deprioritizing against anything else in the
-// same list). The HUB tags are the shared HubUnitTags, which fades codes the
-// student no longer needs.
-function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash, shaded = false }) {
+// Rows are never dimmed (a stashed row shows its filled paw button). The
+// HUB tags are the shared HubUnitTags, which marks codes the student no
+// longer needs.
+function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash, matchCodes }) {
   const label = course.courseNumber ?? course.id;
   // Staged rows come from courseMap, which has no `inCurrentTerm`.
   const currentTermKeys = useCurrentTermCourseKeys();
   return (
     <div className="search-result-card" style={{ cursor: 'default' }}>
-      <div className="search-result-info" style={shaded ? { opacity: 0.55 } : undefined}>
+      <div className="search-result-info">
         <div className="search-result-code">{label}</div>
         <div className="search-result-name-row">
           <span className="search-result-name" title={course.name ?? undefined}>{course.name ?? '—'}</span>
@@ -350,7 +285,7 @@ function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash
           {course.studyAbroad && (
             <span className="offering-badge offering-badge-abroad">Study abroad</span>
           )}
-            <HubUnitTags units={course.hubUnits} max={Infinity} />
+            <HubUnitTags units={course.hubUnits} max={Infinity} stashed={isStashed} matchCodes={matchCodes} />
             <OfferingBadge
               offeringPattern={course.offeringPattern}
               upcomingSeasons={course.upcomingSeasons}
@@ -362,8 +297,8 @@ function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash
         type="button"
         className={`search-result-stash-btn${isStashed ? ' is-stashed' : ''}`}
         onClick={() => (isStashed ? onRemoveFromStash(course.id) : onAddToStash(course.id))}
-        aria-label={isStashed ? `Remove ${label} from Paw-tential Courses` : `Save ${label} to Paw-tential Courses (saved for later, not on your plan)`}
-        title={isStashed ? 'Remove from Paw-tential Courses' : 'Save to Paw-tential Courses (saved for later, not on your plan)'}
+        aria-label={isStashed ? `Remove ${label} from Paw-tential Courses` : `Save ${label} to Paw-tential`}
+        title={isStashed ? 'Remove from Paw-tential Courses' : 'Save to Paw-tential'}
       >
         <PawIcon filled={isStashed} />
       </button>
@@ -372,25 +307,22 @@ function HubSearchResultRow({ course, isStashed, onAddToStash, onRemoveFromStash
 }
 
 // One toggleable HUB code in the gap-fill search's include/exclude pickers —
-// the exact same `hub-chip hub-chip-<groupId>` styling/coloring used
-// everywhere else in the app for a read-only HUB tag (search results,
-// course cards, requirement chips), turned into a real toggle button rather
-// than a new chip design: unselected chips dim down, a selected chip gets a
-// ring in its own color via inline style. No new hub-chip CSS variant.
-function HubCodeChip({ code, selected, onToggle }) {
+// the same `hub-chip hub-chip-<groupId>` coloring as every read-only HUB
+// tag, as a toggle button: unselected keeps the category tint with an
+// outline in its own color; selected fills solid like a matching result
+// chip (.is-match). Same size either way (see .hub-code-toggle).
+// `exclude` (the Exclude grid): selected fills dark gray with a "−" instead.
+function HubCodeChip({ code, selected, onToggle, exclude = false }) {
+  const selectedClass = exclude ? ' is-excluded' : ' is-match';
   return (
     <button
       type="button"
-      className={`hub-chip hub-chip-${HUB_COLOR_FOR[code]?.groupId ?? 'def'}`}
+      className={`hub-chip hub-chip-${HUB_COLOR_FOR[code]?.groupId ?? 'def'} hub-code-toggle${selected ? selectedClass : ''}`}
       onClick={() => onToggle(code)}
       aria-pressed={selected}
-      style={{
-        cursor: 'pointer',
-        border: '1.5px solid currentColor',
-        opacity: selected ? 1 : 0.4,
-        boxShadow: selected ? '0 0 0 1.5px currentColor' : 'none',
-      }}
+      title={HUB_LABELS[code] ?? code}
     >
+      {exclude && selected && <span aria-hidden="true">− </span>}
       {code}
     </button>
   );
@@ -470,13 +402,14 @@ export default function HubFullView({
 
   // "What if I added everything in my stash" preview — the exact same
   // useHubProgress computation, just with the stash folded into
-  // extraCourseKeys, so the ring-fade logic below never has to duplicate
-  // any counting/progress math of its own. Only groupSummaries (for each
-  // ring's potentialPercent) is used from this second call.
-  const extraCourseKeysWithStash = useMemo(
-    () => [...extraCourseKeys, ...stash],
-    [extraCourseKeys, stash],
-  );
+  // extraCourseKeys, so nothing below duplicates any counting/progress
+  // math of its own. Only groupSummaries (each category's "+N" paw chip) is
+  // used from this second call. Stashed courses already on the plan are
+  // dropped so they aren't counted twice (same as HubSidebar's "could add").
+  const extraCourseKeysWithStash = useMemo(() => {
+    const planKeys = new Set([...semesters.flatMap((sem) => sem.map(entryCourseKey)), ...extraCourseKeys]);
+    return [...extraCourseKeys, ...stash.filter((key) => !planKeys.has(key))];
+  }, [semesters, extraCourseKeys, stash]);
   const { groupSummaries: potentialGroupSummaries } = useHubProgress({
     semesters,
     extraCourseKeys: extraCourseKeysWithStash,
@@ -484,10 +417,11 @@ export default function HubFullView({
     courseMap,
     isTransfer,
   });
-  const potentialPercentByGroupId = useMemo(
-    () => Object.fromEntries(potentialGroupSummaries.map((g) => [g.group.id, g.percent])),
-    [potentialGroupSummaries],
-  );
+  // Units the stash would add over the plan, per category.
+  const potentialAddByGroupId = useMemo(() => {
+    const realByGroupId = Object.fromEntries(groupSummaries.map((g) => [g.group.id, g.fulfilled]));
+    return Object.fromEntries(potentialGroupSummaries.map((g) => [g.group.id, Math.max(0, g.fulfilled - (realByGroupId[g.group.id] ?? 0))]));
+  }, [groupSummaries, potentialGroupSummaries]);
 
   // Completed-only progress — the same computation again with only the
   // courses that count as done (see completion.js): the solid part of each
@@ -509,6 +443,16 @@ export default function HubFullView({
     () => Object.fromEntries(completedGroupSummaries.map((g) => [g.group.id, g.percent])),
     [completedGroupSummaries],
   );
+  // Ring tooltip: "N done, M planned", zero parts left out.
+  const completedFulfilledByGroupId = useMemo(
+    () => Object.fromEntries(completedGroupSummaries.map((g) => [g.group.id, g.fulfilled])),
+    [completedGroupSummaries],
+  );
+  function ringTitle(groupId, groupFulfilled) {
+    const done = Math.min(groupFulfilled, completedFulfilledByGroupId[groupId] ?? 0);
+    const planned = groupFulfilled - done;
+    return [done > 0 && `${done} done`, planned > 0 && `${planned} planned`].filter(Boolean).join(', ') || undefined;
+  }
   const completedSatisfiedIds = useMemo(
     () => new Set(completedGroupSummaries.flatMap((g) => g.requirements
       .filter(({ isSatisfied }) => isSatisfied)
@@ -529,6 +473,8 @@ export default function HubFullView({
   const [hubSearchInclude, setHubSearchInclude] = useState([]);
   const [hubSearchExclude, setHubSearchExclude] = useState([]);
   const [hubSearchMode, setHubSearchMode] = useState(HUB_MATCH_MODES.OR);
+  // Exclude picker starts collapsed behind "+ Exclude codes".
+  const [excludeOpen, setExcludeOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -572,6 +518,8 @@ export default function HubFullView({
   }, [semesters, extraCourseKeys]);
 
   const stashSet = useMemo(() => new Set(stash), [stash]);
+  // Include codes, filled on the results' HUB tags.
+  const includeSet = useMemo(() => new Set(hubSearchInclude), [hubSearchInclude]);
 
   // Stashed courses that actually carry a HUB unit — a running "what I've
   // paw-tentially queued up for HUB" list, visible right here instead of
@@ -596,11 +544,23 @@ export default function HubFullView({
     return Array.from(codes);
   }, [openRequirements]);
 
+  // Include and Exclude are mutually exclusive per code: picking a code in
+  // one drops it from the other (a code in both would match nothing).
   function toggleIncludeCode(code) {
+    const adding = !hubSearchInclude.includes(code);
     setHubSearchInclude((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
+    if (adding) setHubSearchExclude((prev) => prev.filter((c) => c !== code));
   }
   function toggleExcludeCode(code) {
+    const adding = !hubSearchExclude.includes(code);
     setHubSearchExclude((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
+    if (adding) setHubSearchInclude((prev) => prev.filter((c) => c !== code));
+  }
+  // "Clear": include, exclude and match mode (the Offered toggle stays).
+  function clearCodeFilters() {
+    setHubSearchInclude([]);
+    setHubSearchExclude([]);
+    setHubSearchMode(HUB_MATCH_MODES.OR);
   }
   // Pre-fills the include-set from the student's actual remaining gaps —
   // still just state after this, not locked, so every chip/mode toggle
@@ -673,12 +633,11 @@ export default function HubFullView({
           }}
           aria-expanded={!collapsed}
         >
-          <span className={`hub-ring-wrap hub-ring-${group.id}`}>
+          <span className={`hub-ring-wrap hub-ring-${group.id}`} title={ringTitle(group.id, groupFulfilled)}>
             <HubProgressRing
               percent={percent}
               fulfilled={groupFulfilled}
               total={groupTotal}
-              potentialPercent={potentialPercentByGroupId[group.id]}
               completedPercent={completedPercentByGroupId[group.id]}
               size={38}
               strokeWidth={4}
@@ -689,6 +648,7 @@ export default function HubFullView({
             <span className={`hub-full-group-count${satisfied ? ' satisfied' : ''}`}>
               {groupFulfilled}/{groupTotal} units
             </span>
+            <PotentialAddChip units={potentialAddByGroupId[group.id]} />
           </div>
           <span className="hub-full-group-caret" aria-hidden="true">{collapsed ? '▸' : '▾'}</span>
         </div>
@@ -845,15 +805,32 @@ export default function HubFullView({
               pre-populates the include chips from openRequirements. */}
           <div className="hub-browse-panel">
             <div className="hub-browse-header">
-              <span className="hub-full-overview-heading">Search Classes</span>
-              <DepartmentPrefixAutocomplete
-                value={searchPrefix}
-                onChange={setSearchPrefix}
-                allPrefixes={departmentPrefixes}
-              />
+              <div className="hub-match-row">
+                <span className="hub-full-overview-heading">Match:</span>
+                <div className="hub-year-toggle-group hub-match-pill">
+                  <button
+                    type="button"
+                    className={`hub-year-toggle-btn ${hubSearchMode === HUB_MATCH_MODES.OR ? 'active' : ''}`}
+                    onClick={() => setHubSearchMode(HUB_MATCH_MODES.OR)}
+                    aria-pressed={hubSearchMode === HUB_MATCH_MODES.OR}
+                    title="Match courses carrying ANY of the included codes"
+                  >
+                    Any selected
+                  </button>
+                  <button
+                    type="button"
+                    className={`hub-year-toggle-btn ${hubSearchMode === HUB_MATCH_MODES.AND ? 'active' : ''}`}
+                    onClick={() => setHubSearchMode(HUB_MATCH_MODES.AND)}
+                    aria-pressed={hubSearchMode === HUB_MATCH_MODES.AND}
+                    title="Match courses carrying ALL of the included codes"
+                  >
+                    All in one course
+                  </button>
+                </div>
+              </div>
               <button
                 type="button"
-                className="panel-open-full-btn"
+                className="hub-gapfill-btn"
                 onClick={applyGapFill}
                 disabled={gapCodes.length === 0}
                 title={
@@ -865,64 +842,118 @@ export default function HubFullView({
                 Gap-fill my remaining units
               </button>
             </div>
-
-            <div className="hub-year-toggle-group" style={{ margin: '10px 0' }}>
-              <button
-                type="button"
-                className={`hub-year-toggle-btn ${hubSearchMode === HUB_MATCH_MODES.OR ? 'active' : ''}`}
-                onClick={() => setHubSearchMode(HUB_MATCH_MODES.OR)}
-                title="Match courses carrying ANY of the included codes"
-              >
-                Any of these
-              </button>
-              <button
-                type="button"
-                className={`hub-year-toggle-btn ${hubSearchMode === HUB_MATCH_MODES.AND ? 'active' : ''}`}
-                onClick={() => setHubSearchMode(HUB_MATCH_MODES.AND)}
-                title="Match courses carrying ALL of the included codes"
-              >
-                All of these (one course, both units)
-              </button>
+            <div className="hub-browse-search">
+              <DepartmentPrefixAutocomplete
+                value={searchPrefix}
+                onChange={setSearchPrefix}
+                allPrefixes={departmentPrefixes}
+              />
             </div>
-            {hubSearchInclude.length >= 2 && (
-              <p className="search-hint">
-                {hubSearchMode === HUB_MATCH_MODES.AND
-                  ? 'Courses that cover every one of: '
-                  : 'Courses that cover at least one of: '}
-                {hubSearchInclude.map((code) => HUB_LABELS[code] ?? code).join(', ')}
-              </p>
+
+            <div className="hub-include-header">
+              <span className="hub-full-overview-heading">Include</span>
+              <span className="hub-include-actions">
+                {/* Active excludes, removable, beside the link while the grid is closed. */}
+                {!excludeOpen && hubSearchExclude.map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    className={`hub-chip hub-chip-${HUB_COLOR_FOR[code]?.groupId ?? 'def'} hub-exclude-chip`}
+                    onClick={() => toggleExcludeCode(code)}
+                    title={HUB_LABELS[code] ?? code}
+                    aria-label={`Remove ${code} from excluded codes`}
+                  >
+                    × {code}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={`hub-stash-link${excludeOpen ? ' is-open' : ''}`}
+                  onClick={() => setExcludeOpen((open) => !open)}
+                  aria-expanded={excludeOpen}
+                >
+                  Exclude{hubSearchExclude.length > 0 ? ` (${hubSearchExclude.length})` : ''}
+                </button>
+                {(hubSearchInclude.length > 0 || hubSearchExclude.length > 0) && (
+                  <button type="button" className="hub-stash-link" onClick={clearCodeFilters}>
+                    Clear
+                  </button>
+                )}
+              </span>
+            </div>
+            <div className="hub-browse-code-picker">
+              {ALL_HUB_CODES.map((code) => (
+                <HubCodeChip
+                  key={code}
+                  code={code}
+                  selected={hubSearchInclude.includes(code)}
+                  onToggle={toggleIncludeCode}
+                />
+              ))}
+            </div>
+
+            {excludeOpen && (
+              <>
+                <div className="hub-include-header">
+                  <span className="hub-full-overview-heading">Exclude</span>
+                  <button
+                    type="button"
+                    className="hub-exclude-close"
+                    onClick={() => setExcludeOpen(false)}
+                    aria-label="Close Exclude"
+                    title="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="hub-browse-code-picker">
+                  {ALL_HUB_CODES.map((code) => (
+                    <HubCodeChip
+                      key={code}
+                      code={code}
+                      selected={hubSearchExclude.includes(code)}
+                      onToggle={toggleExcludeCode}
+                      exclude
+                    />
+                  ))}
+                </div>
+              </>
             )}
 
-            <div className="hub-browse-code-row">
-              <span className="hub-full-overview-heading">Include</span>
-              <div className="hub-browse-code-picker">
-                {ALL_HUB_CODES.map((code) => (
-                  <HubCodeChip
-                    key={code}
-                    code={code}
-                    selected={hubSearchInclude.includes(code)}
-                    onToggle={toggleIncludeCode}
-                  />
-                ))}
+            {/* "N courses" left, the Spring chip right. Same size on and off
+                (no ✓); the snapshot note lives in its tooltip. */}
+            {(hasCurrentTermData || (searchActive && coursesLoaded && searchResults.length > 0)) && (
+              <div className="hub-browse-count-row">
+                <p className="hub-browse-count">
+                  {searchActive && coursesLoaded && searchResults.length > 0
+                    && `${searchResults.length} course${searchResults.length === 1 ? '' : 's'}`}
+                </p>
+                {hasCurrentTermData && (
+                  <button
+                    type="button"
+                    className={`hub-chip offered-filter-chip${offeredOnly ? ' is-on' : ''}`}
+                    aria-pressed={offeredOnly}
+                    title={`Only show courses offered in ${CURRENT_TERM_LABEL}. ${OFFERED_SNAPSHOT_NOTE}.`}
+                    onClick={() => setOfferedOnly(!offeredOnly)}
+                  >
+                    {CURRENT_TERM_LABEL}
+                  </button>
+                )}
               </div>
-            </div>
-            <div className="hub-browse-code-row">
-              <span className="hub-full-overview-heading">Exclude</span>
-              <div className="hub-browse-code-picker">
-                {ALL_HUB_CODES.map((code) => (
-                  <HubCodeChip
-                    key={code}
-                    code={code}
-                    selected={hubSearchExclude.includes(code)}
-                    onToggle={toggleExcludeCode}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {hasCurrentTermData && <OfferedFilterToggle checked={offeredOnly} onChange={setOfferedOnly} />}
-            <p className="search-hint">Paw = save to Paw-tential Courses (maybe-later list).</p>
-
+            )}
+            {searchActive && coursesLoaded && searchResults.length > 0 && (
+              <>
+                {/* Chip key, rendered with the same HubChip as the results. */}
+                <p className="hub-chip-legend">
+                  <HubChip unit="HUB" match />
+                  {' '}Filled = matches your search ·{' '}
+                  <HubChip unit="HUB" covered />
+                  {' '}Faded = already covered ·{' '}
+                  <HubChip unit="HUB" paw />
+                  {' '}Paw = a Paw-tential course covers it
+                </p>
+              </>
+            )}
             {searchActive && (
               <div className="hub-browse-results">
                 {!coursesLoaded ? (
@@ -930,7 +961,7 @@ export default function HubFullView({
                 ) : searchResults.length === 0 ? (
                   <div className="search-empty">
                     {hubSearchMode === HUB_MATCH_MODES.AND && hubSearchInclude.length >= 2
-                      ? "No single course covers all of these. Try 'Any of these'."
+                      ? "No single course covers all of these. Try 'Any selected'."
                       : 'No courses match those filters (already-planned courses are left out)'}
                   </div>
                 ) : (
@@ -941,7 +972,7 @@ export default function HubFullView({
                         key={course.id}
                         course={course}
                         isStashed={isStashed}
-                        shaded={isStashed}
+                        matchCodes={includeSet}
                         onAddToStash={onAddToStash}
                         onRemoveFromStash={onRemoveFromStash}
                       />
@@ -1004,7 +1035,7 @@ export default function HubFullView({
               viewports rather than scrolling horizontally. */}
           {potentialHintVisible && (
             <OneTimeHint onDismiss={dismissPotentialHint} onSeen={markPotentialSeen}>
-              Yellow dashed = what your Paw-tential courses would add. Gray dashed = planned, not done yet.
+              Paw +N = units your Paw-tential courses would add.
             </OneTimeHint>
           )}
 
@@ -1021,22 +1052,33 @@ export default function HubFullView({
                   aria-pressed={!collapsed}
                   aria-label={`${group.label} — ${percent}% complete, ${collapsed ? 'collapsed' : 'expanded'}. Toggle.`}
                 >
-                  <span className={`hub-ring-wrap hub-ring-${group.id}`}>
+                  <span className={`hub-ring-wrap hub-ring-${group.id}`} title={ringTitle(group.id, fulfilled)}>
                     <HubProgressRing
                       percent={percent}
                       fulfilled={fulfilled}
                       total={total}
-                      potentialPercent={potentialPercentByGroupId[group.id]}
                       completedPercent={completedPercentByGroupId[group.id]}
                       size={72}
                       strokeWidth={6}
                     />
                   </span>
                   <span className="hub-full-overview-label">{group.label}</span>
+                  <PotentialAddChip units={potentialAddByGroupId[group.id]} />
                 </button>
               );
             })}
           </div>
+          {/* Swatches use the ring's own stroke classes, in a neutral gray. */}
+          <p className="hub-ring-legend">
+            <svg className="hub-ring-legend-swatch" width="16" height="6" aria-hidden="true">
+              <line className="hub-ring-fill" x1="1" y1="3" x2="15" y2="3" strokeWidth="4" />
+            </svg>
+            Dark = done ·{' '}
+            <svg className="hub-ring-legend-swatch" width="16" height="6" aria-hidden="true">
+              <line className="hub-ring-planned" x1="1" y1="3" x2="15" y2="3" strokeWidth="4" />
+            </svg>
+            Light = planned
+          </p>
 
           {hubBanner.celebrate && (
             <div className="panel-all-fulfilled">

@@ -100,7 +100,7 @@ function SearchResultCard({
           {isProfessionalCareer(course.career) && (
             <span className="offering-badge offering-badge-career">{course.career}</span>
           )}
-          <HubUnitTags units={course.hubUnits} plain={alreadyAdded} />
+          <HubUnitTags units={course.hubUnits} plain={alreadyAdded} stashed={isStashed} />
           <MarineSemesterPill courseKey={course.id} />
           <OfferingBadge
             offeringPattern={course.offeringPattern}

@@ -61,7 +61,7 @@ function StashResultCard({
         </div>
         {/* Tags line: HUB tags, then the offering badge (hidden when empty). */}
         <div className="search-result-hub">
-          <HubUnitTags units={course.hubUnits} plain={alreadyAdded} />
+          <HubUnitTags units={course.hubUnits} plain={alreadyAdded} stashed />
           <MarineSemesterPill courseKey={course.id} />
           <OfferingBadge
             offeringPattern={course.offeringPattern}
