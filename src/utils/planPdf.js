@@ -1,8 +1,7 @@
 // "Download plan PDF": draws the plan directly from planner state with
 // pdf-lib (light palette, Helvetica, selectable text) and embeds the plan as
-// a versioned JSON attachment. Export only — nothing reads the attachment
-// back yet. Loaded with a dynamic import() on click so pdf-lib stays out of
-// the main chunk.
+// a versioned JSON attachment (read back by planImport.js). Loaded with a
+// dynamic import() on click so pdf-lib stays out of the main chunk.
 import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
 import {
   blockEntryLabel, entryCourseKey, isCourseEntry, isNoteEntry,

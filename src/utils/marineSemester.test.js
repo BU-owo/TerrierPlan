@@ -1,4 +1,4 @@
-// Run with: node --test src/utils/
+// Run with: node --test src/utils/marineSemester.test.js (or npm test for all)
 // Checks on the hand-curated lists in src/data/marineSemester.js.
 import test from 'node:test';
 import assert from 'node:assert/strict';

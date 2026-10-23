@@ -1,4 +1,4 @@
-// Run with: node --test src/utils/
+// Run with: node --test src/utils/transcriptMapping.test.js (or npm test for all)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 // applyImport's append-or-replace step is placeImportedCourse (transcriptMapping.js

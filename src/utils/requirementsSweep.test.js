@@ -1,4 +1,4 @@
-// Run with: node --test src/utils/
+// Run with: node --test src/utils/requirementsSweep.test.js (or npm test for all)
 //
 // Sweep over EVERY program JSON in src/data/requirements/ (same set
 // programs.js globs, so new majors are picked up automatically). For each

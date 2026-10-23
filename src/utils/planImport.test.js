@@ -1,4 +1,4 @@
-// Run with: node --test src/utils/
+// Run with: node --test src/utils/planImport.test.js (or npm test for all)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sanitizePlanBlob, MAX_SLOTS, MIN_SLOTS } from './planImport.js';
