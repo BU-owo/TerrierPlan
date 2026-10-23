@@ -3061,7 +3061,17 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
    nothing lighter than the white card, so it stays white (border shows it). */
 html[data-theme='dark'] .hub-browse-search .search-input { background: var(--cream-dark); }
 /* "N courses" left, the Spring chip right. */
-.hub-browse-count-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.hub-browse-count-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; min-height: 24px; }
+/* Placeholder bars while the catalog loads, before the paw's 150ms delay. */
+.hub-results-pending { min-height: 96px; }
+.hub-results-skeleton { display: flex; flex-direction: column; gap: 10px; }
+.hub-results-skeleton > span { height: 14px; border-radius: 4px; background: var(--cream-dark); }
+.hub-results-skeleton > span:nth-child(2) { width: 80%; }
+.hub-results-skeleton > span:nth-child(3) { width: 60%; }
+/* HUB finder rows aren't draggable, so let a touch that starts on one scroll
+   (.search-result-card sets touch-action: none for the planner's draggable cards). */
+.hub-browse-results .search-result-card,
+.hub-staging-rail-body .search-result-card { touch-action: pan-y; }
 /* Active excluded codes while the Exclude picker is collapsed. */
 .hub-exclude-chip { border: none; font-family: inherit; cursor: pointer; color: #fff; background: var(--hub-def); }
 /* "N courses" above the finder's results. */

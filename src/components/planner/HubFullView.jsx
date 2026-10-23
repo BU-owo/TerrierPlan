@@ -139,7 +139,7 @@ function segmentGroups(groupSummaries, collapsedOf) {
 // keys move a highlighted option, Enter selects it, Escape/click-outside
 // closes; the input stays a plain free-text field throughout; a highlight
 // is just a suggestion, never a requirement to pick one.
-function DepartmentPrefixAutocomplete({ value, onChange, allPrefixes }) {
+function DepartmentPrefixAutocomplete({ value, onChange, allPrefixes, loading = false }) {
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
   const rootRef = useRef(null);
@@ -167,6 +167,8 @@ function DepartmentPrefixAutocomplete({ value, onChange, allPrefixes }) {
   // department; the listbox's own maxHeight/overflowY below is what makes
   // that scrollable instead of blowing out the page.
   const suggestions = trimmed ? allPrefixes.filter((p) => p.includes(trimmed)) : [];
+  // Typing before the catalog is in: a small paw (after a moment) instead of nothing.
+  const suggestionsLoading = useDelayedBusy(loading && open && Boolean(trimmed));
 
   function selectSuggestion(code) {
     onChange(code);
@@ -210,6 +212,26 @@ function DepartmentPrefixAutocomplete({ value, onChange, allPrefixes }) {
         aria-expanded={open && suggestions.length > 0}
         aria-autocomplete="list"
       />
+      {open && suggestionsLoading && suggestions.length === 0 && (
+        <div
+          role="status"
+          style={{
+            position: 'absolute',
+            zIndex: 40,
+            top: 'calc(100% + 4px)',
+            left: 0,
+            right: 0,
+            background: 'var(--cream)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-xs)',
+            padding: '5px 8px',
+            fontSize: 12,
+            color: 'var(--text-muted)',
+          }}
+        >
+          <PawLoader size="small" label="Loading departments…" />
+        </div>
+      )}
       {open && suggestions.length > 0 && (
         <div
           ref={listRef}
@@ -911,6 +933,7 @@ export default function HubFullView({
                 value={searchPrefix}
                 onChange={setSearchPrefix}
                 allPrefixes={departmentPrefixes}
+                loading={!coursesLoaded}
               />
             </div>
 
@@ -986,7 +1009,7 @@ export default function HubFullView({
 
             {/* "N courses" left, the Spring chip right. Same size on and off
                 (no ✓); the snapshot note lives in its tooltip. */}
-            {(hasCurrentTermData || (searchActive && coursesLoaded && !catalogLoaderVisible && searchResults.length > 0)) && (
+            {(hasCurrentTermData || !coursesLoaded || (searchActive && coursesLoaded && !catalogLoaderVisible && searchResults.length > 0)) && (
               <div className="hub-browse-count-row">
                 <p className="hub-browse-count">
                   {searchActive && coursesLoaded && !catalogLoaderVisible && searchResults.length > 0
@@ -1021,8 +1044,12 @@ export default function HubFullView({
             {searchActive && (
               <div className="hub-browse-results">
                 {!coursesLoaded || catalogLoaderVisible ? (
-                  <div className="search-loading" role="status" aria-busy="true">
-                    {catalogLoaderVisible && <PawLoader size="small" label="Loading courses…" />}
+                  <div className="search-loading hub-results-pending" role="status" aria-busy="true">
+                    {catalogLoaderVisible ? (
+                      <PawLoader size="small" label="Loading courses…" />
+                    ) : (
+                      <span className="hub-results-skeleton" aria-hidden="true"><span /><span /><span /></span>
+                    )}
                   </div>
                 ) : coursesFailed ? (
                   <div className="search-empty" role="alert">Couldn&apos;t load courses. Reload to try again.</div>

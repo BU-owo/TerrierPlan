@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useContext } from 'react';
 import { evaluateRequirementTree } from '../../utils/requirementsEngine';
 import { normalizeCourseKey } from '../../utils/courseKey';
 import { REQUIREMENT_PROGRAMS } from './programs';
@@ -19,6 +19,9 @@ import { unresolvedLast } from '../../utils/unresolvedLast';
 import { DISCORD_URL, SUPPORT_EMAIL } from '../HelpSupportModal';
 import { findProgramByUrl } from '../../data/bu-programs';
 import useInactiveCourseKeys from '../../hooks/useInactiveCourseKeys';
+import useDelayedBusy from '../../hooks/useDelayedBusy';
+import PawLoader from '../PawLoader';
+import { CourseDataStatusContext } from '../planner/courseDataContext';
 
 // The one source of truth for requirement-tree rendering — evaluates the
 // program against the plan's courseKeys and renders the tree as cards (one
@@ -97,6 +100,9 @@ export default function RequirementTree({
   const stashSet = useMemo(() => new Set(stash), [stash]);
   // Long-unoffered courses, hidden from requirement choice lists (see hideInactive).
   const inactiveKeys = useInactiveCourseKeys();
+  // Course names still being looked up: a small paw instead of bare rows.
+  const courseLookup = useContext(CourseDataStatusContext);
+  const lookupLoaderVisible = useDelayedBusy(Boolean(result) && courseLookup.fetching);
 
   useEffect(() => {
     onSummaryChange?.({
@@ -406,6 +412,12 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
           )}
 
           {disclaimer}
+
+          {lookupLoaderVisible && (
+            <div className="search-loading" role="status" aria-busy="true">
+              <PawLoader size="small" label="Loading courses…" />
+            </div>
+          )}
 
           {hoisted && (
             <div className="hub-year-toggle-group req-one-of-toggle req-tracks-toggle" role="group" aria-label={hoisted.label}>

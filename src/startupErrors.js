@@ -18,8 +18,9 @@
 import { ART_ALT, CREDIT_SHORT, ART_MASCOT_SRC } from './constants/credits.js';
 
 // Same value as DRAFT_STORAGE_KEY in utils/draftStorage.js. Hard-coded so this
-// module doesn't pull in app code and can't itself fail to load. Only this key is ever
-// cleared: terrierplan_scheduler_schedules and terrierplan_session are kept.
+// module doesn't pull in app code and can't itself fail to load. Only this key and
+// the signed-in ones (that key + "_<uid>") are ever cleared:
+// terrierplan_scheduler_schedules and terrierplan_session are kept.
 const DRAFT_STORAGE_KEY = 'terrierplan_scheduler_draft';
 const PRELOAD_RELOAD_KEY = 'terrierplan_preload_reload_at';
 const PRELOAD_RELOAD_WINDOW_MS = 30000;
@@ -60,7 +61,12 @@ export function reloadPage() {
 
 export function resetDraftAndReload() {
   try {
-    window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+    const draftKeys = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key === DRAFT_STORAGE_KEY || (key && key.startsWith(`${DRAFT_STORAGE_KEY}_`))) draftKeys.push(key);
+    }
+    draftKeys.forEach((key) => window.localStorage.removeItem(key));
   } catch (e) {
     console.error('[TerrierPlan] Could not clear saved scheduler draft:', e);
   }
