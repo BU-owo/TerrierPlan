@@ -1,0 +1,535 @@
+{
+  "programName": "Biomedical Engineering",
+  "degree": "BS",
+  "school": "ENG",
+  "bulletinUrl": "https://www.bu.edu/academics/eng/programs/biomedical-engineering/bs/",
+  "minGrade": null,
+  "totalCoursesRequired": 32,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "sequence": {
+    "fillPriority": [
+      "bme-bs-fields",
+      "bme-bs-design",
+      "bme-bs-engineering-elective",
+      "bme-bs-bme-electives",
+      "bme-bs-professional"
+    ],
+    "slots": [
+      {
+        "courses": [
+          "CASCH101",
+          "CASMA123",
+          "CASWR120",
+          "ENGEK100",
+          "ENGEK125"
+        ]
+      },
+      {
+        "courses": [
+          "CASCH102",
+          "CASMA124",
+          "CASPY211",
+          "ENGEK103",
+          "ENGEK131"
+        ]
+      },
+      {
+        "courses": [
+          "CASMA225",
+          "CASPY212",
+          "CASWR151",
+          "ENGEK210",
+          "ENGEK301"
+        ]
+      },
+      {
+        "courses": [
+          "CASMA226",
+          "ENGBE209",
+          "ENGEK307"
+        ],
+        "placeholders": [
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "CASBI315",
+          "ENGBE403",
+          "ENGBE493",
+          "ENGEK381"
+        ]
+      },
+      {
+        "courses": [
+          "ENGBE424"
+        ],
+        "placeholders": [
+          {
+            "label": "Fields Elective",
+            "fills": "bme-bs-fields"
+          },
+          {
+            "label": "BME Design Elective",
+            "fills": "bme-bs-design"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "ENGBE465"
+        ],
+        "placeholders": [
+          {
+            "label": "BME Elective",
+            "fills": "bme-bs-bme-electives"
+          },
+          {
+            "label": "Engineering Elective",
+            "fills": "bme-bs-engineering-elective"
+          },
+          {
+            "label": "Professional Elective",
+            "fills": "bme-bs-professional"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "ENGBE466"
+        ],
+        "placeholders": [
+          {
+            "label": "BME Elective",
+            "fills": "bme-bs-bme-electives"
+          },
+          {
+            "label": "Professional Elective",
+            "fills": "bme-bs-professional"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      }
+    ]
+  },
+  "tree": {
+    "id": "bme-bs-root",
+    "type": "ALL",
+    "label": "Biomedical Engineering BS — Major Requirements",
+    "devNote": "Sources: bulletin BS page (structure, wording, units) and the ENG BME Program Planning Sheets, Classes 2027-2030 (elective lists, note (c), class-year alternates; all four sheets have the same back page). Total = 25 required + 1 Fields + 1 Design + 1 Engineering + 2 BME + 2 Professional = 32; the engine derives it, totalCoursesRequired is the fallback. Catalog gaps (in the sources, not in public/courses.json, left out): ENG BE 503 and BE 508 (Engineering elective list); CAS PY 314 and PY 321 (overlap set (8); only E-suffixed study-abroad keys exist); CAS PY 482 and MA 381 (sheet Professional excludes). Claim order: claiming is greedy with no backtracking, siblings left to right, REMAINDER last. Electives go narrow to broad (Fields, Design, Engineering, BME electives, Professional) so a broad pool never takes a course a narrower one needs; this puts the Engineering elective before the BME electives, unlike the bulletin's Senior 1 listing.",
+    "children": [
+      {
+        "id": "bme-bs-required",
+        "type": "COUNT",
+        "label": "Required Courses",
+        "note": "Take the ENG course unless your advisor says otherwise.",
+        "min": 25,
+        "pool": [
+          "CASCH101",
+          "CASMA123",
+          "CASWR120",
+          "ENGEK100",
+          {
+            "type": "SEQUENCE_GROUP",
+            "label": "Programming",
+            "note": "Classes of 2027-2028 planning sheets list EK 121 + 122; 2029 and later use EK 125.",
+            "options": [
+              {
+                "label": "EK 125",
+                "courses": [
+                  "ENGEK125"
+                ]
+              },
+              {
+                "label": "EK 121 + EK 122",
+                "courses": [
+                  "ENGEK121",
+                  "ENGEK122"
+                ]
+              }
+            ]
+          },
+          "CASMA124",
+          "CASCH102",
+          "CASPY211",
+          {
+            "type": "OR_EQUIVALENT",
+            "label": "Writing",
+            "options": [
+              "CASWR151",
+              "CASWR152",
+              "CASWR153"
+            ]
+          },
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "ENGEK103",
+            "substitutes": [
+              "CASMA242",
+              "CASMA442"
+            ],
+            "optionTags": {
+              "CASMA242": "Substitute",
+              "CASMA442": "Substitute"
+            }
+          },
+          "ENGEK131",
+          "CASMA225",
+          "CASPY212",
+          "ENGEK210",
+          "ENGEK301",
+          "CASMA226",
+          "ENGBE209",
+          "ENGEK307",
+          "CASBI315",
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "ENGBE403",
+            "substitutes": [
+              "ENGEC401"
+            ],
+            "optionTags": {
+              "ENGEC401": "Substitute"
+            }
+          },
+          "ENGBE493",
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "ENGEK381",
+            "substitutes": [
+              "CASMA581"
+            ],
+            "optionTags": {
+              "CASMA581": "Substitute"
+            }
+          },
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "ENGBE424",
+            "substitutes": [
+              "ENGEK424"
+            ],
+            "optionTags": {
+              "ENGEK424": "Substitute"
+            },
+            "note": "Earlier class years took this as EK 424."
+          },
+          "ENGBE465",
+          "ENGBE466"
+        ],
+        "devNote": "Same take-all COUNT shape as the EE and ME BS (one named slot per required course, min = pool length = 25) instead of an ALL leaf, because ALL leaves take plain courseKeys only and can't carry either/or slots, optionTags or per-slot notes. Order follows the typical sequence on the bulletin and the ENG BME planning sheet (Class of 2030, 133 units). EK 100 is 0 units but a required course, so it's a slot. Programming slot: EK 125 (bulletin, 2029-2030 sheets) or EK 121 + 122 (2027-2028 sheets). A SEQUENCE_GROUP slot counts as one slot but claims every course in its option, so totalCoursesClaimed can run one higher per bundle than the slot count. SEQUENCE_GROUP options can't take optionTags, so no 'Substitute' pill on the programming slot. Substitute slots (sheet note (c), 'take the ENG option'): EK 103 (MA 242 / MA 442), BE 403 (EC 401), EK 381 (MA 581); sharing one slot also stops both courses of a set counting. BE 424: EK 424 is the 2027 sheet's number for it (same catalog title, no current bulletin page). Bulletin titles: BE 209 Cellular and Molecular Biology, BE 465 Senior Project I, BE 466 Senior Project II; rows show catalog titles, since a plain slot can't carry a label without becoming a 'Choose 1' box."
+      },
+      {
+        "id": "bme-bs-fields",
+        "type": "COUNT",
+        "label": "Fields Elective",
+        "min": 1,
+        "subtitle": "Pick 1 · solid mechanics, transport, or fluids",
+        "pool": [
+          "ENGBE420",
+          "ENGBE435",
+          "ENGBE436"
+        ],
+        "devNote": "Sheet: Continua & Fields in Biomedical Systems Elective. Narrowest elective pool, so it claims first; all three are also on the Engineering list."
+      },
+      {
+        "id": "bme-bs-design",
+        "type": "COUNT",
+        "label": "Biomedical Engineering Design Elective",
+        "min": 1,
+        "subtitle": "Pick 1 · a design course",
+        "pool": [
+          "ENGBE428",
+          "ENGBE468",
+          "ENGBE478"
+        ],
+        "note": "BE 428 and BE 478 can't both be taken for credit.",
+        "noteStyle": "caption",
+        "devNote": "Sheet list. A second design course falls through to the BME electives (BE 400-599)."
+      },
+      {
+        "id": "bme-bs-engineering-elective",
+        "type": "COUNT",
+        "label": "Engineering Elective",
+        "min": 1,
+        "subtitle": "Pick 1 · an approved ENG course",
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "label": "EC, EK and ME courses",
+            "courses": [
+              "ENGEC311",
+              "ENGEC327",
+              "ENGEC410",
+              "ENGEC414",
+              "ENGEC455",
+              "ENGEC471",
+              "ENGEC503",
+              "ENGEC505",
+              "ENGEC516",
+              "ENGEC522",
+              "ENGEC526",
+              "ENGEC556",
+              "ENGEK481",
+              "ENGME302",
+              "ENGME305",
+              "ENGME409",
+              "ENGME419",
+              "ENGME441",
+              "ENGME503",
+              "ENGME521",
+              "ENGME549",
+              "ENGME555",
+              "ENGME571"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "BE courses",
+            "courses": [
+              "ENGBE404",
+              "ENGBE420",
+              "ENGBE425",
+              "ENGBE435",
+              "ENGBE436",
+              "ENGBE471",
+              "ENGBE511",
+              "ENGBE517",
+              "ENGBE518",
+              "ENGBE521",
+              "ENGBE533",
+              "ENGBE526",
+              "ENGBE549",
+              "ENGBE552",
+              "ENGBE555",
+              "ENGBE556",
+              "ENGBE557",
+              "ENGBE559",
+              "ENGBE562",
+              "ENGBE567",
+              "ENGBE571",
+              "ENGBE572"
+            ]
+          }
+        ],
+        "devNote": "2030 sheet list, split so non-BE courses claim first and BE courses stay free for the BME-elective range (claim order beats sheet order). Cross-listed twins from the bulletin course listing count here too: ME 521 (= BE 521), ME 549 (= BE 549), EC 556 (= BE 556); plain keys in the EC/EK/ME list rather than OR_EQUIVALENT slots, since min is 1 and the claimed set stops double counting. BE 503 and BE 508 are on the sheet but not in public/courses.json. BE 517, BE 533, BE 552, EC 471 and ME 409 are on the sheet and active in the catalog but missing from the bulletin's current course listing; kept."
+      },
+      {
+        "id": "bme-bs-bme-electives",
+        "type": "COUNT",
+        "label": "Biomedical Engineering Electives",
+        "min": 2,
+        "subtitle": "Pick 2 · any ENG BE 400-599",
+        "pool": [
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGBE",
+            "min": 400,
+            "max": 599,
+            "exclude": [
+              "ENGBE451",
+              "ENGBE452",
+              "ENGBE500",
+              "ENGBE403",
+              "ENGBE424",
+              "ENGBE465",
+              "ENGBE466",
+              "ENGBE493"
+            ]
+          }
+        ],
+        "note": "BE 451, BE 500, and 600- and 700-level BE courses may count by petition (use ⋯ → Substitute a course).",
+        "noteStyle": "caption",
+        "devNote": "Sheet: all ENG BE 400 and 500 level courses except BE 451, BE 452 and BE 500. A plain COUNT placed after the Engineering elective, so it claims after it. Required BE courses in the range (403, 424, 465, 466, 493) are excluded so they're never offered here; Required Courses claims them first anyway. BE 519 = EC 519 (cross-listed): BE 519 counts here through the range, EC 519 only as a Professional elective; left as is."
+      },
+      {
+        "id": "bme-bs-professional",
+        "type": "REMAINDER",
+        "label": "Professional Electives",
+        "totalRequired": 32,
+        "subtitle": "Pick 2 · ENG BE/EC/EK/ME 300-599, CAS CH/PY/MA/BI, or a listed course",
+        "note": "Directed study and BE 500 may count by petition (use ⋯ → Substitute a course). CH 203 and CH 204 count here, which is how pre-med students usually use them.",
+        "noteStyle": "caption",
+        "pool": [
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGBE",
+            "min": 300,
+            "max": 599,
+            "exclude": [
+              "ENGBE451",
+              "ENGBE452",
+              "ENGBE500",
+              "ENGBE403",
+              "ENGBE424",
+              "ENGBE465",
+              "ENGBE466",
+              "ENGBE493"
+            ]
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGEC",
+            "min": 300,
+            "max": 599,
+            "exclude": [
+              "ENGEC451",
+              "ENGEC467",
+              "ENGEC463",
+              "ENGEC464",
+              "ENGEC401",
+              "ENGEC402"
+            ]
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGEK",
+            "min": 300,
+            "max": 599,
+            "exclude": [
+              "ENGEK494",
+              "ENGEK495",
+              "ENGEK301",
+              "ENGEK307",
+              "ENGEK381",
+              "ENGEK424"
+            ]
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGME",
+            "min": 300,
+            "max": 599,
+            "exclude": [
+              "ENGME452",
+              "ENGME505",
+              "ENGME303",
+              "ENGME306",
+              "ENGME403",
+              "ENGME404"
+            ]
+          },
+          {
+            "type": "COURSE_RANGE",
+            "label": "CAS CH 203, CH 204, or CH 300-599",
+            "subject": "CASCH",
+            "min": 300,
+            "max": 599,
+            "include": [
+              "CASCH203",
+              "CASCH204"
+            ],
+            "exclude": [
+              "CASCH391",
+              "CASCH392",
+              "CASCH401",
+              "CASCH402",
+              "CASCH491",
+              "CASCH492"
+            ]
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "CASPY",
+            "min": 300,
+            "max": 599,
+            "exclude": [
+              "CASPY355",
+              "CASPY371",
+              "CASPY401",
+              "CASPY402",
+              "CASPY491",
+              "CASPY492",
+              "CASPY313"
+            ]
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "CASMA",
+            "min": 300,
+            "max": 599,
+            "exclude": [
+              "CASMA401",
+              "CASMA402",
+              "CASMA581",
+              "CASMA442"
+            ]
+          },
+          {
+            "type": "COURSE_RANGE",
+            "label": "CAS BI 206, BI 216, or BI 300-599",
+            "subject": "CASBI",
+            "min": 300,
+            "max": 599,
+            "include": [
+              "CASBI206",
+              "CASBI216"
+            ],
+            "exclude": [
+              "CASBI315",
+              "CASBI371",
+              "CASBI372",
+              "CASBI394"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "Other approved courses",
+            "courses": [
+              "ENGME357",
+              "ENGME358",
+              "HUBXC433",
+              "HUBXC438",
+              "QSTSI480",
+              "QSTSI482"
+            ]
+          }
+        ],
+        "devNote": "2030 sheet list. totalRequired = 25 required slots + 1 Fields + 1 Design + 1 Engineering + 2 BME + 2 Professional = 32; engine required = totalRequired - siblingsExpected (30) = 2. If a sibling's size changes, recompute. Excludes: the sheet's own, plus directed study / research / thesis / internships (BE 451, BE 452, EC 451, EC 467, ME 452, EK 494, EK 495), BE 500, required-course overlaps (ME 505 has BE 424's title; EC 463/464 senior design; overlap sets: EC 401, EC 402, ME 303, ME 306, ME 403, ME 404, MA 442, PY 313) and the required courses themselves. Kept on purpose, revisit if needed: ME 457 (Engineering Projects in ME) and Special Topics BE 400, EC 400, ME 400, EC 500, ME 500. The CAS ranges still include research / directed-study courses (CH 341-366, 441, 442, 461, 462; MA 491, 492; BI research and graduate seminars); the sheet only excludes those for ENG. MA 242 is outside the MA range. ME 357 and ME 358 are 2 units each; the engine counts courses, so each counts as one of the two. They also fall inside the ME range; listed for visibility. COURSE_RANGE takes one subject per entry, hence one entry per subject."
+      },
+      {
+        "id": "bme-bs-hub",
+        "type": "UNRESOLVED",
+        "label": "BU Hub electives",
+        "note": "Four or more Hub electives covering Philosophical Inquiry, Aesthetic Exploration, Historical Consciousness, Social Inquiry, Individual in Community, Ethical Reasoning, and Global Citizenship (twice), at least 16 units. Track these in the HUB tab. AP/IB credit counts for at most one Hub requirement and transfer credit for none, so you may need extra Hub electives.",
+        "devNote": "Hub units are tracked by the HUB tab, not by this requirements engine."
+      },
+      {
+        "id": "bme-bs-residency",
+        "type": "UNRESOLVED",
+        "label": "Upper-division residency",
+        "note": "At least 48 units of upper-division program coursework (junior/senior program requirements and electives; Hub electives and writing don't count) must be taken at BU.",
+        "devNote": "Needs per-course unit and institution data the engine doesn't have."
+      },
+      {
+        "id": "bme-bs-total-units",
+        "type": "UNRESOLVED",
+        "label": "133 total units",
+        "note": "133 total units are needed to graduate.",
+        "devNote": "Unit total, not a course count; credits are tracked in the Credits tab."
+      },
+      {
+        "id": "bme-bs-overlaps",
+        "type": "UNRESOLVED",
+        "label": "Overlapping courses",
+        "note": "Only one course from each set counts for credit: ME 403 / ME 404 / EC 402 / BE 404; ME 303 / BE 436; ME 306 / BE 425; EK 103 / MA 242 / MA 442; BE 403 / EC 401; EK 381 / MA 581; BE 428 / BE 478; PY 313 / PY 314 / PY 321 & 322.",
+        "devNote": "Sheet note (c). The engine can't flag two overlapping courses. The EK 103, BE 403 and EK 381 sets are enforced in Required Courses by sharing one slot. ME 403, ME 404, EC 402, ME 303, ME 306, EC 401, MA 442 and PY 313 are excluded from Professional Electives. BE 428 / BE 478 can still both count (Design plus a BME elective): advisory only. The BME sheet prints set (8) as 'PY321 & 321'; written as 'PY 321 & 322' like the EE and ME files."
+      }
+    ]
+  }
+}
