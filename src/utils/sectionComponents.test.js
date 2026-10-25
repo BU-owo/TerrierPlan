@@ -1,4 +1,4 @@
-// Run with: node --test src/utils/
+// Run with: node --test src/utils/sectionComponents.test.js (or npm test for all)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { groupSectionsByComponent } from './sectionComponents.js';

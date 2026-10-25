@@ -2,9 +2,9 @@
 
 ## Project
 - Degree planner + class scheduler for BU students. React 19 + Vite 6, react-router-dom 7, Firebase 12 (Auth + Firestore), @dnd-kit. Hosted on Firebase Hosting (`dist/`).
-- Pages: `src/pages/PlannerPage.jsx` (/planner), `src/pages/SchedulerPage.jsx` (/scheduler). Route wiring in `src/App.jsx` (route paths unverified).
-- Data: Firestore `courses`, `sections`, `bulletinPages`, `offeringHistory` (read-only reference, writes only via Admin SDK scripts); per-user `users/{uid}/plans` and `users/{uid}/schedules`. Also `siteStats` and presence docs (rules unverified). Field shapes live in `SCHEMA.md`.
-- Course catalog is also served statically from `public/courses.json` (built by `scripts/export-catalog.cjs`, fetched in `src/utils/courseQuery.js`). Guests (signed out) keep drafts in localStorage (`src/utils/draftStorage.js` and the pages); exact guest-to-account flow unverified.
+- Pages: `src/pages/PlannerPage.jsx` (/planner), `src/pages/SchedulerPage.jsx` (/scheduler). Routes in `src/App.jsx`: `/` (HomePage), `/login`, `/planner`, `/scheduler`, `*` (NotFoundPage).
+- Data: Firestore `courses`, `sections`, `bulletinPages`, `offeringHistory` (read-only reference, writes only via Admin SDK scripts); per-user `users/{uid}/plans` and `users/{uid}/schedules`. Also `siteStats` and presence docs (rules in `firestore.rules`). Field shapes live in `SCHEMA.md`.
+- Course catalog is also served statically from `public/courses.json` (built by `scripts/export-catalog.cjs`, fetched in `src/utils/courseQuery.js`). Guests (signed out) keep drafts in localStorage (`src/utils/draftStorage.js` and the pages). On sign-in, the guest plan is copied to a new Firestore plan and the guest profile and scheduler draft are merged into the account's (the local copy is removed only after the write succeeds): `migrateGuestPlanIfNeeded` / `loadUserProfile` in `PlannerPage.jsx`, the restore in `SchedulerPage.jsx`.
 - Commands: `npm run dev`, `npm run build`, `npm run lint`.
 
 ## Git and deploys (hard rules)

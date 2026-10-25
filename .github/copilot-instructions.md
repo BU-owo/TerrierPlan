@@ -9,8 +9,8 @@
 ## Data model summary
 - `courses/{courseKey}` — catalog data, HUB units as a `hubUnits` string array (already flattened from one-hot columns, don't re-derive from raw CSV columns in app code)
 - `sections/{term}_{classNbr}` — per-term section data, already deduplicated (one doc per section, `instructors` is an array)
-- `bulletinPages/{majorSlug}` — stored bulletin text for the planner's side panel; this is DISPLAY ONLY, not parsed into structured requirements
-- `users/{uid}/plans/{planId}` — a saved degree plan, `semesters` is a fixed-length array of 8 arrays of `courseKey`s
+- `bulletinPages/{majorSlug}` — stored bulletin text; nothing in the client reads it now (the program picker uses `bu-programs.js`, and requirements come from the JSONs in `src/data/requirements/`)
+- `users/{uid}/plans/{planId}` — a saved degree plan, `semesters` has at least 8 slots (Fall/Spring × years, up to 16), stored as an object keyed by slot index; entries are courses or placeholders (see `SCHEMA.md`)
 - `users/{uid}/schedules/{scheduleId}` — a saved schedule, `selectedSectionIds` references `sections` doc IDs
 
 ## Explicit non-goals for now (do not build these unless asked)
@@ -47,10 +47,10 @@ playful, not corporate.
 ## Build order (current phase)
 This is a rough sequencing note, not a gate — work on whatever's next by
 the user's call, no confirmation needed.
-1. Degree Planner page (drag courses into 8 semesters, credit totals, HUB auto-tracking, bulletin side panel) — done
+1. Degree Planner page (drag courses into semesters, credit totals, HUB auto-tracking) — done
 2. HUB Tracker page (reuses HUB data from the Planner) — done
-3. Scheduler rebuild
+3. Scheduler — done
 4. GPA + transcript/AP/IB import — partially done (import exists, GPA UI doesn't)
-5. Degree-requirements engine
+5. Degree-requirements engine — done for the structured majors (see `src/data/requirements/`)
 
 When in doubt about a feature's scope, check this file and `SCHEMA.md` — don't add functionality (real-time updates, open-seat notifications) that's explicitly listed as a non-goal above.

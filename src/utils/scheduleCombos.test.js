@@ -1,4 +1,4 @@
-// Run with: node --test src/utils/
+// Run with: node --test src/utils/scheduleCombos.test.js (or npm test for all)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildGenerationSlots, generateSchedules, generateSchedulesAsync, pinInGroup, scheduleStats, sortSchedules, scheduleSummary, scheduleChipLabel, bookmarkChipStates, bookmarkStep, MAX_EXPLORED, MAX_RESULTS } from './scheduleCombos.js';

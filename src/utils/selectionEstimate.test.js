@@ -1,4 +1,4 @@
-// Run with: node --test src/utils/
+// Run with: node --test src/utils/selectionEstimate.test.js (or npm test for all)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { combinationProduct, SLOW_GENERATION_PRODUCT } from './selectionEstimate.js';

@@ -1,4 +1,4 @@
-// Run with: node --test src/utils/
+// Run with: node --test src/utils/hubConstants.test.js (or npm test for all)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { neededUnitCodes, FIRST_YEAR_REQUIREMENTS, TRANSFER_REQUIREMENTS } from './hubConstants.js';

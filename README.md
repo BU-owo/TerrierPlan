@@ -1,6 +1,6 @@
 # TerrierPlan
 
-A degree planning, HUB tracking, and (eventually) scheduling tool for BU students.
+A degree planning, HUB tracking, and class scheduling tool for BU students.
 
 ## Setup on a new machine
 
@@ -21,7 +21,7 @@ machine-specific):
 
 2. **Create your local environment file**
    ```
-   cp .env.example .env.local
+   cp env.example .env.local
    ```
    Then fill in the real values in `.env.local` from:
    Firebase Console → Project Settings → General → Your apps → Web app config

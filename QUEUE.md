@@ -1,15 +1,8 @@
 # TerrierPlan — Working Queue
 
-Last updated: 2026-09-08
+Last updated: 2026-10-23
 
 ## Queued (in order)
-- Homepage — build the actual marketing/landing homepage. Concept
-  discussed: 3 feature categories (Plan your degree / Build your
-  schedule / Discover courses), Rhett mascot illustrations per category
-  (user is hand-drawing these), BU scarlet/cream branding leaning into
-  BU-specific visual identity rather than generic SaaS/AI-landing-page
-  aesthetics, product screenshot or live demo in the hero rather than an
-  abstract gradient hero.
 - Onboarding / user details on login — new flow prompting a student to
   indicate first-year vs. transfer vs. other, and their major, at
   sign-in/first-use time. Currently `major` (free text, unvalidated) and
@@ -20,8 +13,7 @@ Last updated: 2026-09-08
 ## Ideas — not scoped yet
 - "Tracks" — something about tracks/specializations, not yet defined
   what this means concretely.
-- Should locked/completed courses carry across a user's multiple plans,
-  or stay per-plan only? (currently per-plan only)
+- (Decided) Locked/completed courses are student-level, shared across all of a user's plans (`completedCourseKeys` on `users/{uid}`).
 - Collapsible/expandable year rows in `SemesterBoard.jsx`'s Year 1–4
   layout — collapse a year down to a compact summary line (e.g. "Year 1
   — 8 courses, 32 credits") instead of always showing full columns, so a
@@ -37,12 +29,8 @@ Last updated: 2026-09-08
 
 ### Older backlog (pre-dates this queue, from To_Do doc — not urgent)
 - GPA UI (data captured, nothing displayed in planner)
-- Manual "add external credit" button (currently import-only)
-- HUB course-finder ("what class fills my missing HUB unit")
-- Scheduler page rebuild (fully unbuilt)
-- IB credit import path (blocked on a sample IB transcript)
+- IB credit import path (blocked on a sample IB transcript; manual IB entry works)
 - Dark mode gaps on a few transcript/external-credit elements
-- BulletinPanel removal (once requirements coverage is thorough enough)
 - Custom domain
 - draw happy rhett for when reqs are complete
 - integrate the "when courses are held" script on my Mac.
@@ -70,9 +58,7 @@ Last updated: 2026-09-08
   offered in 5 years"), `offeredSeasons`, fall/spring/summer ratios, and
   first/last offered year. Full per-term history goes to a separate
   `offeringHistory/{courseKey}` collection (see SCHEMA.md — this
-  collection currently has no Firestore rule and is therefore unreadable
-  from the client; nothing reads it yet, but it's a gap to close before
-  anything tries to). Surfaced in the app two ways, both purely
+  collection has a public-read rule in `firestore.rules`; nothing in the client reads it yet). Surfaced in the app two ways, both purely
   informational (never affects drag-and-drop, HUB counting, or
   requirement evaluation): a season-agnostic badge on search/stash result
   cards ("Rarely offered", "Fall only", "Offered some years" — normal

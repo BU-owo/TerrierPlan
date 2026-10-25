@@ -25,6 +25,10 @@ One doc per catalog course. Source: full bulletin scrape (periodic).
 | description | string | |
 | hubUnits | string[] | e.g. `["SI1", "CRI"]` — derived from one-hot columns |
 | lastScraped | timestamp | |
+| career | string \| null | e.g. `"Undergraduate"`, `"Graduate"`, `"Law"`, `"Dental"`, `"Medical"`. Merged by `import-catalog.cjs`. |
+| studyAbroad | boolean? | Study-abroad course. Merged by `import-catalog.cjs`. |
+| credits | number? | Only on courses with no `sections` doc in any term (set by `import-credits.cjs`); the client reads it as a fallback after section credits. |
+| creditsSource | string? | Where `credits` came from, e.g. `"hub-page"`. |
 | offeringPattern | string \| null | Historical offering frequency, e.g. `"Fall"`, `"Fall and Spring"`, `"Alternating Fall"`, `"Alternating Spring"`, `"Not offered in 5 years"`, `"Random"`, `"Insufficient data"`. Merged separately from the fields above — see `offeringHistory` and Import order below. Absent (not just null) on courses the offering-data import never matched. |
 | offeredSeasons | string[] | e.g. `["Fall", "Summer"]` |
 | fallRatio, springRatio, summerRatio | number \| null | Fraction of offered terms in each season, over the dataset window |
@@ -32,10 +36,9 @@ One doc per catalog course. Source: full bulletin scrape (periodic).
 | datasetYearsAvailable | number \| null | How many years of history the ratios above are computed over |
 | offeringDataUpdatedAt | timestamp | Set by `import-offering-data.cjs`, separate from `lastScraped` |
 
-Note: this CSV has no credit-hours column. Credits come from `sections` —
-if a course has no current sections (e.g. not offered this term), credits
-will be unknown until you either backfill from a prior term's data or add
-a manual override field later.
+Note: this CSV has no credit-hours column. Credits come from `sections`;
+a course with no sections in any term falls back to its own `credits` field
+(see above), and shows no credits if that's missing too.
 
 ### `sections/{term}_{classNbr}`
 One doc per section per term. Source: manually imported official schedule
@@ -97,6 +100,8 @@ requirement-checking, no rules engine yet).
 | currentSemesterTarget | number \| string \| null | Student-reported "I am currently in this semester" marker. A number is a `semesters` index (see the plan doc below); a `summer:{year}` string is a Summer slot in `gridSummerTerms`. A fact about the *student*, not any one plan — shared by every plan of theirs (see `completedCourseKeys`), loaded once at sign-in and left untouched by switching or creating plans. `null` means none set. See `getSemesterStatus` in `courseEntry.js`. |
 | completedCourseKeys | courseKey[] | Courses the student has locked/marked complete — also shared across every plan (locking a course in one plan locks it everywhere that courseKey appears). Setting `currentSemesterTarget` auto-adds every course in the active plan's now-past slots here, once; the student can freely remove any of them again (per-course or per-semester, see SemesterColumn's lock toggle). Drives the Requirements/HUB/Credits "Completed" chip as a fallback for courses that aren't chronologically past — see `describeLockStatus` in `treeHelpers.js`. |
 | externalCredits | object[] | AP / IB / transfer credit (see `externalCredits[]` entry below) — also student-level, shared across every plan: adding, editing, or removing a credit in any plan applies everywhere. Backfilled once, the first time an account loads this field, by unioning `externalCredits` off all of that account's plan docs — first deduped by `id`, then deduped again by content (AP/IB: type+courseKey+testSubject, or type+testSubject+score+sourceTitle when there's no courseKey; transfer: sourceTitle+institution+courseKey), since independent plans can hold the same real-world credit under different generated ids. On a conflict, a copy with a student-entered manual override (manualHubUnits/manualCourseKey/manualCourses/advisorNote) wins regardless of recency; otherwise the most recently updated plan's copy wins — see `migratePlanExternalCredits` in `PlannerPage.jsx`. |
+| startTerm | string? | Fall/Spring term code the student started at BU (e.g. `"2248"`, `"2251"`). Sets which slots are past/current/planned from today's date. Unset = the legacy `currentSemesterTarget` path. Written only when set; Clear stores `""`, which reads as unset. Shared across plans, like the fields above. |
+| incompleteCourseKeys | courseKey[] | Reserved; loaded and merged (union) with the guest profile, but nothing uses it yet. |
 
 ### `users/{uid}/plans/{planId}`
 | Field | Type | Notes |
@@ -130,9 +135,9 @@ Shape of each entry in the `users/{uid}.externalCredits` array (see above) — l
 | Field | Type | Notes |
 |---|---|---|
 | id | string | Persistent per-entry identifier used for stable UI keying and updates |
-| type | string | `'ap'` \| `'transfer'` |
+| type | string | `'ap'` \| `'ib'` \| `'transfer'` |
 | sourceTitle | string | Title as printed on the transcript |
-| courseKey | string \| null | BU equivalent; null until user maps a transfer row |
+| courseKey | string \| null | BU equivalent; null until user maps a transfer row. An exam that maps to several courses stores them `+`-joined (e.g. `"CASMA123+CASMA124"`); `externalCreditCourseKeys` splits it back. |
 | credits | number | |
 | institution | string? | Transfer only |
 | testSubject | string? | AP / test credit only |
