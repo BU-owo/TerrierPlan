@@ -160,6 +160,13 @@ priority**, so put the entries you'd prefer claimed first.
 - `"continues": true` on a pool entry draws that entry inside the previous
   entry's box with no heading of its own (e.g. an either/or slot plus a list
   that together form one visible area). Claiming order is unchanged.
+- `"heading": "..."` on a pool entry makes its box a headed box: `heading` is
+  the box title, and that entry plus every following `continues` entry is a
+  collapsed row titled with its own `label` (a `COURSE_RANGE` or a
+  `COURSE_LIST` looks the same; expanding shows its courses). Claimed courses
+  show under their row. A `continues` entry only joins a box with the same
+  heading, and the heading stays when the first entry is hidden (satisfied
+  view). Used for Linguistics BA's language courses (department → language).
 
 #### `atLeast` (optional, `COUNT` and `REMAINDER`)
 ```jsonc

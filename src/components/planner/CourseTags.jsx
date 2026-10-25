@@ -104,14 +104,17 @@ export function OfferingBadge({ offeringPattern, upcomingSeasons, inCurrentTerm 
 // requirement course lists), off by default — outlined off, filled green
 // with a ✓ on, like the HUB code chips. When on, a muted one-line note that
 // it's a snapshot. Never used for claimed rows.
-export function OfferedFilterToggle({ checked, onChange }) {
+// `disabled`: shown greyed when nothing in the list is offered, so the
+// control doesn't come and go (headed requirement rows).
+export function OfferedFilterToggle({ checked, onChange, disabled = false }) {
   return (
     <div className="offered-filter">
       <button
         type="button"
-        className={`hub-chip offered-filter-chip${checked ? ' is-on' : ''}`}
+        className={`hub-chip offered-filter-chip${checked ? ' is-on' : ''}${disabled ? ' is-disabled' : ''}`}
         aria-pressed={checked}
-        title={`Only show courses offered in ${CURRENT_TERM_LABEL}`}
+        disabled={disabled || undefined}
+        title={disabled ? `None offered in ${CURRENT_TERM_LABEL}` : `Only show courses offered in ${CURRENT_TERM_LABEL}`}
         onClick={() => onChange(!checked)}
       >
         {checked && <span aria-hidden="true">✓ </span>}

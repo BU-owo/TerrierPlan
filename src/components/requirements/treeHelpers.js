@@ -319,6 +319,9 @@ export function collectPoolGroups(node, planCourseKeySet, { browse = false } = {
         : entryTitle(entry),
       // Display only: drawn inside the previous entry's box, without its own heading.
       continues: Boolean(entry.continues),
+      // Display only: a box heading (e.g. a department) over collapsed, labeled
+      // rows, one per entry in the box (see CoursePool).
+      heading: entry.heading ?? null,
       // Optional authored per-course pills ("Substitute") and a student note
       // for this slot (OR_EQUIVALENT entries; see requirements SCHEMA.md).
       optionTags: entry.optionTags
@@ -353,6 +356,13 @@ export function collectPoolGroups(node, planCourseKeySet, { browse = false } = {
       textIfEmpty: describePoolEntryShort(entry),
     });
   });
+  // A heading covers its whole box: carried onto the entries that continue it,
+  // so the box keeps it even when its first entry is hidden (satisfied view).
+  let boxHeading = null;
+  for (const group of groups) {
+    if (!group.continues) boxHeading = group.heading ?? null;
+    else if (boxHeading && !group.heading) group.heading = boxHeading;
+  }
   const fallback = satisfied ? [] : (node.missing || []).filter((entry) => entry.fallback);
   return { groups: finish(groups), fallback, substituted: openSubstituted };
 }

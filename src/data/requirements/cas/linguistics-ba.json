@@ -1,0 +1,309 @@
+{
+  "programName": "Linguistics",
+  "degree": "BA",
+  "school": "CAS",
+  "bulletinUrl": "https://www.bu.edu/academics/cas/programs/linguistics/ba-linguistics/",
+  "minGrade": null,
+  "totalCoursesRequired": 12,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "id": "ling-ba-root",
+    "type": "ALL",
+    "label": "Linguistics BA — Major Requirements",
+    "devNote": "Bulletin: 12 courses = 8 Linguistics (groups 1-5) + 4 language courses (group 6). Derived progress total is 12 (1 + 3 + 2 + 1 + 1 + 4), matching totalCoursesRequired. The bulletin lists no minimum grade, so minGrade is null. Honors in the Major is not modeled. Catalog gaps (in the bulletin but not in public/courses.json, left out): LX 327, 368, 369, 372, 374, 376, 381, 386, 490, LG 315, LS 504, PH 486.",
+    "children": [
+      {
+        "id": "ling-ba-intro",
+        "type": "ALL",
+        "label": "Introductory course",
+        "courses": [
+          "CASLX250"
+        ],
+        "devNote": "Bulletin: LX 250, 'taken before all other linguistics courses in the major'. The ordering can't be checked; see ling-ba-intro-first."
+      },
+      {
+        "id": "ling-ba-intro-first",
+        "type": "UNRESOLVED",
+        "label": "Take LX 250 first",
+        "note": "LX 250 should come before all your other LX courses in the major. This isn't checked automatically.",
+        "devNote": "Bulletin ordering rule for group 1. The engine doesn't look at term order."
+      },
+      {
+        "id": "ling-ba-basic",
+        "type": "ALL",
+        "label": "Three basic courses",
+        "courses": [
+          "CASLX301",
+          "CASLX321",
+          "CASLX331"
+        ],
+        "devNote": "Bulletin group 2. Same courses as the Ling-CS BA's required LX block (minus LX 250, which is group 1 here)."
+      },
+      {
+        "id": "ling-ba-additional-lx",
+        "type": "COUNT",
+        "label": "Two additional linguistics courses",
+        "min": 2,
+        "subtitle": "Pick 2, at most one below LX 250",
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "label": "Below LX 250 (at most one)",
+            "cap": 1,
+            "courses": [
+              "CASLX110",
+              "CASLX120",
+              "CASLX205",
+              "CASLX208",
+              "CASLX235"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "LX 300 and above",
+            "courses": [
+              "CASLX311",
+              "CASLX317",
+              "CASLX328",
+              "CASLX341",
+              "CASLX342",
+              "CASLX345",
+              "CASLX346",
+              "CASLX349",
+              "CASLX350",
+              "CASLX355",
+              "CASLX359",
+              "CASLX360",
+              "CASLX390",
+              "CASLX394",
+              "CASLX402",
+              "CASLX403",
+              "CASLX405",
+              "CASLX422",
+              "CASLX423",
+              "CASLX432",
+              "CASLX433",
+              "CASLX453",
+              "CASLX454",
+              "CASLX496"
+            ]
+          }
+        ],
+        "devNote": "Bulletin group 3: two courses, 'at most one of which may be below the level of LX 250'. Sub-250 list first (bulletin numeric order) with cap 1; a second sub-250 course stays unclaimed here and can count in group 5. Explicit lists, not LX ranges like the Ling-CS BA, because the bulletin names the courses. LX 327 and LX 490 are in the bulletin but not in public/courses.json, so they're left out. LX 205, 208, 355, 359 are inactive and hide automatically."
+      },
+      {
+        "id": "ling-ba-specific-language",
+        "type": "COUNT",
+        "label": "One course in the linguistic analysis of a specific language",
+        "min": 1,
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "label": "Offered in English",
+            "courses": [
+              "CASLX365",
+              "CASLX367",
+              "CASLX370",
+              "CASLX375",
+              "CASLX391"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "Knowledge of the language a prerequisite",
+            "courses": [
+              "CASLJ410",
+              "CASLJ510",
+              "CASLX373",
+              "CASLX383",
+              "CASLX384",
+              "SEDDE672"
+            ]
+          }
+        ],
+        "note": "Courses in the second list need knowledge of the language first.",
+        "noteStyle": "caption",
+        "devNote": "Bulletin group 4, two sub-lists as the bulletin shows them. Bulletin's WED DE 672 is SEDDE672 in the catalog (Wheelock became SED; title 'SIGN LANG STRUC', Graduate career). Not in public/courses.json, left out: LX 368, 369 (English list); LG 315, LS 504, LX 372, 374, 376, 381, 386 (prerequisite list). LX 373 is inactive and hides automatically."
+      },
+      {
+        "id": "ling-ba-one-more",
+        "type": "COUNT",
+        "label": "One additional course",
+        "min": 1,
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "label": "From group 3 or 4 above",
+            "courses": [
+              "CASLX110",
+              "CASLX120",
+              "CASLX205",
+              "CASLX208",
+              "CASLX235",
+              "CASLX311",
+              "CASLX317",
+              "CASLX328",
+              "CASLX341",
+              "CASLX342",
+              "CASLX345",
+              "CASLX346",
+              "CASLX349",
+              "CASLX350",
+              "CASLX355",
+              "CASLX359",
+              "CASLX360",
+              "CASLX390",
+              "CASLX394",
+              "CASLX402",
+              "CASLX403",
+              "CASLX405",
+              "CASLX422",
+              "CASLX423",
+              "CASLX432",
+              "CASLX433",
+              "CASLX453",
+              "CASLX454",
+              "CASLX496",
+              "CASLX365",
+              "CASLX367",
+              "CASLX370",
+              "CASLX375",
+              "CASLX391",
+              "CASLJ410",
+              "CASLJ510",
+              "CASLX373",
+              "CASLX383",
+              "CASLX384",
+              "SEDDE672"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "Logic and philosophy of language",
+            "courses": [
+              "CASPH160",
+              "CASPH261",
+              "CASPH360",
+              "CASPH421",
+              "CASPH463"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "Language, culture, and society",
+            "courses": [
+              "CASAN351",
+              "CASAN524",
+              "CASAN532"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "Language acquisition and development",
+            "courses": [
+              "CASNE544",
+              "CASPS544",
+              "SARSH110",
+              "SARSH230",
+              "SARSH325",
+              "SARSH355",
+              "SARSH356"
+            ]
+          }
+        ],
+        "note": "Or another related course with advisor approval (use ⋯ → Substitute a course).",
+        "noteStyle": "caption",
+        "devNote": "Bulletin group 5. A plain COUNT placed after groups 3 and 4: siblings claim left to right, so those fill first and only leftovers count here (no REMAINDER/totalRequired to keep in sync). The first list is the union of the group 3 and 4 lists; group 3's 'at most one below LX 250' cap is per-group, so a second sub-250 course can count here. NE 544 / PS 544 are the same dual-listed course (both keys exist); listing both is harmless since min is 1. PH 486 is in the bulletin but not in public/courses.json, left out."
+      },
+      {
+        "id": "ling-ba-language",
+        "type": "COUNT",
+        "label": "Four language courses",
+        "min": 4,
+        "subtitle": "Third-term level or above, two different non-native languages",
+        "pool": [
+          { "type": "COURSE_RANGE", "heading": "Romance Studies", "label": "French", "subject": "CASLF", "min": 200, "max": 599 },
+          { "type": "COURSE_RANGE", "label": "Italian", "subject": "CASLI", "min": 200, "max": 599, "exclude": ["CASLI330"], "continues": true },
+          { "type": "COURSE_RANGE", "label": "Portuguese", "subject": "CASLP", "min": 200, "max": 599, "exclude": ["CASLP360", "CASLP362"], "continues": true },
+          { "type": "COURSE_RANGE", "label": "Spanish", "subject": "CASLS", "min": 200, "max": 599, "continues": true },
+          { "type": "COURSE_RANGE", "heading": "World Languages & Literatures", "label": "Arabic", "subject": "CASLY", "min": 200, "max": 599, "exclude": ["CASLY283", "CASLY284", "CASLY441"] },
+          { "type": "COURSE_RANGE", "label": "Chinese", "subject": "CASLC", "min": 200, "max": 599, "exclude": ["CASLC227", "CASLC250", "CASLC251", "CASLC260", "CASLC261", "CASLC280", "CASLC286", "CASLC287"], "continues": true },
+          { "type": "COURSE_RANGE", "label": "German", "subject": "CASLG", "min": 200, "max": 599, "exclude": ["CASLG235", "CASLG250", "CASLG382", "CASLG387", "CASLG388"], "continues": true },
+          { "type": "COURSE_RANGE", "label": "Hebrew", "subject": "CASLH", "min": 200, "max": 599, "exclude": ["CASLH250", "CASLH283", "CASLH284"], "continues": true },
+          { "type": "COURSE_RANGE", "label": "Hindi-Urdu", "subject": "CASLN", "min": 200, "max": 599, "exclude": ["CASLN260"], "continues": true },
+          { "type": "COURSE_RANGE", "label": "Japanese", "subject": "CASLJ", "min": 200, "max": 599, "exclude": ["CASLJ250", "CASLJ251", "CASLJ260", "CASLJ261", "CASLJ282", "CASLJ283", "CASLJ388", "CASLJ460"], "continues": true },
+          { "type": "COURSE_RANGE", "label": "Korean", "subject": "CASLK", "min": 200, "max": 599, "exclude": ["CASLK250", "CASLK260", "CASLK261", "CASLK383"], "continues": true },
+          { "type": "COURSE_RANGE", "label": "Persian", "subject": "CASLZ", "min": 200, "max": 599, "exclude": ["CASLZ380", "CASLZ381"], "continues": true },
+          { "type": "COURSE_RANGE", "label": "Russian", "subject": "CASLR", "min": 200, "max": 599, "exclude": ["CASLR250", "CASLR280", "CASLR281", "CASLR282", "CASLR289", "CASLR327", "CASLR355"], "continues": true },
+          { "type": "COURSE_RANGE", "label": "Turkish", "subject": "CASLT", "min": 200, "max": 599, "exclude": ["CASLT388", "CASLT389"], "continues": true },
+          {
+            "type": "COURSE_LIST",
+            "heading": "Classical Studies",
+            "label": "Latin",
+            "courses": [
+              "CASCL211",
+              "CASCL212",
+              "CASCL351",
+              "CASCL451",
+              "CASCL520",
+              "CASCL521",
+              "CASCL522",
+              "CASCL530"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "Ancient Greek",
+            "courses": [
+              "CASCL261",
+              "CASCL262",
+              "CASCL391",
+              "CASCL461",
+              "CASCL561",
+              "CASCL562",
+              "CASCL563"
+            ],
+            "continues": true
+          },
+          { "type": "COURSE_RANGE", "label": "Modern Greek", "subject": "CASCG", "min": 200, "max": 599, "continues": true },
+          {
+            "type": "COURSE_LIST",
+            "heading": "American Sign Language",
+            "label": "American Sign Language",
+            "courses": [
+              "SEDDE383",
+              "SEDDE384",
+              "SEDDE385",
+              "SEDDE386",
+              "SEDDE583",
+              "SEDDE584",
+              "SEDDE585",
+              "SEDDE586",
+              "SEDDE590",
+              "SEDDE591",
+              "SEDDE592"
+            ]
+          }
+        ],
+        "note": "Counts language courses at the third-term level or above from Romance Studies, World Languages & Literatures, Classical Studies, or American Sign Language. Study-abroad courses: use ⋯ → Substitute a course.",
+        "noteStyle": "caption",
+        "devNote": "Bulletin group 6. Subjects from the bulletin department pages, prefixes checked in public/courses.json: Romance Studies = LF, LI, LP, LS; WLL = LY (Arabic), LC, LG, LH, LN (Hindi-Urdu), LJ, LK, LZ (Persian), LR, LT; Classical Studies = CL (Latin/Greek only, explicit list since CL is mostly civ) + CG (Modern Greek; WLL page refers it to Classical Studies); ASL = SED DE. Every language's third term is numbered 211 in the catalog, so min 200 works; no third-term course is below 200 (LF 113, LS 123, LI 131/132, LY 139, LH 139, LC 116, LK 116 are first-year/intensive/heritage). Max 599 keeps out 6xx graduate courses (Reading X for Graduate Students, workshops). Excludes: 200-599 courses whose catalog title says 'in English' / 'in English translation' / 'taught in English', plus ones whose exact title matches an English-taught cross-listing (XL, CL, HI, EN or RN: LI 330, LY 441, LC 227/260/261, LG 235/388, LN 260, LJ 260/261/282/388/460, LK 260/261, LR 327, LT 388/389). Display: one entry per language (label = language name); the first entry of each department carries `heading` and the rest use continues, so each department is one box of collapsed language rows. Latin/Greek lists leave out directed study (CL 493, 494, 497, 498). ASL list = ASL 3 and up (383-386, 583-586, 590-592); DE 472/534/672 (ASL structure, linguistics) and DE 693 (graduate) left out. African languages (LA, LD, LE, LM, LO, LW), LL and LX not included: not on the three department pages. E-suffixed keys never match a range. Group 4/5 courses in these subjects (LJ 410, LJ 510) are claimed by those nodes first, so nothing is counted twice. The two-languages rule is the sibling ling-ba-two-languages (UNRESOLVED)."
+      },
+      {
+        "id": "ling-ba-two-languages",
+        "type": "UNRESOLVED",
+        "label": "Two different languages",
+        "note": "Your four courses must cover at least two different non-native languages. This isn't checked automatically.",
+        "devNote": "Bulletin group 6: 'covering at least two different non-native languages'. The engine can't count distinct subjects within a node."
+      },
+      {
+        "id": "ling-ba-residency",
+        "type": "UNRESOLVED",
+        "label": "Charles River Campus",
+        "note": "At least 6 of your 12 major courses need to be taken on the Charles River Campus. This isn't checked automatically.",
+        "devNote": "Bulletin residency rule. Study-abroad (E-suffixed) courses are kept out of every list."
+      }
+    ]
+  }
+}

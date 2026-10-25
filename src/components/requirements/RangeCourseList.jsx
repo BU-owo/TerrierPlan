@@ -33,8 +33,12 @@ function getSubjectIndex(courses) {
 // catalog is the same shared static-file cache Search and HubFullView use
 // (loadAllCourses), loaded only once the list is first expanded. Courses
 // already in the plan are hidden; stashed ones stay, with a filled paw.
-// Law/Dental/Medical are dropped.
+// Law/Dental/Medical are dropped. `label` replaces the toggle text (a labeled
+// row in a headed box, see CoursePool); `children` render under the toggle.
 export default function RangeCourseList({
+  label,
+  children,
+  alwaysShowControls = false,
   range,
   planCourseKeySet,
   stashSet,
@@ -91,9 +95,10 @@ export default function RangeCourseList({
 
   return (
     <>
-      <button type="button" className="req-node-pool-toggle" onClick={toggle} aria-expanded={expanded}>
-        Browse eligible courses {expanded ? '▾' : '▸'}
+      <button type="button" className={`req-node-pool-toggle${label ? ' req-node-pool-toggle--row' : ''}`} onClick={toggle} aria-expanded={expanded}>
+        {label ?? 'Browse eligible courses'} {expanded ? '▾' : '▸'}
       </button>
+      {children}
       {expanded && shownStatus === 'loading' && (
         <div className="search-loading" role="status" aria-busy="true">
           {loaderVisible && <PawLoader size="small" label="Loading courses…" />}
@@ -112,6 +117,7 @@ export default function RangeCourseList({
           subsetLabels={subsetLabels}
           onRowClick={onRowClick}
           emptyText="No other courses in this range."
+          alwaysShowControls={alwaysShowControls}
         />
       )}
     </>

@@ -1305,6 +1305,8 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
   border: 1.5px solid currentColor;
 }
 .offered-filter-chip.is-on { color: var(--success-surface); background: var(--success-text); border-color: var(--success-text); }
+/* Nothing in the list offered this term: kept in place, greyed. */
+.offered-filter-chip.is-disabled { color: var(--text-muted); cursor: default; opacity: 0.6; }
 .offered-filter-note {
   max-width: 100%;
   font-size: 10px;
@@ -2708,6 +2710,19 @@ html[data-theme='dark'] .search-hub-finder-btn { color: var(--warning-border); }
 .req-fallback-note { font-style: italic; }
 .req-range-list { flex-basis: 100%; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
 .req-range-list .req-node-pool-toggle { align-self: flex-start; }
+/* Headed pool box (Linguistics BA languages): each entry is a full-width
+   labeled row that wraps instead of truncating. */
+.req-node-pool-toggle--row {
+  flex-basis: 100%;
+  flex-shrink: 1;
+  min-width: 0;
+  font-size: 11px;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.req-labeled-row-text { color: var(--text-secondary); cursor: default; }
+.req-labeled-row-text:hover { text-decoration: none; }
 
 /* Course rows (RequirementCourseRow) — one compact line each, in a 2-column
    grid (1 on narrow screens and in the compact sidebar). No inner scroll. */

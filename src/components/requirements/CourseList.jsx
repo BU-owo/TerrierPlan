@@ -29,6 +29,9 @@ export default function CourseList({
   dimmed = false,
   // courseKey -> pill text for alternates ("Substitute"); untagged = standard.
   optionTags,
+  // Headed-box rows (see CoursePool): filter box and term chip at any length,
+  // the chip greyed when nothing here is offered this term.
+  alwaysShowControls = false,
 }) {
   const pair = equivalent && courses.length === 2;
   const [filter, setFilter] = useState('');
@@ -36,20 +39,25 @@ export default function CourseList({
   // Browsing filter only — these rows are never claimed ✓ rows.
   const [offeredOnly, setOfferedOnly] = useState(false);
   const currentTermKeys = useCurrentTermCourseKeys();
+  const isOffered = (course) => course.inCurrentTerm || currentTermKeys?.has(course.id);
+  const showFilter = alwaysShowControls || courses.length > INITIAL_VISIBLE;
+  const chipDisabled = alwaysShowControls && !courses.some(isOffered);
+  const showChip = alwaysShowControls || (courses.length > INITIAL_VISIBLE && currentTermKeys?.size > 0);
+  const offeredFilterOn = offeredOnly && !chipDisabled;
 
   const filterLower = filter.trim().toLowerCase();
   const textFiltered = filterLower
     ? courses.filter((course) =>
       `${course.courseNumber ?? course.id} ${course.name ?? ''} ${course.id}`.toLowerCase().includes(filterLower))
     : courses;
-  const filtered = offeredOnly
-    ? textFiltered.filter((course) => course.inCurrentTerm || currentTermKeys?.has(course.id))
+  const filtered = offeredFilterOn
+    ? textFiltered.filter(isOffered)
     : textFiltered;
   const visible = showAll || filterLower ? filtered : filtered.slice(0, INITIAL_VISIBLE);
 
   return (
     <div className="req-range-list">
-      {courses.length > INITIAL_VISIBLE && (
+      {showFilter && (
         <input
           type="text"
           className="req-pool-filter-input"
@@ -58,12 +66,12 @@ export default function CourseList({
           onChange={(e) => setFilter(e.target.value)}
         />
       )}
-      {courses.length > INITIAL_VISIBLE && currentTermKeys?.size > 0 && (
-        <OfferedFilterToggle checked={offeredOnly} onChange={setOfferedOnly} />
+      {showChip && (
+        <OfferedFilterToggle checked={offeredFilterOn} onChange={setOfferedOnly} disabled={chipDisabled} />
       )}
-      {filtered.length === 0 && (filterLower || offeredOnly || emptyText) && (
+      {filtered.length === 0 && (filterLower || offeredFilterOn || emptyText) && (
         <div className="req-pool-filter-empty">
-          {offeredOnly && textFiltered.length > 0
+          {offeredFilterOn && textFiltered.length > 0
             ? <>None offered {CURRENT_TERM_LABEL} — turn off the filter to see all.</>
             : filterLower ? <>No courses match &ldquo;{filter}&rdquo;.</> : emptyText}
         </div>

@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import CourseList from './CourseList';
 import RequirementCourseRow from './RequirementCourseRow';
 import RangeCourseList from './RangeCourseList';
@@ -13,6 +13,27 @@ import { lockStatusVariant } from '../../utils/completion';
 // range include rows plus the inline catalog browse list (RangeCourseList,
 // the same in the sidebar and the full view), or sequence option cards — then
 // the additionalPool note.
+
+// One collapsed, labeled row in a headed box (an entry with nothing left to
+// offer shows its label as plain text). Claimed rows stay visible under the
+// label; `body` (the usual CourseList) shows when expanded.
+function LabeledRow({ label, held, body }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <>
+      {body ? (
+        <button type="button" className="req-node-pool-toggle req-node-pool-toggle--row" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
+          {label} {expanded ? '▾' : '▸'}
+        </button>
+      ) : (
+        <span className="req-node-pool-toggle req-node-pool-toggle--row req-labeled-row-text">{label}</span>
+      )}
+      {held}
+      {expanded && body}
+    </>
+  );
+}
+
 export default function CoursePool({
   pool,
   subsets = [],
@@ -80,14 +101,44 @@ export default function CoursePool({
   }
 
   // A pool entry flagged `continues` is drawn inside the previous entry's box
-  // (one visible area made of an either/or slot plus a plain list).
+  // (one visible area made of an either/or slot plus a plain list). Only a box
+  // with the same heading takes it, so headed boxes never merge.
   function foldContinuing(list) {
     const folded = [];
     for (const group of list) {
-      if (group.continues && folded.length > 0) folded[folded.length - 1].continued.push(group);
+      const prev = folded[folded.length - 1];
+      if (group.continues && prev && (prev.heading ?? null) === (group.heading ?? null)) prev.continued.push(group);
       else folded.push({ ...group, continued: [] });
     }
     return folded;
+  }
+
+  // Headed box: each entry is a collapsed row titled with its label, the same
+  // for range and list entries; its claimed rows sit under the label.
+  function renderLabeledRow(part) {
+    const claimedKeys = part.claimed.filter((key) => !part.substituted?.some((sub) => sub.courseKey === key));
+    const held = (
+      <>
+        {part.note && <span className="req-slot-note">{part.note}</span>}
+        {claimedKeys.length > 0 && (
+          <div className="req-course-grid">{claimedKeys.map((key) => claimedRow(key, part.optionTags))}</div>
+        )}
+        {substitutedRows(part.substituted)}
+      </>
+    );
+    if (part.kind === 'range' && part.showRange) {
+      return (
+        <Fragment key={part.key}>
+          <RangeCourseList label={part.title} range={part.range} planCourseKeySet={planCourseKeySet} alwaysShowControls {...listProps}>
+            {held}
+          </RangeCourseList>
+          {part.includeOptions.length > 0 && choiceList(part.includeOptions)}
+        </Fragment>
+      );
+    }
+    const offer = part.kind === 'range' ? null : renderOffer(part, { alwaysShowControls: true });
+    if (!offer && claimedKeys.length === 0 && !part.substituted?.length) return null;
+    return <LabeledRow key={part.key} label={part.title} held={held} body={offer} />;
   }
 
   // Take-all nodes: a run of plain required courses is one borderless grid in
@@ -138,7 +189,8 @@ export default function CoursePool({
     );
   }
 
-  function renderOffer(group) {
+  // `extra`: CourseList props for this call only (headed-box rows).
+  function renderOffer(group, extra = {}) {
     if (group.kind === 'range') {
       if (!group.showRange) return null;
       return (
@@ -171,11 +223,11 @@ export default function CoursePool({
     // "Choose 1" box: every authored option, same grid at 2 and 3+ (no "or"
     // pill, no inactive hiding — these are required slots).
     if (group.layout === 'choose') {
-      return <CourseList courses={toCourses(group.options)} optionTags={group.optionTags} {...listProps} />;
+      return <CourseList courses={toCourses(group.options)} optionTags={group.optionTags} {...extra} {...listProps} />;
     }
     // Required courses (ALL leaf) are never hidden — they aren't choices.
-    if (group.required) return <CourseList courses={toCourses(group.options)} {...listProps} />;
-    return choiceList(group.options, { equivalent: group.equivalent, optionTags: group.optionTags });
+    if (group.required) return <CourseList courses={toCourses(group.options)} {...extra} {...listProps} />;
+    return choiceList(group.options, { equivalent: group.equivalent, optionTags: group.optionTags, ...extra });
   }
 
   return (
@@ -208,6 +260,16 @@ export default function CoursePool({
                 {group.title && <span className="req-slot-title">{group.title}</span>}
               </div>
               {parts.map((part) => renderGroupBody(part))}
+            </div>
+          );
+        }
+        if (group.heading) {
+          return (
+            <div key={group.key} className={`req-slot${open || substituted ? ' req-slot--open' : ''}`}>
+              <div className="req-pool-head">
+                <span className="req-pool-title">{group.heading}</span>
+              </div>
+              {parts.map((part) => renderLabeledRow(part))}
             </div>
           );
         }
