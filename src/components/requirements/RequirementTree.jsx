@@ -111,13 +111,22 @@ export default function RequirementTree({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
 
+  // Keyed on the missing keys themselves (not `result`, a new object whenever
+  // the plan re-renders) and asked for once each: a key with no courses doc
+  // never lands in courseMap and must not re-trigger the lookup forever.
+  const requestedKeys = useRef(new Set());
+  const missingSig = useMemo(
+    () => (result ? Array.from(collectAllCourseKeys(result.tree)).filter((key) => !courseMap[key]).sort().join('|') : ''),
+    [result, courseMap]
+  );
   useEffect(() => {
-    if (!result || !onEnsureCourseData) return;
-    const keys = Array.from(collectAllCourseKeys(result.tree));
-    const missing = keys.filter((key) => !courseMap[key]);
-    if (missing.length > 0) onEnsureCourseData(missing);
+    if (!missingSig || !onEnsureCourseData) return;
+    const fresh = missingSig.split('|').filter((key) => !requestedKeys.current.has(key));
+    if (fresh.length === 0) return;
+    fresh.forEach((key) => requestedKeys.current.add(key));
+    onEnsureCourseData(fresh);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result]);
+  }, [missingSig]);
 
   // Same default as RequirementNodeView: only fully done rows start
   // collapsed (startsCollapsed); a manual toggle always wins.

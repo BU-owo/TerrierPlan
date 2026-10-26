@@ -377,6 +377,6 @@ test('seeding and the tracker use the same key list: requirementsPlanKeys', () =
     assert.ok(!r.addedCourses.some((c) => c.courseKey === key), `${key} not re-added`);
   }
   const planner = readFileSync(new URL('../pages/PlannerPage.jsx', import.meta.url), 'utf8');
-  assert.match(planner, /requirementsCourseKeys = requirementsPlanKeys\(/);
+  assert.match(planner, /requirementsCourseKeys = useMemo\(\s*\(\) => requirementsPlanKeys\(/);
   assert.doesNotMatch(planner, /externalCredits\.flatMap\(externalCreditCourseKeys\)/);
 });

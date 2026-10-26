@@ -3113,7 +3113,11 @@ export default function PlannerPage({ theme = 'light', onToggleTheme }) {
   // came back courseNote-only with no courseKey, e.g. AP Biology — without
   // this fallback, a confirmed override was invisible to every requirement
   // node even though it displayed correctly in the External Credit panel.
-  const requirementsCourseKeys = requirementsPlanKeys({ semesters, gridSummerTerms, extraTerms, externalCredits });
+  // Memoized: RequirementTree re-evaluates whenever this array changes identity.
+  const requirementsCourseKeys = useMemo(
+    () => requirementsPlanKeys({ semesters, gridSummerTerms, extraTerms, externalCredits }),
+    [semesters, gridSummerTerms, extraTerms, externalCredits],
+  );
 
   // ── Milestone celebrations (see useCelebration / CelebrationCard) ──────
   // Plan loaded: same signal as the `?view=` effect. HUB also waits for every
