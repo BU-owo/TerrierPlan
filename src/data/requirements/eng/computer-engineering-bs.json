@@ -1,0 +1,529 @@
+{
+  "programName": "Computer Engineering",
+  "degree": "BS",
+  "school": "ENG",
+  "bulletinUrl": "https://www.bu.edu/academics/eng/programs/computer-engineering/bs/",
+  "minGrade": null,
+  "totalCoursesRequired": 32,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "sequence": {
+    "fillPriority": [
+      "ce-bs-natural-science",
+      "ce-bs-core-electives",
+      "ce-bs-breadth",
+      "ce-bs-ce-electives",
+      "ce-bs-technical-electives"
+    ],
+    "slots": [
+      {
+        "courses": [
+          "CASMA123",
+          "CASWR120",
+          "ENGEK100",
+          "ENGEK125"
+        ],
+        "placeholders": [
+          {
+            "label": "Natural Science Elective",
+            "fills": "ce-bs-natural-science"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "CASMA124",
+          "CASPY211",
+          "CASWR151",
+          "ENGEK103",
+          "ENGEK131"
+        ]
+      },
+      {
+        "courses": [
+          "CASMA193",
+          "CASMA225",
+          "CASPY212",
+          "ENGEK307",
+          "ENGEC327"
+        ]
+      },
+      {
+        "courses": [
+          "CASMA226",
+          "ENGEC311",
+          "ENGEC330",
+          "ENGEK210",
+          "ENGEK301"
+        ]
+      },
+      {
+        "courses": [
+          "ENGEC413",
+          "ENGEK381"
+        ],
+        "placeholders": [
+          {
+            "label": "CE Core Elective",
+            "fills": "ce-bs-core-electives"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "placeholders": [
+          {
+            "label": "CE Core Elective",
+            "fills": "ce-bs-core-electives"
+          },
+          {
+            "label": "Computer Engineering Elective",
+            "fills": "ce-bs-ce-electives"
+          },
+          {
+            "label": "EE Breadth Elective",
+            "fills": "ce-bs-breadth"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "ENGEC463"
+        ],
+        "placeholders": [
+          {
+            "label": "Computer Engineering Elective",
+            "fills": "ce-bs-ce-electives"
+          },
+          {
+            "label": "Technical Elective",
+            "fills": "ce-bs-technical-electives"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "ENGEC464"
+        ],
+        "placeholders": [
+          {
+            "label": "Technical Elective",
+            "fills": "ce-bs-technical-electives"
+          },
+          {
+            "label": "Technical Elective",
+            "fills": "ce-bs-technical-electives"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      }
+    ]
+  },
+  "tree": {
+    "id": "ce-bs-root",
+    "type": "ALL",
+    "label": "Computer Engineering BS — Major Requirements",
+    "children": [
+      {
+        "id": "ce-bs-required",
+        "type": "COUNT",
+        "label": "Required Courses",
+        "note": "Take the ENG course unless your advisor says otherwise.",
+        "min": 23,
+        "pool": [
+          "CASMA123",
+          "CASWR120",
+          "ENGEK100",
+          {
+            "type": "SEQUENCE_GROUP",
+            "label": "Programming",
+            "note": "Classes of 2027-2028 planning sheets list EK 121 + 122; 2029 and later use EK 125.",
+            "options": [
+              {
+                "label": "EK 125",
+                "courses": [
+                  "ENGEK125"
+                ]
+              },
+              {
+                "label": "EK 121 + EK 122",
+                "courses": [
+                  "ENGEK121",
+                  "ENGEK122"
+                ]
+              }
+            ]
+          },
+          "CASMA124",
+          "CASPY211",
+          {
+            "type": "OR_EQUIVALENT",
+            "label": "Writing",
+            "options": [
+              "CASWR151",
+              "CASWR152",
+              "CASWR153"
+            ]
+          },
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "ENGEK103",
+            "substitutes": [
+              "CASMA242",
+              "CASMA442"
+            ],
+            "optionTags": {
+              "CASMA242": "Substitute",
+              "CASMA442": "Substitute"
+            }
+          },
+          "ENGEK131",
+          "CASMA193",
+          "CASMA225",
+          "CASPY212",
+          "ENGEK307",
+          "ENGEC327",
+          "CASMA226",
+          "ENGEC311",
+          "ENGEC330",
+          "ENGEK210",
+          "ENGEK301",
+          "ENGEC413",
+          {
+            "type": "SUBSTITUTE_GROUP",
+            "primary": "ENGEK381",
+            "substitutes": [
+              "CASMA581"
+            ],
+            "optionTags": {
+              "CASMA581": "Substitute"
+            }
+          },
+          "ENGEC463",
+          "ENGEC464"
+        ],
+        "devNote": "Authored as a COUNT with one named slot per required course (min = pool length) instead of an ALL leaf, because ALL leaves take plain courseKeys only and can't carry either/or slots, optionTags or per-slot notes. Same shape as the EE and BME cores. Order follows the bulletin sequence. Programming slot: EK 125 (2029+ sheets, bulletin) or EK 121 + 122 (2027-2028 sheets). A SEQUENCE_GROUP slot counts as one slot but claims every course in its option, so totalCoursesClaimed can run one higher than the slot count. SEQUENCE_GROUP options can't take optionTags, so no 'Substitute' pill on the programming slot. EK 103 substitutes: MA 242, MA 442; EK 381: MA 581 (no sheet uses MA 142 or MA 381). Hub electives are tracked in the HUB tab, not here."
+      },
+      {
+        "id": "ce-bs-natural-science",
+        "type": "COUNT",
+        "label": "Natural Science Elective",
+        "min": 1,
+        "pool": [
+          "CASAS202",
+          "CASBI107",
+          "CASBI108",
+          "CASCH101",
+          "CASCH131",
+          "CASPY313",
+          "CASPY451"
+        ],
+        "devNote": "Same list as the EE node plus PY 313. The 2027 sheet prints CH 131 in First-year 1 in place of the Natural Science placeholder; CH 131 is in this list, so nothing changes. PY 313 and PY 451 are also in the Technical Electives list; claimed here first if they are the only natural science course. PY 314 and PY 321 + 322 are intentionally not options (catalog has only E-suffixed keys); students use ⋯ → Substitute a course."
+      },
+      {
+        "id": "ce-bs-core-electives",
+        "type": "COUNT",
+        "label": "CE Core Electives",
+        "min": 2,
+        "subtitle": "Pick 2 · EC 401, 410, 427, 440, 441, or 444",
+        "pool": [
+          "ENGEC401",
+          "ENGEC410",
+          "ENGEC427",
+          "ENGEC440",
+          "ENGEC441",
+          "ENGEC444"
+        ],
+        "devNote": "Pool order is claim order. 401 and 410 are first: Breadth (claims next) lists them last, so putting them here first misfires least. 427, 440, 441, 444 can still go to CE Electives, which claims after Core. See the root devNote for the known residual case."
+      },
+      {
+        "id": "ce-bs-breadth",
+        "type": "COUNT",
+        "label": "EE Breadth Elective",
+        "min": 1,
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "courses": [
+              "ENGEC455",
+              "ENGEC402",
+              "ENGEC414",
+              "ENGEC415",
+              "ENGEC418",
+              "ENGEC501",
+              "ENGEC503",
+              "ENGEC505",
+              "ENGEC508",
+              "ENGEC516",
+              "ENGEC517",
+              "ENGEC519",
+              "ENGEC520",
+              "ENGEC522",
+              "ENGEC524",
+              "ENGEC525",
+              "ENGEC534",
+              "ENGEC412",
+              "ENGEC580",
+              "ENGEC582",
+              "ENGEC417",
+              "ENGEC583",
+              "ENGEC456",
+              "ENGEC471",
+              "ENGEC491",
+              "ENGEC543",
+              "ENGEC555",
+              "ENGEC556",
+              "ENGEC560",
+              "ENGEC562",
+              "ENGEC565",
+              "ENGEC568",
+              "ENGEC570",
+              "ENGEC572",
+              "ENGEC573",
+              "ENGEC574",
+              "ENGEC575",
+              "ENGEC577",
+              "ENGEC578",
+              "ENGEC579",
+              "ENGEC585",
+              "ENGEC591",
+              "ENGEK481",
+              "ENGEC401",
+              "ENGEC410",
+              "ENGEC523"
+            ]
+          }
+        ],
+        "subtitle": "Pick 1 · EC 401, 410, 455, or an EE core elective",
+        "devNote": "EC 455 first, then every course in EE's three EE Core Elective pools (Systems, Electronics, Electrophysics) except EC 541 and EC 571, copied from electrical-engineering-bs.json and de-duplicated (EC 417 and EC 583 appear in two EE pools). EC 401, 410 and 523 are last: 401/410 are claimed by Core first anyway, and 523 also counts as a CE Elective (claims after this node), so other Breadth courses take the slot first. EE's per-area cap of 2 does not apply to CE Breadth."
+      },
+      {
+        "id": "ce-bs-ce-electives",
+        "type": "COUNT",
+        "label": "Computer Engineering Electives",
+        "min": 2,
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "courses": [
+              "ENGEC427",
+              "ENGEC440",
+              "ENGEC441",
+              "ENGEC444",
+              "ENGEC504",
+              "ENGEC513",
+              "ENGEC518",
+              "ENGEC521",
+              "ENGEC523",
+              "ENGEC526",
+              "ENGEC527",
+              "ENGEC528",
+              "ENGEC530",
+              "ENGEC531",
+              "ENGEC535",
+              "ENGEC541",
+              "ENGEC544",
+              "ENGEC545",
+              "ENGEC551",
+              "ENGEC552",
+              "ENGEC571",
+              "CASCS320",
+              "CASCS350",
+              "CASCS410",
+              "CASCS411",
+              "CASCS505",
+              "CASCS511",
+              "CASCS525",
+              "CASCS530",
+              "CASCS535",
+              "CASCS538",
+              "CASCS548",
+              "CASCS552",
+              "CASCS558",
+              "CASCS562",
+              "CASCS565"
+            ]
+          }
+        ],
+        "subtitle": "Pick 2 · a listed EC or CS course",
+        "devNote": "2030 sheet list (identical on the 2027-2029 sheets). Includes EC 541 and EC 571, which are excluded from Breadth. EC 427/440/441/444 also appear in Core and are claimed there first when the student has more than two."
+      },
+      {
+        "id": "ce-bs-technical-electives",
+        "type": "REMAINDER",
+        "label": "Technical Electives",
+        "totalRequired": 32,
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "label": "Computer Engineering Electives",
+            "courses": [
+              "ENGEC427",
+              "ENGEC440",
+              "ENGEC441",
+              "ENGEC444",
+              "ENGEC504",
+              "ENGEC513",
+              "ENGEC518",
+              "ENGEC521",
+              "ENGEC523",
+              "ENGEC526",
+              "ENGEC527",
+              "ENGEC528",
+              "ENGEC530",
+              "ENGEC531",
+              "ENGEC535",
+              "ENGEC541",
+              "ENGEC544",
+              "ENGEC545",
+              "ENGEC551",
+              "ENGEC552",
+              "ENGEC571",
+              "CASCS320",
+              "CASCS350",
+              "CASCS410",
+              "CASCS411",
+              "CASCS505",
+              "CASCS511",
+              "CASCS525",
+              "CASCS530",
+              "CASCS535",
+              "CASCS538",
+              "CASCS548",
+              "CASCS552",
+              "CASCS558",
+              "CASCS562",
+              "CASCS565"
+            ]
+          },
+          "ENGBE209",
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGEC",
+            "min": 300,
+            "max": 599,
+            "exclude": [
+              "ENGEC311",
+              "ENGEC327",
+              "ENGEC330",
+              "ENGEC413",
+              "ENGEC463",
+              "ENGEC464"
+            ]
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGBE",
+            "min": 300,
+            "max": 599,
+            "exclude": [
+              "ENGBE403",
+              "ENGBE404"
+            ]
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGEK",
+            "min": 300,
+            "max": 599,
+            "exclude": [
+              "ENGEK301",
+              "ENGEK307",
+              "ENGEK381"
+            ]
+          },
+          {
+            "type": "COURSE_RANGE",
+            "subject": "ENGME",
+            "min": 300,
+            "max": 599,
+            "exclude": [
+              "ENGME403",
+              "ENGME404"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "Approved outside courses",
+            "courses": [
+              "CASAS414",
+              "CASCS440",
+              "CASCS480",
+              "CASCS585",
+              "CASMA511",
+              "CASMA528",
+              "CASMA531",
+              "CASMA541",
+              "CASMA583",
+              "CASPY313",
+              "CASPY451",
+              "CASPY452",
+              "CDSDS310",
+              "CDSDS340",
+              "CDSDS453",
+              "CDSDS563"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "Technology & business courses",
+            "cap": 2,
+            "courses": [
+              "QSTSI480",
+              "QSTSI482",
+              "HUBXC433",
+              "HUBXC438"
+            ]
+          }
+        ],
+        "subtitle": "Pick 3 · any CE elective, BE 209, ENG EC/BE/EK/ME 300-599, or a listed outside course",
+        "note": "No more than 4 units of EC 451 (directed study) count; that isn't checked automatically. Courses already used elsewhere don't count twice.",
+        "noteStyle": "caption",
+        "devNote": "totalRequired = 23 required slots + 1 natural science + 2 core + 1 breadth + 2 CE + 3 technical = 32; engine required = totalRequired - siblingsExpected (29) = 3. The sheet says ENG BE 209 and any ENG EC, BE, EK or ME course at 300-level or above except 600-level; authored as 300-599 (no 700+ undergrad courses expected), same call as EE. COURSE_RANGE takes one subject per entry. The EC 3xx range only matches EC 311/327/330 (all required), so it is effectively EC 400-599; min stays 300 as the sheet says. Excludes: the required courses in range (EC 311, 327, 330, 413, 463, 464; EK 301, 307, 381) and the CE overlap alternates BE 403, BE 404, ME 403, ME 404 (EC 401/402 are kept). ME 303/306 and BE 425/436 are left in. Kept on purpose, revisit if needed (the sheet does not exclude them): EC 400, 451, 467, 500; BE 400, 451, 452, 465, 466, 500; EK 494, 495; ME 400, 452, 457, 500. 'No more than 4 units of EC 451' can't be enforced by the engine. HUB XC 433 carries '(F24 & Sp25)' on the sheet; kept in the list. PY 314 and PY 321 + 322 are left out (catalog has only E-suffixed keys). Range matches (unsuffixed, 300-599): EC 78, BE 45, EK 16, ME 79 before excludes."
+      },
+      {
+        "id": "ce-bs-hub",
+        "type": "UNRESOLVED",
+        "label": "BU Hub electives",
+        "note": "Four or more Hub electives covering Philosophical Inquiry, Aesthetic Exploration, Historical Consciousness, Social Inquiry, Individual in Community, Ethical Reasoning, and Global Citizenship (twice), at least 16 units. Track these in the HUB tab. AP/IB credit counts for at most one Hub requirement and transfer credit for none, so you may need extra Hub electives.",
+        "devNote": "Hub units are tracked by the HUB tab, not by this requirements engine."
+      },
+      {
+        "id": "ce-bs-residency",
+        "type": "UNRESOLVED",
+        "label": "Upper-division residency",
+        "note": "At least 48 units of upper-division program coursework (junior/senior program requirements and electives; Hub electives and writing don't count) must be taken at BU.",
+        "devNote": "Needs per-course unit and institution data the engine doesn't have."
+      },
+      {
+        "id": "ce-bs-total-units",
+        "type": "UNRESOLVED",
+        "label": "133 total units",
+        "note": "133 total units are needed to graduate.",
+        "devNote": "Unit total, not a course count; credits are tracked in the Credits tab."
+      },
+      {
+        "id": "ce-bs-overlaps",
+        "type": "UNRESOLVED",
+        "label": "Overlapping courses",
+        "note": "Only one course from each set counts for credit: EC 402 / ME 403 / ME 404 / BE 404; ME 303 / BE 436; ME 306 / BE 425; EK 103 / MA 242 / MA 442; BE 403 / EC 401; EK 381 / MA 581; BE 428 / BE 478; PY 313 / PY 314 / PY 321 & 322.",
+        "devNote": "Sheet note (c). The engine can't flag two overlapping courses. The EK 103 and EK 381 sets are enforced in Required Courses by sharing one slot. BE 403, BE 404, ME 403 and ME 404 are excluded from Technical Electives (EC 401 and EC 402 are CE-side options). The rest (ME 303 / BE 436, ME 306 / BE 425, BE 428 / BE 478, PY 313 / PY 314 / PY 321 & 322) are advisory only."
+      }
+    ],
+    "devNote": "Sources: bulletin BS page (structure, units; its last-updated date could not be confirmed, and it shows only EK 125 where the 2027-2028 sheets use EK 121 + 122) and the ENG CE Program Planning Sheets, Classes 2027-2030 (elective lists, note (c), class-year alternates; all four sheets have the same back page). Total = 23 required + 1 Natural Science + 2 Core + 1 Breadth + 2 CE + 3 Technical = 32; the engine derives it, totalCoursesRequired is the fallback. Catalog gaps (in the sheets, not in public/courses.json, left out): CAS PY 314 and PY 321 + 322 (Natural Science and Technical lists; only E-suffixed study-abroad keys exist). Claim order: greedy, no backtracking, siblings left to right, REMAINDER last: Natural Science, Core, Breadth, CE Electives, Technical, narrow to broad. Core, Breadth and CE Electives overlap (EC 401/410 in Core and Breadth; EC 427/440/441/444 in Core and CE; EC 523 in Breadth and CE), so greedy claiming can't always find the best split. Known residual: EC 401, 410, 440, 441, 504 puts 401 + 410 in Core and 440 + 441 in CE, leaving Breadth at 0/1 although Core 410 + 440, Breadth 401, CE 441 + 504 would fill everything (adding EC 455 fixes it). Student fix: use ⋯ → Substitute a course on Breadth. Fixing it properly needs backtracking in the engine; Core order 401, 410, 427, 440, 441, 444 was chosen because it misfires least (about 4 in 3000 random contested plans, versus about 19 with 427-444 first)."
+  }
+}
