@@ -7,7 +7,11 @@
 // DRY RUN BY DEFAULT — reads two local files and writes nothing (no Firestore
 // access, no credentials needed). --commit writes with create(), so an
 // existing doc makes that one create fail instead of being overwritten; the
-// rest still go through and every failure is reported.
+// rest still go through and every failure is reported. Exits nonzero if any
+// create failed for a reason other than "already exists".
+//
+// Also required as a module by scripts/refresh-term.cjs (check), which calls
+// buildCandidates() directly; main() only runs when this file is executed.
 //
 // Doc shape mirrors import-catalog.cjs's --create-new payload, minus
 // everything that would be invented rather than read from the schedule:
@@ -79,9 +83,9 @@ function countBy(items, fn) {
   return out;
 }
 
-function buildCandidates() {
-  const rows = parse(readUtf8Strict(INPUT), { columns: true, skip_empty_lines: true, bom: true });
-  const catalog = new Set(JSON.parse(fs.readFileSync(CATALOG, 'utf8')).map((c) => c.id));
+function buildCandidates({ input = INPUT, catalogPath = CATALOG } = {}) {
+  const rows = parse(readUtf8Strict(input), { columns: true, skip_empty_lines: true, bom: true });
+  const catalog = new Set(JSON.parse(fs.readFileSync(catalogPath, 'utf8')).map((c) => c.id));
 
   // One entry per courseKey; keeps every distinct title/career/class-status
   // seen across that key's rows (a section repeats a row per instructor/meeting).
@@ -159,6 +163,11 @@ async function commit(docs) {
   }
   console.log(`\nCreated ${created.length}, failed ${failed.length}.`);
   for (const f of failed) console.log(`  FAILED ${f.key}: ${f.error}`);
+  const realFailures = failed.filter((f) => f.error !== 'already exists');
+  if (realFailures.length) {
+    console.error(`${realFailures.length} create(s) failed for a reason other than "already exists".`);
+    process.exitCode = 1;
+  }
 }
 
 async function main() {
@@ -206,7 +215,11 @@ async function main() {
   await commit(docs);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = { buildCandidates };

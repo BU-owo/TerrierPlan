@@ -16,15 +16,18 @@
 //       Derives the stale set from LIVE Firestore (the snapshot is ignored).
 //       Aborts before writing if the live stale count is not exactly 50, or
 //       the --expect value. Backs up the full data of every affected doc to
-//       ../TerrierPlan-out/retire-stale-sections-backup-2026-10-19.json
-//       (refuses if it exists), creates the marker meta/retireStaleSections<term>
-//       (refuses if it exists), then merge-sets ONLY
-//       { classStat: 'Cancelled', retiredAt: serverTimestamp() } in batches of 400.
+//       ../TerrierPlan-out/retire-stale-sections-backup-<term>-<timestamp>.json,
+//       overwrites the marker meta/retireStaleSections<term> with status
+//       'started' (an earlier run's marker is only printed as a warning), then
+//       merge-sets ONLY { classStat: 'Cancelled', retiredAt: serverTimestamp() }
+//       in batches of 400, and finally sets the marker to 'done'.
 //
 // Options: --term (default 2271),
 //          --csv (default scheduleclasses/schedule_with_types_spring2027.csv).
 //
-// Rollback: restore classStat from the backup JSON (and delete retiredAt).
+// Rollback: restore classStat from the backup JSON (and delete retiredAt). A
+// re-run's backup holds the already-Cancelled values; the original classStat
+// is in the first run's backup.
 
 const fs = require('fs');
 const path = require('path');
@@ -32,7 +35,6 @@ const { parse } = require('csv-parse/sync');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const OUT_DIR = path.join(REPO_ROOT, '..', 'TerrierPlan-out');
-const BACKUP_PATH = path.join(OUT_DIR, 'retire-stale-sections-backup-2026-10-19.json');
 const BATCH_SIZE = 400;
 const DEFAULT_EXPECTED = 50;
 
@@ -47,6 +49,7 @@ const TERM = argValue('--term', '2271');
 const CSV_PATH = path.resolve(argValue('--csv', path.join(REPO_ROOT, 'scheduleclasses', 'schedule_with_types_spring2027.csv')));
 const SNAPSHOT_PATH = path.resolve(argValue('--snapshot', path.join(OUT_DIR, `sections-${TERM}-backup-2026-10-19.json`)));
 const MARKER = ['meta', `retireStaleSections${TERM}`];
+const BACKUP_PATH = path.join(OUT_DIR, `retire-stale-sections-backup-${TERM}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
 
 function loadCsvIds() {
   const rows = parse(fs.readFileSync(CSV_PATH, 'utf8'), { columns: true, skip_empty_lines: true });
@@ -89,10 +92,6 @@ async function apply() {
     console.error(`Refusing --apply: --expect must be a non-negative integer (got "${expectRaw}").`);
     process.exit(1);
   }
-  if (fs.existsSync(BACKUP_PATH)) {
-    console.error(`Refusing --apply: backup ${BACKUP_PATH} already exists, so this may already have run.`);
-    process.exit(1);
-  }
   const csvIds = loadCsvIds();
   if (csvIds.size === 0) {
     console.error(`Refusing --apply: no term ${TERM} sections found in ${CSV_PATH}.`);
@@ -104,11 +103,16 @@ async function apply() {
   initializeApp({ credential: applicationDefault() });
   const db = getFirestore();
 
-  // Marker is checked (read-only) before anything else touches Firestore.
+  // An earlier run's marker is only reported; this run overwrites it below.
+  // Re-retiring is safe (merge-set of the same two fields; the --expect check
+  // still guards the count).
   const markerRef = db.collection(MARKER[0]).doc(MARKER[1]);
-  if ((await markerRef.get()).exists) {
-    console.error(`Refusing --apply: marker ${MARKER.join('/')} exists, so this already ran (or was started).`);
-    process.exit(1);
+  const oldMarker = await markerRef.get();
+  if (oldMarker.exists) {
+    const m = oldMarker.data();
+    const when = (m.finishedAt ?? m.startedAt)?.toDate?.().toISOString() ?? 'unknown date';
+    const count = m.docsRetired ?? m.docsToRetire ?? 'unknown';
+    console.warn(`WARNING: marker ${MARKER.join('/')} exists from an earlier run (status ${m.status ?? 'unknown'}, ${when}, ${count} sections). It will be overwritten.`);
   }
 
   const snap = await db.collection('sections').where('term', '==', TERM).get();
@@ -130,8 +134,9 @@ async function apply() {
   fs.writeFileSync(BACKUP_PATH, JSON.stringify(backup, null, 2) + '\n', { flag: 'wx' });
   console.log(`Backup of ${stale.length} docs written to ${BACKUP_PATH}`);
 
-  // create() fails if the marker exists. Set before the first batch so a crash midway still blocks a re-run.
-  await markerRef.create({
+  // Overwrites any earlier marker. Set before the first batch so a crash midway
+  // leaves status 'started' rather than the previous run's 'done'.
+  await markerRef.set({
     status: 'started',
     startedAt: FieldValue.serverTimestamp(),
     term: TERM,

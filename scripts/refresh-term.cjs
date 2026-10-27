@@ -6,16 +6,19 @@
 //       Offline. Reads the two BU exports (title row skipped, meeting dates ->
 //       MM/DD/YYYY), runs scheduleclasses/merge-section-types.cjs, and writes
 //       scheduleclasses/schedule_with_types_<season><year>.csv. An existing
-//       file there is renamed to .OLD.csv first (refuses if .OLD.csv exists).
+//       file there is renamed to .OLD.csv first (an existing .OLD.csv is
+//       renamed to .OLD-<timestamp>.csv before that).
 //       Fails if any non-Cancelled row ends up with no Component.
 //   node scripts/refresh-term.cjs check <csv> [--offline]
-//       import-sections dry run + local counts + READ-ONLY comparison with live
-//       Firestore (needs GOOGLE_APPLICATION_CREDENTIALS). On a pass writes
+//       import-sections dry run + local counts + courses missing from
+//       public/courses.json + READ-ONLY comparison with live Firestore (needs
+//       GOOGLE_APPLICATION_CREDENTIALS). On a pass writes
 //       ../TerrierPlan-out/refresh-check-<date>.json (CSV hash). --offline skips
 //       the Firestore part and writes no check file (so apply can't use it).
 //   node scripts/refresh-term.cjs apply <csv>
 //       WRITES to live Firestore. Needs a matching passed check. Backup ->
-//       import-sections -> retire-stale-sections --apply -> export-catalog.
+//       import-sections -> retire-stale-sections --apply ->
+//       create-courses-from-schedule --commit -> export-catalog.
 
 const fs = require('fs');
 const os = require('os');
@@ -30,7 +33,8 @@ const Papa = require('papaparse');
 const REPO_ROOT = path.resolve(__dirname, '..');
 const OUT_DIR = path.join(REPO_ROOT, '..', 'TerrierPlan-out');
 const SCHED_DIR = path.join(REPO_ROOT, 'scheduleclasses');
-const RETIRE_BACKUP = path.join(OUT_DIR, 'retire-stale-sections-backup-2026-10-19.json'); // hardcoded in retire-stale-sections.cjs
+const CATALOG_PATH = path.join(REPO_ROOT, 'public', 'courses.json');
+const MISSING_SHOWN = 20;
 const DATE_COLS = ['Meeting Start Date', 'Meeting End Date'];
 const SEASON = { 1: 'spring', 5: 'summer', 6: 'summer', 8: 'fall' };
 
@@ -38,6 +42,7 @@ const die = (msg) => {
   console.error(`\nFAIL: ${msg}`);
   process.exit(1);
 };
+const stamp = () => new Date().toISOString().replace(/[:.]/g, '-');
 const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const readCsv = (file) => parse(fs.readFileSync(file, 'utf8'), { columns: true, skip_empty_lines: true });
 const node = (script, args, opts = {}) => spawnSync(process.execPath, [path.join(REPO_ROOT, script), ...args], { cwd: REPO_ROOT, ...opts });
@@ -110,9 +115,6 @@ function prepare(schedArg, rosterArg, outArg) {
 
   const finalPath = outArg ? path.resolve(outArg) : path.join(SCHED_DIR, `schedule_with_types_${termSlug(term)}.csv`);
   const oldPath = finalPath.replace(/\.csv$/, '.OLD.csv');
-  if (!outArg && fs.existsSync(finalPath) && fs.existsSync(oldPath)) {
-    die(`${path.relative(REPO_ROOT, finalPath)} and its .OLD.csv both exist. Move or delete the .OLD.csv yourself, then re-run (nothing was changed).`);
-  }
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'refresh-term-'));
   try {
@@ -134,6 +136,11 @@ function prepare(schedArg, rosterArg, outArg) {
     }
 
     if (!outArg && fs.existsSync(finalPath)) {
+      if (fs.existsSync(oldPath)) {
+        const olderPath = finalPath.replace(/\.csv$/, `.OLD-${stamp()}.csv`);
+        fs.renameSync(oldPath, olderPath);
+        console.log(`Moved older ${path.basename(oldPath)} to ${path.relative(REPO_ROOT, olderPath)}`);
+      }
       fs.renameSync(finalPath, oldPath);
       console.log(`Moved previous file to ${path.relative(REPO_ROOT, oldPath)}`);
     }
@@ -197,7 +204,16 @@ async function check(csv, offline) {
     for (const r of bad.slice(0, 10)) console.log(`      ${r['Class Nbr']}  ${r['Subject Area']} ${r['Catalog Nbr']} ${r['Class Section']}`);
   }
 
-  // 3. Live sections that are not in the CSV (read-only).
+  // 3. Courses with no catalog entry (informational). Same rule as
+  // create-courses-from-schedule.cjs, which apply runs with --commit.
+  const { buildCandidates } = require('./create-courses-from-schedule.cjs');
+  const missingKeys = buildCandidates({ input: csv, catalogPath: CATALOG_PATH }).candidates.map((e) => e.key).sort();
+  console.log(`INFO  ${missingKeys.length} courses in the CSV are missing from public/courses.json (apply creates their course docs)`);
+  if (missingKeys.length) {
+    console.log(`      ${missingKeys.slice(0, MISSING_SHOWN).join(', ')}${missingKeys.length > MISSING_SHOWN ? `, … (${missingKeys.length - MISSING_SHOWN} more)` : ''}`);
+  }
+
+  // 4. Live sections that are not in the CSV (read-only).
   let stale = null;
   let liveCount = null;
   if (offline) {
@@ -228,7 +244,7 @@ async function check(csv, offline) {
     return;
   }
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  const record = { passed: true, csv: path.resolve(csv), sha256: sha256(csv), term, sections: ids.size, liveCount, staleCount: stale.length, checkedAt: new Date().toISOString() };
+  const record = { passed: true, csv: path.resolve(csv), sha256: sha256(csv), term, sections: ids.size, liveCount, staleCount: stale.length, missingCourses: missingKeys.length, checkedAt: new Date().toISOString() };
   fs.writeFileSync(checkFile, JSON.stringify(record, null, 2) + '\n');
   console.log(`\nCHECK PASSED. Wrote ${checkFile}`);
 }
@@ -262,14 +278,12 @@ async function apply(csv) {
   const rec = findPassedCheck(csv);
   if (!rec) die(`no passed check for this exact CSV (sha256 ${sha256(csv).slice(0, 12)}…). Run: node scripts/refresh-term.cjs check ${path.relative(REPO_ROOT, csv)}`);
 
-  // Preflight: everything that can be refused is refused before the first write.
-  if (fs.existsSync(RETIRE_BACKUP)) die(`${RETIRE_BACKUP} already exists and retire-stale-sections.cjs refuses to run over it. Move it aside first. Nothing was written.`);
+  // An earlier retire marker for this term is not a refusal: retire-stale-sections
+  // prints it as a warning and overwrites it.
   const db = openDb();
-  const marker = await db.collection('meta').doc(`retireStaleSections${term}`).get();
-  if (marker.exists) die(`marker meta/retireStaleSections${term} exists, so retire-stale-sections would refuse. Nothing was written.`);
 
-  console.log(`Term ${term}: ${rec.sections} sections in CSV, ${rec.liveCount} live, ${rec.staleCount} to retire (check from ${rec.checkedAt}).`);
-  console.log('This WRITES to live Firestore: import-sections, then retire-stale-sections --apply, then rewrites public/courses.json.');
+  console.log(`Term ${term}: ${rec.sections} sections in CSV, ${rec.liveCount} live, ${rec.staleCount} to retire, ${rec.missingCourses ?? '?'} new course docs (check from ${rec.checkedAt}).`);
+  console.log('This WRITES to live Firestore: import-sections, retire-stale-sections --apply, create-courses-from-schedule --commit, then rewrites public/courses.json.');
   if ((await ask(`Type the term id (${term}) to continue: `)) !== term) die('confirmation did not match; nothing was written.');
 
   const written = [];
@@ -292,7 +306,7 @@ async function apply(csv) {
   const runStep = (script, args) => () => node(script, args, { stdio: 'inherit' }).status === 0;
 
   const backupPath = path.join(OUT_DIR, `sections-${term}-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
-  await step('1/4 back up live sections', async () => {
+  await step('1/5 back up live sections', async () => {
     const snap = await db.collection('sections').where('term', '==', term).get();
     fs.mkdirSync(OUT_DIR, { recursive: true });
     fs.writeFileSync(backupPath, JSON.stringify(Object.fromEntries(snap.docs.map((d) => [d.id, d.data()])), null, 2) + '\n', { flag: 'wx' });
@@ -300,9 +314,10 @@ async function apply(csv) {
     return true;
   }, 'nothing in Firestore was changed (a backup file may be partly written; delete it and retry)');
   const rel = path.relative(REPO_ROOT, csv);
-  await step('2/4 import-sections', runStep('scripts/import-sections.cjs', [csv]), 'may be PARTLY imported (merge-sets in batches of 400). Safe to fix the cause and re-run apply from the start.');
-  await step('3/4 retire-stale-sections --apply', runStep('scripts/retire-stale-sections.cjs', ['--apply', '--term', term, '--csv', csv, '--expect', String(rec.staleCount)]), `the import is complete. Retire may have written its backup and the marker meta/retireStaleSections${term} and some batches; read its output above before retrying.`);
-  await step('4/4 export-catalog', runStep('scripts/export-catalog.cjs', []), 'Firestore is fully updated; public/courses.json may be stale. Just re-run: node scripts/export-catalog.cjs');
+  await step('2/5 import-sections', runStep('scripts/import-sections.cjs', [csv]), 'may be PARTLY imported (merge-sets in batches of 400). Safe to fix the cause and re-run apply from the start.');
+  await step('3/5 retire-stale-sections --apply', runStep('scripts/retire-stale-sections.cjs', ['--apply', '--term', term, '--csv', csv, '--expect', String(rec.staleCount)]), `the import is complete. Retire may have written its backup, the marker meta/retireStaleSections${term} (status 'started') and some batches; read its output above. Re-running apply from the start is safe (retire re-applies the same merge-set).`);
+  await step('4/5 create-courses-from-schedule --commit', runStep('scripts/create-courses-from-schedule.cjs', ['--input', csv, '--commit']), `sections are fully updated; some course docs may already be created (create() never overwrites). Fix the cause, then re-run: node scripts/create-courses-from-schedule.cjs --input ${path.relative(REPO_ROOT, csv)} --commit, then node scripts/export-catalog.cjs`);
+  await step('5/5 export-catalog', runStep('scripts/export-catalog.cjs', []), 'Firestore is fully updated; public/courses.json may be stale. Just re-run: node scripts/export-catalog.cjs');
 
   console.log(`\nDONE. Firestore updated and public/courses.json rewritten. Backup: ${backupPath}`);
   console.log(`\nNow, BY HAND, in a clean checkout of main (copy these two files in first if this checkout is not main):\n`);
