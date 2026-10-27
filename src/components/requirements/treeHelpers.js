@@ -95,8 +95,16 @@ export function isTakeAllNode(node) {
     && pool.every((entry) => typeof entry === 'string' || isAlternativesEntry(entry) || isSequenceEntry(entry));
 }
 
+// "CS" for a one-subject range; "QST courses" / "Any course" (plus "not QST")
+// for a subjectPrefix range. Authored labels replace this in most cards.
+function rangeSubjectText(range) {
+  if (range.subject) return displaySubject(range.subject);
+  const notSubjects = range.excludeSubjectPrefixes?.length ? ` not ${range.excludeSubjectPrefixes.join('/')}` : '';
+  return `${range.subjectPrefix ? `${range.subjectPrefix} courses` : 'Any course'}${notSubjects}`;
+}
+
 function describeRange(entry) {
-  const span = `${displaySubject(entry.subject)} ${entry.min}-${entry.max}`;
+  const span = `${rangeSubjectText(entry)} ${entry.min}-${entry.max}`;
   return entry.type === 'COURSE_RANGE_CAP' ? `up to ${entry.cap} from ${span}` : span;
 }
 
@@ -131,7 +139,8 @@ export function describeRequirement(node, visibility = null) {
       const pool = node.pool || [];
       // No course list (e.g. filled by a special-term block, or by petitions).
       if (pool.length === 0) return null;
-      if (isTakeAllNode(node)) return `Take all ${node.min}`;
+      // Same course count as the card's n/N (a bundle slot counts its courses).
+      if (isTakeAllNode(node)) return `Take all ${node.required ?? node.min}`;
       if (pool.some(isRangeEntry)) return `Pick ${node.min}: ${pool.map(describePoolEntryShort).join(', ')}`;
       // Pick-one nodes count every selectable course (a sequence bundle is one).
       if (node.min === 1) {
@@ -302,6 +311,34 @@ export function collectPoolGroups(node, planCourseKeySet, { browse = false } = {
     }
 
     const kind = entryKind(entry);
+    // `slotLayout: "rows"` take-all nodes: an either/or slot is plain rows in
+    // authored order (the counted one keeps its place), not a "Choose 1" box.
+    // Every option stays listed, so browse mode shows nothing more.
+    if (takeAll && node.slotLayout === 'rows' && isAlternativesEntry(entry)) {
+      const substituted = subsForEntry(i);
+      const items = substituted.length > 0
+        ? substituted.map((sub) => ({ type: 'sub', sub }))
+        : poolEntryCandidateKeys(entry).flatMap((key) => {
+          if (claimedSet.has(key)) return [{ type: 'claimed', key }];
+          return planCourseKeySet.has(key) ? [] : [{ type: 'offer', key }];
+        });
+      groups.push({
+        key: `${i}`,
+        title: null,
+        kind: 'courses',
+        layout: 'rows',
+        items,
+        optionTags: entry.optionTags
+          ? Object.fromEntries(Object.entries(entry.optionTags).map(([key, tag]) => [normalizeCourseKey(key), tag]))
+          : null,
+        note: entry.note ?? null,
+        claimed,
+        substituted,
+        options: items.filter((item) => item.type === 'offer').map((item) => item.key),
+        textIfEmpty: describePoolEntryShort(entry),
+      });
+      return;
+    }
     // One course fills an "X or Y" / sequence slot; lists and ranges can
     // keep claiming until the node (or the entry's cap) is full.
     const singleSlot = isAlternativesEntry(entry) || kind === 'sequence';
@@ -342,6 +379,8 @@ export function collectPoolGroups(node, planCourseKeySet, { browse = false } = {
       range: isRangeEntry(entry)
         ? {
           subject: entry.subject,
+          subjectPrefix: entry.subjectPrefix,
+          excludeSubjectPrefixes: entry.excludeSubjectPrefixes,
           min: entry.min,
           max: entry.max,
           exclude,
@@ -420,7 +459,7 @@ export function describeFallbackNote(node, fallbackEntries, flatNodes) {
       parts.push(entry.entryLabel);
       keys.push(...(entry.courseKeys || []));
     } else if (entry.range) {
-      parts.push(`${displaySubject(entry.range.subject)} ${entry.range.min}-${entry.range.max}`);
+      parts.push(`${rangeSubjectText(entry.range)} ${entry.range.min}-${entry.range.max}`);
     } else {
       const entryKeys = entry.courseKeys || [];
       keys.push(...entryKeys);
@@ -452,8 +491,10 @@ export function collectMatchedKeys(node, acc = []) {
   if (node.type === 'ONE_OF' && Array.isArray(node.children) && node.activeChildIndex !== undefined) {
     return collectMatchedKeys(node.children[node.activeChildIndex], acc);
   }
+  // A view child (`claims: "view"`) only re-reads courses counted elsewhere,
+  // so a parent skips it; asked directly, it reports its own.
   if (Array.isArray(node.children)) {
-    node.children.forEach((child) => collectMatchedKeys(child, acc));
+    node.children.forEach((child) => { if (child.claims !== 'view') collectMatchedKeys(child, acc); });
     return acc;
   }
   for (const entry of node.matched || []) {
@@ -473,7 +514,7 @@ export function countCounted(node) {
   if (node.type === 'ONE_OF' && Array.isArray(node.children) && node.activeChildIndex !== undefined) {
     return countCounted(node.children[node.activeChildIndex]);
   }
-  if (Array.isArray(node.children)) return node.children.reduce((sum, child) => sum + countCounted(child), 0);
+  if (Array.isArray(node.children)) return node.children.reduce((sum, child) => sum + (child.claims === 'view' ? 0 : countCounted(child)), 0);
   const matched = collectMatchedKeys(node);
   const outside = (node.substitutions || []).filter(
     (sub) => sub.status === 'applied' && !(sub.courseKey && matched.includes(sub.courseKey))

@@ -68,9 +68,11 @@ function keysForEntry(entry, count) {
   if (entry.type === 'SEQUENCE_GROUP') return (entry.options[0]?.courses || []).map(normalizeCourseKey);
   if (entry.type === 'COURSE_RANGE' || entry.type === 'COURSE_RANGE_CAP') {
     const skip = new Set([...(entry.exclude || [])].map(normalizeCourseKey));
+    // subjectPrefix ranges: a made-up subject inside the prefix ("QSTZZ", "ZZ").
+    const subject = entry.subject ?? `${entry.subjectPrefix ?? ''}ZZ`;
     const keys = [];
     for (let n = entry.min; n <= entry.max && keys.length < count; n += 1) {
-      const key = `${entry.subject}${n}`;
+      const key = `${subject}${n}`;
       if (!skip.has(key)) keys.push(key);
     }
     return keys.slice(0, entry.type === 'COURSE_RANGE_CAP' ? Math.min(count, entry.cap) : count);
@@ -118,6 +120,27 @@ function syntheticPlan(def) {
   return [...new Set(planKeysForNode(def.tree, []))];
 }
 
+// The same plan with every bundle (SEQUENCE_GROUP option, as a node or a pool
+// entry) filled by its LARGEST option and no other option's courses, so the
+// multi-course options are the ones that match (numerator must stay <= total).
+function largestBundlePlan(def) {
+  const bundles = [];
+  (function walk(node) {
+    if (node.type === 'SEQUENCE_GROUP') bundles.push(node);
+    for (const entry of [...(node.pool || []), ...(node.additionalPool || [])]) if (entry?.type === 'SEQUENCE_GROUP') bundles.push(entry);
+    (node.atLeast || []).forEach((subset) => (subset.pool || []).forEach((entry) => { if (entry?.type === 'SEQUENCE_GROUP') bundles.push(entry); }));
+    if (Array.isArray(node.children)) node.children.forEach(walk);
+  })(def.tree);
+  const largest = bundles.map((bundle) => [...bundle.options].sort((a, b) => b.courses.length - a.courses.length)[0].courses.map(normalizeCourseKey));
+  const other = new Set(bundles.flatMap((bundle) => bundle.options.flatMap((option) => option.courses.map(normalizeCourseKey))));
+  return [...new Set([...syntheticPlan(def).filter((key) => !other.has(key)), ...largest.flat()])];
+}
+
+const PLAN_VARIANTS = [
+  { name: null, build: syntheticPlan },
+  { name: 'largest bundle options', build: largestBundlePlan },
+];
+
 // ── Walking results ─────────────────────────────────────────────────────────
 
 function allNodes(node, acc = []) {
@@ -127,8 +150,11 @@ function allNodes(node, acc = []) {
 }
 
 // Every courseKey the evaluated tree holds as claimed (a course claimed twice
-// shows up twice).
+// shows up twice). View nodes (`claims: "view"`) re-read courses counted
+// elsewhere on a private copy, so they're left out of the double-claim and
+// freed-course checks.
 function claimedList(node, acc = []) {
+  if (node.claims === 'view') return acc;
   if (node.waived) {
     acc.push(...(node.matched || []));
     return acc;
@@ -210,10 +236,10 @@ const MARINE_VARIANTS = [
   { name: 'legacy Marine shapes', marineSlots: legacySemesters.reduce((sum, entries, i) => sum + marineTrackerSlots(entries, i), 0) },
 ];
 
-for (const { file, def } of programs) for (const variant of MARINE_VARIANTS) {
-  test(`petition sweep: ${file} (${variant.name})`, (t) => {
+for (const { file, def } of programs) for (const variant of MARINE_VARIANTS) for (const planVariant of PLAN_VARIANTS) {
+  test(`petition sweep: ${file} (${variant.name}${planVariant.name ? `, ${planVariant.name}` : ''})`, (t) => {
     const options = { marineSlots: variant.marineSlots };
-    const plan = [...syntheticPlan(def), ...IN_PLAN];
+    const plan = [...planVariant.build(def), ...IN_PLAN];
     const failures = [];
     const fail = (nodeId, kind, message) => failures.push(`${nodeId} [${kind}]: ${message}`);
 

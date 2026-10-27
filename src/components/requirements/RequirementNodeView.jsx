@@ -17,6 +17,7 @@ import PetitionActiveDisplay from './PetitionActiveDisplay';
 import SequenceGroupDetail from './SequenceGroupDetail';
 import RequirementNodeMenu from './RequirementNodeMenu';
 import MarinePoolList from './MarinePoolList';
+import PickDropdown from './PickDropdown';
 import { HubProgressRing } from '../planner/HubFullView';
 import { deriveRequiredTotal } from '../../utils/requirementsEngine';
 import { unresolvedLast } from '../../utils/unresolvedLast';
@@ -57,6 +58,7 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
     flatNodes,
     onAddFromRow,
     inactiveKeys,
+    onSelectOption,
   } = shared;
 
   // Which ONE_OF option is on screen; null = follow node.activeChildIndex.
@@ -66,6 +68,33 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
 
   // Full view's All / Still to do / Done filter (RequirementTree).
   if (!nodeShown(node, viewFilter, splitStatusMap)) return null;
+
+  // `selection: "student"` ONE_OF (BSBA concentration): a dropdown of every
+  // option, then the picked one's requirements. The pick is what's evaluated
+  // (onSelectOption); the dropdown's "No concentration" row clears it.
+  if (node.type === 'ONE_OF' && node.selection === 'student' && Array.isArray(node.children) && !node.waived) {
+    const picked = node.activeChildIndex;
+    const chosen = picked == null ? null : node.children[picked];
+    return (
+      <div className="req-picker">
+        <PickDropdown
+          label={node.label}
+          options={node.children.map((option) => option.label)}
+          picked={picked}
+          onPick={(index) => onSelectOption?.(node.id, index)}
+          placeholder="Choose your concentration"
+          clearLabel="No concentration"
+        />
+        {chosen ? (
+          <div className="hub-full-requirements">
+            <RequirementNodeView key={chosen.id} node={chosen} depth={depth + 1} {...shared} />
+          </div>
+        ) : (
+          <p className="req-node-note">Pick your concentration to see what it needs.</p>
+        )}
+      </div>
+    );
+  }
 
   // A waived container has no evaluated children to recurse into, since
   // evaluation was skipped entirely for it — it renders like a leaf.
@@ -119,7 +148,10 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
   )?.label;
   const substitutedText = substitutedCount > 0 ? `${substitutedCount} substituted` : null;
   // Take-all nodes: "Take all N" as a pill plus a one-line legend for the boxes.
-  const subtitle = isTakeAllNode(node) && headerText
+  // `slotLayout: "rows"` nodes have no boxes, so neither.
+  const subtitle = node.slotLayout === 'rows' && isTakeAllNode(node)
+    ? substitutedText ?? ''
+    : isTakeAllNode(node) && headerText
     ? (
       <>
         <span className="req-choose-badge">{headerText}</span>
@@ -235,9 +267,21 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
     const browsePool = normalPool && !isMarineCard ? collectPoolGroups(node, planCourseKeySet, { browse: true }) : null;
     const canBrowse = Boolean(browsePool) && poolOfferCount(browsePool) > poolOfferCount(normalPool);
     const pool = canBrowse && browsing ? browsePool : normalPool;
+    // A small text link, right-aligned on the note's line (its own short line
+    // when the node has no note).
+    const browseToggle = canBrowse ? (
+      <button
+        type="button"
+        className="req-browse-toggle"
+        aria-expanded={browsing}
+        onClick={(e) => { e.stopPropagation(); setBrowsing((open) => !open); }}
+      >
+        {browsing ? 'Hide options' : 'Browse options'}
+      </button>
+    ) : null;
     return (
       <>
-        {noteLine}
+        {browseToggle ? <div className="req-body-topline">{noteLine}{browseToggle}</div> : noteLine}
         {isUnresolved && node.note && <span className="req-node-detail">{node.note}</span>}
         {node.type === 'SEQUENCE_GROUP' && !isOverridden && (
           <SequenceGroupDetail
@@ -260,16 +304,6 @@ export default function RequirementNodeView({ node, depth = 0, ...shared }) {
             onShowCourseInfo={onShowCourseInfo}
             onRowClick={onAddFromRow}
           />
-        )}
-        {canBrowse && (
-          <button
-            type="button"
-            className="req-browse-toggle"
-            aria-expanded={browsing}
-            onClick={(e) => { e.stopPropagation(); setBrowsing((open) => !open); }}
-          >
-            {browsing ? 'Hide options' : 'Browse options'}
-          </button>
         )}
         {pool && (
           <CoursePool

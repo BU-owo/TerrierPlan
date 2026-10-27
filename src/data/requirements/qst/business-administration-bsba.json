@@ -1,0 +1,2317 @@
+{
+  "programName": "Business Administration",
+  "degree": "BS",
+  "school": "QST",
+  "bulletinUrl": "https://www.bu.edu/academics/questrom/programs/undergrad/",
+  "minGrade": null,
+  "totalCoursesRequired": 35,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "id": "bsba-root",
+    "type": "ALL",
+    "label": "Business Administration BS — Major Requirements",
+    "devNote": "bulletinUrl is the Questrom undergrad overview (https://www.bu.edu/academics/questrom/programs/undergrad/) because that is the url in src/data/bu-programs.js and what saved plans store as majorBulletinUrl; the official-bulletin link therefore lands on the overview, not the BSBA page (https://www.bu.edu/academics/questrom/programs/undergrad/bsba/). Switching needs a bu-programs.js change plus a majorBulletinUrl migration. Sources: Track A = the BSBA bulletin page (132 units); Track B = the Questrom UDC 'Fall 2019 – Spring 2025' requirements page (133 units). Counts are courses, not units: 1-unit XP 301, 2-unit SM 132 and the ES career courses each count as one course. minGrade is null because the grade rules differ by course group (see the Grades cards).",
+    "children": [
+      {
+        "id": "bsba-earlier-cohorts",
+        "type": "UNRESOLVED",
+        "label": "Entered before Fall 2019",
+        "note": "Requirements for students who entered before Fall 2019 aren't tracked here. Check the bulletin archive for your entry year.",
+        "devNote": "Only the Fall 2025+ and Fall 2019 – Spring 2025 requirement sets are modeled."
+      },
+      {
+        "id": "bsba-tracks",
+        "type": "ONE_OF",
+        "presentation": "tracks",
+        "label": "When you entered Questrom",
+        "devNote": "Tracks are entry cohorts, not student choices. The engine picks the first complete track, else the closest (ties: Track A); students can switch tabs. Each track's free electives REMAINDER totalRequired is the track's own slot total; RECOMPUTE it if a sibling's size changes.",
+        "children": [
+          {
+            "id": "bsba-a",
+            "type": "ALL",
+            "label": "Entered Fall 2025 or later",
+            "children": [
+              {
+                "id": "bsba-a-required",
+                "type": "COUNT",
+                "label": "Required Courses",
+                "slotLayout": "rows",
+                "note": "XP 301 can also be met with an approved term-long study abroad, a global business internship, or a Questrom global business course with a reflection paper. Record that with ⋯ → Substitute a course.",
+                "min": 14,
+                "pool": [
+                  "QSTSM131",
+                  "QSTAC221",
+                  {
+                    "type": "SUBSTITUTE_GROUP",
+                    "primary": "QSTBA221",
+                    "substitutes": [
+                      "QSTQM221"
+                    ],
+                    "optionTags": {
+                      "QSTQM221": "Substitute"
+                    },
+                    "note": "QM 221 (the old number) also counts."
+                  },
+                  "QSTMO221",
+                  {
+                    "type": "SUBSTITUTE_GROUP",
+                    "primary": "QSTBA222",
+                    "substitutes": [
+                      "QSTBA223",
+                      "QSTQM222"
+                    ],
+                    "optionTags": {
+                      "QSTBA223": "Substitute",
+                      "QSTQM222": "Substitute"
+                    },
+                    "note": "Only one of BA 222 and BA 223 counts. QM 222 (the old number) also counts."
+                  },
+                  "QSTFE223",
+                  "QSTIS223",
+                  "QSTMK223",
+                  "QSTOM223",
+                  "QSTLA245",
+                  "QSTSM275",
+                  "QSTXP298",
+                  "QSTXP301",
+                  "QSTSI422"
+                ],
+                "devNote": "COUNT with one named slot per course (min = pool length), same shape as EE Required Courses, because ALL leaves can't carry either/or slots. Bulletin order. QM 221/222 are the pre-rename numbers of BA 221/222, accepted for students who took the old number. XP 301 is 1 unit; its alternatives (study abroad, internship, global course + reflection paper) aren't catalog courses, so students use a petition."
+              },
+              {
+                "id": "bsba-a-career",
+                "type": "COUNT",
+                "label": "Career Development",
+                "min": 2,
+                "pool": [
+                  {
+                    "type": "SEQUENCE_GROUP",
+                    "label": "ES 110 + ES 210, or ES 215",
+                    "note": "ES 215 is for students who didn't start at Questrom as first-years.",
+                    "options": [
+                      {
+                        "label": "ES 110 + ES 210",
+                        "courses": [
+                          "QSTES110",
+                          "QSTES210"
+                        ]
+                      },
+                      {
+                        "label": "ES 215",
+                        "courses": [
+                          "QSTES215"
+                        ]
+                      }
+                    ]
+                  },
+                  "QSTES310"
+                ],
+                "devNote": "ES 215 is 2 units. SEQUENCE_GROUP options can't take optionTags, so ES 215 has no Substitute pill. The ES 110 + 210 bundle claims two courses for one slot."
+              },
+              {
+                "id": "bsba-a-fundamentals",
+                "type": "COUNT",
+                "label": "Economics, Calculus & Writing",
+                "slotLayout": "rows",
+                "min": 4,
+                "pool": [
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "label": "Microeconomics",
+                    "options": [
+                      "QSTBE101",
+                      "CASEC101"
+                    ],
+                    "optionTags": {
+                      "CASEC101": "Substitute"
+                    },
+                    "note": "Only one of BE 101 and EC 101 counts."
+                  },
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "label": "Macroeconomics",
+                    "options": [
+                      "QSTBE102",
+                      "CASEC102"
+                    ],
+                    "optionTags": {
+                      "CASEC102": "Substitute"
+                    },
+                    "note": "Only one of BE 102 and EC 102 counts."
+                  },
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "label": "Writing",
+                    "options": [
+                      "CASWR120"
+                    ],
+                    "note": "The CAS Writing Program may place you in a different level."
+                  },
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "label": "Calculus",
+                    "options": [
+                      "CASMA121",
+                      "CASMA123"
+                    ],
+                    "optionTags": {
+                      "CASMA123": "Substitute"
+                    },
+                    "note": "Only one of MA 121 and MA 123 counts."
+                  }
+                ],
+                "devNote": "Merges the former Economics, Calculus and Writing cards: COUNT with one named slot per course (min = pool length), same shape as Required Courses. Slots in course-number order; claimed in the same place as the old cards (before the Questrom electives). Economics: The bulletin's macro line reads 'QST BE 102 or CAS EC 101'; that's a typo for EC 102. The unused alternate of each pair is excluded from the elective pools below so it can't count twice. Writing: bulletin says 'CAS WR 120 (or equivalent)'; only WR 120 is modeled, other placements go through ⋯ → Substitute a course. Writing is a one-option OR_EQUIVALENT only so it can carry its slot note."
+              },
+              {
+                "id": "bsba-a-questrom-electives",
+                "type": "COUNT",
+                "label": "Questrom Electives",
+                "note": "Five upper-level Questrom courses. These are usually your concentration courses.",
+                "min": 5,
+                "pool": [
+                  {
+                    "type": "COURSE_RANGE",
+                    "label": "Questrom courses 300–599",
+                    "subjectPrefix": "QST",
+                    "excludeSubjectPrefixes": [
+                      "QSTES",
+                      "QSTXP"
+                    ],
+                    "min": 300,
+                    "max": 599,
+                    "include": [
+                      "QSTSI250"
+                    ]
+                  }
+                ],
+                "devNote": "ASSUMPTION (author): 'Questrom electives' = upper-level QST courses numbered 300-599, and they're the courses used for the concentration. 600+ graduate courses are left out. QSTES (career) and QSTXP (1-unit experience) subjects are excluded so they can't count as full electives. Claimed before the non-Questrom and free electives. QST SI 250 (200-level) is included explicitly: it is a B-list course for Management & Organizations."
+              },
+              {
+                "id": "bsba-a-non-questrom-electives",
+                "type": "COUNT",
+                "label": "Non-Questrom Electives",
+                "note": "Any BU course outside Questrom.",
+                "min": 7,
+                "pool": [
+                  {
+                    "type": "COURSE_RANGE",
+                    "label": "Any non-Questrom course",
+                    "subjectPrefix": "",
+                    "excludeSubjectPrefixes": [
+                      "QST"
+                    ],
+                    "min": 0,
+                    "max": 999,
+                    "exclude": [
+                      "CASEC101",
+                      "CASEC102",
+                      "CASMA121",
+                      "CASMA123"
+                    ]
+                  }
+                ],
+                "devNote": "Any subject not starting with QST, any number. Excludes the 'only one counts' alternates (EC 101/102, MA 121/123) so a second copy doesn't count as an elective; the one actually used is claimed earlier by its own card."
+              },
+              {
+                "id": "bsba-a-free-electives",
+                "type": "REMAINDER",
+                "label": "Free Electives",
+                "note": "Any BU course.",
+                "totalRequired": 35,
+                "pool": [
+                  {
+                    "type": "COURSE_RANGE",
+                    "label": "Any BU course",
+                    "subjectPrefix": "",
+                    "min": 0,
+                    "max": 999,
+                    "exclude": [
+                      "CASEC101",
+                      "CASEC102",
+                      "CASMA121",
+                      "CASMA123",
+                      "QSTBE101",
+                      "QSTBE102",
+                      "QSTBA221",
+                      "QSTQM221",
+                      "QSTBA222",
+                      "QSTBA223",
+                      "QSTQM222"
+                    ]
+                  }
+                ],
+                "devNote": "totalRequired = 14 required + 2 career + 4 fundamentals + 5 Questrom + 7 non-Questrom (= 32 structural) + 3 free = 35. REMAINDER evaluates last, so it only takes what the other cards left. Excludes the 'only one counts' / renamed alternates so a second copy doesn't count."
+              },
+              {
+                "id": "bsba-a-concentration-set",
+                "type": "ALL",
+                "label": "Concentration",
+                "claims": "view",
+                "viewOf": [
+                  "bsba-a-questrom-electives",
+                  "bsba-a-non-questrom-electives",
+                  "bsba-a-free-electives"
+                ],
+                "note": "Your concentration courses also count as electives above, so they don't add to your course total.",
+                "devNote": "Phase 2a. Course lists, chart order and the in/outside-department split from the Questrom UDC page 'Concentrations for Students Entering BU Year 2025 And Beyond'; counts, caps and names from the bulletin (conflicts in the authoring report). View node: re-reads courses counted by the elective cards listed in viewOf (never the core cards), adds nothing to the program total and doesn't hold the track back. Picker choice is browser-only (useRequirementPicks). Rename pairs: both keys in B-lists, OR_EQUIVALENT in A/required slots. Catalog-missing keys dropped except QSTLA325. 12 B units = 3 courses (8 = 2); SHA HF 314 + 315 is one bundled slot that the outside-Questrom cap does NOT cover (engine caps are per list). Offering status per UDC (not offered 2026-27: LA 325, LA 343, LA 365, FE 429, FE 456, IS 479, MK 470; no longer offered: FE 560, OM 467, MK 465) is left to the catalog's own inactive hiding. Fall 2025+: required + exactly one X-list + B = 5.",
+                "children": [
+                  {
+                    "id": "bsba-a-concentration-pick",
+                    "type": "ONE_OF",
+                    "selection": "student",
+                    "label": "Your concentration",
+                    "children": [
+                      {
+                        "id": "bsba-a-conc-accounting",
+                        "type": "ALL",
+                        "label": "Accounting",
+                        "children": [
+                          {
+                            "id": "bsba-a-conc-accounting-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "All 2 required",
+                            "min": 2,
+                            "slotLayout": "rows",
+                            "pool": [
+                              {
+                                "type": "OR_EQUIVALENT",
+                                "options": [
+                                  "QSTAC322",
+                                  "QSTAC222"
+                                ],
+                                "optionTags": {
+                                  "QSTAC222": "Substitute"
+                                },
+                                "note": "AC 222 (the old number) also counts."
+                              },
+                              "QSTAC347"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-accounting-x",
+                            "type": "COUNT",
+                            "label": "Action Learning (X-list)",
+                            "min": 1,
+                            "pool": [
+                              "QSTAC431",
+                              "QSTFE325"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-accounting-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 2 · at most 1 from outside AC",
+                            "min": 2,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "AC courses",
+                                "courses": [
+                                  "QSTAC348",
+                                  "QSTAC414",
+                                  "QSTAC420",
+                                  "QSTAC498",
+                                  "QSTAC530",
+                                  "QSTAC430",
+                                  "QSTAC565",
+                                  "QSTAC569",
+                                  "QSTAC469"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside AC",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTBA576",
+                                  "QSTBA476",
+                                  "QSTFE449",
+                                  "QSTIS565",
+                                  "QSTIS465",
+                                  "QSTLA450"
+                                ]
+                              }
+                            ],
+                            "note": "AC 530 is only 2 units. It counts here as one course, but the concentration needs 20 units in total, so check with your advisor if you use it. Directed study (AC 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-a-conc-business-analytics",
+                        "type": "ALL",
+                        "label": "Business Analytics",
+                        "children": [
+                          {
+                            "id": "bsba-a-conc-business-analytics-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "All 2 required",
+                            "min": 2,
+                            "slotLayout": "rows",
+                            "pool": [
+                              "QSTBA305",
+                              {
+                                "type": "OR_EQUIVALENT",
+                                "options": [
+                                  "QSTIS565",
+                                  "QSTIS465"
+                                ],
+                                "optionTags": {
+                                  "QSTIS465": "Substitute"
+                                },
+                                "note": "IS 465 (the old number) also counts."
+                              }
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-business-analytics-x",
+                            "type": "COUNT",
+                            "label": "Action Learning (X-list)",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTBA325"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-business-analytics-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "min": 2,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "B-list",
+                                "courses": [
+                                  "QSTAC420",
+                                  "QSTBA320",
+                                  "QSTBA510",
+                                  "QSTBA572",
+                                  "QSTBA472",
+                                  "QSTBA576",
+                                  "QSTBA476",
+                                  "QSTFE459",
+                                  "QSTMK542",
+                                  "QSTMK442",
+                                  "QSTMO520",
+                                  "QSTMO420"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-a-conc-business-law-policy",
+                        "type": "ALL",
+                        "label": "Business Law & Policy",
+                        "children": [
+                          {
+                            "id": "bsba-a-conc-business-law-policy-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTLA450"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-business-law-policy-x",
+                            "type": "COUNT",
+                            "label": "Action Learning (X-list)",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTLA325"
+                            ],
+                            "note": "LA 325 isn't in the course catalog yet. If you take it, record it with ⋯ → Substitute a course."
+                          },
+                          {
+                            "id": "bsba-a-conc-business-law-policy-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside BE, LA and PL",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "BE, LA and PL courses",
+                                "courses": [
+                                  "QSTBE325",
+                                  "QSTPL325",
+                                  "QSTBE350",
+                                  "QSTPL350",
+                                  "QSTLA333",
+                                  "QSTLA346",
+                                  "QSTLA355",
+                                  "QSTLA360",
+                                  "QSTLA365",
+                                  "QSTLA498"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside BE, LA and PL",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTMO356",
+                                  "QSTMO441",
+                                  "QSTMO448",
+                                  "QSTSI445",
+                                  "QSTSI464",
+                                  "QSTSI469"
+                                ]
+                              }
+                            ],
+                            "note": "Directed study (LA 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-a-conc-finance",
+                        "type": "ALL",
+                        "label": "Finance",
+                        "children": [
+                          {
+                            "id": "bsba-a-conc-finance-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTFE445"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-finance-x",
+                            "type": "COUNT",
+                            "label": "Action Learning (X-list)",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTFE325"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-finance-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside FE",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "FE courses",
+                                "courses": [
+                                  "QSTFE342",
+                                  "QSTFE427",
+                                  "QSTFE429",
+                                  "QSTFE433",
+                                  "QSTFE449",
+                                  "QSTFE453",
+                                  "QSTFE454",
+                                  "QSTFE455",
+                                  "QSTFE456",
+                                  "QSTFE457",
+                                  "QSTFE458",
+                                  "QSTFE459",
+                                  "QSTFE460",
+                                  "QSTFE469",
+                                  "QSTFE498",
+                                  "QSTFE549",
+                                  "QSTFE550",
+                                  "QSTFE450",
+                                  "QSTFE555",
+                                  "QSTFE560",
+                                  "QSTFE562",
+                                  "QSTFE462"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside FE",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTAC322",
+                                  "QSTAC222",
+                                  "QSTAC414",
+                                  "QSTAC420",
+                                  "QSTIS579",
+                                  "QSTLA333",
+                                  "QSTLA365",
+                                  "QSTSI432"
+                                ]
+                              }
+                            ],
+                            "note": "Directed study (FE 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-a-conc-global-business",
+                        "type": "ALL",
+                        "label": "Global Business",
+                        "note": "Courses from outside Questrom count here but not toward your five Questrom electives. You can petition to count other global business courses.",
+                        "children": [
+                          {
+                            "id": "bsba-a-conc-global-business-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTIM345"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-global-business-x",
+                            "type": "COUNT",
+                            "label": "Action Learning (X-list)",
+                            "min": 1,
+                            "pool": [
+                              "QSTAC431",
+                              "QSTBA325",
+                              "QSTFE325",
+                              "QSTIS474",
+                              "QSTLA325",
+                              "QSTMK447",
+                              "QSTOM365",
+                              "QSTSI360"
+                            ],
+                            "note": "LA 325 isn't in the course catalog yet. If you take it, record it with ⋯ → Substitute a course."
+                          },
+                          {
+                            "id": "bsba-a-conc-global-business-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 2 from outside Questrom",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Questrom courses",
+                                "courses": [
+                                  "QSTFE427",
+                                  "QSTIM430",
+                                  "QSTMO430",
+                                  "QSTIM445",
+                                  "QSTIM475",
+                                  "QSTSI475",
+                                  "QSTMK467",
+                                  "QSTMO448",
+                                  "QSTOM467",
+                                  "QSTSI471"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside Questrom",
+                                "cap": 2,
+                                "courses": [
+                                  "CASEC391",
+                                  "CASIR322",
+                                  "CASIR349",
+                                  "CASIR399"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-a-conc-information-systems",
+                        "type": "ALL",
+                        "label": "Information Systems",
+                        "children": [
+                          {
+                            "id": "bsba-a-conc-information-systems-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "All 2 required",
+                            "min": 2,
+                            "slotLayout": "rows",
+                            "pool": [
+                              "QSTIS467",
+                              {
+                                "type": "OR_EQUIVALENT",
+                                "options": [
+                                  "QSTIS565",
+                                  "QSTIS465"
+                                ],
+                                "optionTags": {
+                                  "QSTIS465": "Substitute"
+                                },
+                                "note": "IS 465 (the old number) also counts."
+                              }
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-information-systems-x",
+                            "type": "COUNT",
+                            "label": "Action Learning (X-list)",
+                            "min": 1,
+                            "pool": [
+                              "QSTFE325",
+                              "QSTIS474",
+                              "QSTMK447",
+                              "QSTSI360"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-information-systems-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 2 · at most 1 from outside IS",
+                            "min": 2,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "IS courses",
+                                "courses": [
+                                  "QSTIS469",
+                                  "QSTIS479",
+                                  "QSTIS498",
+                                  "QSTIS522",
+                                  "QSTIS528",
+                                  "QSTIS428",
+                                  "QSTIS579"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside IS",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTAC420",
+                                  "QSTBA576",
+                                  "QSTBA476",
+                                  "QSTFE449",
+                                  "QSTFE459",
+                                  "QSTLA333",
+                                  "QSTMK542",
+                                  "QSTMK442",
+                                  "QSTMO520",
+                                  "QSTMO420",
+                                  "QSTOM441",
+                                  "QSTSI344",
+                                  "QSTSI482"
+                                ]
+                              }
+                            ],
+                            "note": "Directed study (IS 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-a-conc-innovation-entrepreneurship",
+                        "type": "ALL",
+                        "label": "Innovation & Entrepreneurship",
+                        "children": [
+                          {
+                            "id": "bsba-a-conc-innovation-entrepreneurship-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTSI344"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-innovation-entrepreneurship-x",
+                            "type": "COUNT",
+                            "label": "Action Learning (X-list)",
+                            "min": 1,
+                            "pool": [
+                              "QSTFE325",
+                              "QSTIS474",
+                              "QSTLA325",
+                              "QSTSI360"
+                            ],
+                            "note": "LA 325 isn't in the course catalog yet. If you take it, record it with ⋯ → Substitute a course."
+                          },
+                          {
+                            "id": "bsba-a-conc-innovation-entrepreneurship-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside S&I",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "S&I courses",
+                                "courses": [
+                                  "QSTSI348",
+                                  "QSTSI445",
+                                  "QSTSI451",
+                                  "QSTSI464",
+                                  "QSTSI471",
+                                  "QSTSI482",
+                                  "QSTSI498"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside S&I",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTFE455",
+                                  "QSTIS467",
+                                  "QSTMO356",
+                                  "QSTMO448"
+                                ]
+                              }
+                            ],
+                            "note": "Directed study (SI 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-a-conc-management-organizations",
+                        "type": "ALL",
+                        "label": "Management & Organizations",
+                        "children": [
+                          {
+                            "id": "bsba-a-conc-management-organizations-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTMO460"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-management-organizations-x",
+                            "type": "COUNT",
+                            "label": "Action Learning (X-list)",
+                            "min": 1,
+                            "pool": [
+                              "QSTAC431",
+                              "QSTBA325",
+                              "QSTFE325",
+                              "QSTIS474",
+                              "QSTLA325",
+                              "QSTMK447",
+                              "QSTOM365",
+                              "QSTSI360"
+                            ],
+                            "note": "LA 325 isn't in the course catalog yet. If you take it, record it with ⋯ → Substitute a course."
+                          },
+                          {
+                            "id": "bsba-a-conc-management-organizations-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside M&O",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "M&O courses",
+                                "courses": [
+                                  "QSTIM430",
+                                  "QSTMO430",
+                                  "QSTMO356",
+                                  "QSTMO441",
+                                  "QSTMO448",
+                                  "QSTMO498",
+                                  "QSTMO520",
+                                  "QSTMO420",
+                                  "QSTSI250",
+                                  "QSTSI451"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside M&O",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTBE350",
+                                  "QSTPL350",
+                                  "QSTIM475",
+                                  "QSTSI475",
+                                  "QSTIS467",
+                                  "QSTLA355",
+                                  "QSTMK345",
+                                  "QSTOM353",
+                                  "QSTSI340",
+                                  "QSTSI432",
+                                  "QSTSI445"
+                                ]
+                              }
+                            ],
+                            "note": "SI 250 and SI 451 count as M&O courses here. Directed study (MO 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-a-conc-marketing",
+                        "type": "ALL",
+                        "label": "Marketing",
+                        "children": [
+                          {
+                            "id": "bsba-a-conc-marketing-a",
+                            "type": "COUNT",
+                            "label": "A-list (pick one)",
+                            "subtitle": "Pick 1",
+                            "min": 1,
+                            "pool": [
+                              "QSTMK345",
+                              {
+                                "type": "OR_EQUIVALENT",
+                                "options": [
+                                  "QSTMK542",
+                                  "QSTMK442"
+                                ],
+                                "optionTags": {
+                                  "QSTMK442": "Substitute"
+                                },
+                                "note": "MK 442 (the old number) also counts."
+                              }
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-marketing-x",
+                            "type": "COUNT",
+                            "label": "Action Learning (X-list)",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTMK447"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-marketing-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside MK",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "MK courses",
+                                "courses": [
+                                  "QSTBA572",
+                                  "QSTBA472",
+                                  "QSTBA576",
+                                  "QSTBA476",
+                                  "QSTMK344",
+                                  "QSTMK345",
+                                  "QSTMK435",
+                                  "QSTMK467",
+                                  "QSTMK470",
+                                  "QSTMK475",
+                                  "QSTMK478",
+                                  "QSTMK487",
+                                  "QSTMK498",
+                                  "QSTMK542",
+                                  "QSTMK442"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside MK",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTBE350",
+                                  "QSTPL350",
+                                  "QSTIS565",
+                                  "QSTIS465",
+                                  "QSTMO448",
+                                  "QSTSI348",
+                                  "QSTSI432"
+                                ]
+                              }
+                            ],
+                            "note": "BA 572 and BA 576 count as MK courses here. The course you use for the A-list can't count here too. Directed study (MK 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-a-conc-operations-supply-chain",
+                        "type": "ALL",
+                        "label": "Operations & Supply Chain Management",
+                        "children": [
+                          {
+                            "id": "bsba-a-conc-operations-supply-chain-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTOM440"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-operations-supply-chain-x",
+                            "type": "COUNT",
+                            "label": "Action Learning (X-list)",
+                            "min": 1,
+                            "pool": [
+                              "QSTBA325",
+                              "QSTOM365"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-operations-supply-chain-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside OM",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "OM courses",
+                                "courses": [
+                                  "QSTOM351",
+                                  "QSTOM353",
+                                  "QSTOM441",
+                                  "QSTOM467",
+                                  "QSTOM498"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside OM",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTAC322",
+                                  "QSTAC222",
+                                  "QSTBA305",
+                                  "QSTIS467",
+                                  "QSTMO448",
+                                  "QSTSI451"
+                                ]
+                              }
+                            ],
+                            "note": "Directed study (OM 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-a-conc-real-estate",
+                        "type": "ALL",
+                        "label": "Real Estate",
+                        "note": "Courses from outside Questrom count here but not toward your five Questrom electives. You can petition to count other real estate courses.",
+                        "children": [
+                          {
+                            "id": "bsba-a-conc-real-estate-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTFE469"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-real-estate-x",
+                            "type": "COUNT",
+                            "label": "Action Learning (X-list)",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTFE325"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-real-estate-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 2 from outside Questrom",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Questrom courses",
+                                "courses": [
+                                  "QSTFE456",
+                                  "QSTLA360",
+                                  "QSTMO448",
+                                  "QSTSI469"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside Questrom",
+                                "cap": 2,
+                                "courses": [
+                                  "CASAH201",
+                                  "CASAH399",
+                                  "CASEE201",
+                                  "CASEE304",
+                                  "CASIR304",
+                                  "CASSO244",
+                                  "CASSO306",
+                                  "CASSO483"
+                                ]
+                              },
+                              {
+                                "type": "SEQUENCE_GROUP",
+                                "label": "SHA HF 314 + HF 315 (2 units each, together one course)",
+                                "continues": true,
+                                "options": [
+                                  {
+                                    "label": "HF 314 + HF 315",
+                                    "courses": [
+                                      "SHAHF314",
+                                      "SHAHF315"
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-a-conc-strategy",
+                        "type": "ALL",
+                        "label": "Strategy",
+                        "children": [
+                          {
+                            "id": "bsba-a-conc-strategy-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTSI432"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-strategy-x",
+                            "type": "COUNT",
+                            "label": "Action Learning (X-list)",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTSI360"
+                            ]
+                          },
+                          {
+                            "id": "bsba-a-conc-strategy-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside S&I",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "S&I courses",
+                                "courses": [
+                                  "QSTIM345",
+                                  "QSTIM475",
+                                  "QSTSI475",
+                                  "QSTSI348",
+                                  "QSTSI451",
+                                  "QSTSI464",
+                                  "QSTSI482",
+                                  "QSTSI498",
+                                  "QSTSI553",
+                                  "QSTSI453"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside S&I",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTAC322",
+                                  "QSTAC222",
+                                  "QSTBA305",
+                                  "QSTBE325",
+                                  "QSTPL325",
+                                  "QSTFE460",
+                                  "QSTLA333",
+                                  "QSTMK470",
+                                  "QSTMO441"
+                                ]
+                              }
+                            ],
+                            "note": "IM 345 and IM 475 count as S&I courses here. Directed study (SI 498) is by application."
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "bsba-a-conc-independent",
+                    "type": "UNRESOLVED",
+                    "label": "Independent Concentration",
+                    "note": "You can design your own concentration of five 300- or 400-level Questrom electives around one theme, including one Action Learning (X-list) course. It needs approval from your UDC academic advisor and the faculty concentration advisor before you start.",
+                    "devNote": "Advisor-approved theme; not tracked. Not in the picker."
+                  },
+                  {
+                    "id": "bsba-a-conc-overlap",
+                    "type": "UNRESOLVED",
+                    "label": "Two concentrations",
+                    "note": "Two concentrations share at most one course (plus a shared X-list course for Fall 2025+; 8 courses minimum).",
+                    "devNote": "Phase 2b: only one concentration is tracked. Old-cohort UDC page says 7 courses minimum for two (one shared course, no X-list)."
+                  }
+                ]
+              },
+              {
+                "id": "bsba-a-grades",
+                "type": "UNRESOLVED",
+                "label": "Grades",
+                "note": "All required Questrom courses and concentration courses need a C– or better. This isn't checked automatically."
+              },
+              {
+                "id": "bsba-a-gateway",
+                "type": "UNRESOLVED",
+                "label": "Gateway courses",
+                "note": "To take 300-level Questrom courses, you need a C or better in four of EC 101 (or BE 101), MA 121 (or 123), WR 120, SM 131 and AC 221, and at least a C– in the fifth. This isn't checked automatically."
+              },
+              {
+                "id": "bsba-a-total-units",
+                "type": "UNRESOLVED",
+                "label": "132 total units",
+                "note": "132 total units are needed to graduate.",
+                "devNote": "Unit total, not a course count; credits are tracked in the Credits tab."
+              }
+            ]
+          },
+          {
+            "id": "bsba-b",
+            "type": "ALL",
+            "label": "Entered Fall 2019 – Spring 2025",
+            "children": [
+              {
+                "id": "bsba-b-required",
+                "type": "COUNT",
+                "label": "Required Courses",
+                "slotLayout": "rows",
+                "note": "SM 132 isn't offered after Fall 2026. If you still need it, ask your advisor what to take instead.",
+                "min": 11,
+                "pool": [
+                  "QSTSM131",
+                  "QSTSM132",
+                  "QSTAC221",
+                  "QSTMO221",
+                  {
+                    "type": "SUBSTITUTE_GROUP",
+                    "primary": "QSTQM221",
+                    "substitutes": [
+                      "QSTBA221"
+                    ],
+                    "optionTags": {
+                      "QSTBA221": "Substitute"
+                    },
+                    "note": "BA 221 (the new number) also counts."
+                  },
+                  {
+                    "type": "SUBSTITUTE_GROUP",
+                    "primary": "QSTAC222",
+                    "substitutes": [
+                      "QSTAC322"
+                    ],
+                    "optionTags": {
+                      "QSTAC322": "Substitute"
+                    },
+                    "note": "AC 322 (the new number) also counts."
+                  },
+                  {
+                    "type": "SUBSTITUTE_GROUP",
+                    "primary": "QSTQM222",
+                    "substitutes": [
+                      "QSTBA222",
+                      "QSTBA223"
+                    ],
+                    "optionTags": {
+                      "QSTBA222": "Substitute",
+                      "QSTBA223": "Substitute"
+                    },
+                    "note": "BA 222 or BA 223 (the new numbers) also count. Only one of them counts."
+                  },
+                  "QSTIS223",
+                  "QSTLA245",
+                  "QSTSM275",
+                  "QSTSI422"
+                ],
+                "devNote": "COUNT with named slots (min = pool length). Order follows the UDC page. SM 132 is 2 units and kept required and visible even though it isn't offered after Fall 2026; students without it use a petition. AC 222 was renumbered AC 322 (bulletin), accepted as a Substitute."
+              },
+              {
+                "id": "bsba-b-cross-functional-core",
+                "type": "ONE_OF",
+                "label": "Cross-Functional Core (SM 323)",
+                "note": "16 units: FE 323, MK 323, OM 323 and QM 323. Some records list it as SM 323 instead, which also counts.",
+                "children": [
+                  {
+                    "id": "bsba-b-cfc-courses",
+                    "type": "ALL",
+                    "label": "FE 323, MK 323, OM 323 and QM 323",
+                    "courses": [
+                      "QSTFE323",
+                      "QSTMK323",
+                      "QSTOM323",
+                      "QSTQM323"
+                    ]
+                  },
+                  {
+                    "id": "bsba-b-cfc-sm323",
+                    "type": "ALL",
+                    "label": "SM 323",
+                    "courses": [
+                      "QSTSM323"
+                    ]
+                  }
+                ],
+                "devNote": "public/courses.json has QSTSM323 'Cross-Functional Core' (16 units) as well as the four component courses, so a student may hold either. Structurally this ONE_OF counts as 1 (smallest child) for the free-electives denominator; the progress total follows the active child (4 or 1). QSTSM323 is excluded from the elective pools so it can't also count as an elective."
+              },
+              {
+                "id": "bsba-b-career",
+                "type": "COUNT",
+                "label": "Career Development",
+                "min": 2,
+                "pool": [
+                  {
+                    "type": "SEQUENCE_GROUP",
+                    "label": "ES 110 + ES 210, or ES 215",
+                    "note": "ES 215 is for students who didn't start at Questrom as first-years.",
+                    "options": [
+                      {
+                        "label": "ES 110 + ES 210",
+                        "courses": [
+                          "QSTES110",
+                          "QSTES210"
+                        ]
+                      },
+                      {
+                        "label": "ES 215",
+                        "courses": [
+                          "QSTES215"
+                        ]
+                      }
+                    ]
+                  },
+                  "QSTES310"
+                ],
+                "devNote": "Same as Track A."
+              },
+              {
+                "id": "bsba-b-fundamentals",
+                "type": "COUNT",
+                "label": "Economics, Calculus & Writing",
+                "slotLayout": "rows",
+                "min": 4,
+                "pool": [
+                  {
+                    "type": "SUBSTITUTE_GROUP",
+                    "label": "Microeconomics",
+                    "primary": "CASEC101",
+                    "substitutes": [
+                      "QSTBE101"
+                    ],
+                    "optionTags": {
+                      "QSTBE101": "Substitute"
+                    },
+                    "note": "BE 101 also counts. Only one of EC 101 and BE 101 counts."
+                  },
+                  {
+                    "type": "SUBSTITUTE_GROUP",
+                    "label": "Macroeconomics",
+                    "primary": "CASEC102",
+                    "substitutes": [
+                      "QSTBE102"
+                    ],
+                    "optionTags": {
+                      "QSTBE102": "Substitute"
+                    },
+                    "note": "BE 102 also counts. Only one of EC 102 and BE 102 counts."
+                  },
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "label": "Writing",
+                    "options": [
+                      "CASWR120"
+                    ],
+                    "note": "The CAS Writing Program may place you in a different level."
+                  },
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "label": "Calculus",
+                    "options": [
+                      "CASMA121",
+                      "CASMA123"
+                    ],
+                    "optionTags": {
+                      "CASMA123": "Substitute"
+                    },
+                    "note": "Only one of MA 121 and MA 123 counts."
+                  }
+                ],
+                "devNote": "Merges the former Economics, Calculus and Writing cards: COUNT with one named slot per course (min = pool length), same shape as Required Courses. Slots in course-number order; claimed in the same place as the old cards (before the Questrom electives). Economics: The UDC page lists CAS EC 101 and EC 102 only; QST BE 101/102 accepted as Substitute (author decision) for students in this cohort who took the Questrom version. Writing: bulletin says 'CAS WR 120 (or equivalent)'; only WR 120 is modeled, other placements go through ⋯ → Substitute a course. Writing is a one-option OR_EQUIVALENT only so it can carry its slot note. The unused alternate of each 'only one counts' pair is excluded from the elective pools so it can't count twice."
+              },
+              {
+                "id": "bsba-b-questrom-electives",
+                "type": "COUNT",
+                "label": "Questrom Electives",
+                "note": "Four upper-level Questrom courses.",
+                "min": 4,
+                "pool": [
+                  {
+                    "type": "COURSE_RANGE",
+                    "label": "Questrom courses 300–599",
+                    "subjectPrefix": "QST",
+                    "excludeSubjectPrefixes": [
+                      "QSTES",
+                      "QSTXP"
+                    ],
+                    "min": 300,
+                    "max": 599,
+                    "exclude": [
+                      "QSTSM323"
+                    ],
+                    "include": [
+                      "QSTSI250"
+                    ]
+                  }
+                ],
+                "devNote": "Same 300-599 assumption as Track A. SM 323 excluded (it is the Cross-Functional Core). The four 323 courses are claimed by the core card first. QST SI 250 (200-level) is included explicitly: it is a B-list course for Management & Organizations."
+              },
+              {
+                "id": "bsba-b-cas-electives",
+                "type": "COUNT",
+                "label": "CAS Liberal Arts Electives",
+                "note": "20 units of CAS courses. Counted here as 5 courses, assuming 4 units each.",
+                "min": 5,
+                "pool": [
+                  {
+                    "type": "COURSE_RANGE",
+                    "label": "Any CAS course",
+                    "subjectPrefix": "CAS",
+                    "min": 0,
+                    "max": 999,
+                    "exclude": [
+                      "CASEC101",
+                      "CASEC102",
+                      "CASMA121",
+                      "CASMA123",
+                      "CASMA113",
+                      "CASMA115",
+                      "CASMA116",
+                      "CASMA213",
+                      "CASMA214",
+                      "CASEC203",
+                      "CASEC204",
+                      "CASEC303",
+                      "CASEC304",
+                      "CASEC305",
+                      "CASPS211"
+                    ]
+                  }
+                ],
+                "devNote": "APPROXIMATE: 20 units modeled as COUNT 5 over any CAS subject (4 units each). 'Liberal arts' isn't narrower than CAS here. Excludes the 'only one counts' alternates and the courses Questrom students can't take (stats overlap; CASEC305 isn't in public/courses.json, kept anyway)."
+              },
+              {
+                "id": "bsba-b-non-questrom-electives",
+                "type": "COUNT",
+                "label": "Non-Questrom Electives",
+                "note": "12 units outside Questrom. Counted here as 3 courses, assuming 4 units each.",
+                "min": 3,
+                "pool": [
+                  {
+                    "type": "COURSE_RANGE",
+                    "label": "Any non-Questrom course",
+                    "subjectPrefix": "",
+                    "excludeSubjectPrefixes": [
+                      "QST"
+                    ],
+                    "min": 0,
+                    "max": 999,
+                    "exclude": [
+                      "CASEC101",
+                      "CASEC102",
+                      "CASMA121",
+                      "CASMA123",
+                      "CASMA113",
+                      "CASMA115",
+                      "CASMA116",
+                      "CASMA213",
+                      "CASMA214",
+                      "CASEC203",
+                      "CASEC204",
+                      "CASEC303",
+                      "CASEC304",
+                      "CASEC305",
+                      "CASPS211"
+                    ]
+                  }
+                ],
+                "devNote": "APPROXIMATE: 12 units modeled as COUNT 3 (4 units each). Claimed after the CAS electives, so extra CAS courses spill over here."
+              },
+              {
+                "id": "bsba-b-free-electives",
+                "type": "REMAINDER",
+                "label": "Free Electives",
+                "note": "Any BU course.",
+                "totalRequired": 32,
+                "pool": [
+                  {
+                    "type": "COURSE_RANGE",
+                    "label": "Any BU course",
+                    "subjectPrefix": "",
+                    "min": 0,
+                    "max": 999,
+                    "exclude": [
+                      "CASEC101",
+                      "CASEC102",
+                      "CASMA121",
+                      "CASMA123",
+                      "QSTBE101",
+                      "QSTBE102",
+                      "QSTQM221",
+                      "QSTBA221",
+                      "QSTQM222",
+                      "QSTBA222",
+                      "QSTBA223",
+                      "QSTSM323",
+                      "CASMA113",
+                      "CASMA115",
+                      "CASMA116",
+                      "CASMA213",
+                      "CASMA214",
+                      "CASEC203",
+                      "CASEC204",
+                      "CASEC303",
+                      "CASEC304",
+                      "CASEC305",
+                      "CASPS211"
+                    ]
+                  }
+                ],
+                "devNote": "totalRequired = 11 required + 1 Cross-Functional Core (ONE_OF counts as its smallest child) + 2 career + 4 fundamentals + 4 Questrom + 5 CAS + 3 non-Questrom (= 30 structural) + 2 free = 32. REMAINDER evaluates last."
+              },
+              {
+                "id": "bsba-b-concentration-set",
+                "type": "ALL",
+                "label": "Concentration",
+                "claims": "view",
+                "viewOf": [
+                  "bsba-b-questrom-electives",
+                  "bsba-b-cas-electives",
+                  "bsba-b-non-questrom-electives",
+                  "bsba-b-free-electives"
+                ],
+                "note": "Your concentration courses also count as electives above, so they don't add to your course total.",
+                "devNote": "Phase 2a. Course lists, chart order and the in/outside-department split from the Questrom UDC page 'Concentrations for Students Entering BU Fall 2019 – Spring 2025'; counts, caps and names from the bulletin (conflicts in the authoring report). View node: re-reads courses counted by the elective cards listed in viewOf (never the core cards), adds nothing to the program total and doesn't hold the track back. Picker choice is browser-only (useRequirementPicks). Rename pairs: both keys in B-lists, OR_EQUIVALENT in A/required slots. Catalog-missing keys dropped except QSTLA325. 12 B units = 3 courses (8 = 2); SHA HF 314 + 315 is one bundled slot that the outside-Questrom cap does NOT cover (engine caps are per list). Offering status per UDC (not offered 2026-27: LA 325, LA 343, LA 365, FE 429, FE 456, IS 479, MK 470; no longer offered: FE 560, OM 467, MK 465) is left to the catalog's own inactive hiding. 2019-2025: 4 courses, no X-list. viewOf also lists the CAS electives card: Global Business / Real Estate outside courses are CAS courses that card claims first. UDC calls the law concentration \"Law\"; the bulletin name \"Business Law & Policy\" is used. The UDC programming requirement for Information Systems is not in the bulletin and is left out.",
+                "children": [
+                  {
+                    "id": "bsba-b-concentration-pick",
+                    "type": "ONE_OF",
+                    "selection": "student",
+                    "label": "Your concentration",
+                    "children": [
+                      {
+                        "id": "bsba-b-conc-accounting",
+                        "type": "ALL",
+                        "label": "Accounting",
+                        "children": [
+                          {
+                            "id": "bsba-b-conc-accounting-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTAC347"
+                            ]
+                          },
+                          {
+                            "id": "bsba-b-conc-accounting-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside AC",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "AC courses",
+                                "courses": [
+                                  "QSTAC348",
+                                  "QSTAC414",
+                                  "QSTAC420",
+                                  "QSTAC431",
+                                  "QSTAC498",
+                                  "QSTAC530",
+                                  "QSTAC430",
+                                  "QSTAC565",
+                                  "QSTAC569",
+                                  "QSTAC469"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside AC",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTBA576",
+                                  "QSTBA476",
+                                  "QSTFE449",
+                                  "QSTIS565",
+                                  "QSTIS465",
+                                  "QSTLA450"
+                                ]
+                              }
+                            ],
+                            "note": "AC 530 is only 2 units. It counts here as one course, but the B-list needs 12 units, so check with your advisor if you use it. Directed study (AC 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-b-conc-business-analytics",
+                        "type": "ALL",
+                        "label": "Business Analytics",
+                        "children": [
+                          {
+                            "id": "bsba-b-conc-business-analytics-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "All 2 required",
+                            "min": 2,
+                            "slotLayout": "rows",
+                            "pool": [
+                              "QSTBA305",
+                              {
+                                "type": "OR_EQUIVALENT",
+                                "options": [
+                                  "QSTIS565",
+                                  "QSTIS465"
+                                ],
+                                "optionTags": {
+                                  "QSTIS465": "Substitute"
+                                },
+                                "note": "IS 465 (the old number) also counts."
+                              }
+                            ]
+                          },
+                          {
+                            "id": "bsba-b-conc-business-analytics-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "min": 2,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "B-list",
+                                "courses": [
+                                  "QSTAC420",
+                                  "QSTBA320",
+                                  "QSTBA510",
+                                  "QSTBA572",
+                                  "QSTBA472",
+                                  "QSTBA576",
+                                  "QSTBA476",
+                                  "QSTFE459",
+                                  "QSTMK542",
+                                  "QSTMK442",
+                                  "QSTMO520",
+                                  "QSTMO420"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-b-conc-business-law-policy",
+                        "type": "ALL",
+                        "label": "Business Law & Policy",
+                        "children": [
+                          {
+                            "id": "bsba-b-conc-business-law-policy-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTLA450"
+                            ]
+                          },
+                          {
+                            "id": "bsba-b-conc-business-law-policy-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside LA",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "LA courses",
+                                "courses": [
+                                  "QSTLA333",
+                                  "QSTLA343",
+                                  "QSTLA346",
+                                  "QSTLA355",
+                                  "QSTLA360",
+                                  "QSTLA365",
+                                  "QSTLA498"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside LA",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTBE325",
+                                  "QSTPL325",
+                                  "QSTBE350",
+                                  "QSTPL350",
+                                  "QSTMO356",
+                                  "QSTMO441",
+                                  "QSTMO448",
+                                  "QSTSI445",
+                                  "QSTSI464",
+                                  "QSTSI469"
+                                ]
+                              }
+                            ],
+                            "note": "Directed study (LA 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-b-conc-finance",
+                        "type": "ALL",
+                        "label": "Finance",
+                        "children": [
+                          {
+                            "id": "bsba-b-conc-finance-a",
+                            "type": "COUNT",
+                            "label": "A-list (pick one)",
+                            "subtitle": "Pick 1",
+                            "min": 1,
+                            "pool": [
+                              "QSTFE445",
+                              "QSTFE449",
+                              {
+                                "type": "OR_EQUIVALENT",
+                                "options": [
+                                  "QSTFE562",
+                                  "QSTFE462"
+                                ],
+                                "optionTags": {
+                                  "QSTFE462": "Substitute"
+                                },
+                                "note": "FE 462 (the old number) also counts."
+                              }
+                            ]
+                          },
+                          {
+                            "id": "bsba-b-conc-finance-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside FE",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "FE courses",
+                                "courses": [
+                                  "QSTFE342",
+                                  "QSTFE427",
+                                  "QSTFE429",
+                                  "QSTFE433",
+                                  "QSTFE445",
+                                  "QSTFE449",
+                                  "QSTFE453",
+                                  "QSTFE454",
+                                  "QSTFE455",
+                                  "QSTFE456",
+                                  "QSTFE457",
+                                  "QSTFE458",
+                                  "QSTFE459",
+                                  "QSTFE549",
+                                  "QSTFE460",
+                                  "QSTFE469",
+                                  "QSTFE498",
+                                  "QSTFE550",
+                                  "QSTFE450",
+                                  "QSTFE555",
+                                  "QSTFE562",
+                                  "QSTFE462"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside FE",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTAC414",
+                                  "QSTAC420",
+                                  "QSTIS579",
+                                  "QSTLA333",
+                                  "QSTLA365",
+                                  "QSTSI432"
+                                ]
+                              }
+                            ],
+                            "note": "The A-list courses you don't use for the A-list count here. Directed study (FE 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-b-conc-global-business",
+                        "type": "ALL",
+                        "label": "Global Business",
+                        "note": "Courses from outside Questrom count here but not toward your four Questrom electives.",
+                        "children": [
+                          {
+                            "id": "bsba-b-conc-global-business-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTIM345"
+                            ]
+                          },
+                          {
+                            "id": "bsba-b-conc-global-business-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 2 from outside Questrom",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Questrom courses",
+                                "courses": [
+                                  "QSTFE427",
+                                  "QSTIM430",
+                                  "QSTMO430",
+                                  "QSTIM445",
+                                  "QSTIM475",
+                                  "QSTSI475",
+                                  "QSTMK467",
+                                  "QSTMO448",
+                                  "QSTOM467",
+                                  "QSTSI471"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside Questrom",
+                                "cap": 2,
+                                "courses": [
+                                  "CASEC320",
+                                  "CASEC369",
+                                  "CASEC370",
+                                  "CASEC391",
+                                  "CASEE304",
+                                  "CASIR250",
+                                  "CASIR271",
+                                  "CASIR275",
+                                  "CASIR292",
+                                  "CASIR304",
+                                  "CASIR307",
+                                  "CASIR308",
+                                  "CASIR322",
+                                  "CASIR333",
+                                  "CASIR340",
+                                  "CASIR373",
+                                  "CASIR395",
+                                  "CASIR399",
+                                  "CASIR428",
+                                  "CASSO206",
+                                  "CASSO242"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-b-conc-information-systems",
+                        "type": "ALL",
+                        "label": "Information Systems",
+                        "children": [
+                          {
+                            "id": "bsba-b-conc-information-systems-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "All 2 required",
+                            "min": 2,
+                            "slotLayout": "rows",
+                            "pool": [
+                              "QSTIS467",
+                              {
+                                "type": "OR_EQUIVALENT",
+                                "options": [
+                                  "QSTIS565",
+                                  "QSTIS465"
+                                ],
+                                "optionTags": {
+                                  "QSTIS465": "Substitute"
+                                },
+                                "note": "IS 465 (the old number) also counts."
+                              }
+                            ]
+                          },
+                          {
+                            "id": "bsba-b-conc-information-systems-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 2 · at most 1 from outside IS",
+                            "min": 2,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "IS courses",
+                                "courses": [
+                                  "QSTIS469",
+                                  "QSTIS474",
+                                  "QSTIS479",
+                                  "QSTIS498",
+                                  "QSTIS522",
+                                  "QSTIS528",
+                                  "QSTIS428",
+                                  "QSTIS579"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside IS",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTAC420",
+                                  "QSTBA576",
+                                  "QSTBA476",
+                                  "QSTFE449",
+                                  "QSTFE459",
+                                  "QSTLA333",
+                                  "QSTMK542",
+                                  "QSTMK442",
+                                  "QSTMO520",
+                                  "QSTMO420",
+                                  "QSTOM365",
+                                  "QSTOM441",
+                                  "QSTSI482"
+                                ]
+                              }
+                            ],
+                            "note": "Directed study (IS 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-b-conc-innovation-entrepreneurship",
+                        "type": "ALL",
+                        "label": "Innovation & Entrepreneurship",
+                        "children": [
+                          {
+                            "id": "bsba-b-conc-innovation-entrepreneurship-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTSI344"
+                            ]
+                          },
+                          {
+                            "id": "bsba-b-conc-innovation-entrepreneurship-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside S&I",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "S&I courses",
+                                "courses": [
+                                  "QSTSI348",
+                                  "QSTSI445",
+                                  "QSTSI451",
+                                  "QSTSI464",
+                                  "QSTSI471",
+                                  "QSTSI482",
+                                  "QSTSI498"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside S&I",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTFE455",
+                                  "QSTIS467",
+                                  "QSTIS474",
+                                  "QSTMO356",
+                                  "QSTMO448"
+                                ]
+                              }
+                            ],
+                            "note": "Directed study (SI 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-b-conc-management-organizations",
+                        "type": "ALL",
+                        "label": "Management & Organizations",
+                        "children": [
+                          {
+                            "id": "bsba-b-conc-management-organizations-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTMO460"
+                            ]
+                          },
+                          {
+                            "id": "bsba-b-conc-management-organizations-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside M&O",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "M&O courses",
+                                "courses": [
+                                  "QSTIM430",
+                                  "QSTMO430",
+                                  "QSTMO356",
+                                  "QSTMO441",
+                                  "QSTMO448",
+                                  "QSTMO498",
+                                  "QSTMO520",
+                                  "QSTMO420"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside M&O",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTBE350",
+                                  "QSTPL350",
+                                  "QSTIM475",
+                                  "QSTSI475",
+                                  "QSTIS467",
+                                  "QSTLA355",
+                                  "QSTMK345",
+                                  "QSTOM353",
+                                  "QSTSI250",
+                                  "QSTSI340",
+                                  "QSTSI432",
+                                  "QSTSI445",
+                                  "QSTSI451"
+                                ]
+                              }
+                            ],
+                            "note": "IM 430 counts as an M&O course here. Directed study (MO 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-b-conc-marketing",
+                        "type": "ALL",
+                        "label": "Marketing",
+                        "children": [
+                          {
+                            "id": "bsba-b-conc-marketing-a",
+                            "type": "COUNT",
+                            "label": "A-list (pick one)",
+                            "subtitle": "Pick 1",
+                            "min": 1,
+                            "pool": [
+                              "QSTMK447",
+                              {
+                                "type": "OR_EQUIVALENT",
+                                "options": [
+                                  "QSTMK542",
+                                  "QSTMK442"
+                                ],
+                                "optionTags": {
+                                  "QSTMK442": "Substitute"
+                                },
+                                "note": "MK 442 (the old number) also counts."
+                              }
+                            ]
+                          },
+                          {
+                            "id": "bsba-b-conc-marketing-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside MK",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "MK courses",
+                                "courses": [
+                                  "QSTBA572",
+                                  "QSTBA472",
+                                  "QSTBA576",
+                                  "QSTBA476",
+                                  "QSTMK344",
+                                  "QSTMK345",
+                                  "QSTMK435",
+                                  "QSTMK447",
+                                  "QSTMK463",
+                                  "QSTMK465",
+                                  "QSTMK467",
+                                  "QSTMK469",
+                                  "QSTMK470",
+                                  "QSTMK475",
+                                  "QSTMK478",
+                                  "QSTMK487",
+                                  "QSTMK498",
+                                  "QSTMK542",
+                                  "QSTMK442"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside MK",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTBE350",
+                                  "QSTPL350",
+                                  "QSTFE449",
+                                  "QSTIS474",
+                                  "QSTMO448",
+                                  "QSTSI348",
+                                  "QSTSI432",
+                                  "QSTSI435",
+                                  "QSTSI451"
+                                ]
+                              }
+                            ],
+                            "note": "BA 572 and BA 576 count as MK courses here. The course you use for the A-list can't count here too. Directed study (MK 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-b-conc-operations-supply-chain",
+                        "type": "ALL",
+                        "label": "Operations & Supply Chain Management",
+                        "children": [
+                          {
+                            "id": "bsba-b-conc-operations-supply-chain-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTOM441"
+                            ]
+                          },
+                          {
+                            "id": "bsba-b-conc-operations-supply-chain-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside OM",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "OM courses",
+                                "courses": [
+                                  "QSTOM351",
+                                  "QSTOM353",
+                                  "QSTOM365",
+                                  "QSTOM440",
+                                  "QSTOM467",
+                                  "QSTOM498"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside OM",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTBA305",
+                                  "QSTIS467",
+                                  "QSTIS565",
+                                  "QSTIS465",
+                                  "QSTMO448",
+                                  "QSTSI451"
+                                ]
+                              }
+                            ],
+                            "note": "Directed study (OM 498) is by application."
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-b-conc-real-estate",
+                        "type": "ALL",
+                        "label": "Real Estate",
+                        "note": "Courses from outside Questrom count here but not toward your four Questrom electives.",
+                        "children": [
+                          {
+                            "id": "bsba-b-conc-real-estate-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTFE469"
+                            ]
+                          },
+                          {
+                            "id": "bsba-b-conc-real-estate-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 2 from outside Questrom",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Questrom courses",
+                                "courses": [
+                                  "QSTFE456",
+                                  "QSTLA360",
+                                  "QSTSI469"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside Questrom",
+                                "cap": 2,
+                                "courses": [
+                                  "CASAH201",
+                                  "CASAH387",
+                                  "CASAH399",
+                                  "CASAN309",
+                                  "CASBI475",
+                                  "CASEE475",
+                                  "CASEE304",
+                                  "CASIR304",
+                                  "CASEE201",
+                                  "CASEE309",
+                                  "CASSO306",
+                                  "ENGEK225"
+                                ]
+                              },
+                              {
+                                "type": "SEQUENCE_GROUP",
+                                "label": "SHA HF 314 + HF 315 (2 units each, together one course)",
+                                "continues": true,
+                                "options": [
+                                  {
+                                    "label": "HF 314 + HF 315",
+                                    "courses": [
+                                      "SHAHF314",
+                                      "SHAHF315"
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "bsba-b-conc-strategy",
+                        "type": "ALL",
+                        "label": "Strategy",
+                        "children": [
+                          {
+                            "id": "bsba-b-conc-strategy-required",
+                            "type": "COUNT",
+                            "label": "Required",
+                            "subtitle": "Required",
+                            "min": 1,
+                            "pool": [
+                              "QSTSI432"
+                            ]
+                          },
+                          {
+                            "id": "bsba-b-conc-strategy-b",
+                            "type": "COUNT",
+                            "label": "B-list electives",
+                            "subtitle": "Pick 3 · at most 1 from outside S&I",
+                            "min": 3,
+                            "pool": [
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "S&I courses",
+                                "courses": [
+                                  "QSTIM475",
+                                  "QSTSI475",
+                                  "QSTSI360",
+                                  "QSTSI451",
+                                  "QSTSI464",
+                                  "QSTSI482",
+                                  "QSTSI498",
+                                  "QSTSI553",
+                                  "QSTSI453"
+                                ]
+                              },
+                              {
+                                "type": "COURSE_LIST",
+                                "label": "Outside S&I",
+                                "cap": 1,
+                                "courses": [
+                                  "QSTBA305",
+                                  "QSTBE325",
+                                  "QSTPL325",
+                                  "QSTFE460",
+                                  "QSTIM345",
+                                  "QSTIS474",
+                                  "QSTMK447",
+                                  "QSTMK470",
+                                  "QSTMO441"
+                                ]
+                              }
+                            ],
+                            "note": "IM 475 counts as an S&I course here. Directed study (SI 498) is by application."
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "bsba-b-conc-independent",
+                    "type": "UNRESOLVED",
+                    "label": "Independent Concentration",
+                    "note": "You can design your own concentration of four 300- or 400-level Questrom electives around one theme. It needs approval from your UDC academic advisor and the faculty concentration advisor before you start (apply before finishing SM 323).",
+                    "devNote": "Advisor-approved theme; not tracked. Not in the picker."
+                  },
+                  {
+                    "id": "bsba-b-conc-overlap",
+                    "type": "UNRESOLVED",
+                    "label": "Two concentrations",
+                    "note": "Two concentrations share at most one course (plus a shared X-list course for Fall 2025+; 8 courses minimum).",
+                    "devNote": "Phase 2b: only one concentration is tracked. Old-cohort UDC page says 7 courses minimum for two (one shared course, no X-list)."
+                  }
+                ]
+              },
+              {
+                "id": "bsba-b-grades",
+                "type": "UNRESOLVED",
+                "label": "Grades",
+                "note": "All required Questrom courses and concentration courses need a C– or better. This isn't checked automatically."
+              },
+              {
+                "id": "bsba-b-total-units",
+                "type": "UNRESOLVED",
+                "label": "133 total units",
+                "note": "133 total units are needed to graduate.",
+                "devNote": "Unit total, not a course count; credits are tracked in the Credits tab."
+              },
+              {
+                "id": "bsba-b-restricted-courses",
+                "type": "UNRESOLVED",
+                "label": "Courses you can't take",
+                "note": "Questrom students can't take CAS MA 113, 115, 116, 213 or 214, CAS EC 203, 204, 303, 304 or 305, or CAS PS 211. QM 221 and 222 (BA 221 and 222) cover that material. These don't count toward any elective here.",
+                "devNote": "From the UDC Fall 2019 – Spring 2025 page. Enforced by excluding them from this track's CAS, non-Questrom and free elective pools; the planner doesn't block adding them. Not applied to Track A (the Fall 2025+ page doesn't state it)."
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

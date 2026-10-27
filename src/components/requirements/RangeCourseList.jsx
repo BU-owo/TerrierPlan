@@ -3,7 +3,12 @@ import { loadAllCourses, isProfessionalCareer, isInactiveCourse } from '../../ut
 import PawLoader from '../PawLoader';
 import useDelayedBusy from '../../hooks/useDelayedBusy';
 import { parseCourseKey } from '../../utils/courseKey';
+import { rangeMatchesSubject } from '../../utils/requirementsEngine';
 import CourseList from './CourseList';
+
+// subjectPrefix ranges ("any BU course", "any CAS course") can match thousands
+// of courses: they show a search box first and at most this many rows.
+const WIDE_RANGE_LIMIT = 12;
 
 // Catalog courses grouped by subject, parsed once per loaded catalog and
 // shared by every RangeCourseList: [{ course, number }] sorted by catalog
@@ -48,6 +53,7 @@ export default function RangeCourseList({
   onRowClick,
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [query, setQuery] = useState('');
   const [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'ready' | 'error'
   const [courses, setCourses] = useState([]);
   const loaderVisible = useDelayedBusy(status === 'loading');
@@ -76,7 +82,13 @@ export default function RangeCourseList({
     const excludeSet = new Set(range.exclude || []);
     // `include` keys are listed above the browse list (see CoursePool).
     const includeSet = new Set(range.include || []);
-    return (getSubjectIndex(courses).get(range.subject) || [])
+    const index = getSubjectIndex(courses);
+    // One subject: its list. A subjectPrefix range: every matching subject, A–Z.
+    const candidates = range.subject
+      ? (rangeMatchesSubject(range, range.subject) ? index.get(range.subject) || [] : [])
+      : [...index.keys()].filter((subject) => rangeMatchesSubject(range, subject)).sort()
+        .flatMap((subject) => index.get(subject));
+    return candidates
       .filter(({ course, number }) =>
         number >= range.min
         && number <= range.max
@@ -91,7 +103,17 @@ export default function RangeCourseList({
   // nothing, show them all greyed rather than an empty list.
   const activeOrStashed = matching.filter((course) => !isInactiveCourse(course) || stashSet.has(course.id));
   const allInactive = activeOrStashed.length === 0 && matching.length > 0;
-  const shown = allInactive ? matching : activeOrStashed;
+  const pool = allInactive ? matching : activeOrStashed;
+
+  // Wide (subjectPrefix) ranges: nothing listed until 2+ characters are typed,
+  // then the first WIDE_RANGE_LIMIT matches.
+  const wide = !range.subject;
+  const queryLower = query.trim().toLowerCase();
+  const queryMatches = wide && queryLower.length >= 2
+    ? pool.filter((course) =>
+      `${course.courseNumber ?? course.id} ${course.name ?? ''} ${course.id}`.toLowerCase().includes(queryLower))
+    : [];
+  const shown = wide ? queryMatches.slice(0, WIDE_RANGE_LIMIT) : pool;
 
   return (
     <>
@@ -107,7 +129,38 @@ export default function RangeCourseList({
       {expanded && shownStatus === 'error' && (
         <div className="req-pool-filter-empty">Couldn&apos;t load courses. Close and reopen to try again.</div>
       )}
-      {expanded && shownStatus === 'ready' && (
+      {expanded && shownStatus === 'ready' && wide && (
+        <div className="req-range-list">
+          <input
+            type="text"
+            className="req-pool-filter-input"
+            placeholder={`Search ${pool.length.toLocaleString()} courses…`}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {queryLower.length < 2 && (
+            <div className="req-pool-filter-empty">Type a course code or title to see matches.</div>
+          )}
+          {queryLower.length >= 2 && (
+            <CourseList
+              courses={shown}
+              dimmed={allInactive}
+              stashSet={stashSet}
+              onToggleStash={onToggleStash}
+              onShowCourseInfo={onShowCourseInfo}
+              subsetLabels={subsetLabels}
+              onRowClick={onRowClick}
+              emptyText={<>No courses match &ldquo;{query}&rdquo;.</>}
+            />
+          )}
+          {queryMatches.length > WIDE_RANGE_LIMIT && (
+            <div className="req-pool-filter-empty">
+              {queryMatches.length - WIDE_RANGE_LIMIT} more match. Keep typing to narrow it down.
+            </div>
+          )}
+        </div>
+      )}
+      {expanded && shownStatus === 'ready' && !wide && (
         <CourseList
           courses={shown}
           dimmed={allInactive}

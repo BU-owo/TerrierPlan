@@ -244,3 +244,15 @@ test('satisfiedHubInputs with no status map keeps everything', () => {
   assert.deepEqual(out.semesters, [['A', 'B']]);
   assert.deepEqual(out.extraCourseKeys, ['C']);
 });
+
+test('courseTally: the counted total never shows above the required one, nor planned above counted', () => {
+  const map = { P1: { locked: false, semesterStatus: 'future' }, P2: { locked: false, semesterStatus: 'future' } };
+  assert.deepEqual(
+    courseTally({ claimedTotal: 36, requiredTotal: 35, countedKeys: ['P1', 'P2'], statusMap: map }),
+    { done: 33, planned: 2, toGo: 0, toCheck: 0 },
+  );
+  assert.deepEqual(
+    courseTally({ claimedTotal: 1, requiredTotal: 4, countedKeys: ['P1', 'P2'], statusMap: map }),
+    { done: 0, planned: 1, toGo: 3, toCheck: 0 },
+  );
+});

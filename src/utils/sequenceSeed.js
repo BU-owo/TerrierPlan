@@ -32,8 +32,11 @@ export function sequenceSlots(programDef) {
   return Array.isArray(slots) ? slots : null;
 }
 
+// View nodes (`claims: "view"`) and everything inside them are skipped: they
+// take no placeholders (a `fills` naming one fails validation, and takeover
+// never finds one).
 function walkNodes(node, visit) {
-  if (!node || typeof node !== 'object') return;
+  if (!node || typeof node !== 'object' || node.claims === 'view') return;
   visit(node);
   if (Array.isArray(node.children)) node.children.forEach((child) => walkNodes(child, visit));
 }
@@ -126,6 +129,7 @@ function slotStateInTree(node, key) {
   if (own != null) return own;
   if (node.type === 'ONE_OF') return slotStateInTree(node.children[node.activeChildIndex] ?? {}, key);
   for (const child of Array.isArray(node.children) ? node.children : []) {
+    if (child.claims === 'view') continue;
     const state = slotStateInTree(child, key);
     if (state != null) return state;
   }
@@ -201,6 +205,7 @@ function slotMatchedKeys(node, key) {
   }
   if (node.type === 'ONE_OF') return slotMatchedKeys(node.children[node.activeChildIndex] ?? {}, key);
   for (const child of Array.isArray(node.children) ? node.children : []) {
+    if (child.claims === 'view') continue;
     const found = slotMatchedKeys(child, key);
     if (found != null) return found;
   }

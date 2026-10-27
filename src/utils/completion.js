@@ -146,12 +146,15 @@ export function isNodeShown(filter, ownState, anyChildShown = false) {
 // `done` = the rest of what's counted, `toGo` = what's still missing.
 // `toCheck` (UNRESOLVED "check with advisor" items) is reported on its own
 // and never adds to toGo — the engine counts those as 0 courses.
+// The counted total never shows above the required one ("36 of 35"), and
+// planned never above what's counted.
 export function courseTally({ claimedTotal, requiredTotal, countedKeys, statusMap, toCheck = 0 }) {
-  const planned = [...new Set(countedKeys || [])].filter((key) => !isKeyDone(statusMap, key)).length;
+  const claimed = Math.min(claimedTotal || 0, requiredTotal || 0);
+  const planned = Math.min(claimed, [...new Set(countedKeys || [])].filter((key) => !isKeyDone(statusMap, key)).length);
   return {
-    done: Math.max(0, (claimedTotal || 0) - planned),
+    done: Math.max(0, claimed - planned),
     planned,
-    toGo: Math.max(0, (requiredTotal || 0) - (claimedTotal || 0)),
+    toGo: Math.max(0, (requiredTotal || 0) - claimed),
     toCheck,
   };
 }

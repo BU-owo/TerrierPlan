@@ -8,7 +8,8 @@ function describeEntry(entry) {
     return [entry.primary, ...(entry.substitutes || [])].join(' or ');
   }
   if (entry.type === 'COURSE_RANGE' || entry.type === 'COURSE_RANGE_CAP') {
-    return `${entry.subject} ${entry.min}-${entry.max}`;
+    const notSubjects = entry.excludeSubjectPrefixes?.length ? ` (not ${entry.excludeSubjectPrefixes.join('/')})` : '';
+    return `${entry.subject ?? `${entry.subjectPrefix ?? ''}*`} ${entry.min}-${entry.max}${notSubjects}`;
   }
   if (entry.type === 'COURSE_LIST') return entry.courses.join(', ');
   if (entry.type === 'SEQUENCE_GROUP') return entry.options.map((option) => option.label).join(' or ');
@@ -21,6 +22,8 @@ function describeEntry(entry) {
 // denominator (e.g. "6 electives") instead of one that inflates whenever an
 // earlier group isn't finished yet.
 function structuralCourseCount(node) {
+  // A view node (`claims: "view"`) only re-reads its siblings' courses.
+  if (node.claims === 'view') return 0;
   switch (node.type) {
     case 'ALL':
       return Array.isArray(node.children)
@@ -44,9 +47,19 @@ function structuralCourseCount(node) {
   }
 }
 
+// Which subjects a COURSE_RANGE / COURSE_RANGE_CAP entry (or the `range` the
+// engine reports for one) covers: exactly `subject` when set; otherwise every
+// subject starting with `subjectPrefix` ("CAS", or "" for any course). Either
+// way, subjects starting with one of `excludeSubjectPrefixes` never match.
+export function rangeMatchesSubject(range, subject) {
+  if ((range.excludeSubjectPrefixes || []).some((prefix) => subject.startsWith(prefix))) return false;
+  if (range.subject) return subject === range.subject;
+  return typeof range.subjectPrefix === 'string' && subject.startsWith(range.subjectPrefix);
+}
+
 // `include` (COURSE_RANGE only): extra courseKeys that also match, on top of
 // the subject/number range — same exclude/claimed rules.
-function matchCourseRange(ctx, subject, min, max, exclude, include = []) {
+function matchCourseRange(ctx, range, min, max, exclude, include = []) {
   const excludeSet = new Set((exclude || []).map(normalizeCourseKey));
   const includeSet = new Set((include || []).map(normalizeCourseKey));
   const results = [];
@@ -57,7 +70,7 @@ function matchCourseRange(ctx, subject, min, max, exclude, include = []) {
       continue;
     }
     const parsed = parseCourseKey(key);
-    if (!parsed || parsed.subject !== subject) continue;
+    if (!parsed || !rangeMatchesSubject(range, parsed.subject)) continue;
     if (parsed.number < min || parsed.number > max) continue;
     results.push(key);
   }
@@ -98,6 +111,9 @@ function poolEntryRange(entry) {
   if (entry.type === 'COURSE_RANGE' || entry.type === 'COURSE_RANGE_CAP') {
     return {
       subject: entry.subject,
+      // Prefix ranges only (see rangeMatchesSubject); absent on plain ranges.
+      ...(entry.subjectPrefix !== undefined ? { subjectPrefix: entry.subjectPrefix } : {}),
+      ...(entry.excludeSubjectPrefixes ? { excludeSubjectPrefixes: entry.excludeSubjectPrefixes } : {}),
       min: entry.min,
       max: entry.max,
       exclude: entry.exclude || [],
@@ -148,13 +164,13 @@ function claimPoolEntry(entry, ctx, need) {
       return { claimedKeys: [], candidateKeys };
     }
     case 'COURSE_RANGE': {
-      const candidates = matchCourseRange(ctx, entry.subject, entry.min, entry.max, entry.exclude, entry.include);
+      const candidates = matchCourseRange(ctx, entry, entry.min, entry.max, entry.exclude, entry.include);
       const claim = candidates.slice(0, need);
       claim.forEach((key) => ctx.claimed.add(key));
       return { claimedKeys: claim, candidateKeys };
     }
     case 'COURSE_RANGE_CAP': {
-      const candidates = matchCourseRange(ctx, entry.subject, entry.min, entry.max, entry.exclude);
+      const candidates = matchCourseRange(ctx, entry, entry.min, entry.max, entry.exclude);
       const cappedNeed = Math.min(need, entry.cap);
       const claim = candidates.slice(0, cappedNeed);
       claim.forEach((key) => ctx.claimed.add(key));
@@ -242,14 +258,28 @@ function claimFromPools(pools, required, ctx) {
   return { matched, missing, satisfiedCount };
 }
 
+// Every courseKey an evaluated node counts in the shared claimed set (a ONE_OF
+// through its active child only; view nodes count nothing).
+function countedKeysOf(node) {
+  if (!node || node.claims === 'view') return [];
+  if (node.waived) return (node.matched || []).filter((key) => typeof key === 'string');
+  if (node.type === 'ONE_OF') return node.activeChildIndex == null ? [] : countedKeysOf(node.children[node.activeChildIndex]);
+  if (Array.isArray(node.children)) return node.children.flatMap(countedKeysOf);
+  return (node.matched || []).flatMap((entry) => (typeof entry === 'string' ? [entry] : entry.courseKeys || []));
+}
+
 function evaluateAllContainer(node, ctx) {
   const original = node.children;
   // REMAINDER siblings must see what everyone else already claimed, so they
-  // always evaluate last regardless of where they appear in the JSON.
+  // always evaluate last regardless of where they appear in the JSON. View
+  // nodes (`claims: "view"`) go after them: they re-read what their `viewOf`
+  // siblings counted.
   const remainderIndices = [];
   const otherIndices = [];
+  const viewIndices = [];
   original.forEach((child, i) => {
-    (child.type === 'REMAINDER' ? remainderIndices : otherIndices).push(i);
+    if (child.claims === 'view') viewIndices.push(i);
+    else (child.type === 'REMAINDER' ? remainderIndices : otherIndices).push(i);
   });
 
   const children = new Array(original.length);
@@ -262,8 +292,18 @@ function evaluateAllContainer(node, ctx) {
   for (const i of remainderIndices) {
     children[i] = evaluateNode(original[i], ctx, { siblingsExpected });
   }
+  // A view node sees every plan course except those counted by siblings
+  // outside its `viewOf`, and claims into a private copy: nothing it takes
+  // reaches the shared set, so the program total and numerator never move.
+  for (const i of viewIndices) {
+    const viewOf = new Set(original[i].viewOf || []);
+    const visible = new Set(children.filter((child) => child && viewOf.has(child.id)).flatMap(countedKeysOf));
+    const claimed = new Set([...ctx.claimed].filter((key) => !visible.has(key)));
+    children[i] = evaluateNode(original[i], { ...ctx, claimed });
+  }
 
-  const blocking = children.filter((c) => c.type !== 'UNRESOLVED');
+  // UNRESOLVED and view nodes never hold their parent back.
+  const blocking = children.filter((c) => c.type !== 'UNRESOLVED' && c.claims !== 'view');
   const satisfiedCount = blocking.filter((c) => c.status === 'satisfied').length;
   const required = blocking.length;
 
@@ -438,7 +478,23 @@ function evaluateOneOf(node, ctx) {
   // e.g. the track tab the student is looking at; everything after this
   // point treats it exactly like an auto-picked one.
   const forced = ctx.forcedTracks?.[node.id];
-  const activeChildIndex = Number.isInteger(forced) && forced >= 0 && forced < attempts.length ? forced : autoChildIndex;
+  const validForced = Number.isInteger(forced) && forced >= 0 && forced < attempts.length;
+  // `selection: "student"`: only the student's pick counts; no pick = none
+  // active (activeChildIndex null), nothing claimed, unsatisfied.
+  if (node.selection === 'student' && !validForced) {
+    return {
+      ...node,
+      children: attempts.map(({ result }) => result),
+      activeChildIndex: null,
+      autoChildIndex,
+      status: 'unsatisfied',
+      matched: [],
+      missing: [],
+      satisfiedCount: 0,
+      required: 1,
+    };
+  }
+  const activeChildIndex = validForced ? forced : autoChildIndex;
   attempts[activeChildIndex].claimed.forEach((key) => ctx.claimed.add(key));
   const satisfied = attempts[activeChildIndex].result.status === 'satisfied';
   return {
@@ -790,6 +846,32 @@ function evaluateUnresolvedSubstituted(node, ctx, sub, override) {
   };
 }
 
+// A bundle slot (a SEQUENCE_GROUP pool entry, e.g. ES 110 + ES 210) is one
+// slot to the claiming, status and petition logic above, but the program
+// total and the header count courses. So a COUNT / REMAINDER result reports
+// `required` / `satisfiedCount` in courses: a filled bundle adds its matched
+// option's extra courses to both; an unfilled named slot (take-all card) adds
+// its smallest option's extra courses to `required`. A pick-N card's empty
+// slots stay one course each. `status` and `openSlots` are unchanged.
+function inCourses(node, result) {
+  let filled = 0;
+  let unmet = 0;
+  for (const m of result.matched) {
+    if (typeof m === 'string' || m.entryIndex == null) continue;
+    const pool = m.subsetIndex !== undefined ? node.atLeast?.[m.subsetIndex]?.pool : m.fallback ? node.additionalPool : node.pool;
+    if (pool?.[m.entryIndex]?.type === 'SEQUENCE_GROUP') filled += Math.max(0, (m.courseKeys || []).length - 1);
+  }
+  if (hasNamedSlots(node)) {
+    node.pool.forEach((entry, i) => {
+      if (entry?.type !== 'SEQUENCE_GROUP') return;
+      if (result.matched.some((m) => m.entryIndex === i && !m.fallback && m.subsetIndex === undefined)) return;
+      unmet += Math.min(...entry.options.map((option) => option.courses.length)) - 1;
+    });
+  }
+  if (filled + unmet === 0) return result;
+  return { ...result, required: result.required + filled + unmet, satisfiedCount: result.satisfiedCount + filled };
+}
+
 function evaluateNode(rawNode, ctx, meta) {
   const node = resolvePoolFrom(rawNode);
   const override = ctx.overrides?.[node.id];
@@ -807,9 +889,9 @@ function evaluateNodeBody(node, ctx, meta, substitutions = []) {
         ? evaluateAllContainer(node, ctx)
         : applySlotSubstitutions(node, evaluateAllLeaf(node, ctx), ctx, substitutions);
     case 'COUNT':
-      return applySlotSubstitutions(node, evaluateCount(node, ctx), ctx, substitutions);
+      return inCourses(node, applySlotSubstitutions(node, evaluateCount(node, ctx), ctx, substitutions));
     case 'REMAINDER':
-      return applySlotSubstitutions(node, evaluateRemainder(node, ctx, meta), ctx, substitutions);
+      return inCourses(node, applySlotSubstitutions(node, evaluateRemainder(node, ctx, meta), ctx, substitutions));
     case 'SEQUENCE_GROUP':
       return evaluateSequenceGroup(node, ctx, substitutions);
     case 'ONE_OF':
@@ -841,10 +923,14 @@ export function deriveRequiredTotal(node) {
   if (node.waived) return node.required ?? 0;
   switch (node.type) {
     case 'ALL':
+      // A view child adds nothing to its parent's total (its own total still
+      // counts when it is asked directly, e.g. for its card's n/N).
       return Array.isArray(node.children)
-        ? node.children.reduce((sum, child) => sum + deriveRequiredTotal(child), 0)
+        ? node.children.reduce((sum, child) => sum + (child.claims === 'view' ? 0 : deriveRequiredTotal(child)), 0)
         : node.required;
     case 'ONE_OF':
+      // No pick yet on a `selection: "student"` ONE_OF: nothing asked.
+      if (node.activeChildIndex == null) return 0;
       return deriveRequiredTotal(node.children[node.activeChildIndex]);
     case 'SEQUENCE_GROUP':
       // The matched option's size (not `matched.length`: a substitute from outside the plan fills a slot without being a matched course).

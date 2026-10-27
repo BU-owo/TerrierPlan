@@ -16,7 +16,8 @@ import RhettPeek from '../RhettPeek';
 import { BU_LINKS } from '../../data/officialLinks';
 import { RequirementDragContext } from './requirementDrag';
 import { unresolvedLast } from '../../utils/unresolvedLast';
-import { DISCORD_URL, SUPPORT_EMAIL } from '../HelpSupportModal';
+import HelpSupportModal, { DISCORD_URL, SUPPORT_EMAIL } from '../HelpSupportModal';
+import useRequirementPicks from '../../hooks/useRequirementPicks';
 import { findProgramByUrl } from '../../data/bu-programs';
 import useInactiveCourseKeys from '../../hooks/useInactiveCourseKeys';
 import useDelayedBusy from '../../hooks/useDelayedBusy';
@@ -62,8 +63,12 @@ export default function RequirementTree({
   dragEnabled = false,
 }) {
   const [collapsedOverrides, setCollapsedOverrides] = useState({});
-  // Selected tab of a hoisted ONE_OF ("tracks"), by node id.
-  const [trackViews, setTrackViews] = useState({});
+  // "Need a paw?" on the Questrom notice opens the same help modal as the footer.
+  const [showHelp, setShowHelp] = useState(false);
+  // Selected tab of a hoisted ONE_OF ("tracks") and the pick of a
+  // `selection: "student"` ONE_OF (concentration), by node id. Kept in this
+  // browser per major (useRequirementPicks), never in the plan.
+  const [trackViews, setPick] = useRequirementPicks(majorBulletinUrl);
   // { nodeId, mode: 'waive' | 'substitute' } while the exception form is open
   // ('waive' is only "Mark as done" on an UNRESOLVED node).
   const [exception, setException] = useState(null);
@@ -103,10 +108,12 @@ export default function RequirementTree({
   // Course names still being looked up: a small paw instead of bare rows.
   const courseLookup = useContext(CourseDataStatusContext);
   const lookupLoaderVisible = useDelayedBusy(Boolean(result) && courseLookup.fetching);
+  // What every count, bar and badge shows: never above the total.
+  const shownClaimed = result ? Math.min(result.totalCoursesClaimed, result.totalCoursesRequired) : 0;
 
   useEffect(() => {
     onSummaryChange?.({
-      badge: result ? `${result.totalCoursesClaimed}/${result.totalCoursesRequired}` : '—',
+      badge: result ? `${shownClaimed}/${result.totalCoursesRequired}` : '—',
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
@@ -239,6 +246,8 @@ export default function RequirementTree({
     flatNodes,
     onAddFromRow: addFromRow,
     inactiveKeys,
+    // A `selection: "student"` ONE_OF's picker (index null = no pick).
+    onSelectOption: setPick,
   };
 
   // Same "planning only" line as the HUB views, under the progress summary
@@ -291,7 +300,7 @@ export default function RequirementTree({
   // Independent of the All / Still to do / Done filter.
   const tally = result
     ? courseTally({
-      claimedTotal: result.totalCoursesClaimed,
+      claimedTotal: shownClaimed,
       requiredTotal: result.totalCoursesRequired,
       countedKeys: collectMatchedKeys(result.tree),
       statusMap: splitStatusMap,
@@ -303,7 +312,7 @@ export default function RequirementTree({
   const progress = result
     ? requirementsProgressView({
       satisfied: result.status === 'satisfied',
-      claimed: result.totalCoursesClaimed,
+      claimed: shownClaimed,
       required: result.totalCoursesRequired,
       planned: tally.planned,
     })
@@ -390,12 +399,19 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
 
       {result && (
         <>
+          {/* Questrom programs (school "QST") are newer and less checked. */}
+          {programDef?.school === 'QST' && (
+            <p className={`estimate-note req-program-notice${density === 'full' ? ' is-prominent' : ''}`}>
+              Questrom requirement checker is a work in progress. Please report any inaccuracies.{' '}
+              <button type="button" className="req-notice-link" onClick={() => setShowHelp(true)}>Need a paw?</button>
+            </p>
+          )}
           {density === 'full' ? (
             <div className="req-progress-summary">
               <p className="req-progress-summary-text">
                 {splitStatusMap
                   ? progressHeaderText(headerNumbers)
-                  : `${result.totalCoursesClaimed} of ${result.totalCoursesRequired} courses counted — ${progress.countedPercent}% complete`}
+                  : `${shownClaimed} of ${result.totalCoursesRequired} courses counted — ${progress.countedPercent}% complete`}
               </p>
               {progressBar}
               <p className="req-progress-summary-sub">{result.programName} {result.degree}</p>
@@ -406,7 +422,7 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
               <p className="panel-summary-line">
                 {splitStatusMap
                   ? progressHeaderText(headerNumbers, { compact: true })
-                  : `${result.totalCoursesClaimed} of ${result.totalCoursesRequired} courses counted`}
+                  : `${shownClaimed} of ${result.totalCoursesRequired} courses counted`}
                 <span className="req-beta-tag">Beta</span>
               </p>
               {progressBar}
@@ -436,7 +452,7 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
                   type="button"
                   className={`hub-year-toggle-btn${i === trackIndex ? ' active' : ''}`}
                   aria-pressed={i === trackIndex}
-                  onClick={() => setTrackViews((prev) => ({ ...prev, [hoisted.id]: i }))}
+                  onClick={() => setPick(hoisted.id, i)}
                 >
                   {option.label}
                 </button>
@@ -531,6 +547,7 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
         onSetOverride={onSetRequirementOverride}
         onClose={() => setException(null)}
       />
+      <HelpSupportModal open={showHelp} onClose={() => setShowHelp(false)} />
     </div>
     </RequirementDragContext.Provider>
   );

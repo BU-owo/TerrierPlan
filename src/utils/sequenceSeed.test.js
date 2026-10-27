@@ -380,3 +380,28 @@ test('seeding and the tracker use the same key list: requirementsPlanKeys', () =
   assert.match(planner, /requirementsCourseKeys = useMemo\(\s*\(\) => requirementsPlanKeys\(/);
   assert.doesNotMatch(planner, /externalCredits\.flatMap\(externalCreditCourseKeys\)/);
 });
+
+test('view nodes take no placeholders: a fills naming one (or a node inside one) fails validation, takeover never picks it', () => {
+  const program = {
+    programName: 'T', degree: 'BS', totalCoursesRequired: 2,
+    tree: {
+      id: 'root', type: 'ALL', label: 'Root', children: [
+        { id: 'electives', type: 'COUNT', label: 'Electives', min: 2, pool: [{ type: 'COURSE_RANGE', subject: 'QSTFE', min: 300, max: 599 }] },
+        { id: 'conc', type: 'ALL', label: 'Concentration', claims: 'view', viewOf: ['electives'], children: [
+          { id: 'conc-b', type: 'COUNT', label: 'B', min: 1, pool: ['QSTFE449'] },
+        ] },
+      ],
+    },
+    sequence: { slots: [{ placeholders: [
+      { label: 'Elective', fills: 'electives' },
+      { label: 'Concentration', fills: 'conc' },
+      { label: 'Concentration B', fills: 'conc-b' },
+    ] }] },
+  };
+  assert.deepEqual(validateSequence(program), [
+    'slot 0: fills "conc" is not a node id of this program',
+    'slot 0: fills "conc-b" is not a node id of this program',
+  ]);
+  assert.equal(nodeAcceptsCourse(program, 'conc-b', 'QSTFE449'), false);
+  assert.equal(nodeAcceptsCourse(program, 'electives', 'QSTFE449'), true);
+});

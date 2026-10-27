@@ -6,6 +6,7 @@ import { HubUnitTags, MarineSemesterPill, OfferingBadge } from '../planner/Cours
 import useUpcomingSeasons from '../../hooks/useUpcomingSeasons';
 import useCurrentTermCourseKeys from '../../hooks/useCurrentTermCourseKeys';
 import { shortCourseCode } from './treeHelpers';
+import { displayCourseTitle } from '../../utils/courseTitle';
 
 // The one row used for every selectable course in the requirements view
 // (pool groups, range lists, sequence options): code, title (two lines then
@@ -52,11 +53,15 @@ export default function RequirementCourseRow({
   // Substitute from outside the catalog / plan (transfer, study abroad, ...):
   // free text shown in place of a course code and title.
   substituteLabel,
+  // Full-width last line inside the row's own box, under a thin divider (a
+  // filled either/or slot's "Also counts here: …" and its other options).
+  footer,
 }) {
   const catalogSeasons = useUpcomingSeasons(courseKey);
   const currentTermKeys = useCurrentTermCourseKeys();
   const code = shortCourseCode(courseKey);
-  const name = course?.name;
+  // ALL CAPS catalog titles are shown title-cased (display only).
+  const name = displayCourseTitle(course?.name);
   const clickable = Boolean(onRowClick) && !inPlan;
   const canDrag = useContext(RequirementDragContext) && clickable;
   // Unique per row: the same course can appear in several requirement groups.
@@ -96,7 +101,7 @@ export default function RequirementCourseRow({
   return (
     <div
       ref={canDrag ? setNodeRef : undefined}
-      className={`req-course-row${isStashed ? ' is-stashed' : ''}${compact ? ' is-compact' : ''}${inPlan ? ' is-in-plan' : ''}${inPlan && planStatus ? ` is-plan-${planStatus}` : ''}${clickable ? ' is-clickable' : ''}${dimmed ? ' is-dimmed' : ''}${tag ? ' is-alt' : ''}${substituted ? ' is-substituted' : ''}${canDrag ? ' is-draggable' : ''}${isDragging ? ' is-dragging' : ''}`}
+      className={`req-course-row${isStashed ? ' is-stashed' : ''}${compact ? ' is-compact' : ''}${inPlan ? ' is-in-plan' : ''}${inPlan && planStatus ? ` is-plan-${planStatus}` : ''}${clickable ? ' is-clickable' : ''}${dimmed ? ' is-dimmed' : ''}${tag ? ' is-alt' : ''}${substituted ? ' is-substituted' : ''}${canDrag ? ' is-draggable' : ''}${isDragging ? ' is-dragging' : ''}${footer ? ' has-footer' : ''}`}
       onClick={clickable ? () => onRowClick(courseKey) : undefined}
       {...(canDrag ? { ...attributes, ...listeners } : {})}
     >
@@ -175,6 +180,7 @@ export default function RequirementCourseRow({
           )}
         </div>
       )}
+      {footer && <div className="req-course-row-footer">{footer}</div>}
     </div>
   );
 }

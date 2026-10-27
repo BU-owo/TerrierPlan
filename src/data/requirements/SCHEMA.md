@@ -157,6 +157,14 @@ priority**, so put the entries you'd prefer claimed first.
   ("Pick N of M", "Pick N from this list"). Counting is unchanged.
 - `"noteStyle": "caption"` renders the node's `note` as normal-weight caption
   text instead of the default italic grey.
+- `"slotLayout": "rows"` on a take-all `COUNT` (one named slot per entry,
+  `min` = slot count) draws every either/or slot as plain rows in authored
+  order — the counted option keeps its place, a pair gets the "or" pill and
+  "Either one counts", the slot `note` sits underneath, a one-option slot is
+  one plain row — instead of "Choose 1" boxes, and drops the "Take all N ·
+  Boxed groups" legend. All options stay listed, so there's no Browse
+  toggle for them. Sequence slots are unchanged. Used by Business
+  Administration BS's "Economics, Calculus & Writing".
 - `"continues": true` on a pool entry draws that entry inside the previous
   entry's box with no heading of its own (e.g. an either/or slot plus a list
   that together form one visible area). Claiming order is unchanged.
@@ -225,6 +233,15 @@ claims are committed. Output: `status` (satisfied if any child is),
 one's claims are real), `satisfiedCount`/`required` = 1/1 or 0/1. For a
 sibling `REMAINDER`'s denominator it counts as the smallest child. Overrides:
 waive only (a substitute override on a `ONE_OF` has no effect).
+
+Optional `"selection": "student"`: only the student's pick counts. The pick
+is `forcedTracks[node.id]` (the UI stores it in this browser per major, see
+`src/hooks/useRequirementPicks.js`, never in the plan). With no valid pick,
+`activeChildIndex` is `null`: nothing is claimed, the node is unsatisfied and
+asks for 0 courses (`autoChildIndex` still says which option is closest).
+The UI draws it as a picker of every option's `label`, then the picked
+option's requirements (BSBA concentration; its "No concentration" row, shown
+only while something is picked, clears it; re-picking the same one keeps it).
 
 Optional `"presentation": "tracks"` (display only — evaluation is unchanged)
 hoists a top-level `ONE_OF` out of the card list: its options become a track
@@ -313,6 +330,32 @@ BMB Electives `COUNT`'s pool alongside its `COURSE_LIST` entry, instead of
 being modeled as a second, independently-required sibling that would have to
 be satisfied *in addition to* an already-satisfied elective pool.
 
+### View nodes (`"claims": "view"`)
+```jsonc
+{ "id": "bsba-a-concentration-set", "type": "ALL", "claims": "view",
+  "viewOf": ["bsba-a-questrom-electives", "bsba-a-non-questrom-electives", "bsba-a-free-electives"],
+  "children": [...] }
+```
+Any node type can carry it (BSBA uses it on a concentration `ALL`). A view
+node re-reads courses that already count elsewhere, so the same course can
+count for both (a concentration course is also a Questrom elective):
+
+- It evaluates **last** in its parent container, after every `REMAINDER`.
+- It sees every plan course except those counted by a sibling **not** in
+  `viewOf` (so core courses stay out), and claims into a private copy:
+  nothing it takes reaches the shared claimed set, so `totalCoursesClaimed`
+  never moves.
+- It adds **0** to its parent's total (`deriveRequiredTotal` skips it, and so
+  does `structuralCourseCount`, so a sibling `REMAINDER` is unchanged), and it
+  never holds its parent's `status` back (like `UNRESOLVED`). Asked directly,
+  its own total and counted courses still read n/N for its card.
+- The UI's container walks (`collectMatchedKeys`, `countCounted`) skip it the
+  same way; it takes no sequence placeholders (a `fills` naming it, or a node
+  inside it, fails `validateSequence`); the sweep test leaves it out of its
+  double-claim and freed-course checks.
+- `viewOf` names direct siblings; unknown ids are ignored. Overrides inside
+  it (waive, substitute) stay private too.
+
 ### `UNRESOLVED`
 `{ "type": "UNRESOLVED", "label": "...", "note": "...", "devNote": "..." }`
 
@@ -378,6 +421,16 @@ entry's title.
   entry stays `null`; the include list is reported as `range.include`
   instead (the UI lists those courses above the catalog browse list).
   `COURSE_RANGE_CAP` ignores `include`.
+  Wide ranges (`COURSE_RANGE` and `COURSE_RANGE_CAP`): leave out `subject` and
+  set `"subjectPrefix"` to match every subject that starts with it (`"CAS"` =
+  any CAS course, `"QST"` = any Questrom course, `""` = any course), and
+  optionally `"excludeSubjectPrefixes": ["QST"]` to drop subjects starting with
+  any of those (also honored next to `subject`). Number range, `exclude` and
+  `include` work as usual. The evaluated `range` carries both fields (only
+  when authored). The browse list for a wide range is search-first: nothing
+  is listed until 2+ characters are typed, then at most 12 matches. Always
+  give a wide range a `label`. Used by Business Administration BS (Questrom
+  electives, non-Questrom electives, free electives).
 - `{ "type": "COURSE_RANGE_CAP", "subject": "CASCS", "min": 200, "max": 299, "cap": 2 }`
   — same matching as `COURSE_RANGE`, but never contributes more than `cap`
   courses to the node, even if the node needs more and more are available.
@@ -394,6 +447,12 @@ entry's title.
   but (unlike `COURSE_LIST`) counts as exactly **one** claim toward the
   node's `min`/`totalRequired`, not one per course — a two-course bundle
   fills one slot, the same way a single `OR_EQUIVALENT` course would.
+  The evaluated node still reports `required` / `satisfiedCount` (and so the
+  program total and card n/N) in **courses**, to match the header's course
+  count: a matched bundle adds its option's extra courses to both, and an
+  unmatched bundle in a take-all card (named slots) adds its smallest option's
+  extra courses to `required` (BSBA Career: 2 with nothing, 3 with ES 110 +
+  210, 2 with ES 215). Status, claiming and petitions still work in slots.
 
 ## courseKey parsing
 

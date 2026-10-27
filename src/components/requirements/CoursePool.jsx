@@ -34,6 +34,88 @@ function LabeledRow({ label, held, body }) {
   );
 }
 
+const itemKey = (item) => item.key ?? item.sub?.courseKey ?? item.sub?.label;
+
+// A slot note without its "X also counts." sentences (the footer's "Also
+// counts here: X" line already says that), or null when nothing is left.
+function noteBeyondAlsoCounts(note) {
+  if (!note) return null;
+  const rest = note.split(/(?<=\.)\s+/).filter((sentence) => !/\balso counts?\b/i.test(sentence)).join(' ');
+  return rest || null;
+}
+
+// One either/or slot of a `slotLayout: "rows"` card, always one visual group.
+// Not filled yet: every option as a row in authored order ("or" pill +
+// "Either one counts" for a pair) in one shared box, the slot note at its
+// bottom. Filled: only the counted row; inside its own box, under a divider,
+// "Also counts here: QM 221 · Show"; Show reveals the other options (and what
+// the note adds) in that same box. One-option slots, and a slot filled with
+// nothing else to list (a petition), are just the row.
+function RowsSlot({ group, renderItem }) {
+  const [open, setOpen] = useState(false);
+  const counted = group.items.filter((item) => item.type !== 'offer');
+  const alternates = group.items.filter((item) => item.type === 'offer');
+
+  if (counted.length === 0) {
+    const pair = group.items.length === 2;
+    const rows = (
+      <div className={`req-course-grid${pair ? ' req-course-grid--pair' : ''}`}>
+        {group.items.map((item, i) => (
+          <Fragment key={itemKey(item)}>
+            {pair && i === 1 && <span className="req-or-pill">or</span>}
+            {renderItem(item, group.optionTags)}
+          </Fragment>
+        ))}
+      </div>
+    );
+    const note = group.note && <span className="req-slot-note">{group.note}</span>;
+    if (group.items.length < 2) return <>{rows}{note}</>;
+    return (
+      <div className="req-rows-group">
+        {pair && <span className="req-either-caption">Either one counts</span>}
+        {rows}
+        {note}
+      </div>
+    );
+  }
+
+  if (alternates.length === 0) {
+    return (
+      <div className="req-course-grid">
+        {counted.map((item) => <Fragment key={itemKey(item)}>{renderItem(item, group.optionTags)}</Fragment>)}
+      </div>
+    );
+  }
+
+  const extraNote = noteBeyondAlsoCounts(group.note);
+  const footer = (
+    <>
+      <span className="req-also-counts">
+        Also counts here: {alternates.map((item) => shortCourseCode(item.key)).join(', ')} ·{' '}
+        <button type="button" className="req-inline-link" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? 'Hide' : 'Show'}
+        </button>
+      </span>
+      {open && (
+        <div className="req-rows-alternates">
+          <span className="req-or-pill">or</span>
+          <div className="req-course-grid">
+            {alternates.map((item) => <Fragment key={itemKey(item)}>{renderItem(item, group.optionTags)}</Fragment>)}
+          </div>
+          {extraNote && <span className="req-slot-note">{extraNote}</span>}
+        </div>
+      )}
+    </>
+  );
+  return (
+    <div className="req-rows-slot">
+      {counted.map((item, i) => (
+        <Fragment key={itemKey(item)}>{renderItem(item, group.optionTags, i === counted.length - 1 ? footer : undefined)}</Fragment>
+      ))}
+    </div>
+  );
+}
+
 export default function CoursePool({
   pool,
   subsets = [],
@@ -83,7 +165,7 @@ export default function CoursePool({
     return <div className="req-course-grid">{list.map(substitutedRow)}</div>;
   }
 
-  function claimedRow(key, optionTags) {
+  function claimedRow(key, optionTags, footer) {
     return (
       <RequirementCourseRow
         key={key}
@@ -96,6 +178,7 @@ export default function CoursePool({
         onShowCourseInfo={onShowCourseInfo}
         subsetLabel={subsetLabels?.get(key)}
         tag={optionTags?.[key]}
+        footer={footer}
       />
     );
   }
@@ -143,27 +226,36 @@ export default function CoursePool({
 
   // Take-all nodes: a run of plain required courses is one borderless grid in
   // authored order. Same row props as CourseList, so click / stash are unchanged.
+  function renderItem(item, optionTags = null, footer = undefined) {
+    if (item.type === 'claimed') return claimedRow(item.key, optionTags, footer);
+    if (item.type === 'sub') return substitutedRow(item.sub);
+    return (
+      <RequirementCourseRow
+        key={item.key}
+        courseKey={item.key}
+        course={{ id: item.key, ...(courseMap[item.key] || {}) }}
+        isStashed={stashSet.has(item.key)}
+        onToggleStash={onToggleStash}
+        onShowCourseInfo={onShowCourseInfo}
+        subsetLabel={subsetLabels?.get(item.key)}
+        onRowClick={onRowClick}
+        tag={optionTags?.[item.key]}
+      />
+    );
+  }
+
   function renderRun(group) {
     return (
       <div key={group.key} className="req-course-grid">
-        {group.items.map((item) => {
-          if (item.type === 'claimed') return claimedRow(item.key, null);
-          if (item.type === 'sub') return substitutedRow(item.sub);
-          return (
-            <RequirementCourseRow
-              key={item.key}
-              courseKey={item.key}
-              course={{ id: item.key, ...(courseMap[item.key] || {}) }}
-              isStashed={stashSet.has(item.key)}
-              onToggleStash={onToggleStash}
-              onShowCourseInfo={onShowCourseInfo}
-              subsetLabel={subsetLabels?.get(item.key)}
-              onRowClick={onRowClick}
-            />
-          );
-        })}
+        {group.items.map((item) => renderItem(item))}
       </div>
     );
+  }
+
+  // `slotLayout: "rows"` either/or slot: its options as plain rows in authored
+  // order, "or" pill + "Either one counts" for a pair, slot note underneath.
+  function renderRowsSlot(group) {
+    return <RowsSlot key={group.key} group={group} renderItem={renderItem} />;
   }
 
   function renderGroupBody(group) {
@@ -252,6 +344,7 @@ export default function CoursePool({
         const substituted = parts.some((part) => part.substituted?.length > 0);
         const open = parts.some((part) => part.open);
         if (group.layout === 'run') return renderRun(group);
+        if (group.layout === 'rows') return renderRowsSlot(group);
         if (group.layout === 'choose') {
           return (
             <div key={group.key} className="req-slot req-choose">

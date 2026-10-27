@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { evaluateRequirementTree, normalizeSubstitutions, resolvePoolFrom, resolveProgramPools } from './requirementsEngine.js';
+import { deriveRequiredTotal, evaluateRequirementTree, normalizeSubstitutions, rangeMatchesSubject, resolvePoolFrom, resolveProgramPools } from './requirementsEngine.js';
 import { marinePool } from '../data/marineSemester.js';
 
 const biology = JSON.parse(readFileSync(new URL('../data/requirements/cas/biology-ba.json', import.meta.url), 'utf8'));
@@ -682,4 +682,326 @@ test('forcedTracks: invalid values are ignored; waived tracks behave as before',
   assert.equal(child(forcedWaived, 'tracks').activeChildIndex, 1);
   assert.equal(child(forcedWaived, 'tracks').children[1].waived, true);
   assert.equal(child(forcedWaived, 'tracks').status, 'satisfied');
+});
+
+// ── COURSE_RANGE subjectPrefix / excludeSubjectPrefixes ─────────────────────
+
+const prefixProgram = (entry, min = 3) => ({
+  programName: 'T', degree: 'BS', totalCoursesRequired: 99,
+  tree: { id: 'root', type: 'ALL', label: 'Root', children: [{ id: 'P', type: 'COUNT', label: 'P', min, pool: [entry] }] },
+});
+const prefixPlan = ['QSTFE323', 'QSTES310', 'QSTMK499', 'QSTFE600', 'CASEC101', 'ENGEK100'];
+
+test('rangeMatchesSubject: exact subject wins, prefix covers every subject that starts with it, excluded prefixes never match', () => {
+  assert.equal(rangeMatchesSubject({ subject: 'CASCS' }, 'CASCS'), true);
+  assert.equal(rangeMatchesSubject({ subject: 'CASCS' }, 'CASCSX'), false);
+  assert.equal(rangeMatchesSubject({ subject: 'CASCS', subjectPrefix: 'QST' }, 'QSTFE'), false);
+  assert.equal(rangeMatchesSubject({ subjectPrefix: 'QST' }, 'QSTFE'), true);
+  assert.equal(rangeMatchesSubject({ subjectPrefix: 'QST', excludeSubjectPrefixes: ['QSTES'] }, 'QSTES'), false);
+  assert.equal(rangeMatchesSubject({ subjectPrefix: '' }, 'ENGEK'), true);
+  assert.equal(rangeMatchesSubject({ subjectPrefix: '', excludeSubjectPrefixes: ['QST'] }, 'QSTFE'), false);
+  assert.equal(rangeMatchesSubject({}, 'CASCS'), false); // no subject, no prefix: matches nothing (as before)
+});
+
+test('COURSE_RANGE subjectPrefix: claims across subjects in the number range, minus excluded subjects and keys', () => {
+  const qst = evaluateRequirementTree(prefixProgram({
+    type: 'COURSE_RANGE', subjectPrefix: 'QST', excludeSubjectPrefixes: ['QSTES'], min: 300, max: 599,
+  }), prefixPlan, {});
+  assert.deepEqual(child(qst, 'P').matched.flatMap((m) => m.courseKeys), ['QSTFE323', 'QSTMK499']);
+  assert.equal(child(qst, 'P').satisfiedCount, 2);
+
+  const nonQst = evaluateRequirementTree(prefixProgram({
+    type: 'COURSE_RANGE', subjectPrefix: '', excludeSubjectPrefixes: ['QST'], min: 0, max: 999, exclude: ['ENGEK100'],
+  }), prefixPlan, {});
+  assert.deepEqual(child(nonQst, 'P').matched.flatMap((m) => m.courseKeys), ['CASEC101']);
+
+  const any = evaluateRequirementTree(prefixProgram({ type: 'COURSE_RANGE', subjectPrefix: '', min: 0, max: 999 }, 10), prefixPlan, {});
+  assert.equal(child(any, 'P').satisfiedCount, prefixPlan.length);
+
+  const capped = evaluateRequirementTree(prefixProgram({ type: 'COURSE_RANGE_CAP', subjectPrefix: 'QST', min: 0, max: 999, cap: 1 }), prefixPlan, {});
+  assert.equal(child(capped, 'P').satisfiedCount, 1);
+});
+
+test('COURSE_RANGE: missing range reports the prefix fields only when authored (plain ranges unchanged)', () => {
+  const wide = evaluateRequirementTree(prefixProgram({
+    type: 'COURSE_RANGE', subjectPrefix: '', excludeSubjectPrefixes: ['QST'], min: 0, max: 999,
+  }), [], {});
+  assert.deepEqual(child(wide, 'P').missing[0].range, {
+    subject: undefined, subjectPrefix: '', excludeSubjectPrefixes: ['QST'], min: 0, max: 999, exclude: [], include: [],
+  });
+  const plain = evaluateRequirementTree(prefixProgram({ type: 'COURSE_RANGE', subject: 'CASCS', min: 300, max: 599 }), [], {});
+  assert.deepEqual(child(plain, 'P').missing[0].range, { subject: 'CASCS', min: 300, max: 599, exclude: [], include: [] });
+});
+
+// ── Business Administration BS (Questrom) ───────────────────────────────────
+
+const bsba = JSON.parse(readFileSync(new URL('../data/requirements/qst/business-administration-bsba.json', import.meta.url), 'utf8'));
+const trackNode = (result, index) => child(result, 'bsba-tracks').children[index];
+const trackChild = (result, index, id) => trackNode(result, index).children.find((c) => c.id === id);
+const keysOf = (node) => (node.matched || []).flatMap((m) => (typeof m === 'string' ? [m] : m.courseKeys || []));
+
+const bsbaTrackA = [
+  'QSTAC221', 'QSTBA221', 'QSTBA222', 'QSTFE223', 'QSTIS223', 'QSTLA245', 'QSTMK223', 'QSTMO221', 'QSTOM223',
+  'QSTSI422', 'QSTSM131', 'QSTSM275', 'QSTXP298', 'QSTXP301',
+  'QSTES110', 'QSTES210', 'QSTES310', 'QSTBE101', 'QSTBE102', 'CASMA121', 'CASWR120',
+  'QSTFE425', 'QSTFE449', 'QSTMK465', 'QSTOB345', 'QSTSI480',
+  'CASCS111', 'CASPS101', 'CASHI101', 'CASAR100', 'COMCM101', 'ENGEK100', 'SARHS201',
+  'QSTFE360', 'CASPH100', 'QSTES311',
+];
+
+test('BSBA Track A: a full plan is satisfied, 36 courses (ES 110 + 210 is two), electives claimed in order', () => {
+  const r = evaluateRequirementTree(bsba, bsbaTrackA, {});
+  assert.equal(child(r, 'bsba-tracks').activeChildIndex, 0);
+  assert.equal(trackNode(r, 0).status, 'satisfied');
+  assert.equal(r.totalCoursesRequired, 36);
+  assert.equal(r.totalCoursesClaimed, 36);
+  assert.equal(keysOf(trackChild(r, 0, 'bsba-a-questrom-electives')).length, 5);
+  // A sixth upper-level QST course is a free elective, never a non-Questrom one.
+  assert.ok(!keysOf(trackChild(r, 0, 'bsba-a-non-questrom-electives')).some((k) => k.startsWith('QST')));
+  assert.equal(keysOf(trackChild(r, 0, 'bsba-a-free-electives')).length, 3);
+});
+
+test('BSBA Track A: ES and XP courses are never Questrom electives; a second "only one counts" course is no elective', () => {
+  const r = evaluateRequirementTree(bsba, [...bsbaTrackA, 'QSTES410', 'QSTXP401', 'CASEC101', 'QSTBA223'], {});
+  const qstElectives = keysOf(trackChild(r, 0, 'bsba-a-questrom-electives'));
+  assert.ok(!qstElectives.some((k) => k.startsWith('QSTES') || k.startsWith('QSTXP')));
+  const electives = keysOf(trackChild(r, 0, 'bsba-a-non-questrom-electives')).concat(keysOf(trackChild(r, 0, 'bsba-a-free-electives')));
+  assert.ok(!electives.includes('CASEC101'));
+  assert.ok(!electives.includes('QSTBA223'));
+});
+
+test('BSBA Track B: SM 323 alone satisfies the Cross-Functional Core; stats-overlap courses never count as electives', () => {
+  const plan = [
+    'QSTSM131', 'QSTSM132', 'QSTAC221', 'QSTAC222', 'QSTQM221', 'QSTQM222', 'QSTMO221', 'QSTIS223', 'QSTLA245', 'QSTSM275', 'QSTSI422',
+    'QSTSM323', 'CASMA213', 'CASEC203', 'CASPS211',
+  ];
+  const r = evaluateRequirementTree(bsba, plan, {});
+  assert.equal(child(r, 'bsba-tracks').activeChildIndex, 1);
+  const core = trackChild(r, 1, 'bsba-b-cross-functional-core');
+  assert.equal(core.status, 'satisfied');
+  assert.equal(core.activeChildIndex, 1);
+  for (const id of ['bsba-b-questrom-electives', 'bsba-b-cas-electives', 'bsba-b-non-questrom-electives', 'bsba-b-free-electives']) {
+    assert.deepEqual(keysOf(trackChild(r, 1, id)), [], id);
+  }
+});
+
+test('BSBA Track A pools keep the stats-overlap courses (that rule is Track B only)', () => {
+  const r = evaluateRequirementTree(bsba, [...bsbaTrackA.filter((k) => k !== 'CASCS111'), 'CASMA213'], {});
+  assert.ok(keysOf(trackChild(r, 0, 'bsba-a-non-questrom-electives')).includes('CASMA213'));
+});
+
+// ── View nodes (`claims: "view"`) and `selection: "student"` ────────────────
+
+// root: [V (view of E), E (COUNT 2 of A B C), K (core leaf), R (REMAINDER, any QST)]
+// V is listed first but evaluates last; it may re-read E's and R's courses but
+// never K's (not in viewOf), and may also take a plan course nobody counts.
+const viewProgram = (viewOf = ['E', 'R'], extra = {}) => ({
+  programName: 'T', degree: 'BS', totalCoursesRequired: 99,
+  tree: {
+    id: 'root', type: 'ALL', label: 'Root', children: [
+      { id: 'V', type: 'ALL', label: 'View', claims: 'view', viewOf, children: [
+        { id: 'V1', type: 'COUNT', label: 'V1', min: 4, pool: [{ type: 'COURSE_LIST', courses: ['CASXX001', 'CASXX003', 'CASXX009', 'QSTXX500', 'CASXX005'] }] },
+      ], ...extra },
+      { id: 'E', type: 'COUNT', label: 'E', min: 2, pool: ['CASXX001', 'CASXX002', 'CASXX003'] },
+      { id: 'K', type: 'ALL', label: 'K', courses: ['CASXX009'] },
+      { id: 'R', type: 'REMAINDER', label: 'R', totalRequired: 4, pool: [{ type: 'COURSE_RANGE', subjectPrefix: 'QST', min: 0, max: 999 }] },
+    ],
+  },
+});
+const viewPlan = ['CASXX001', 'CASXX002', 'CASXX003', 'CASXX009', 'QSTXX500', 'CASXX005'];
+const withoutView = (program) => ({ ...program, tree: { ...program.tree, children: program.tree.children.filter((c) => c.id !== 'V') } });
+
+test('view node: re-reads viewOf courses (also the REMAINDER\'s), never a core course; totals and claims unchanged', () => {
+  const program = viewProgram();
+  const r = evaluateRequirementTree(program, viewPlan, {});
+  const base = evaluateRequirementTree(withoutView(program), viewPlan, {});
+  const v = child(r, 'V').children[0];
+  // E claims 001 + 002, K claims 009, R claims QST 500; 003 and 005 are counted nowhere.
+  assert.deepEqual(keysOf(v).sort(), ['CASXX001', 'CASXX003', 'CASXX005', 'QSTXX500']);
+  assert.ok(!keysOf(v).includes('CASXX009'));
+  assert.equal(v.status, 'satisfied');
+  assert.equal(r.totalCoursesClaimed, base.totalCoursesClaimed);
+  assert.equal(r.totalCoursesRequired, base.totalCoursesRequired);
+  assert.deepEqual(keysOf(child(r, 'E')), keysOf(child(base, 'E')));
+  assert.deepEqual(keysOf(child(r, 'R')), keysOf(child(base, 'R')));
+  // Its own total still reads n/N when asked directly.
+  assert.equal(deriveRequiredTotal(child(r, 'V')), 4);
+});
+
+test('view node: a course counted by a sibling outside viewOf stays out; an unsatisfied view never blocks its parent', () => {
+  const r = evaluateRequirementTree(viewProgram(['R']), viewPlan, {});
+  // E is not in viewOf now: 001 is invisible (003 isn't counted by E, so it is free).
+  assert.ok(!keysOf(child(r, 'V').children[0]).includes('CASXX001'));
+  const short = evaluateRequirementTree(viewProgram(), ['CASXX001', 'CASXX002', 'CASXX009', 'QSTXX500', 'QSTXX501', 'QSTXX502'], {});
+  assert.equal(child(short, 'V').status, 'unsatisfied');
+  assert.equal(short.status, 'satisfied'); // E, K and R are done; the view doesn't hold the root back
+});
+
+test('view node: petitions and waives inside it stay private', () => {
+  const program = viewProgram();
+  const base = evaluateRequirementTree(withoutView(program), viewPlan, {});
+  const sub = evaluateRequirementTree(program, viewPlan, { V1: { type: 'substitute', substitutions: [{ label: 'Study abroad course' }] } });
+  assert.equal(sub.totalCoursesClaimed, base.totalCoursesClaimed);
+  const waived = evaluateRequirementTree(program, viewPlan, { V: { type: 'waive' } });
+  assert.equal(waived.totalCoursesClaimed, base.totalCoursesClaimed);
+  assert.equal(waived.totalCoursesRequired, base.totalCoursesRequired);
+});
+
+const pickProgram = {
+  programName: 'T', degree: 'BS', totalCoursesRequired: 99,
+  tree: { id: 'root', type: 'ALL', label: 'Root', children: [
+    { id: 'P', type: 'ONE_OF', selection: 'student', label: 'Pick', children: [
+      { id: 'P0', type: 'ALL', label: 'P0', courses: ['CASXX001'] },
+      { id: 'P1', type: 'ALL', label: 'P1', courses: ['CASXX002', 'CASXX003'] },
+    ] },
+  ] },
+};
+
+test('selection "student": no pick = nothing active or claimed; a pick (forcedTracks) is the active child; bad picks are ignored', () => {
+  const none = evaluateRequirementTree(pickProgram, ['CASXX001'], {});
+  assert.equal(child(none, 'P').activeChildIndex, null);
+  assert.equal(child(none, 'P').autoChildIndex, 0);
+  assert.equal(child(none, 'P').status, 'unsatisfied');
+  assert.equal(none.totalCoursesClaimed, 0);
+  assert.equal(deriveRequiredTotal(child(none, 'P')), 0);
+  const picked = evaluateRequirementTree(pickProgram, ['CASXX001'], {}, { forcedTracks: { P: 1 } });
+  assert.equal(child(picked, 'P').activeChildIndex, 1);
+  assert.equal(picked.totalCoursesRequired, 2);
+  assert.equal(picked.totalCoursesClaimed, 0);
+  for (const bad of [-1, 2, 0.5, '1']) {
+    assert.equal(child(evaluateRequirementTree(pickProgram, [], {}, { forcedTracks: { P: bad } }), 'P').activeChildIndex, null);
+  }
+});
+
+// BSBA concentrations (phase 2a): view of the elective cards, picked per track.
+const pickA = (index) => ({ forcedTracks: { 'bsba-tracks': 0, 'bsba-a-concentration-pick': index } });
+const concNames = (track) => trackChild(evaluateRequirementTree(bsba, [], {}), track, `bsba-${track ? 'b' : 'a'}-concentration-set`)
+  .children[0].children.map((c) => c.label);
+
+test('BSBA concentrations: 12 per cohort in bulletin order; Independent and the overlap rule are advisor cards', () => {
+  const names = [
+    'Accounting', 'Business Analytics', 'Business Law & Policy', 'Finance', 'Global Business', 'Information Systems',
+    'Innovation & Entrepreneurship', 'Management & Organizations', 'Marketing', 'Operations & Supply Chain Management', 'Real Estate', 'Strategy',
+  ];
+  assert.deepEqual(concNames(0), names);
+  assert.deepEqual(concNames(1), names);
+  for (const track of [0, 1]) {
+    const set = trackChild(evaluateRequirementTree(bsba, [], {}), track, `bsba-${track ? 'b' : 'a'}-concentration-set`);
+    assert.equal(set.claims, 'view');
+    assert.deepEqual(set.children.slice(1).map((c) => c.type), ['UNRESOLVED', 'UNRESOLVED']);
+  }
+});
+
+test('BSBA concentrations: picking one never changes the totals (A 36 with ES 110 + 210, B 35 with the four-course core)', () => {
+  const plan = [...bsbaTrackA, 'QSTFE445', 'QSTFE325', 'QSTFE454', 'QSTFE458'];
+  const none = evaluateRequirementTree(bsba, plan, {}, { forcedTracks: { 'bsba-tracks': 0 } });
+  for (let i = 0; i < 12; i += 1) {
+    const r = evaluateRequirementTree(bsba, plan, {}, pickA(i));
+    assert.equal(r.totalCoursesRequired, 36);
+    assert.equal(r.totalCoursesClaimed, none.totalCoursesClaimed);
+  }
+  assert.equal(evaluateRequirementTree(bsba, [], {}, { forcedTracks: { 'bsba-tracks': 1, 'bsba-b-concentration-pick': 3 } }).totalCoursesRequired, 35);
+});
+
+test('BSBA Finance (Fall 2025+): required + X-list + 3 B = 5, the same courses still fill Questrom electives', () => {
+  const plan = ['QSTFE445', 'QSTFE325', 'QSTFE449', 'QSTFE454', 'QSTFE458'];
+  const r = evaluateRequirementTree(bsba, plan, {}, pickA(3));
+  const set = trackChild(r, 0, 'bsba-a-concentration-set');
+  const finance = set.children[0].children[3];
+  assert.equal(finance.label, 'Finance');
+  assert.equal(finance.status, 'satisfied');
+  assert.equal(deriveRequiredTotal(set), 5);
+  assert.deepEqual(keysOf(trackChild(r, 0, 'bsba-a-questrom-electives')).sort(), [...plan].sort());
+});
+
+test('BSBA Global Business: outside courses count for the concentration (cap 2) but never as Questrom electives', () => {
+  const plan = ['QSTIM345', 'QSTFE325', 'CASIR322', 'CASIR399', 'CASEC391', 'QSTMK467'];
+  const r = evaluateRequirementTree(bsba, plan, {}, pickA(4));
+  const gb = trackChild(r, 0, 'bsba-a-concentration-set').children[0].children[4];
+  const b = gb.children.find((c) => c.id.endsWith('-b'));
+  assert.equal(b.status, 'satisfied');
+  assert.equal(keysOf(b).filter((k) => k.startsWith('CAS')).length, 2);
+  assert.ok(!keysOf(trackChild(r, 0, 'bsba-a-questrom-electives')).some((k) => k.startsWith('CAS')));
+});
+
+test('BSBA Marketing: the A-list course is not also a B-list course; the other A option can be', () => {
+  const marketing = 8;
+  const r = evaluateRequirementTree(bsba, ['QSTMK345', 'QSTMK542', 'QSTMK447', 'QSTMK487'], {}, pickA(marketing));
+  const mk = trackChild(r, 0, 'bsba-a-concentration-set').children[0].children[marketing];
+  const [a, , b] = mk.children;
+  assert.deepEqual(keysOf(a), ['QSTMK345']);
+  assert.deepEqual(keysOf(b).sort(), ['QSTMK487', 'QSTMK542']);
+});
+
+// ── Bundle slots count their courses (SEQUENCE_GROUP pool entries) ──────────
+
+const ee = JSON.parse(readFileSync(new URL('../data/requirements/eng/electrical-engineering-bs.json', import.meta.url), 'utf8'));
+
+test('bundle slots: a complete plan using EK 121 + 122 reads N of N, never N+1 of N; one missing slot leaves 1 to add', () => {
+  const keys = [...new Set(JSON.stringify(ee.tree).match(/"[A-Z]{5}\d{3}"/g).map((s) => s.slice(1, -1)))];
+  const complete = keys.filter((k) => k !== 'ENGEK125');
+  const full = evaluateRequirementTree(ee, complete, {});
+  const req = child(full, 'ee-bs-required');
+  assert.equal(req.status, 'satisfied');
+  assert.equal(`${req.satisfiedCount}/${req.required}`, '24/24'); // 23 slots, the programming slot is 2 courses
+  assert.equal(full.totalCoursesRequired, 32);
+  assert.equal(full.totalCoursesClaimed, full.totalCoursesRequired);
+  // Drop one other required course: exactly one still to add.
+  const short = evaluateRequirementTree(ee, complete.filter((k) => k !== 'ENGEC464'), {});
+  assert.ok(short.totalCoursesClaimed <= short.totalCoursesRequired);
+  assert.equal(short.totalCoursesRequired - short.totalCoursesClaimed, 1);
+  // EK 125 instead: the slot is one course again.
+  const ek125 = evaluateRequirementTree(ee, keys.filter((k) => k !== 'ENGEK121' && k !== 'ENGEK122'), {});
+  assert.equal(child(ek125, 'ee-bs-required').required, 23);
+  assert.equal(ek125.totalCoursesRequired, 31);
+});
+
+test('bundle slots: a pick-N card adds only the bundles it actually counts (BMB advanced lab)', () => {
+  const bmb = JSON.parse(readFileSync(new URL('../data/requirements/cas/biochemistry-molecular-biology-ba.json', import.meta.url), 'utf8'));
+  const empty = evaluateRequirementTree(bmb, [], {});
+  const bundle = evaluateRequirementTree(bmb, ['CASBB401', 'CASBB402'], {});
+  const lab = (r) => r.tree.children.flatMap(function all(n) { return [n, ...(n.children || []).flatMap(all)]; }).find((n) => n.id === 'bmb-ba-adv-lab-elective');
+  assert.equal(`${lab(empty).satisfiedCount}/${lab(empty).required}`, '0/1');
+  assert.equal(`${lab(bundle).satisfiedCount}/${lab(bundle).required}`, '2/2');
+  assert.equal(bundle.totalCoursesRequired, empty.totalCoursesRequired + 1);
+  assert.ok(bundle.totalCoursesClaimed <= bundle.totalCoursesRequired);
+});
+
+test('BSBA Career (both tracks): nothing = 2, ES 110 + 210 = 3, ES 215 = 2; the total follows', () => {
+  for (const [track, id] of [[0, 'bsba-a-career'], [1, 'bsba-b-career']]) {
+    const run = (plan) => {
+      const r = evaluateRequirementTree(bsba, plan, {}, { forcedTracks: { 'bsba-tracks': track } });
+      const c = trackChild(r, track, id);
+      return { card: `${c.satisfiedCount}/${c.required}`, status: c.status, total: r.totalCoursesRequired, claimed: r.totalCoursesClaimed };
+    };
+    assert.deepEqual(run([]), { card: '0/2', status: 'unsatisfied', total: 35, claimed: 0 });
+    assert.deepEqual(run(['QSTES110', 'QSTES210']), { card: '2/3', status: 'unsatisfied', total: 36, claimed: 2 });
+    assert.deepEqual(run(['QSTES215']), { card: '1/2', status: 'unsatisfied', total: 35, claimed: 1 });
+    assert.deepEqual(run(['QSTES110', 'QSTES210', 'QSTES310']), { card: '3/3', status: 'satisfied', total: 36, claimed: 3 });
+    assert.deepEqual(run(['QSTES215', 'QSTES310']), { card: '2/2', status: 'satisfied', total: 35, claimed: 2 });
+  }
+});
+
+test('BSBA Track A: every slot filled but ES 310 (bundle used) leaves 1 to add, not 0', () => {
+  const plan = [
+    'QSTAC221', 'QSTBA221', 'QSTBA222', 'QSTFE223', 'QSTIS223', 'QSTLA245', 'QSTMK223', 'QSTMO221', 'QSTOM223', 'QSTSI422', 'QSTSM131', 'QSTSM275', 'QSTXP298', 'QSTXP301',
+    'QSTES110', 'QSTES210', 'QSTBE101', 'QSTBE102', 'CASWR120', 'CASMA123',
+    'QSTAC322', 'QSTAC347', 'QSTAC348', 'QSTAC431', 'QSTAC569',
+    'CASCS111', 'CASMA124', 'CASAA113', 'CASAH233', 'CASBI414', 'CASLH284', 'CASRN242', 'CASSO306', 'CASWS101', 'CASWS333',
+  ];
+  const r = evaluateRequirementTree(bsba, plan, {}, { forcedTracks: { 'bsba-tracks': 0, 'bsba-a-concentration-pick': 0 } });
+  assert.equal(r.totalCoursesClaimed, 35);
+  assert.equal(r.totalCoursesRequired, 36);
+  assert.equal(r.status, 'unsatisfied');
+  const full = evaluateRequirementTree(bsba, [...plan, 'QSTES310'], {}, { forcedTracks: { 'bsba-tracks': 0 } });
+  assert.equal(full.totalCoursesClaimed, full.totalCoursesRequired);
+});
+
+test('BSBA core fixes: Track B AC 222 slot takes AC 322; SI 250 counts as a Questrom elective in both tracks', () => {
+  const b = evaluateRequirementTree(bsba, ['QSTAC322'], {}, { forcedTracks: { 'bsba-tracks': 1 } });
+  assert.ok(keysOf(trackChild(b, 1, 'bsba-b-required')).includes('QSTAC322'));
+  for (const track of [0, 1]) {
+    const r = evaluateRequirementTree(bsba, ['QSTSI250'], {}, { forcedTracks: { 'bsba-tracks': track } });
+    assert.deepEqual(keysOf(trackChild(r, track, `bsba-${track ? 'b' : 'a'}-questrom-electives`)), ['QSTSI250']);
+  }
 });
