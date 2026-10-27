@@ -37,6 +37,7 @@ import { placedOverlaps, overlapTagText } from '../utils/manualOverlaps';
 import { withMockMeetings } from '../utils/mockMeetings';
 import { describeSectionName } from '../utils/sectionType';
 import { classifyComponent, groupSectionsByComponent } from '../utils/sectionComponents';
+import { isVisibleSection } from '../utils/sectionVisibility';
 import {
   generateSchedulesAsync,
   buildGenerationSlots,
@@ -620,7 +621,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
       ));
       const sections = snap.docs
         .map((d) => withMockMeetings({ id: d.id, ...d.data() }))
-        .filter((s) => s.term === CURRENT_TERM && s.classStat !== 'Cancelled')
+        .filter((s) => s.term === CURRENT_TERM && isVisibleSection(s))
         .sort((a, b) => (a.classSection || '').localeCompare(b.classSection || ''));
       setSectionsByCourse((prev) => ({ ...prev, [courseKey]: sections }));
 
@@ -696,13 +697,13 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
   const sectionSwapCandidates = useMemo(() => {
     if (!sectionSwapSlot) return [];
     const sections = sectionsByCourse[sectionSwapSlot.courseKey] || [];
-    // Everything except cancelled sections — checked or not, eliminated or
-    // not, inside the time filter or not (those are only labeled, never
-    // hidden; see WeeklyGrid/SectionSwapSheet). The placed section is kept
-    // even if cancelled so the sheet can still show it.
+    // Everything except hidden sections (isVisibleSection) — checked or not,
+    // eliminated or not, inside the time filter or not (those are only
+    // labeled, never hidden; see WeeklyGrid/SectionSwapSheet). The placed
+    // section is kept even if hidden so the sheet can still show it.
     return sections.filter(
       (s) => classifyComponent(s) === sectionSwapSlot.component
-        && (s.id === sectionSwapSlot.currentSectionId || s.classStat !== 'Cancelled'),
+        && (s.id === sectionSwapSlot.currentSectionId || isVisibleSection(s)),
     );
   }, [sectionSwapSlot, sectionsByCourse]);
 
@@ -785,7 +786,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     draftCourses.forEach((course) => {
       const mine = previewed.filter((s) => s.courseKey === course.courseKey);
       if (mine.length === 0) return;
-      const groups = groupSectionsByComponent((sectionsByCourse[course.courseKey] || []).filter((s) => s.classStat !== 'Cancelled'));
+      const groups = groupSectionsByComponent((sectionsByCourse[course.courseKey] || []).filter(isVisibleSection));
       groups.forEach((group) => {
         if (mine.some((s) => classifyComponent(s) === group.key)) return;
         incompleteLabels.push(`${courseMap[course.courseKey]?.courseNumber ?? course.courseKey} ${shortComponent(group.sections[0]?.componentLabel || group.key)}`);
@@ -1127,7 +1128,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
     for (const key of ghostGroups) {
       const [courseKey, groupKey] = key.split('|');
       for (const s of sectionsByCourse[courseKey] || []) {
-        if (classifyComponent(s) === groupKey && s.classStat !== 'Cancelled' && !drawn.has(s.id)) out.push(s);
+        if (classifyComponent(s) === groupKey && isVisibleSection(s) && !drawn.has(s.id)) out.push(s);
       }
     }
     return out;
@@ -1705,7 +1706,7 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
           const snap = await getDocs(query(collection(db, 'sections'), where(documentId(), 'in', bookmarkIds.slice(i, i + 30))));
           snap.docs.forEach((d) => {
             const sec = withMockMeetings({ id: d.id, ...d.data() });
-            if (sec.term === CURRENT_TERM && sec.classStat !== 'Cancelled') liveSections[d.id] = sec;
+            if (sec.term === CURRENT_TERM && isVisibleSection(sec)) liveSections[d.id] = sec;
           });
         }
         if (cancelled) return;

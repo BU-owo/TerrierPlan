@@ -11,6 +11,7 @@ import { describeSectionTime, describeExamTime, describeSeatStatus } from '../..
 import { withMockMeetings } from '../../utils/mockMeetings';
 import { sectionTypeLabel } from '../../utils/sectionType';
 import { groupSectionsByComponent } from '../../utils/sectionComponents';
+import { isVisibleSection } from '../../utils/sectionVisibility';
 import { instructorLabel } from '../../utils/sectionInstructors';
 import { marineKind } from '../../data/marineSemester';
 import PawLoader from '../PawLoader';
@@ -42,11 +43,11 @@ function useIsMobile() {
 // between two) costs nothing. Only successful reads are cached — a failure
 // or a missing doc is retried the next time the panel opens on that course.
 // At most four Firestore requests per open: the course doc, the
-// offeringHistory doc, the Fall 2026 sections query, and (only when that
+// offeringHistory doc, the current-term sections query, and (only when that
 // yields no credits) one fallback sections query.
 const courseDocCache = new Map();
 const offeringHistoryCache = new Map();
-const fall2026Cache = new Map();
+const currentTermCache = new Map();
 
 async function fetchCourseDoc(courseKey) {
   const snap = await getDoc(doc(db, 'courses', courseKey));
@@ -65,18 +66,21 @@ function creditsRange(values) {
   return { min: Math.min(...nums), max: Math.max(...nums) };
 }
 
-// Fall 2026 sections for a course plus its credits. Two equality filters on
+// Current-term sections for a course plus its credits. Two equality filters on
 // separate fields — Firestore serves that from its built-in single-field
-// indexes, no composite index needed. Credits come from those sections; if
-// they give none (usually because there are no sections), one limit(1) query
-// for the course in any term is the fallback. Never resolves to null: an
-// empty `sections` array is a valid answer, and is cached like any other.
-async function fetchFall2026(courseKey) {
+// indexes, no composite index needed. Credits come from every one of those
+// sections (hidden ones included); if they give none (usually because there
+// are no sections), one limit(1) query for the course in any term is the
+// fallback. `sections` holds only visible ones (isVisibleSection). Never
+// resolves to null: an empty `sections` array is a valid answer, and is
+// cached like any other.
+async function fetchCurrentTerm(courseKey) {
   const snap = await getDocs(
     query(collection(db, 'sections'), where('courseKey', '==', courseKey), where('term', '==', CURRENT_TERM)),
   );
-  const sections = snap.docs.map((d) => withMockMeetings({ id: d.id, ...d.data() }));
-  let credits = creditsRange(sections.map((s) => s.credits));
+  const allSections = snap.docs.map((d) => withMockMeetings({ id: d.id, ...d.data() }));
+  const sections = allSections.filter(isVisibleSection);
+  let credits = creditsRange(allSections.map((s) => s.credits));
   if (!credits) {
     const fallback = await getDocs(query(collection(db, 'sections'), where('courseKey', '==', courseKey), limit(1)));
     credits = creditsRange(fallback.docs.map((d) => d.get('credits')));
@@ -272,7 +276,7 @@ function buildOfferingRows(history) {
 
 // The current term is usually not in offeringHistory yet (it is a published
 // schedule, not completed history), so when the course has sections this term
-// (cancelled ones don't count) add one history entry for it. History wins: if
+// (hidden ones don't count; see isVisibleSection) add one history entry for it. History wins: if
 // it already has an entry for the current term, nothing is added.
 function withCurrentTermEntry(history, currentSections) {
   if (!currentSections || CURRENT_TERM_SEASON == null) return history;
@@ -280,7 +284,7 @@ function withCurrentTermEntry(history, currentSections) {
     (entry) => Number(entry?.year) === CURRENT_TERM_YEAR && entry.season === CURRENT_TERM_SEASON,
   );
   if (hasEntry) return history;
-  const sectionCount = currentSections.filter((s) => s.classStat !== 'Cancelled').length;
+  const sectionCount = currentSections.filter(isVisibleSection).length;
   if (sectionCount === 0) return history;
   return [...history, { year: CURRENT_TERM_YEAR, season: CURRENT_TERM_SEASON, sectionCount }];
 }
@@ -496,7 +500,7 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
   const isMobile = useIsMobile();
   const courseFetch = useCachedFetch(courseDocCache, courseKey, fetchCourseDoc);
   const historyFetch = useCachedFetch(offeringHistoryCache, courseKey, fetchOfferingHistory);
-  const termFetch = useCachedFetch(fall2026Cache, courseKey, fetchFall2026);
+  const termFetch = useCachedFetch(currentTermCache, courseKey, fetchCurrentTerm);
   const upcomingSeasons = useUpcomingSeasons(courseKey);
 
   // A GRS course renumbered into CAS borrows what it lacks from the CAS
@@ -516,9 +520,9 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
   const docCredits = courseFetch.status === 'ready' ? creditsFromDoc(courseFetch.data) : null;
   const ownCredits = sectionCredits ?? docCredits;
   const aliasTermFetch = useCachedFetch(
-    fall2026Cache,
+    currentTermCache,
     aliasKey && termFetch.status === 'ready' && courseFetch.status === 'ready' && !ownCredits ? aliasKey : null,
-    fetchFall2026,
+    fetchCurrentTerm,
   );
 
   const detailsLoaderVisible = useDelayedBusy(courseFetch.status === 'loading');

@@ -13,17 +13,18 @@
 // time, not a live value: re-run this script after every term import
 // (import-sections.cjs) and after CURRENT_TERM in src/utils/term.js moves,
 // or it goes stale. It lists the terms (e.g. ["Spring 2027"]) that have at
-// least one non-cancelled section at or after CURRENT_TERM, and is only
-// emitted when one of those seasons isn't already a usual season for the
+// least one visible section (classStat not in HIDDEN_CLASS_STATS: Cancelled
+// or Stop Enrl) at or after CURRENT_TERM, and is only emitted when one of
+// those seasons isn't already a usual season for the
 // course's offeringPattern (see USUAL_SEASONS), to keep the file small.
 //
-// `inCurrentTerm` is true when the course has at least one non-cancelled
+// `inCurrentTerm` is true when the course has at least one visible
 // section in CURRENT_TERM exactly; omitted otherwise. Same snapshot caveat as
 // upcomingSeasons, and independent of offeringPattern.
 //
 // `inactive` is true when the course has NO offering after Spring 2022 (last
 // offered Spring 2022 or earlier, or no offering on record) AND no
-// non-cancelled section at or after CURRENT_TERM; omitted otherwise. Summer
+// visible section at or after CURRENT_TERM; omitted otherwise. Summer
 // 2022 and later count as offered. Read from the course doc's
 // lastOfferedYear; a course last offered in 2022 is resolved from
 // offeringHistory/{courseKey} (read-only) since the year alone can't tell
@@ -49,6 +50,12 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 const OUTPUT_PATH = path.join(REPO_ROOT, 'public', 'courses.json');
 const FIELDS = ['courseNumber', 'name', 'hubUnits', 'offeringPattern', 'career', 'studyAbroad', 'credits', 'upcomingSeasons'];
 const SAMPLE_IDS = ['CASCS111', 'CASAH716', 'SARHS438'];
+
+// Sections with one of these classStats count as not offered. Keep in sync
+// with src/utils/sectionVisibility.js (an ES module, so it can't be required
+// here).
+const HIDDEN_CLASS_STATS = new Set(['Cancelled', 'Stop Enrl']);
+const isVisibleClassStat = (classStat) => !HIDDEN_CLASS_STATS.has(String(classStat ?? '').trim());
 
 // Read CURRENT_TERM from the app's own constant (an ES module) so the two
 // can't drift apart.
@@ -105,10 +112,10 @@ function toEntry(doc) {
   return entry;
 }
 
-// courseKey → Set of term labels with a non-cancelled section at or after
-// CURRENT_TERM. Same "not cancelled" rule as withCurrentTermEntry in
-// CourseInfoPanel.jsx. Term codes are same-length strings, so >= compares
-// them in term order.
+// courseKey → Set of term labels with a visible section at or after
+// CURRENT_TERM. Same rule as isVisibleSection in
+// src/utils/sectionVisibility.js. Term codes are same-length strings, so >=
+// compares them in term order.
 async function loadUpcomingTerms() {
   const snap = await db
     .collection('sections')
@@ -120,9 +127,9 @@ async function loadUpcomingTerms() {
   let activeDocs = 0;
   for (const doc of snap.docs) {
     const { courseKey, term, classStat } = doc.data();
-    if (classStat !== 'Cancelled') activeDocs += 1;
+    if (isVisibleClassStat(classStat)) activeDocs += 1;
     const label = termLabel(String(term ?? ''));
-    if (!courseKey || !label || classStat === 'Cancelled') continue;
+    if (!courseKey || !label || !isVisibleClassStat(classStat)) continue;
     if (String(term) === CURRENT_TERM) currentKeys.add(courseKey);
     if (!byKey.has(courseKey)) byKey.set(courseKey, new Set());
     byKey.get(courseKey).add(label);
@@ -245,7 +252,7 @@ async function main() {
   console.log(`Gzipped: ${kb(gzipBytes)} (${gzipBytes} bytes)`);
   console.log(
     `upcomingSeasons: ${courses.filter((c) => c.upcomingSeasons).length} courses ` +
-      `(from ${upcoming.sectionDocs} sections at or after ${CURRENT_TERM}, ${upcoming.activeDocs} not Cancelled)`,
+      `(from ${upcoming.sectionDocs} sections at or after ${CURRENT_TERM}, ${upcoming.activeDocs} visible, i.e. not ${[...HIDDEN_CLASS_STATS].join(' / ')})`,
   );
   console.log(`inCurrentTerm:   ${courses.filter((c) => c.inCurrentTerm).length} courses`);
 

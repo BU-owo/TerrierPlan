@@ -1,6 +1,7 @@
 import { sectionsConflict, classMeetings, describeSectionTime, formatClock, formatClockRange } from './sectionTime.js';
 import { classifyComponent, groupSectionsByComponent, UNKNOWN_KEY } from './sectionComponents.js';
 import { describeSectionName } from './sectionType.js';
+import { isVisibleSection } from './sectionVisibility.js';
 
 // Safety valves against a pathological input (e.g. 8 courses × 6 sections
 // each = 1.6M raw combinations) freezing the tab — NOT the "artificial cap
@@ -248,7 +249,7 @@ export function bookmarkStep(keys, currentKey) {
 // What state each bookmark chip is in, by key: { inBatch, stale, staleReason }.
 // inBatch: its content key is in `batchKeys` (a Set of scheduleKey for the current
 // results; null means "don't care" and counts as in). stale: a section is gone from
-// `sectionsById` or cancelled ("section changed"), or its course is no longer in
+// `sectionsById` or hidden, see isVisibleSection ("section changed"), or its course is no longer in
 // the draft ("course removed"). A stale or out-of-results bookmark still previews.
 // `bookmarks` is [{ key, sectionIds }].
 export function bookmarkChipStates(bookmarks, batchKeys, sectionsById, draftCourseKeys) {
@@ -256,7 +257,7 @@ export function bookmarkChipStates(bookmarks, batchKeys, sectionsById, draftCour
   for (const { key, sectionIds } of bookmarks) {
     const sections = sectionIds.map((id) => sectionsById[id]);
     let staleReason = null;
-    if (sections.some((s) => !s || s.classStat === 'Cancelled')) staleReason = 'section changed';
+    if (sections.some((s) => !s || !isVisibleSection(s))) staleReason = 'section changed';
     else if (sections.some((s) => !draftCourseKeys.has(s.courseKey))) staleReason = 'course removed';
     states[key] = { inBatch: batchKeys ? batchKeys.has(key) : true, stale: staleReason !== null, staleReason };
   }
