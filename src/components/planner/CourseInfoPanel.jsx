@@ -13,6 +13,7 @@ import { sectionTypeLabel } from '../../utils/sectionType';
 import { groupSectionsByComponent } from '../../utils/sectionComponents';
 import { isVisibleSection } from '../../utils/sectionVisibility';
 import { instructorLabel } from '../../utils/sectionInstructors';
+import { getWrTopic } from '../../utils/wrTopics';
 import { marineKind } from '../../data/marineSemester';
 import PawLoader from '../PawLoader';
 import useDelayedBusy from '../../hooks/useDelayedBusy';
@@ -477,6 +478,12 @@ function CurrentTermSections({ status, data, onRetry }) {
                         <div className="course-info-section-exam">Exam: {describeExamTime(section)}</div>
                       )}
                       <div className="course-info-section-instructor">{instructorLabel(section)}</div>
+                      {getWrTopic(section) && (
+                        <div className="course-info-section-topic">
+                          <strong>{getWrTopic(section).title}</strong>
+                          {getWrTopic(section).description && ` — ${getWrTopic(section).description}`}
+                        </div>
+                      )}
                       <div className={`course-info-section-seats ${isOpen ? 'is-open' : 'is-closed'}`}>
                         {describeSeatStatus(section)}
                       </div>

@@ -4,6 +4,7 @@ import { classifyComponent } from '../../utils/sectionComponents';
 import { swapGhostReasons } from '../../utils/swapReasons';
 import { resolvedCourseColorIndex } from '../../utils/scheduleColors';
 import PinIcon from './PinIcon';
+import { getWrTopic } from '../../utils/wrTopics';
 
 // Mobile counterpart to WeeklyGrid's ghost overlay — a narrow, swipeable
 // single-column layout has no room to render several overlapping
@@ -139,6 +140,7 @@ export default function SectionSwapSheet({
                   <span>{describeSectionTime(section)}</span>
                   {describeExamTime(section) && <span>Exam: {describeExamTime(section)}</span>}
                   <span>{instructorLabel}</span>
+                  {getWrTopic(section) && <span>{getWrTopic(section).title}</span>}
                   <span>{describeSeatStatus(section)}</span>
                 </div>
                 {conflicts.length > 0 && (

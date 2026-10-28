@@ -726,6 +726,31 @@ html[data-theme='dark'] {
   font-size: 11px;
   color: var(--text-secondary);
 }
+/* WR topic (src/utils/wrTopics.js): title line with a caret that expands the description. */
+.sched-section-row-topic {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 5px;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.sched-section-row-topic-title { font-weight: 600; }
+.sched-section-row-topic-toggle {
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  font-size: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sched-section-row-topic-desc {
+  flex-basis: 100%;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
 /* BU's own registration instructions for this exact section — shown only
    when it isn't already covered by the group's shared commonNotes (see
    sectionComponents.js), so identical text doesn't repeat on every row. */

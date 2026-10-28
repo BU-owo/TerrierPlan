@@ -226,6 +226,7 @@ html[data-theme='dark'] .course-info-offerings-dot { color: var(--warning-border
 }
 .course-info-section-label { font-weight: 700; color: var(--text); }
 .course-info-section-exam { color: var(--text-muted); }
+.course-info-section-topic { font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
 .course-info-section-seats { font-weight: 600; }
 .course-info-section-seats.is-open { color: var(--success-text); }
 .course-info-section-seats.is-closed { color: var(--warning-text); }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import SectionNotes from './SectionNotes';
+import { getWrTopic } from '../../utils/wrTopics';
 import { describeSectionTime, describeExamTime, describeMeeting, classMeetings, examMeetings } from '../../utils/sectionTime';
 
 // One selectable section under a DraftCourseCard. Checkbox membership is
@@ -18,6 +19,8 @@ import { describeSectionTime, describeExamTime, describeMeeting, classMeetings, 
 // "in consideration", and there's no lock — pins only steer generation.
 export default function SectionRow({ section, checked, locked, conflicts, notes, filteredOut, overlapTag, onToggle, onToggleLock, manual = false }) {
   const [conflictExpanded, setConflictExpanded] = useState(false);
+  const [topicExpanded, setTopicExpanded] = useState(false);
+  const topic = getWrTopic(section);
 
   const instructorLabel = section.instructors?.length
     ? section.instructors.map((i) => `${i.first ? i.first[0] + '. ' : ''}${i.last}`.trim()).join(', ')
@@ -79,6 +82,25 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
             {seatsLabel && <span>{seatsLabel}</span>}
             {section.credits != null && <span>{section.credits} cr</span>}
           </div>
+          {topic && (
+            <div className="sched-section-row-topic">
+              <span className="sched-section-row-topic-title">{topic.title}</span>
+              {topic.description && (
+                <button
+                  type="button"
+                  className="sched-section-row-topic-toggle"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTopicExpanded((v) => !v); }}
+                  aria-expanded={topicExpanded}
+                  aria-label={topicExpanded ? 'Hide topic description' : 'Show topic description'}
+                >
+                  {topicExpanded ? '▲' : '▼'}
+                </button>
+              )}
+              {topic.description && topicExpanded && (
+                <div className="sched-section-row-topic-desc">{topic.description}</div>
+              )}
+            </div>
+          )}
           {notes && <div className="sched-section-row-notes"><SectionNotes notes={notes} /></div>}
         </div>
       </label>
