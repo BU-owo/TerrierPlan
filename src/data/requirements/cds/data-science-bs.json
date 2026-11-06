@@ -1,0 +1,391 @@
+{
+  "programName": "Data Science",
+  "degree": "BS",
+  "school": "CDS",
+  "bulletinUrl": "https://www.bu.edu/academics/cds/programs/bs-in-data-science/",
+  "minGrade": "C",
+  "totalCoursesRequired": 16,
+  "verifiedBy": null,
+  "verifiedDate": null,
+  "tree": {
+    "id": "ds-bs-root",
+    "type": "ALL",
+    "label": "Data Science BS — Major Requirements",
+    "devNote": "Sources (fetched 2026-11-06): bulletin page (last updated 2026-04-29), CDS undergrad major page (2025-09-17), and the two elective Google Sheets the bulletin links as the 'most up-to-date' approved lists. Bulletin: at least 16 courses = 14 (4 foundations + 6 core + 4 electives) + capstone + final 4 units. Derived total = 4 foundations + 6 core + 3 track groups + 1 fourth elective + 1 capstone + 1 final = 16, matching totalCoursesRequired. CDS news (2026-10-28) announced five new Spring 2027 electives; the sheets may have been updated since this was authored, so re-check them.",
+    "children": [
+      {
+        "id": "ds-bs-min-grade",
+        "type": "UNRESOLVED",
+        "label": "Grade minimum",
+        "note": "Every course in the major, including the capstone, needs a C or better. This isn't checked automatically.",
+        "devNote": "Bulletin and CDS major page: all coursework for the major completed with a C or higher. minGrade is set at the top level but the engine doesn't check grades."
+      },
+      {
+        "id": "ds-bs-foundations",
+        "type": "ALL",
+        "label": "Mathematical & Computational Foundations",
+        "courses": [
+          "CDSDS110",
+          "CDSDS120",
+          "CDSDS121",
+          "CDSDS122"
+        ],
+        "note": "AP credit in calculus, statistics or intro programming can let you swap in more advanced courses. Check with CDS advising, then use ⋯ → Substitute a course.",
+        "noteStyle": "caption",
+        "devNote": "Bulletin: DS 110, 120, 121, 122. The CDS major page says students with AP credit in calculus, statistics and/or intro programming 'have the chance to add more advanced foundational or core courses'; the exact swaps aren't published, so not modeled."
+      },
+      {
+        "id": "ds-bs-core",
+        "type": "ALL",
+        "label": "Data Science Core",
+        "children": [
+          {
+            "id": "ds-bs-core-required",
+            "type": "ALL",
+            "label": "Core courses",
+            "courses": [
+              "CDSDS210",
+              "CDSDS310",
+              "CASMA214",
+              "CDSDS320",
+              "CDSDS340"
+            ],
+            "devNote": "Programming DS 210, Data Mechanics DS 310, Statistics MA 214, Algorithms DS 320, Machine Learning DS 340. The elective sheets' prerequisites sometimes say MA 213/214, but the bulletin core names MA 214 only, so no MA 213 option is modeled."
+          },
+          {
+            "id": "ds-bs-core-ethics",
+            "type": "COUNT",
+            "label": "Ethical & Social Implications",
+            "min": 1,
+            "pool": [
+              {
+                "type": "OR_EQUIVALENT",
+                "label": "DS 380 or DS 381",
+                "options": [
+                  "CDSDS380",
+                  "CDSDS381"
+                ]
+              }
+            ],
+            "devNote": "The bulletin lists DS 380 only; the CDS major page says 'DS380 or DS381' and the planner template says 'DS380/381'. Modeled as one slot. Catalog presence of CDSDS380/381 not checked."
+          }
+        ]
+      },
+      {
+        "id": "ds-bs-electives",
+        "type": "ONE_OF",
+        "label": "Data Science Electives",
+        "subtitle": "Pick a track · one course from each of its 3 groups",
+        "note": "A fourth elective, from either track, is the next requirement below.",
+        "noteStyle": "caption",
+        "devNote": "Bulletin: at least four courses with at least one in each of the three subjects of either the Methodology or the In-the-Field track; the fourth can come from either track. Modeled as ONE_OF (3 groups of one track) + a separate COUNT for the fourth course over both tracks' lists, placed after this node so the track groups claim first. Approved lists come from the two Google Sheets. Courses that appear in two groups of the same track (DS 430; QST MO 520 and QST MK 478) can only count once; they are listed last in the earlier group so other courses fill it first. Claiming is greedy, so a student whose only Analytics-eligible course is one of those can use ⋯ → Substitute a course.",
+        "children": [
+          {
+            "id": "ds-bs-meth",
+            "type": "ALL",
+            "label": "Methodology Track",
+            "children": [
+              {
+                "id": "ds-bs-meth-advanced",
+                "type": "COUNT",
+                "label": "Advanced DS Methods",
+                "min": 1,
+                "pool": [
+                  {
+                    "type": "COURSE_LIST",
+                    "courses": [
+                      "CASCS630",
+                      "CASCS565",
+                      "CASMA416",
+                      "CASMA569",
+                      "CASMA575",
+                      "CASMA576",
+                      "CASMA578",
+                      "CASMA589",
+                      "CASMA592",
+                      "CASMA585",
+                      "CDSDS574"
+                    ]
+                  },
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "options": [
+                      "CDSDS522",
+                      "CASMA586"
+                    ],
+                    "continues": true
+                  },
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "options": [
+                      "ENGEC524",
+                      "ENGSE524"
+                    ],
+                    "continues": true
+                  }
+                ],
+                "devNote": "Sheet tab 'Advanced Data Science Methods' (13 courses). CASMA586 and ENGSE524 are not on the sheet: found in public/courses.json with the same normalized title as CDSDS522 and ENGEC524, so treated as twins. Title match only, real cross-listing unverified."
+              },
+              {
+                "id": "ds-bs-meth-scalable",
+                "type": "COUNT",
+                "label": "Scalable & Trustworthy DS",
+                "min": 1,
+                "pool": [
+                  {
+                    "type": "COURSE_LIST",
+                    "courses": [
+                      "CASCS561",
+                      "CDSDS453",
+                      "CDSDS551",
+                      "CDSDS562"
+                    ]
+                  }
+                ],
+                "devNote": "Sheet tab 'Scalable and Trustworthy DS and AI'. The sheet also lists CDS DS 553 'Privacy-Conscious Computer Systems (formerly DS593)'; CDSDS553 is not in public/courses.json, so it is left out. DS 551 is also 'formerly DS593'.",
+                "note": "DS 553 is on the approved list but isn't in the course catalog yet. If you took it, use ⋯ → Substitute a course.",
+                "noteStyle": "caption"
+              },
+              {
+                "id": "ds-bs-meth-applied",
+                "type": "COUNT",
+                "label": "Applied DS & AI",
+                "min": 1,
+                "pool": [
+                  {
+                    "type": "COURSE_LIST",
+                    "courses": [
+                      "CASCS440",
+                      "CASCS505",
+                      "CASCS585",
+                      "CASEE712",
+                      "CDSDS542"
+                    ]
+                  },
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "options": [
+                      "CDSDS543",
+                      "ENGEC418"
+                    ],
+                    "continues": true
+                  },
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "options": [
+                      "ENGEC523",
+                      "CASCS523"
+                    ],
+                    "continues": true
+                  }
+                ],
+                "devNote": "Sheet tab 'Applied and Use-Inspired DS and AI'. The sheet lists CDS DS 542 and ENG EC 523 separately (both 'Deep Learning', prereq DS 340); followed the sheet. ENGEC418 and CASCS523 are not on the sheet: same normalized title as CDSDS543 and ENGEC523. Title match only, unverified. CAS EE 712 has prerequisite 'TBD' on the sheet."
+              }
+            ]
+          },
+          {
+            "id": "ds-bs-field",
+            "type": "ALL",
+            "label": "In-the-Field Track",
+            "children": [
+              {
+                "id": "ds-bs-field-analytics",
+                "type": "COUNT",
+                "label": "Analytics in the Field",
+                "min": 1,
+                "pool": [
+                  {
+                    "type": "COURSE_LIST",
+                    "courses": [
+                      "CASEC224",
+                      "CASEE375",
+                      "CASEE509",
+                      "CASEE516",
+                      "CASPO502",
+                      "CDSDS530",
+                      "CDSDS430",
+                      "QSTMO520",
+                      "QSTMK478"
+                    ]
+                  }
+                ],
+                "devNote": "Sheet tab 'Analytics in the Field' (9 courses). The last three also appear in other In-the-Field groups (DS 430 in Algorithmics; MO 520 and MK 478 in Data Science in the Field), so they are listed last here."
+              },
+              {
+                "id": "ds-bs-field-algorithmics",
+                "type": "COUNT",
+                "label": "Algorithmics in the Field",
+                "min": 1,
+                "pool": [
+                  {
+                    "type": "COURSE_LIST",
+                    "courses": [
+                      "CASEC405",
+                      "CASEE712",
+                      "ENGBE562",
+                      "QSTBA572",
+                      "CDSDS430"
+                    ]
+                  },
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "options": [
+                      "QSTBA576",
+                      "CDSDS444"
+                    ],
+                    "continues": true
+                  }
+                ],
+                "devNote": "Sheet tab 'Algorithmics in the Field'. QST BA 572 is 'formerly 472' and QST BA 576 'formerly 476' on the sheet; only the current numbers are used (CASEE712 and CDSDS430 also appear in other lists)."
+              },
+              {
+                "id": "ds-bs-field-ds",
+                "type": "COUNT",
+                "label": "Data Science in the Field",
+                "min": 1,
+                "pool": [
+                  {
+                    "type": "COURSE_LIST",
+                    "courses": [
+                      "CASEC406",
+                      "CASLX496",
+                      "CDSDS526",
+                      "CDSDS587",
+                      "CDSDS497",
+                      "QSTMO520",
+                      "QSTMK478"
+                    ]
+                  },
+                  {
+                    "type": "OR_EQUIVALENT",
+                    "options": [
+                      "CDSDS537",
+                      "CASEE508"
+                    ],
+                    "continues": true
+                  }
+                ],
+                "devNote": "Sheet tab 'Data Science in the Field' (8 courses). CASEE508 is not on the sheet: same normalized title as CDSDS537. Title match only, unverified. DS 497 is 'Special Topics Soc/Behav Sci' in the catalog."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ds-bs-elective-4",
+        "type": "COUNT",
+        "label": "Fourth elective (either track)",
+        "min": 1,
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "label": "Any approved elective from either track",
+            "courses": [
+              "CASCS630",
+              "CASCS565",
+              "CASMA416",
+              "CASMA569",
+              "CASMA575",
+              "CASMA576",
+              "CASMA578",
+              "CASMA589",
+              "CASMA592",
+              "CASMA585",
+              "CDSDS522",
+              "CASMA586",
+              "CDSDS574",
+              "ENGEC524",
+              "ENGSE524",
+              "CASCS561",
+              "CDSDS453",
+              "CDSDS551",
+              "CDSDS562",
+              "CASCS440",
+              "CASCS505",
+              "CASCS585",
+              "CASEE712",
+              "CDSDS542",
+              "CDSDS543",
+              "ENGEC418",
+              "ENGEC523",
+              "CASCS523",
+              "CASEC224",
+              "CASEE375",
+              "CASEE509",
+              "CASEE516",
+              "QSTMO520",
+              "CDSDS430",
+              "CASPO502",
+              "QSTMK478",
+              "CDSDS530",
+              "CASEC405",
+              "ENGBE562",
+              "QSTBA572",
+              "QSTBA576",
+              "CDSDS444",
+              "CASEC406",
+              "CASLX496",
+              "CDSDS526",
+              "CDSDS537",
+              "CASEE508",
+              "CDSDS587",
+              "CDSDS497"
+            ]
+          }
+        ],
+        "devNote": "Union of every key in the six groups above. Placed after the ONE_OF so the track groups claim first and only leftovers count here. Twin keys are listed individually (min is 1, so both counting is harmless)."
+      },
+      {
+        "id": "ds-bs-capstone",
+        "type": "COUNT",
+        "label": "Capstone",
+        "min": 1,
+        "pool": [
+          {
+            "type": "COURSE_LIST",
+            "label": "Practicum courses",
+            "courses": [
+              "CDSDS519",
+              "CDSDS539",
+              "CDSDS549"
+            ]
+          },
+          {
+            "type": "COURSE_LIST",
+            "label": "Directed study or internship",
+            "courses": [
+              "CDSDS490"
+            ]
+          }
+        ],
+        "note": "A supervised project in a practicum course, or in DS 490 (internship or directed study), which needs approval before the semester starts.",
+        "noteStyle": "caption",
+        "devNote": "From the CDS undergrad major page: practicum DS 519, 539, 549, or DS 490 with the project approved before the semester. The bulletin only says 'practicum course or directed study'. Not included: CDSDS499 'CDS Practicum Course' (inactive in the catalog) and CDSDX799 'Data Science Capstone' (neither is named on the CDS pages). Catalog presence of DS 519/539/549 not checked."
+      },
+      {
+        "id": "ds-bs-final",
+        "type": "COUNT",
+        "label": "Final 4 units",
+        "min": 1,
+        "pool": [
+          {
+            "type": "COURSE_RANGE",
+            "subject": "CDSDS",
+            "min": 100,
+            "max": 599
+          }
+        ],
+        "note": "Any other CDS course counts, DS 100 included.",
+        "noteStyle": "caption",
+        "devNote": "Bulletin: 'any course taught within CDS (excluding core requirements), including CDS DS 100'. Placed last so core, electives and capstone claim first. Range covers CDSDS 100-599 only; other CDS subject prefixes are not included until checked in public/courses.json."
+      },
+      {
+        "id": "ds-bs-total-credits",
+        "type": "UNRESOLVED",
+        "label": "128 total credits",
+        "note": "128 credits are needed to graduate, at least 64 of them in the major.",
+        "devNote": "Unit total, not a course count; credits are tracked in the Credits tab. The BU Hub is mostly satisfied through the major (CDS Hub-Units PDF); Hub units are tracked in the HUB tab."
+      }
+    ]
+  }
+}
