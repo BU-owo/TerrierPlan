@@ -53,8 +53,10 @@ next to the requirements; the logic lives in `src/utils/sequenceSeed.js`.
 
 - `slots[i]` is the planner's grid slot `i`: Fall Year 1 = 0, Spring Year 1 = 1,
   Fall Year 2 = 2, … (Fall Year 4 = 6, Spring Year 4 = 7). `courses` are plain
-  courseKeys; `placeholders` are 4-credit planning placeholders
-  (`{ label, fills? }`).
+  courseKeys; `placeholders` are planning placeholders
+  (`{ label, fills?, credits? }`). `credits` is optional and defaults to 4;
+  it must be a positive number up to 16 in steps of 0.5, anything else is
+  ignored (4). A placeholder given back after its course is removed keeps them.
 - `fills` is the id of a node in this program's tree (a COUNT / REMAINDER /
   ALL leaf), or `"hub"`. It lets a real course placed in that term take the
   placeholder over (see root `SCHEMA.md`, "fills"). A placeholder without

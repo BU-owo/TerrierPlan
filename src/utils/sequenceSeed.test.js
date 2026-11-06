@@ -405,3 +405,54 @@ test('view nodes take no placeholders: a fills naming one (or a node inside one)
   assert.equal(nodeAcceptsCourse(program, 'conc-b', 'QSTFE449'), false);
   assert.equal(nodeAcceptsCourse(program, 'electives', 'QSTFE449'), true);
 });
+
+test('placeholder credits: a valid `credits` seeds as given, missing or invalid seeds at 4', () => {
+  const placeholders = [
+    { label: 'Two', credits: 2 },
+    { label: 'Half', credits: 0.5 },
+    { label: 'Max', credits: 16 },
+    { label: 'None' },
+    { label: 'Zero', credits: 0 },
+    { label: 'Negative', credits: -2 },
+    { label: 'Too big', credits: 17 },
+    { label: 'Not a half step', credits: 1.3 },
+    { label: 'String', credits: '2' },
+    { label: 'Infinite', credits: Infinity },
+    { label: 'Null', credits: null },
+  ];
+  const program = { ...EE, sequence: { slots: [{ placeholders }] } };
+  const credits = Object.fromEntries(notesAt(seedSequence({ programDef: program, semesters: empty() }).semesters, 0).map((n) => [n.text, n.credits]));
+  assert.deepEqual(credits, {
+    Two: 2, Half: 0.5, Max: 16, None: 4, Zero: 4, Negative: 4, 'Too big': 4, 'Not a half step': 4, String: 4, Infinite: 4, Null: 4,
+  });
+});
+
+test('placeholder credits with fills: seeds at 2, a given-back placeholder keeps 2', () => {
+  const program = { ...EE, sequence: { slots: [{ placeholders: [{ label: 'Two cr', fills: 'ee-bs-natural-science', credits: 2 }] }] } };
+  const seeded = seedSequence({ programDef: program, semesters: empty() }).semesters[0];
+  assert.equal(seeded[0].credits, 2);
+  const placed = placeWithTakeover(seeded, 'CASPY451', 0, { programDef: program }).entries;
+  assert.equal(entryFills(placed[0]), 'ee-bs-natural-science');
+  const back = removeCourseGivingBack(placed, 'CASPY451', 0, program);
+  assert.equal(back[0].credits, 2);
+  assert.equal(back[0].text, 'Two cr');
+});
+
+test('programs whose sequence has no `credits` keep every placeholder at 4', () => {
+  const plain = programs.filter((p) => p.sequence && !JSON.stringify(p.sequence).includes('"credits"'));
+  assert.ok(plain.length >= 2, 'ENG programs found');
+  for (const program of plain) {
+    const { semesters } = seedSequence({ programDef: program, semesters: empty() });
+    const notes = semesters.flat().filter(isNoteEntry);
+    assert.ok(notes.length > 0, program.bulletinUrl);
+    assert.ok(notes.every((n) => n.credits === 4), program.bulletinUrl);
+  }
+});
+
+test('the Data Science BS Spark placeholder seeds at 2 credits (Spring Year 1 totals 18)', () => {
+  const ds = programs.find((p) => p.bulletinUrl === 'https://www.bu.edu/academics/cds/programs/bs-in-data-science/');
+  const { semesters } = seedSequence({ programDef: ds, semesters: empty() });
+  const sum = (entries) => entries.reduce((total, e) => total + (isNoteEntry(e) ? e.credits : 4), 0);
+  assert.equal(notesAt(semesters, 1).find((n) => entryFills(n) === 'ds-bs-final').credits, 2);
+  assert.equal(sum(semesters[1]), 18);
+});

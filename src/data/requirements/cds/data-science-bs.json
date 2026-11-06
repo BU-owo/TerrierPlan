@@ -7,6 +7,159 @@
   "totalCoursesRequired": 16,
   "verifiedBy": null,
   "verifiedDate": null,
+  "sequence": {
+    "slots": [
+      {
+        "courses": [
+          "CDSDS110",
+          "CDSDS120",
+          "CASWR120"
+        ],
+        "placeholders": [
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "CDSDS210",
+          "CDSDS121"
+        ],
+        "placeholders": [
+          {
+            "label": "Any CDS course (Spark recommended, 2 cr: DS 280/290/291/292)",
+            "fills": "ds-bs-final",
+            "credits": 2
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "CDSDS310",
+          "CDSDS122"
+        ],
+        "placeholders": [
+          {
+            "label": "Any CDS course (Spark recommended, 2 cr: DS 280/290/291/292)",
+            "fills": "ds-bs-final",
+            "credits": 2
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "CDSDS320",
+          "CASMA214"
+        ],
+        "placeholders": [
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          },
+          {
+            "label": "Minor Exploration"
+          }
+        ]
+      },
+      {
+        "courses": [
+          "CDSDS340"
+        ],
+        "placeholders": [
+          {
+            "label": "DS Elective",
+            "fills": "ds-bs-elective-4"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          },
+          {
+            "label": "Minor Exploration"
+          }
+        ]
+      },
+      {
+        "placeholders": [
+          {
+            "label": "DS Ethics",
+            "fills": "ds-bs-core-ethics"
+          },
+          {
+            "label": "DS Elective",
+            "fills": "ds-bs-elective-4"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          },
+          {
+            "label": "Minor Exploration"
+          }
+        ]
+      },
+      {
+        "placeholders": [
+          {
+            "label": "DS Elective",
+            "fills": "ds-bs-elective-4"
+          },
+          {
+            "label": "DS Elective",
+            "fills": "ds-bs-elective-4"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          },
+          {
+            "label": "Minor Exploration"
+          }
+        ]
+      },
+      {
+        "placeholders": [
+          {
+            "label": "Capstone",
+            "fills": "ds-bs-capstone"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          },
+          {
+            "label": "Hub Elective",
+            "fills": "hub"
+          },
+          {
+            "label": "Minor Exploration"
+          }
+        ]
+      }
+    ]
+  },
   "tree": {
     "id": "ds-bs-root",
     "type": "ALL",
@@ -60,14 +213,14 @@
             "pool": [
               {
                 "type": "OR_EQUIVALENT",
-                "label": "DS 380 or DS 381",
+                "label": "DS 480 or DS 381",
                 "options": [
-                  "CDSDS380",
+                  "CDSDS480",
                   "CDSDS381"
                 ]
               }
             ],
-            "devNote": "The bulletin lists DS 380 only; the CDS major page says 'DS380 or DS381' and the planner template says 'DS380/381'. Modeled as one slot. Catalog presence of CDSDS380/381 not checked."
+            "devNote": "The DS110 planning sheet footnote says 'DS Ethics Requirement: DS480 (fall and spring) OR DS381 (fall only)'; the bulletin and CDS major page still say DS 380 ('DS380 or DS381'). Modeled as one slot and kept CDSDS480 and CDSDS381, dropped CDSDS380: DS 480 looks like DS 380 renumbered. Same title ('Data, Society, and AI Ethics'), 4 credits, same Hub units (SO2, ETR, RIL). In the schedule CSVs DS 380 has no sections in Fall 2026 or Spring 2027 while DS 480 has four each (lecture + 3 discussions), and the offering history has 380 through Spring 2026 and 480 from 2026 (Spring 2026 shows both). Both are active in public/courses.json. Not certain: no source says 'renumbered' in words. A student who already took DS 380 can use ⋯ → Substitute a course; re-add CDSDS380 to the options if CDS confirms both count."
           }
         ]
       },
@@ -75,7 +228,6 @@
         "id": "ds-bs-electives",
         "type": "ONE_OF",
         "label": "Data Science Electives",
-        "subtitle": "Pick a track · one course from each of its 3 groups",
         "note": "A fourth elective, from either track, is the next requirement below.",
         "noteStyle": "caption",
         "devNote": "Bulletin: at least four courses with at least one in each of the three subjects of either the Methodology or the In-the-Field track; the fourth can come from either track. Modeled as ONE_OF (3 groups of one track) + a separate COUNT for the fourth course over both tracks' lists, placed after this node so the track groups claim first. Approved lists come from the two Google Sheets. Courses that appear in two groups of the same track (DS 430; QST MO 520 and QST MK 478) can only count once; they are listed last in the earlier group so other courses fill it first. Claiming is greedy, so a student whose only Analytics-eligible course is one of those can use ⋯ → Substitute a course.",
@@ -377,7 +529,7 @@
         ],
         "note": "Any other CDS course counts, DS 100 included.",
         "noteStyle": "caption",
-        "devNote": "Bulletin: 'any course taught within CDS (excluding core requirements), including CDS DS 100'. Placed last so core, electives and capstone claim first. Range covers CDSDS 100-599 only; other CDS subject prefixes are not included until checked in public/courses.json."
+        "devNote": "Bulletin: 'any course taught within CDS (excluding core requirements), including CDS DS 100'. Placed last so core, electives and capstone claim first. Range covers CDSDS 100-599 only. CDSBF 501-592 (bioinformatics, some tagged Undergrad), CDSDX 500-501 and CDSEA 500-501 (bootcamps/orientation) were checked in public/courses.json and deliberately left out: the bulletin says 'any CDS course', but these look like grad-program courses. Pending confirmation from CDS advising. The DS110 sheet fills the final 4 credits with two 2-credit Spark courses (DS 2**). The engine counts courses (min 1), not credits, so one 2-credit course turns it green."
       },
       {
         "id": "ds-bs-total-credits",

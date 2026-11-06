@@ -12,6 +12,7 @@ import { evaluateRequirementTree, poolEntryCandidateKeys } from './requirementsE
 import { normalizeCourseKey } from './courseKey.js';
 import { requirementsPlanKeys } from './requirementsKeys.js';
 import {
+  DEFAULT_NOTE_CREDITS,
   createFillsPlaceholder,
   entryCourseKey,
   entryFills,
@@ -163,6 +164,24 @@ export function placeholderLabelFor(programDef, fills) {
     if (found) return found.label;
   }
   return fills === HUB_FILLS ? HUB_LABEL : FALLBACK_LABEL;
+}
+
+// A sequence placeholder may carry its own `credits`: a positive number up to
+// 16 in steps of 0.5. Anything else (missing, junk) is the default.
+export const MAX_PLACEHOLDER_CREDITS = 16;
+export function placeholderCredits(value) {
+  const valid = typeof value === 'number' && value > 0 && value <= MAX_PLACEHOLDER_CREDITS && Number.isInteger(value * 2);
+  return valid ? value : DEFAULT_NOTE_CREDITS;
+}
+
+// The credits a placeholder for `fills` carries in the program's sequence
+// (a given-back placeholder keeps them).
+export function placeholderCreditsFor(programDef, fills) {
+  for (const slot of sequenceSlots(programDef) ?? []) {
+    const found = (slot.placeholders ?? []).find((placeholder) => placeholder.fills === fills);
+    if (found) return placeholderCredits(found.credits);
+  }
+  return DEFAULT_NOTE_CREDITS;
 }
 
 // ── Seeding ─────────────────────────────────────────────────────────────────
@@ -319,14 +338,14 @@ export function seedSequence({
       if (placeholder.fills) {
         if ((budget.get(placeholder.fills) ?? 0) <= 0) { skipped.push({ ...base, reason: 'no-need' }); continue; }
         budget.set(placeholder.fills, budget.get(placeholder.fills) - 1);
-        next[i].push(createFillsPlaceholder(placeholder.label, placeholder.fills));
+        next[i].push(createFillsPlaceholder(placeholder.label, placeholder.fills, placeholderCredits(placeholder.credits)));
       } else {
         // No `fills`: an ordinary placeholder, added once per term and label.
         if (next[i].some((entry) => isPlainNoteEntry(entry) && !entryFills(entry) && entry.text === placeholder.label)) {
           skipped.push({ ...base, reason: 'in-plan' });
           continue;
         }
-        next[i].push(createFillsPlaceholder(placeholder.label, undefined));
+        next[i].push(createFillsPlaceholder(placeholder.label, undefined, placeholderCredits(placeholder.credits)));
       }
       addedPlaceholders += 1;
       filled.add(i);
@@ -473,6 +492,6 @@ export function removeCourseGivingBack(entries, courseKey, slotIndex, programDef
   const fills = index === -1 ? null : entryFills(list[index]);
   const next = removeCourse(list, courseKey, slotIndex);
   if (!fills) return next;
-  const placeholder = createFillsPlaceholder(placeholderLabelFor(programDef, fills), fills);
+  const placeholder = createFillsPlaceholder(placeholderLabelFor(programDef, fills), fills, placeholderCreditsFor(programDef, fills));
   return [...next.slice(0, index), placeholder, ...next.slice(index)];
 }
