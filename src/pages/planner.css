@@ -52,6 +52,17 @@
 .save-badge.error   { background: rgba(220,38,38,.4); }
 /* The error message is a sentence, not a word: let it wrap in the header. */
 .save-badge.error   { white-space: normal; max-width: 300px; border-radius: 10px; line-height: 1.3; }
+.save-badge-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
 
 /* ----- Body ----- */
 .planner-body {
@@ -342,6 +353,27 @@
   display: block;
   margin: 0 auto 8px;
 }
+.search-report {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.search-report .hub-stash-link:disabled { opacity: .6; cursor: default; }
+.search-report-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; margin-top: 4px; }
+.search-report-note { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; text-align: left; font-size: 11px; }
+.search-report-note textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+.search-report .search-report-cancel,
+html[data-theme='dark'] .search-report .search-report-cancel { color: var(--text-muted); font-weight: 500; }
 .search-hint {
   margin-top: 8px;
   font-size: 11px;
@@ -3654,7 +3686,8 @@ html[data-theme='dark'] .hub-ring-planned { stroke: color-mix(in srgb, var(--rin
 /* Requirements full view: tucked under the progress card. */
 .req-progress-summary + .estimate-note.is-prominent { margin: -8px 0 16px; }
 /* Questrom work-in-progress notice above the Requirements progress summary;
-   "Need a paw?" opens the help modal, styled like the note's links. */
+   "report any inaccuracies" opens the feedback form, styled like the note's
+   links. */
 .req-program-notice { margin: 0 0 8px; font-weight: 600; color: var(--text-secondary); }
 .req-notice-link {
   padding: 0;
@@ -3668,6 +3701,8 @@ html[data-theme='dark'] .hub-ring-planned { stroke: color-mix(in srgb, var(--rin
   cursor: pointer;
 }
 .req-notice-link:hover { color: var(--scarlet); }
+/* "Something off with these requirements?" under the tracker. */
+.req-feedback-line { margin: 16px 0 4px; text-align: center; font-size: 12px; color: var(--text-muted); }
 
 .credits-hint {
   font-size: 10px;

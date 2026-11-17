@@ -429,6 +429,9 @@ html[data-theme='dark'] .home-page {
 .home-contact-email:hover { background: var(--scarlet-dark); }
 .home-contact-discord { background: #5865F2; }
 .home-contact-discord:hover { background: #4752C4; }
+/* Inverted text/surface colors, so it reads in both themes. */
+.home-contact-feedback { border: none; background: var(--text); color: var(--white); cursor: pointer; }
+.home-contact-feedback:hover { opacity: .85; }
 .home-contact-btn:focus-visible {
   outline: 2px solid var(--scarlet);
   outline-offset: 2px;

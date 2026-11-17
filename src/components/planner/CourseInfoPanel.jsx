@@ -16,6 +16,7 @@ import { instructorLabel } from '../../utils/sectionInstructors';
 import { getWrTopic } from '../../utils/wrTopics';
 import { marineKind } from '../../data/marineSemester';
 import PawLoader from '../PawLoader';
+import FeedbackModal from '../FeedbackModal';
 import useDelayedBusy from '../../hooks/useDelayedBusy';
 import './CourseInfoPanel.css';
 
@@ -505,6 +506,7 @@ function CurrentTermSections({ status, data, onRetry }) {
 // Read-only: nothing is ever written.
 export default function CourseInfoPanel({ courseKey, onClose }) {
   const isMobile = useIsMobile();
+  const [showFeedback, setShowFeedback] = useState(false);
   const courseFetch = useCachedFetch(courseDocCache, courseKey, fetchCourseDoc);
   const historyFetch = useCachedFetch(offeringHistoryCache, courseKey, fetchOfferingHistory);
   const termFetch = useCachedFetch(currentTermCache, courseKey, fetchCurrentTerm);
@@ -535,13 +537,14 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
   const detailsLoaderVisible = useDelayedBusy(courseFetch.status === 'loading');
 
   useEffect(() => {
-    if (!courseKey) return undefined;
+    // Off while the feedback form is open, so Escape there doesn't close the panel.
+    if (!courseKey || showFeedback) return undefined;
     function onKeyDown(e) {
       if (e.key === 'Escape') onClose();
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [courseKey, onClose]);
+  }, [courseKey, onClose, showFeedback]);
 
   if (!courseKey) return null;
 
@@ -697,8 +700,23 @@ export default function CourseInfoPanel({ courseKey, onClose }) {
               <CurrentTermSections status={termFetch.status} data={termFetch.data} onRetry={termFetch.retry} />
             </>
           )}
+
+          {(status === 'ready' || status === 'missing') && (
+            <p className="course-info-report">
+              Something wrong here?{' '}
+              <button type="button" className="course-info-report-link" onClick={() => setShowFeedback(true)}>
+                Report an inaccuracy
+              </button>
+            </p>
+          )}
         </div>
       </aside>
+      <FeedbackModal
+        open={showFeedback}
+        onClose={() => setShowFeedback(false)}
+        defaultCategory="wrong_info"
+        query={courseNumber}
+      />
     </div>
   );
 }

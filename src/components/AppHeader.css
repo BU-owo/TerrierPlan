@@ -95,6 +95,7 @@
 
 /* "?" — deliberately an opaque near-white badge (not the ghost treatment
    the theme button uses) so help reads as a findable landmark. */
+.tp-feedback-btn,
 .tp-help-btn,
 .tp-theme-btn {
   width: 30px;
@@ -117,6 +118,15 @@
   font-size: 16px;
 }
 .tp-theme-btn:hover { background: rgba(255,255,255,.22); }
+/* Feedback: same ghost circle as the theme button. */
+.tp-feedback-btn {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: rgba(255,255,255,.1);
+  color: #fff;
+}
+.tp-feedback-btn:hover { background: rgba(255,255,255,.22); }
 
 /* ----- Account menu (UserMenu.jsx) ----- */
 .tp-user-menu {
@@ -149,6 +159,7 @@
   font-weight: 700;
   line-height: 1;
 }
+.tp-feedback-btn:focus-visible,
 .tp-help-btn:focus-visible,
 .tp-theme-btn:focus-visible,
 .tp-avatar-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
@@ -205,4 +216,11 @@
   .tp-tab-home-icon { display: block; }
   .tp-tab-home-label { display: none; }
   .tp-header-actions { gap: 6px; }
+}
+/* Small phones: four round buttons plus the avatar; shrink them a touch. */
+@media (max-width: 400px) {
+  .tp-header-actions { gap: 4px; }
+  .tp-feedback-btn,
+  .tp-help-btn,
+  .tp-theme-btn { width: 27px; height: 27px; }
 }

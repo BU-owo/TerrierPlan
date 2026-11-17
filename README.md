@@ -59,6 +59,44 @@ npx firebase-tools use --add    # select "terrierplan", alias it "terrierplan"
 npx firebase-tools deploy --only firestore:rules
 ```
 
+### Report a problem (Cloud Function → Discord)
+
+`functions/index.js` has one callable function, `reportIssue` (2nd gen,
+Node 22, `us-central1`), used by the "Report a missing course" button in
+course search and the feedback / report form (Help modal and the footer's
+"Send feedback"). It posts to
+a Discord channel through a webhook. It is **not** deployed by the GitHub
+workflow; deploy it by hand.
+
+Needs the Blaze plan (2nd gen functions and Secret Manager).
+
+1. **Set the webhook URL as a secret** (once, and again to rotate it). It
+   prompts for the value; paste the Discord webhook URL there. Never put it
+   in code, `.env*` or any file.
+   ```
+   npx firebase-tools functions:secrets:set DISCORD_WEBHOOK_URL
+   ```
+2. **Install and deploy**
+   ```
+   cd functions && npm install && npm test && cd ..
+   npx firebase-tools deploy --only functions:reportIssue
+   ```
+   After rotating the secret, deploy again so the function picks it up.
+
+Notes:
+- The client calls `https://us-central1-<projectId>.cloudfunctions.net/reportIssue`
+  (`src/utils/reportIssue.js`). If the region ever changes, change it there too.
+- Rate limit: 20 reports per 10 minutes for everyone combined, counted in the
+  Firestore doc `rateLimits/reportIssue`. Only the function (Admin SDK) touches
+  it; no Firestore rule is needed, and clients can't read or write it.
+- Reports carry only category, query, term filter, page path, app version and
+  the optional note. The client sends no ID token, and the function stores and
+  logs nothing about the sender. Cloud Run's own request logs (Cloud Logging)
+  still record caller IP and user agent for their retention period; that is
+  platform logging, not something the function writes.
+- `VITE_FUNCTIONS_ORIGIN` in `.env.local` points the client at another origin
+  (e.g. the Functions emulator). Leave it unset normally.
+
 Run `npx firebase-tools deploy` **from the repo root** — running it from a
 parent directory (like your home folder) can accidentally create/use a
 `firebase.json` there instead of in the project, which silently breaks

@@ -231,6 +231,19 @@ html[data-theme='dark'] .course-info-offerings-dot { color: var(--warning-border
 .course-info-section-seats.is-open { color: var(--success-text); }
 .course-info-section-seats.is-closed { color: var(--warning-text); }
 .course-info-status-inline { padding: 4px 0; text-align: left; }
+.course-info-report { margin: 4px 0 0; font-size: 12px; color: var(--text-muted); }
+.course-info-report-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.course-info-report-link:hover { color: var(--scarlet); }
 
 @media (max-width: 860px) {
   .course-info-overlay {
