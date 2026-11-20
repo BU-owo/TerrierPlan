@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import FeedbackModal from '../FeedbackModal';
 
 export default function PlanSelector({
   plans,
@@ -13,6 +14,7 @@ export default function PlanSelector({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [showFeedback, setShowFeedback] = useState(false);
 
   function startEdit() {
     setDraft(planName);
@@ -101,9 +103,15 @@ export default function PlanSelector({
       {/* Save status */}
       {statusLabel && (
         <span className={`save-badge ${saving ? 'saving' : saveStatus}`}>
-          {statusLabel}
+          {!saving && saveStatus === 'error' ? (
+            <>
+              Couldn&apos;t save your changes. Reload the page, and if it keeps happening,{' '}
+              <button type="button" className="save-badge-link" onClick={() => setShowFeedback(true)}>tell us</button>.
+            </>
+          ) : statusLabel}
         </span>
       )}
+      <FeedbackModal open={showFeedback} onClose={() => setShowFeedback(false)} defaultCategory="bug" />
     </div>
   );
 }

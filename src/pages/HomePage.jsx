@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import HelpSupportModal from '../components/HelpSupportModal';
+import FeedbackModal from '../components/FeedbackModal';
 import Disclaimer from '../components/Disclaimer';
 import { ART_ALT, CREDIT_SHORT, ART_MASCOT_SRC } from '../constants/credits';
 import './home.css';
@@ -182,6 +183,7 @@ function scrollToDisclaimer(e) {
 export default function HomePage({ theme = 'light', onToggleTheme }) {
   const { user, loading } = useAuth();
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   // App waits on its own useAuth before rendering routes, but this hook
   // instance still starts at loading=true and only resolves a tick later
@@ -311,12 +313,20 @@ export default function HomePage({ theme = 'light', onToggleTheme }) {
             >
               Join the Terrier Hub Discord
             </a>
+            <button
+              type="button"
+              className="home-contact-btn home-contact-feedback"
+              onClick={() => setShowFeedback(true)}
+            >
+              Send feedback
+            </button>
           </div>
           <AppButtons />
         </section>
       </main>
 
       <HelpSupportModal open={showHelpModal} onClose={() => setShowHelpModal(false)} />
+      <FeedbackModal open={showFeedback} onClose={() => setShowFeedback(false)} />
     </div>
   );
 }

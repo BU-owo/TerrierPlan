@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { BU_LINKS } from '../data/officialLinks';
+import ReportForm from './ReportForm';
 import './HelpSupportModal.css';
 
-// Exported for the Requirements "want yours next?" line.
 export const SUPPORT_EMAIL = 'terrierplan@gmail.com';
 export const DISCORD_URL = 'https://discord.gg/bostonuniversity';
 
 export default function HelpSupportModal({ open, onClose }) {
+  const [reportOpen, setReportOpen] = useState(false);
+
   if (!open) return null;
 
   return (
@@ -49,6 +52,17 @@ export default function HelpSupportModal({ open, onClose }) {
             >
               Join the Terrier Hub Discord
             </a>
+          </section>
+
+          <section className="help-section">
+            <h3 className="help-section-label">Feedback or a problem?</h3>
+            {reportOpen ? (
+              <ReportForm />
+            ) : (
+              <button type="button" className="help-link-btn" onClick={() => setReportOpen(true)}>
+                Send feedback or report a problem
+              </button>
+            )}
           </section>
 
           <p className="help-disclaimer">

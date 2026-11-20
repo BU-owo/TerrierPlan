@@ -5,6 +5,7 @@ import { CURRENT_TERM_LABEL } from '../../utils/term';
 import SchedulerCourseRow from './SchedulerCourseRow';
 import PawLoader from '../PawLoader';
 import useDelayedBusy from '../../hooks/useDelayedBusy';
+import ReportMissingCourse from '../ReportMissingCourse';
 
 // Left panel: add a course to the schedule draft. Same normalization/
 // subject-prefix approach as the Planner's CourseSearch (courseKey.js is
@@ -176,6 +177,11 @@ export default function SchedulerSearch({ draftCourseKeys, onAddCourse, onShowCo
         {!searching && !catalogWaiting && !loadFailed && query.trim() && visibleResults.length === 0 && (
           <div className="search-empty">
             No courses found for &ldquo;{query.trim()}&rdquo;
+            <ReportMissingCourse
+              key={query.trim()}
+              query={query.trim()}
+              term={`${CURRENT_TERM_LABEL} (${gateByCurrentTerm && onlyAvailable ? 'offered only' : 'all courses'})`}
+            />
           </div>
         )}
 

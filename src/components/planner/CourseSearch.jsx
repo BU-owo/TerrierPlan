@@ -13,6 +13,8 @@ import { aliasFor } from '../../utils/grsAlias';
 import SemesterPickerModal from './SemesterPickerModal';
 import PawLoader from '../PawLoader';
 import useDelayedBusy from '../../hooks/useDelayedBusy';
+import { CURRENT_TERM_LABEL } from '../../utils/term';
+import ReportMissingCourse from '../ReportMissingCourse';
 import { HubUnitTags, MarineSemesterPill, OfferingBadge, OfferedFilterToggle } from './CourseTags';
 
 // Stash toggle glyph — filled paw = stashed, outline paw = not. `currentColor`
@@ -487,6 +489,13 @@ export default function CourseSearch({
               Try a course code like &ldquo;CAS CS 111&rdquo; or a name prefix
               like &ldquo;Calculus&rdquo;
             </div>
+            {searchQuery.trim() && (
+              <ReportMissingCourse
+                key={searchQuery.trim()}
+                query={searchQuery.trim()}
+                term={`${CURRENT_TERM_LABEL} (${offeredOnly ? 'offered only' : 'all courses'})`}
+              />
+            )}
           </div>
         )}
 

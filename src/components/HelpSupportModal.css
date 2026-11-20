@@ -93,9 +93,8 @@
   letter-spacing: .04em;
   color: var(--text-muted);
 }
-/* Email and Discord are now the only two actions in the modal, so they're
-   styled as parallel, equal-weight buttons rather than a primary/fallback
-   pair. */
+/* Email and Discord are styled as parallel, equal-weight buttons rather
+   than a primary/fallback pair. */
 .help-secondary-btn {
   align-self: flex-start;
   padding: 9px 18px;
@@ -119,6 +118,66 @@
   font-weight: 700;
 }
 .help-discord-btn:hover { background: #4752C4; }
+
+/* FeedbackModal opens from inside the full-screen views (z-index 60) and the
+   course info panel (up to 65), so it sits on the modal layer (100). */
+.feedback-overlay { z-index: 100; }
+
+/* Report a problem */
+.help-secondary-btn:disabled { opacity: .55; cursor: default; }
+.help-secondary-btn:disabled:hover { background: var(--scarlet); }
+.help-link-btn {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--scarlet);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.help-link-btn:hover { color: var(--scarlet-dark); }
+.help-report-form { display: flex; flex-direction: column; gap: 10px; }
+.help-report-cats { display: flex; flex-wrap: wrap; gap: 6px; }
+.help-report-cat {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.help-report-cat input { position: absolute; opacity: 0; pointer-events: none; }
+.help-report-cat.active { border-color: var(--scarlet); color: var(--scarlet); font-weight: 600; }
+/* Keyboard focus only, so a click doesn't leave a ring around the pill. */
+.help-report-cat:has(input:focus-visible) { outline: 2px solid var(--scarlet); outline-offset: 2px; }
+/* Scarlet text is too dark on the dark surface; same swap as .hub-stash-link. */
+html[data-theme='dark'] .help-link-btn,
+html[data-theme='dark'] .help-report-cat.active { color: var(--warning-border); }
+html[data-theme='dark'] .help-report-cat.active { border-color: var(--warning-border); }
+.help-report-note { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-secondary); }
+.help-report-note textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+.help-report-count { align-self: flex-end; font-size: 11px; color: var(--text-muted); }
+.help-report-public { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.help-report-msg { margin: 0; font-size: 13px; color: var(--text-secondary); }
+/* Off-screen rather than display:none, so naive bots still fill it in. */
+.help-report-hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 
 @media (max-width: 480px) {
   .help-modal-header h2 { font-size: 17px; }

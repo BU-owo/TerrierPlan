@@ -1,5 +1,6 @@
 import { Fragment, useState } from 'react';
 import HelpSupportModal from './HelpSupportModal';
+import FeedbackModal from './FeedbackModal';
 import useSiteStats from '../hooks/useSiteStats';
 import { BU_LINKS } from '../data/officialLinks';
 import { CREDIT_FULL } from '../constants/credits';
@@ -13,6 +14,7 @@ function pluralizeStudents(n) {
 
 export default function GlobalFooter() {
   const [showHelp, setShowHelp] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const { totalUsersEver, onlineNow } = useSiteStats();
 
   return (
@@ -27,6 +29,10 @@ export default function GlobalFooter() {
           <span className="app-footer-dot" aria-hidden="true">·</span>
           <button type="button" className="app-footer-help-btn" onClick={() => setShowHelp(true)}>
             Need help?
+          </button>
+          <span className="app-footer-dot" aria-hidden="true">·</span>
+          <button type="button" className="app-footer-help-btn" onClick={() => setShowFeedback(true)}>
+            Send feedback
           </button>
         </div>
 
@@ -62,6 +68,7 @@ export default function GlobalFooter() {
       </p>
 
       <HelpSupportModal open={showHelp} onClose={() => setShowHelp(false)} />
+      <FeedbackModal open={showFeedback} onClose={() => setShowFeedback(false)} />
     </footer>
   );
 }

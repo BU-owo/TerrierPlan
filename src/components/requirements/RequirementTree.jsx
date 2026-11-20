@@ -16,7 +16,7 @@ import RhettPeek from '../RhettPeek';
 import { BU_LINKS } from '../../data/officialLinks';
 import { RequirementDragContext } from './requirementDrag';
 import { unresolvedLast } from '../../utils/unresolvedLast';
-import HelpSupportModal, { DISCORD_URL, SUPPORT_EMAIL } from '../HelpSupportModal';
+import FeedbackModal from '../FeedbackModal';
 import useRequirementPicks from '../../hooks/useRequirementPicks';
 import { findProgramByUrl } from '../../data/bu-programs';
 import useInactiveCourseKeys from '../../hooks/useInactiveCourseKeys';
@@ -64,7 +64,8 @@ export default function RequirementTree({
 }) {
   const [collapsedOverrides, setCollapsedOverrides] = useState({});
   // "Need a paw?" on the Questrom notice opens the same help modal as the footer.
-  const [showHelp, setShowHelp] = useState(false);
+  // Category the feedback form opens on, or null while it's closed.
+  const [feedbackCategory, setFeedbackCategory] = useState(null);
   // Selected tab of a hoisted ONE_OF ("tracks") and the pick of a
   // `selection: "student"` ONE_OF (concentration), by node id. Kept in this
   // browser per major (useRequirementPicks), never in the plan.
@@ -387,9 +388,8 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
             Open {findProgramByUrl(majorBulletinUrl)?.name ?? 'program'} bulletin ↗
           </a>
           <p className="req-coming-soon-ask">
-            Want yours next? Let us know on{' '}
-            <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer">Discord</a> or at{' '}
-            <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
+            Want yours next?{' '}
+            <button type="button" className="req-notice-link" onClick={() => setFeedbackCategory('feedback')}>Let us know</button>.
           </p>
         </div>
       )}
@@ -402,8 +402,8 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
           {/* Questrom programs (school "QST") are newer and less checked. */}
           {programDef?.school === 'QST' && (
             <p className={`estimate-note req-program-notice${density === 'full' ? ' is-prominent' : ''}`}>
-              Questrom requirement checker is a work in progress. Please report any inaccuracies.{' '}
-              <button type="button" className="req-notice-link" onClick={() => setShowHelp(true)}>Need a paw?</button>
+              Questrom requirement checker is a work in progress. Please{' '}
+              <button type="button" className="req-notice-link" onClick={() => setFeedbackCategory('wrong_info')}>report any inaccuracies</button>.
             </p>
           )}
           {density === 'full' ? (
@@ -526,6 +526,11 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
               ),
             )}
           </div>
+
+          <p className="req-feedback-line">
+            Something off with these requirements?{' '}
+            <button type="button" className="req-notice-link" onClick={() => setFeedbackCategory('wrong_info')}>Send feedback</button>
+          </p>
         </>
       )}
 
@@ -547,7 +552,11 @@ Hey! This tracker is a work in progress. ~200 majors need to be structured and c
         onSetOverride={onSetRequirementOverride}
         onClose={() => setException(null)}
       />
-      <HelpSupportModal open={showHelp} onClose={() => setShowHelp(false)} />
+      <FeedbackModal
+        open={feedbackCategory !== null}
+        onClose={() => setFeedbackCategory(null)}
+        defaultCategory={feedbackCategory ?? undefined}
+      />
     </div>
     </RequirementDragContext.Provider>
   );
