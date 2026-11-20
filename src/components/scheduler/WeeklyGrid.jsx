@@ -6,7 +6,6 @@ import {
   sectionsConflict,
   describeSectionTime,
   describeExamTime,
-  describeSeatStatus,
   describeMeetingShort,
   formatClock,
   formatClockRange,
@@ -1088,7 +1087,6 @@ export default function WeeklyGrid({
                   describeSectionTime(section),
                   ...(describeExamTime(section) ? [`Exam: ${describeExamTime(section)}`] : []),
                   instructorLabel,
-                  describeSeatStatus(section),
                 ].join('\n');
 
                 return (
@@ -1161,7 +1159,6 @@ export default function WeeklyGrid({
                   ...(overlap ? [`Overlaps ${[...new Set(clashes.map((o) => blockName(o.section)))].join(', ')}`] : []),
                   describeSectionTime(section),
                   ...(describeExamTime(section) ? [`Exam: ${describeExamTime(section)}`] : []),
-                  describeSeatStatus(section),
                 ].join('\n');
                 return (
                   <div

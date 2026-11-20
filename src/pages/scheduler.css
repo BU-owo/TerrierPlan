@@ -241,15 +241,6 @@ html[data-theme='dark'] {
   padding: 32px 16px;
 }
 
-.sched-seat-note {
-  margin: 0 0 10px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--text-muted);
-}
-.sched-seat-note a { color: inherit; font-weight: 600; text-underline-offset: 2px; }
-.sched-seat-note a:hover { color: var(--scarlet); }
-
 .sched-draft-card {
   background: var(--white);
   border: 1px solid var(--border);
@@ -709,16 +700,6 @@ html[data-theme='dark'] {
   margin-bottom: 1px;
 }
 .sched-section-label { font-size: 12.5px; font-weight: 700; color: var(--text); }
-.sched-enrl-badge {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 20px;
-  text-transform: uppercase;
-  letter-spacing: .3px;
-}
-.sched-enrl-badge.is-open { background: var(--badge-success-bg); color: var(--badge-success-text); }
-.sched-enrl-badge.is-closed { background: var(--warning-surface); color: var(--warning-text); }
 .sched-section-row-details {
   display: flex;
   flex-wrap: wrap;

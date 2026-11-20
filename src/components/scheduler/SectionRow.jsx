@@ -25,8 +25,6 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
   const instructorLabel = section.instructors?.length
     ? section.instructors.map((i) => `${i.first ? i.first[0] + '. ' : ''}${i.last}`.trim()).join(', ')
     : 'Staff';
-  const seatsLabel = section.capEnrl != null ? `${section.totEnrl ?? 0}/${section.capEnrl} seats` : null;
-  const isOpen = (section.enrlStat || '').toLowerCase() === 'open';
   const conflictCount = conflicts?.length ?? 0;
   // Rooms per class meeting: one shared room reads as before; differing rooms
   // are shown next to each meeting's own time.
@@ -58,9 +56,6 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
         <div className="sched-section-row-info">
           <div className="sched-section-row-top">
             <span className="sched-section-label">Section {section.classSection}</span>
-            <span className={`sched-enrl-badge ${isOpen ? 'is-open' : 'is-closed'}`}>
-              {section.enrlStat || '—'}
-            </span>
             {examTime && <span className="sched-exam-chip" title="This section has an exam block — it doesn't count as a time conflict">Exam block</span>}
             {filteredOut && (
               <span className="sched-filtered-out-badge" title="Doesn't fit your time filter">Outside filter</span>
@@ -79,7 +74,6 @@ export default function SectionRow({ section, checked, locked, conflicts, notes,
             {examTime && <span>Exam: {examTime}</span>}
             <span>{instructorLabel}</span>
             {section.mode && <span>{section.mode}</span>}
-            {seatsLabel && <span>{seatsLabel}</span>}
             {section.credits != null && <span>{section.credits} cr</span>}
           </div>
           {topic && (

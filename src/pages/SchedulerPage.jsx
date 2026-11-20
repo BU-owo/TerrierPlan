@@ -57,7 +57,6 @@ import useOneTimeHint from '../hooks/useOneTimeHint';
 import useDesktopLayout from '../hooks/useDesktopLayout';
 import useResizableWidth from '../hooks/useResizableWidth';
 import PanelResizeHandle from '../components/planner/PanelResizeHandle';
-import { BU_LINKS } from '../data/officialLinks';
 import { ART_ALT, CREDIT_SHORT, ART_MASCOT_SRC } from '../constants/credits';
 import { registerPendingWriteFlush } from '../utils/pendingWrites';
 import './planner.css';
@@ -2599,13 +2598,6 @@ export default function SchedulerPage({ theme = 'light', onToggleTheme }) {
             <OneTimeHint onDismiss={dismissTimeFilterHint} onSeen={markTimeFilterSeen}>
               The time filter dims sections outside the hours you choose.
             </OneTimeHint>
-          )}
-
-          {draftCourses.length > 0 && (
-            <p className="sched-seat-note">
-              Seat counts are a snapshot, not live. Confirm on{' '}
-              <a href={BU_LINKS.myBU.url} target="_blank" rel="noopener noreferrer">MyBU</a> before enrolling.
-            </p>
           )}
 
           {draftCourses.map(({ courseKey, considering, locked }) => (

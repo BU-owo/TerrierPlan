@@ -1,5 +1,5 @@
 import { sectionTypeLabel } from '../../utils/sectionType';
-import { sectionsConflict, describeSectionTime, describeExamTime, describeSeatStatus } from '../../utils/sectionTime';
+import { sectionsConflict, describeSectionTime, describeExamTime } from '../../utils/sectionTime';
 import { classifyComponent } from '../../utils/sectionComponents';
 import { swapGhostReasons } from '../../utils/swapReasons';
 import { resolvedCourseColorIndex } from '../../utils/scheduleColors';
@@ -141,7 +141,6 @@ export default function SectionSwapSheet({
                   {describeExamTime(section) && <span>Exam: {describeExamTime(section)}</span>}
                   <span>{instructorLabel}</span>
                   {getWrTopic(section) && <span>{getWrTopic(section).title}</span>}
-                  <span>{describeSeatStatus(section)}</span>
                 </div>
                 {conflicts.length > 0 && (
                   <div className="sched-swap-sheet-row-conflict">
